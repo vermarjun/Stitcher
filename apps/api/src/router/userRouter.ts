@@ -1,0 +1,32 @@
+import express, { Router } from 'express';
+import { 
+  signup, 
+  login, 
+  getUser, 
+  updateUser, 
+  changePassword,
+  uploadProfilePhoto,
+  deleteUser, 
+  requestPasswordReset, 
+  resetPassword 
+} from '../controller/userController';
+import auth from '../middleware/auth';
+
+const router: Router = express.Router();
+
+// Public routes
+router.post('/signup', signup);
+router.post('/login', login);
+router.post('/request-password-reset', requestPasswordReset);
+router.post('/reset-password/:token', resetPassword);
+
+// Protected routes
+// Get Update Delete user's profile:
+router.get('/me', auth, getUser);
+router.put('/me', auth, updateUser);
+router.delete('/me', auth, deleteUser);
+// Get Update Delete user's profile:
+router.put('/change-password', auth, changePassword);
+router.post('/profile-photo', auth, uploadProfilePhoto);
+
+export default router;

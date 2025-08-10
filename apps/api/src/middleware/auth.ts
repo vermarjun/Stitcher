@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config';
+import { JWT_CONFIG } from '../config';
 
 // Extend the Request interface to include the userId property
 declare global {
@@ -21,10 +21,7 @@ const auth = (req: Request, res: Response, next: NextFunction) => {
 const token = authHeader.split(' ')[1];
 
 try {
-    if (!JWT_SECRET){
-        return res.status(401).json({ message: 'Internal server error, NO JWT token provided or unable to parse env' });
-    } 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_CONFIG.secret);
     if (typeof decoded === 'string' || !('userId' in decoded)) {
       return res.status(401).json({ message: 'Invalid token structure. Send userId with every request' });
     }
