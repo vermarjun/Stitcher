@@ -3,7 +3,7 @@ import {Schema, Document, Types, ObjectId, Model, model} from "mongoose";
 // Interface representing a Project document in MongoDB
 export interface IScene extends Document {
     name: String,
-    prompts?: Types.ObjectId,
+    prompts?: Types.ObjectId[],
     compiled: Boolean
 }
 

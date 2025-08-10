@@ -2,13 +2,35 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-export const PORT = process.env.PORT || 8000;
-export const JWT_SECRET = process.env.JWT_SECRET;
-export const MONGODB_URL = process.env.MONGODB_URL;
-export const API_PREFIX = process.env.API_PREFIX || "/api/v1";
-export const EMAIL_USER = process.env.EMAIL_USER || "/api/v1";
-export const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD || "/api/v1";
+if (process.env.PORT == undefined){
+    throw new Error("PORT is not defined in environment variables");
+}
+export const PORT = process.env.PORT;
 
+if (process.env.JWT_SECRET == undefined){
+    throw new Error("JWT_SECRET is not defined in environment variables");
+}
+export const JWT_SECRET = process.env.JWT_SECRET;
+
+if (process.env.MONGODB_URL == undefined){
+    throw new Error("MONGODB_URL is not defined in environment variables");
+}
+export const MONGODB_URL = process.env.MONGODB_URL;
+
+if (process.env.API_PREFIX == undefined){
+    throw new Error("API_PREFIX is not defined in environment variables");
+}
+export const API_PREFIX = process.env.API_PREFIX || "";
+
+if (process.env.EMAIL_USER == undefined){
+    throw new Error("EMAIL_USER is not defined in environment variables");
+}
+export const EMAIL_USER = process.env.EMAIL_USER || "";
+
+if (process.env.EMAIL_APP_PASSWORD == undefined){
+    throw new Error("EMAIL_APP_PASSWORD is not defined in environment variables");
+}
+export const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
 
 export interface JwtConfig {
   secret: string;

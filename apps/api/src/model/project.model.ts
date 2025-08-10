@@ -1,9 +1,11 @@
 import {Schema, Document, Types, ObjectId, Model, model} from "mongoose";
 
+// Just remember I am storing the array of object Id's so don't ever call map without populating them. Always populate before mapping!!
+
 // Interface representing a Project document in MongoDB
 export interface IProject extends Document {
     name: String,
-    scenes?: Types.ObjectId,
+    scenes?: Types.ObjectId[],
     duration: Number,
     bytes: Number,
     compiled: Boolean

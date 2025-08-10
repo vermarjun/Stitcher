@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import User from '../model/user';
+import User from '../model/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import sendMail from '../util/mailer';
+import sendMail from '../util/mailer.util';
 import { JWT_CONFIG, PASSWORD_RESET_CONFIG } from '../config';
 
 interface IUserRequest extends Request {
