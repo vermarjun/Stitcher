@@ -6,12 +6,17 @@ import Scene from "../model/scene.model";
 export const createPrompt = async (req: Request, res: Response) => {
   try {
     const { sceneId } = req.params;
-    const { code, prompt, metadata } = req.body;
+    const { prompt } = req.body;
 
     const scene = await Scene.findById(sceneId);
     if (!scene) {
       return res.status(404).json({ message: "Scene not found" });
     }
+    
+    // generate code from llm
+
+    // generate metadata from microservice endpoint
+    
 
     const newPrompt = new Prompt({ code, prompt, metadata });
     await newPrompt.save();
