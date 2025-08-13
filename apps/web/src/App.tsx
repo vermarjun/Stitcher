@@ -1,9 +1,7 @@
-function App() {
+import RouterConfig from './Router/RouterConfig';
 
-  return (
-    <>
-    </>
-  )
+function App() {
+  return <RouterConfig />;
 }
 
-export default App
+export default App;
