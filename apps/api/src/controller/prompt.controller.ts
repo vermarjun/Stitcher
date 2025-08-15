@@ -14,11 +14,13 @@ export const createPrompt = async (req: Request, res: Response) => {
     }
     
     // generate code from llm
-
+    const code = "";
+    const metadata = "";
+    const description = "";
     // generate metadata from microservice endpoint
     
 
-    const newPrompt = new Prompt({ code, prompt, metadata });
+    const newPrompt = new Prompt({ code, prompt, metadata, description });
     await newPrompt.save();
 
     scene.prompts?.push(newPrompt._id as any);
