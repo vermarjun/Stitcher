@@ -276,7 +276,7 @@ const EditComponent = forwardRef<{
                   <Bot className="w-3 h-3 transition-colors duration-300 text-blue-400" />
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 text-sm text-neutral-400">
+                  <div className="flex items-center gap-2 text-xs text-neutral-400">
                     <div className="w-2 h-2 rounded-full animate-pulse transition-colors duration-300 bg-blue-400"></div>
                     <div className="w-2 h-2 rounded-full animate-pulse delay-75 transition-colors duration-300 bg-blue-400"></div>
                     <div className="w-2 h-2 rounded-full animate-pulse delay-150 transition-colors duration-300 bg-blue-400"></div>

@@ -32,7 +32,7 @@ export const FileMenuSection = () => {
     <>
       <div className="flex items-center relative">
         {/* Cursor-style menu bar */}
-        <nav className="flex items-center h-9 bg-neutral-950/80 backdrop-blur-sm border-r border-neutral-800/50">
+        <nav className="flex items-center h-9 bg-neutral-950/80 backdrop-blur-sm border-neutral-500/50">
           {/* Home Button */}
           <Button
             variant="ghost"
@@ -41,11 +41,11 @@ export const FileMenuSection = () => {
             onClick={handleGoHome}
           >
             <Home className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
-            Home
+            {/* Home */}
           </Button>
 
           {/* Separator */}
-          <div className="w-px h-5 bg-neutral-800/50 mx-1" />
+          <div className="w-px h-5 bg-neutral-400/50 mx-1" />
           
           {/* Collaborators Button */}
           <Button
@@ -55,11 +55,11 @@ export const FileMenuSection = () => {
             onClick={handleCollaborators}
           >
             <Users className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
-            Collaborators
+            {/* Collaborators */}
           </Button>
 
           {/* Separator */}
-          <div className="w-px h-5 bg-neutral-800/50 mx-1" />
+          <div className="w-px h-5 bg-neutral-400/50 mx-1" />
           
           {/* API Key Management Button */}
           <Dialog open={isAPIModalOpen} onOpenChange={setIsAPIModalOpen}>
@@ -70,7 +70,7 @@ export const FileMenuSection = () => {
                 className="h-9 px-4 text-sm text-neutral-300 hover:bg-neutral-800/70 hover:text-white focus:bg-neutral-800/70 focus:text-white rounded-none border-0 font-medium transition-all duration-200 flex items-center gap-2 group"
               >
                 <Key className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
-                API Keys
+                {/* API Keys */}
               </Button>
             </DialogTrigger>
             <ApiKeyManagementModal 

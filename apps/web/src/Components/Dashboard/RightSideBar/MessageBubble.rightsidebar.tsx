@@ -47,7 +47,7 @@ const MessageBubble = ({
     return (
       <div className="flex justify-end mb-4 group">
         <div className="max-w-[85%] bg-neutral-800/60 border border-neutral-700/50 rounded-lg px-3 py-2.5">
-          <div className="text-sm text-neutral-200 leading-relaxed">
+          <div className="text-xs text-neutral-200 leading-relaxed">
             {message.content}
           </div>
           <div className="flex items-center justify-between mt-2">
@@ -96,7 +96,7 @@ const MessageBubble = ({
         )} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-neutral-200 leading-relaxed mb-2">
+        <div className="text-xs text-neutral-200 leading-relaxed mb-2">
           {message.content}
         </div>
         <div className="flex items-center justify-between">

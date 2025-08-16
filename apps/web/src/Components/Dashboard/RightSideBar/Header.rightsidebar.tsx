@@ -82,7 +82,7 @@ const ConfirmationDialog = ({
   cancelText?: string;
 }) => (
   <Dialog open={isOpen} onOpenChange={onClose}>
-    <DialogContent className="sm:max-w-md bg-neutral-900 border-neutral-700">
+    <DialogContent className="xs:max-w-md bg-neutral-900 border-neutral-700">
       <DialogHeader>
         <DialogTitle className="text-neutral-200">{title}</DialogTitle>
         <DialogDescription className="text-neutral-400">
@@ -127,7 +127,7 @@ const ChatHistoryModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] bg-neutral-900 border-neutral-700">
+      <DialogContent className="xs:max-w-2xl max-h-[80vh] bg-neutral-900 border-neutral-700">
         <DialogHeader>
           <DialogTitle className="text-neutral-200 flex items-center gap-2">
             <History className="w-5 h-5" />
@@ -162,7 +162,7 @@ const ChatHistoryModal = ({
                     </div>
                   </div>
                   
-                  <p className="text-sm text-neutral-400 mb-3 line-clamp-2">
+                  <p className="text-xs text-neutral-400 mb-3 line-clamp-2">
                     {item.lastMessage}
                   </p>
                   
@@ -314,7 +314,7 @@ const AISidebarHeader = ({
             <button
               onClick={() => setMode('generate')}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-300",
+                "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-lg transition-all duration-300",
                 mode === 'generate' 
                   ? "text-emerald-300 relative z-10" 
                   : "text-neutral-400 hover:text-neutral-300"
@@ -326,7 +326,7 @@ const AISidebarHeader = ({
             <button
               onClick={() => setMode('edit')}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-300",
+                "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-lg transition-all duration-300",
                 mode === 'edit' 
                   ? "text-blue-300 relative z-10" 
                   : "text-neutral-400 hover:text-neutral-300"
