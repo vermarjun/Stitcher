@@ -13,7 +13,6 @@ export interface ITemplate extends Document {
     type: TemplateType; // Fixed: was ITemplate, should be TemplateType
     thumbnail?: string; // Not added in case of images, else always added.
     url: string; 
-    likes: number;
     duration?: number;
     bytes: number;
     metadata: Record<string, any>;
@@ -41,11 +40,6 @@ const TemplateSchema = new Schema<ITemplate>({
     url: { 
         type: String, 
         required: true 
-    },
-    likes: {
-        type: Number,
-        required: true,
-        default: 0
     },
     duration: { 
         type: Number,
