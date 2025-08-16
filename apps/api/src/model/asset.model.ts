@@ -1,4 +1,4 @@
-import {Schema, Document, Model, model} from "mongoose";
+import {Schema, Document, Types, Model, model, ObjectId} from "mongoose";
 
 export enum AssetType {
   VIDEO = 'video',
@@ -17,6 +17,7 @@ export interface IAsset extends Document {
     height?: number;
     bytes: number;
     metadata: Record<string, any>;
+    projectId: Types.ObjectId;
 }
 
 // Asset Schema
@@ -28,7 +29,8 @@ const AssetSchema = new Schema<IAsset>({
     width: { type: Number },
     height: { type: Number },
     bytes: { type: Number, default: 0 },
-    metadata: { type: Schema.Types.Mixed, default: {} }
+    metadata: { type: Schema.Types.Mixed, default: {} },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true }
 }, { timestamps: true });
 
 // Create the Asset model

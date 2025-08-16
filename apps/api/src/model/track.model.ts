@@ -11,6 +11,7 @@ export interface ITrack extends Document {
     name: string;
     type: TrackType;
     projectId: Types.ObjectId;
+    timelineId: Types.ObjectId;
     order: number; // Layer order (higher = on top)
     locked: boolean;
     muted: boolean;
@@ -22,6 +23,7 @@ const TrackSchema = new Schema<ITrack>({
     name: { type: String, required: true },
     type: { type: String, enum: Object.values(TrackType), required: true },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    timelineId: { type: Schema.Types.ObjectId, ref: 'Timeline', required: true },
     order: { type: Number, default: 0 },
     locked: { type: Boolean, default: false },
     muted: { type: Boolean, default: false },

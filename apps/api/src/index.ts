@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 // Import Routes
 import userRoutes from "./router/user.router"
 import searchRoutes from "./router/searchBar.router"
+import chatRoutes from "./router/chat.routes"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -35,6 +36,7 @@ app.get(`${API_PREFIX}/health`, (req: Request, res: Response): Response => {
 // API Routes
 app.use(`${API_PREFIX}/user`, userRoutes);
 app.use(`${API_PREFIX}/search`, searchRoutes);
+app.use(`${API_PREFIX}/chat`, chatRoutes);
 
 // Start the server
 httpServer.listen(PORT, async () => {
