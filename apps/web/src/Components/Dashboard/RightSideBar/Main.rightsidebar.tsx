@@ -105,7 +105,7 @@ const GenerateComponent = forwardRef<{
 
   const getPlaceholder = () => {
     return currentProject 
-      ? `Ask AI to generate videos for "${currentProject.name}"...`
+      ? `Ask AI to generate videos`
       : "Ask AI to generate videos or create a project first...";
   };
 

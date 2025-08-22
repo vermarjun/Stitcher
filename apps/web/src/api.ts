@@ -23,8 +23,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.warn('Unauthorized - maybe redirect to login');
-      // Example: window.location.href = '/login';
+      console.warn('Unauthorized! redirect to login');
+      // window.location.href = '/auth';
     }
     return Promise.reject(error);
   }
