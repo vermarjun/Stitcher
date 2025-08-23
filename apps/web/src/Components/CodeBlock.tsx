@@ -7,6 +7,8 @@ type CodeBlockProps = {
   language?: string;
 };
 
+"checking github on mac"
+
 export function CodeBlock({ code, language = 'typescript' }: CodeBlockProps) {
   return (
     <div className="my-2 rounded-md overflow-hidden">
