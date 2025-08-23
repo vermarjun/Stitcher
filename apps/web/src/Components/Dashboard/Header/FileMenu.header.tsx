@@ -11,13 +11,16 @@ import {
 } from "@/Components/ui/dialog";
 import { ApiKeyManagementModal } from './ApiKeysModal.filemenu';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 // File Menu Section Component
 export const FileMenuSection = () => {
   const [isAPIModalOpen, setIsAPIModalOpen] = useState<boolean>(false);
 
+  const navigate = useNavigate();
+
   const handleGoHome = (): void => {
-    window.location.href = '/home';
+    navigate('/home');
   };
 
   const handleCollaborators = (): void => {

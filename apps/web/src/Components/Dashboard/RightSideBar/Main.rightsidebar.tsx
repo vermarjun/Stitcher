@@ -1,14 +1,11 @@
 import {useState, useRef, useEffect, forwardRef, useImperativeHandle} from 'react';
 import { 
-  // useRecoilState, 
   useRecoilValue 
 } from 'recoil';
 import { ScrollArea } from '@/Components/ui/scroll-area';
 import { Bot } from 'lucide-react';
 import {
-  // chatMessagesState,
   currentProjectState,
-  messageActions,
   type Message
 } from '@/State/Dashboard.state';
 import EmptyState from './EmptyState.rightsidebar';
@@ -16,6 +13,7 @@ import MessageBubble from './MessageBubble.rightsidebar';
 import QuickPrompts from './QuickPrompts.rightsidebar';
 import { AISidebarHeader, ConfirmationDialog } from './Header.rightsidebar';
 import MessageInput from './MessageInput.rightsidebar';
+import type { Project, User } from '@/State/Types';
 
 // Generate Component
 const GenerateComponent = forwardRef<{
@@ -45,32 +43,33 @@ const GenerateComponent = forwardRef<{
   }, [messages]);
 
   const handleSubmit = async () => {
-    if (!input.trim() || isProcessing) return;
+    console.log("clicked")
+    // if (!input.trim() || isProcessing) return;
 
-    const userMessage = messageActions.createMessage(input.trim(), 'user');
-    setMessages((prev: Message[]) => [...prev, userMessage]);
+    // const userMessage = messageActions.createMessage(input.trim(), 'user');
+    // setMessages((prev: Message[]) => [...prev, userMessage]);
     
-    const userInput = input.trim();
-    setInput('');
-    setIsProcessing(true);
+    // const userInput = input.trim();
+    // setInput('');
+    // setIsProcessing(true);
 
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    // try {
+    //   await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
       
-      const responseContent = `I'll generate a video based on your request: "${userInput}". This will create a new video with the specifications you described. The video will be added to your timeline once processing is complete.`;
+    //   const responseContent = `I'll generate a video based on your request: "${userInput}". This will create a new video with the specifications you described. The video will be added to your timeline once processing is complete.`;
       
-      const assistantMessage = messageActions.createMessage(responseContent, 'assistant');
-      setMessages((prev: Message[]) => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error processing request:', error);
-      const errorMessage = messageActions.createMessage(
-        'Sorry, I encountered an error processing your request. Please try again.',
-        'assistant'
-      );
-      setMessages((prev: Message[]) => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
-    }
+    //   const assistantMessage = messageActions.createMessage(responseContent, 'assistant');
+    //   setMessages((prev: Message[]) => [...prev, assistantMessage]);
+    // } catch (error) {
+    //   console.error('Error processing request:', error);
+    //   const errorMessage = messageActions.createMessage(
+    //     'Sorry, I encountered an error processing your request. Please try again.',
+    //     'assistant'
+    //   );
+    //   setMessages((prev: Message[]) => [...prev, errorMessage]);
+    // } finally {
+    //   setIsProcessing(false);
+    // }
   };
 
   const handleExportChat = () => {
@@ -187,32 +186,33 @@ const EditComponent = forwardRef<{
   }, [messages]);
 
   const handleSubmit = async () => {
-    if (!input.trim() || isProcessing) return;
+    console.log("submit clicked")
+    // if (!input.trim() || isProcessing) return;
 
-    const userMessage = messageActions.createMessage(input.trim(), 'user');
-    setMessages((prev: Message[]) => [...prev, userMessage]);
+    // const userMessage = messageActions.createMessage(input.trim(), 'user');
+    // setMessages((prev: Message[]) => [...prev, userMessage]);
     
-    const userInput = input.trim();
-    setInput('');
-    setIsProcessing(true);
+    // const userInput = input.trim();
+    // setInput('');
+    // setIsProcessing(true);
 
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    // try {
+    //   await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
       
-      const responseContent = `I'll modify your timeline according to your request: "${userInput}". I've updated the timeline data with the changes you requested. You can see the modifications reflected in your video editor.`;
+    //   const responseContent = `I'll modify your timeline according to your request: "${userInput}". I've updated the timeline data with the changes you requested. You can see the modifications reflected in your video editor.`;
       
-      const assistantMessage = messageActions.createMessage(responseContent, 'assistant');
-      setMessages((prev: Message[]) => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error processing request:', error);
-      const errorMessage = messageActions.createMessage(
-        'Sorry, I encountered an error processing your request. Please try again.',
-        'assistant'
-      );
-      setMessages((prev: Message[]) => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
-    }
+    //   const assistantMessage = messageActions.createMessage(responseContent, 'assistant');
+    //   setMessages((prev: Message[]) => [...prev, assistantMessage]);
+    // } catch (error) {
+    //   console.error('Error processing request:', error);
+    //   const errorMessage = messageActions.createMessage(
+    //     'Sorry, I encountered an error processing your request. Please try again.',
+    //     'assistant'
+    //   );
+    //   setMessages((prev: Message[]) => [...prev, errorMessage]);
+    // } finally {
+    //   setIsProcessing(false);
+    // }
   };
 
   const handleExportChat = () => {
@@ -301,9 +301,14 @@ const EditComponent = forwardRef<{
   );
 });
 
+interface Props {
+  currentProject?: Project,
+  user?: User
+}
 
 // Main Component with all enhancements
-const AISidebar = () => {
+// @ts-ignore
+const AISidebar = ({currentProject, user}:Props) => {
   const [mode, setMode] = useState<'generate' | 'edit'>('generate');
   
   // Persistent state for Generate component

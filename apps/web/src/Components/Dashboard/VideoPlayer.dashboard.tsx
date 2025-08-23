@@ -33,11 +33,8 @@ import {
 } from "lucide-react";
 import {
   currentProjectState,
-  selectedItemState,
-  explorerItemsState,
-  videoGenerationQueueState,
-  activeVideoGenerationsSelector
 } from "@/State/Dashboard.state";
+import type { Project, User } from "@/State/Types";
 
 interface VideoPlayerState {
   isPlaying: boolean;
@@ -62,18 +59,17 @@ interface VideoPlayerState {
     return null;
   };
 
+interface Props {
+  currentProject? : Project,
+  user? : User
+}
 
-function VideoPlayer() {
-  const currentProject = useRecoilValue(currentProjectState);
-  const selectedItem = useRecoilValue(selectedItemState);
-  const explorerItems = useRecoilValue(explorerItemsState);
-  const videoQueue = useRecoilValue(videoGenerationQueueState);
-  const activeGenerations = useRecoilValue(activeVideoGenerationsSelector);
+// @ts-ignore
+function VideoPlayer({currentProject, user}:Props) {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null);
   
   const [playerState, setPlayerState] = useState<VideoPlayerState>({
     isPlaying: false,
@@ -88,18 +84,18 @@ function VideoPlayer() {
 
   // Get current video source
   const getCurrentVideo = () => {
-    if (selectedItem) {
-      const item = findItemById(explorerItems, selectedItem);
-      if (item?.type === 'video') {
-        // TODO: Return actual video URL from backend
-        return {
-          url: '/demo-video.mp4', // Placeholder
-          name: item.name,
-          duration: 120, // Placeholder
-          thumbnail: '/thumbnail.jpg' // Placeholder
-        };
-      }
-    }
+    // if (selectedItem) {
+    //   const item = findItemById(explorerItems, selectedItem);
+    //   if (item?.type === 'video') {
+    //     // TODO: Return actual video URL from backend
+    //     return {
+    //       url: '/demo-video.mp4', // Placeholder
+    //       name: item.name,
+    //       duration: 120, // Placeholder
+    //       thumbnail: '/thumbnail.jpg' // Placeholder
+    //     };
+    //   }
+    // }
     return null;
   };
 
@@ -191,18 +187,18 @@ function VideoPlayer() {
   }, []);
 
   // Controls visibility management
-  const showControls = useCallback(() => {
-    setControlsVisible(true);
-    if (controlsTimeout) {
-      clearTimeout(controlsTimeout);
-    }
-    const timeout = setTimeout(() => {
-      if (playerState.isPlaying) {
-        setControlsVisible(false);
-      }
-    }, 3000);
-    setControlsTimeout(timeout);
-  }, [controlsTimeout, playerState.isPlaying]);
+  // const showControls = useCallback(() => {
+  //   setControlsVisible(true);
+  //   if (controlsTimeout) {
+  //     clearTimeout(controlsTimeout);
+  //   }
+  //   const timeout = setTimeout(() => {
+  //     if (playerState.isPlaying) {
+  //       setControlsVisible(false);
+  //     }
+  //   }, 3000);
+  //   setControlsTimeout(timeout);
+  // }, [controlsTimeout, playerState.isPlaying]);
 
   const hideControls = useCallback(() => {
     if (playerState.isPlaying && !playerState.isFullscreen) {
@@ -281,7 +277,7 @@ function VideoPlayer() {
         "overflow-hidden", // Prevent overflow
         playerState.isFullscreen && "fixed inset-0 z-50" // Only go fullscreen when needed
       )}
-      onMouseMove={showControls}
+      // onMouseMove={showControls}
       onMouseLeave={hideControls}
     >
       {currentVideo ? (
@@ -289,7 +285,7 @@ function VideoPlayer() {
           {/* Video Element */}
           <video
             ref={videoRef}
-            src={currentVideo.url}
+            // src={currentVideo.url}
             className="w-full h-full object-contain"
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleTimeUpdate}
@@ -303,7 +299,7 @@ function VideoPlayer() {
           )}>
             <div className="flex items-center gap-3">
               <Badge variant="secondary" className="bg-black/70 text-white border-zinc-700">
-                {currentVideo.name}
+                {/* {currentVideo.name} */}
               </Badge>
               {currentProject && (
                 <Badge variant="outline" className="bg-black/70 text-zinc-300 border-zinc-600">
@@ -496,19 +492,6 @@ function VideoPlayer() {
           <p className="text-sm text-zinc-500 mb-6">
             Select a video from the explorer or generate a new one to start viewing and editing.
           </p>
-
-          {/* Generation Status */}
-          {activeGenerations.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center gap-2 text-sm text-blue-400 mb-2">
-                <Zap className="h-4 w-4 animate-pulse" />
-                <span>Generating {activeGenerations.length} video{activeGenerations.length > 1 ? 's' : ''}...</span>
-              </div>
-              <div className="text-xs text-zinc-500">
-                Videos will appear here when generation is complete
-              </div>
-            </div>
-          )}
 
           <div className="flex items-center gap-3 flex-wrap justify-center">
             {!currentProject ? (

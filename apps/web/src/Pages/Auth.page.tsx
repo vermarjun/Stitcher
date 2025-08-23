@@ -1,8 +1,9 @@
 import React, { useState, useRef, type ChangeEvent, type MouseEvent } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User2Icon, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/api';
-import { toast, Toaster } from 'sonner';
+import { toast } from 'sonner';
+import type { User } from '@/State/Types';
 
 // Define types
 interface FormData {
@@ -14,11 +15,7 @@ interface FormData {
 
 interface AuthResponse {
   token: string;
-  user: {
-    id: string;
-    username: string;
-    email: string;
-  };
+  user: User
 }
 
 interface DustParticle {
@@ -121,7 +118,7 @@ const AuthPage: React.FC = () => {
   setLoading(true);
   try {
     if (isLogin) {
-      console.log('Form submitted: login', formData);
+      // console.log('Form submitted: login', formData);
       
       // Login request
       const response = await api.post<AuthResponse>('/users/login', {
@@ -130,21 +127,13 @@ const AuthPage: React.FC = () => {
       });
       
       const { token, user } = response.data;
-      
-      // Store token in sessionStorage
-      sessionStorage.setItem('token', token);
-      
-      console.log('Login successful:', user);
-      toast.success('Login successful!');
-      
-      // Update app state with the user data here (if using context/state management)
-      
-      // Redirect to home page
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      toast.success('Welcome back!');
       navigate('/home', {replace:true});
       
     } else {
-      console.log('Form submitted: register', formData);
-      
       // Signup request
       await api.post('/users/signup', {
         username: formData.name,
@@ -158,13 +147,12 @@ const AuthPage: React.FC = () => {
         password: formData.password
       });
       
-      const { token } = loginResponse.data;
-      sessionStorage.setItem('token', token);
-      
-      toast.success('Successfully logged in!');
-      
-      // Redirect to home page after registration + auto-login
-      navigate('/'); // or navigate('/home') depending on your route
+      const { token, user } = loginResponse.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      toast.success('Registered Successfully!');
+      navigate('/home'); 
     }
   } catch (error: any) {
     console.error('Authentication error:', error.response?.data || error.message);
@@ -309,7 +297,7 @@ const AuthPage: React.FC = () => {
                 }`}>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <User className="h-4 w-4 text-gray-500" />
+                      <User2Icon className="h-4 w-4 text-gray-500" />
                     </div>
                     <input
                       type="text"
@@ -464,7 +452,6 @@ const AuthPage: React.FC = () => {
           }
         }
       `}</style>
-      <Toaster richColors theme='dark'/>
     </div>
   );
 };

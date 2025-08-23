@@ -101,6 +101,7 @@ export const ApiKeyManagementModal: React.FC<ApiKeyManagementModalProps> = ({ is
       if (editingKey) {
         const updateData = { ...formData };
         if (!updateData.key) {
+          // @ts-ignore
             delete updateData.key; 
         }
         await api.put(`/api-keys/${editingKey._id}`, updateData);

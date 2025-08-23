@@ -11,7 +11,15 @@ import TemplatesComponent from './Template.leftsidebar';
 import ProjectDescriptionComponent from './ProjectDescription.leftsidebar';
 import CollaboratorsComponent from './Collaborators.leftsidebar';
 
-const MainSidebar = () => {
+import type { Project, User } from '@/State/Types';
+
+interface Props {
+  currentProject?: Project,
+  user?: User
+}
+
+// @ts-ignore
+const MainSidebar = ({currentProject, user}:Props) => {
   const [activeTab, setActiveTab] = useState('explorer');
   const [isExpanded, setIsExpanded] = useState(true);
 

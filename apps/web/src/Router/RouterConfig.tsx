@@ -4,15 +4,16 @@ import LoadingSpinner from '../Components/LoadingSpinner';
 import AppLayout from '../Layouts/App.layout';
 import ErrorPage from '../Pages/Error.page';
 
+import AuthRoute from './ProtectedRoute.tsx';
+import PublicRoute from './PublicRoute.tsx';
+
 // Lazy-loaded pages
 const LandingPage = lazy(() => import('../Pages/Landing.page'));
 const AuthPage = lazy(() => import('../Pages/Auth.page.tsx'));
-const HomePage = lazy(() => import('../Pages/Home.page.tsx'));
+const HomePage = lazy(() => import('../Components/Home/Main.home.tsx'));
 const DashboardLayout = lazy(() => import('../Layouts/Dashboard.layout'));
-// const DashboardPage = lazy(() => import('../Pages/DashboardPage'));
 const ProfilePage = lazy(() => import('../Pages/ProfilePage.page'));
 const SettingsPage = lazy(() => import('../Pages/SettingsPage.page'));
-const NotFoundPage = lazy(() => import('../Pages/NotFound.page'));
 
 const router = createBrowserRouter([
 // LANDING PAGE
@@ -33,47 +34,46 @@ const router = createBrowserRouter([
   },
   {
     path: '/home',
-    element: <AppLayout />,
     errorElement: <ErrorPage />,
     children: [
       {
         index: true,
         element: (
-          <Suspense fallback={<LoadingSpinner />}>
+          <AuthRoute>
             <HomePage />
-          </Suspense>
+          </AuthRoute>
         ),
       },
     ],
   },
 // DASHBOARD
   {
-    path: '/dashboard',
+    path: '/dashboard/:projectId',
     // element: <DashboardLayout />,
     errorElement: <ErrorPage />,
     children: [
       {
         index: true,
         element: (
-          <Suspense fallback={<LoadingSpinner />}>
+          <AuthRoute>
             <DashboardLayout />
-          </Suspense>
+          </AuthRoute>
         ),
       },
       {
         path: 'profile',
         element: (
-          <Suspense fallback={<LoadingSpinner />}>
+          <AuthRoute>
             <ProfilePage />
-          </Suspense>
+          </AuthRoute>
         ),
       },
       {
         path: 'settings',
         element: (
-          <Suspense fallback={<LoadingSpinner />}>
+          <AuthRoute>
             <SettingsPage />
-          </Suspense>
+          </AuthRoute>
         ),
       },
     ],
@@ -81,19 +81,15 @@ const router = createBrowserRouter([
 // AUTH
   {
     path: '/auth',
-    element: <AuthPage />,
-  },
-  {
-    path: '/404',
     element: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <NotFoundPage />
-      </Suspense>
-    ),
+      <PublicRoute>
+        <AuthPage />
+      </PublicRoute>
+    )
   },
   {
     path: '*',
-    element: <Navigate to="/404" replace />,
+    element: <Navigate to="/home" replace />,
   },
 ]);
 

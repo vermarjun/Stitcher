@@ -1,9 +1,6 @@
-// src/Components/Dashboard/Timeline.dashboard.tsx
-import { useRecoilValue, useRecoilState } from "recoil";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/Components/ui/button";
 import { Slider } from "@/Components/ui/slider";
-import { Badge } from "@/Components/ui/badge";
 import { ScrollArea } from "@/Components/ui/scroll-area";
 import {
   DropdownMenu,
@@ -28,20 +25,14 @@ import {
   Eye,
   EyeOff,
   Plus,
-  Settings,
   Layers,
   Music,
   Type,
   Image,
   Video,
   Wand2,
-  Split
 } from "lucide-react";
-import {
-  currentProjectState,
-  selectedItemState,
-  explorerItemsState
-} from "@/State/Dashboard.state";
+import type { Project, User } from "@/State/Types";
 
 interface TimelineTrack {
   id: string;
@@ -65,10 +56,13 @@ interface TimelineClip {
   selected: boolean;
 }
 
-function Timeline() {
-  const currentProject = useRecoilValue(currentProjectState);
-  const selectedItem = useRecoilValue(selectedItemState);
-  const explorerItems = useRecoilValue(explorerItemsState);
+interface Props {
+  currentProject? : Project,
+  user? : User
+}
+
+// @ts-ignore
+function Timeline({currentProject, user}:Props) {
   
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -489,7 +483,7 @@ function Timeline() {
 
         {/* Timeline Tracks */}
         <div className="flex-1 relative">
-          <ScrollArea className="h-full" orientation="both">
+          <ScrollArea className="h-full" >
             <div
               ref={timelineRef}
               className="relative"

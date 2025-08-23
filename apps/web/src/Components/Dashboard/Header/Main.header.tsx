@@ -1,19 +1,22 @@
-import { useRecoilState, useRecoilValue } from "recoil";
+import { useRecoilState } from "recoil";
 import { 
   searchQueryState, 
-  userState, 
-  currentProjectState,
 } from "@/State/Dashboard.state";
+
+import type { Project, User } from "@/State/Types";
 
 import LogoSection from "./LogoAppName.header";
 import {FileMenuSection} from "./FileMenu.header";
 import SearchSection from "./SearchBar.header";
 import UserSection from "./UserComponents.header";
 
-function Header() {
+interface Props {
+  currentProject?: Project,
+  user?: User
+}
+
+function Header({currentProject, user}:Props) {
   const [searchQuery, setSearchQuery] = useRecoilState(searchQueryState);
-  const [currentProject] = useRecoilState(currentProjectState);
-  const user = useRecoilValue(userState);
 
   return (
     <>
@@ -21,14 +24,14 @@ function Header() {
         {/* Left section - Logo and Menu */}
         <div className="flex items-center gap-6">
           <LogoSection />
-          <FileMenuSection />
+          <FileMenuSection/>
         </div>
 
         {/* Middle section - Search */}
         <SearchSection 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          projectId={currentProject?.id}
+          projectId={currentProject?._id}
         />
 
         {/* Right section - User controls */}

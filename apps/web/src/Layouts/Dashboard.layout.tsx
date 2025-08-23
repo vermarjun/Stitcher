@@ -1,81 +1,96 @@
-// src/Layouts/Dashboard.layout.tsx
-import { RecoilRoot } from 'recoil';
-import { useEffect } from 'react';
+import { useEffect, useState } from "react";
 import Header from "../Components/Dashboard/Header/Main.header";
 import LeftSideBar from "../Components/Dashboard/LeftSideBar/Main.leftsidebar";
+// import Footer from "../Components/Dashboard/Footer.dashboard"
 import RightSideBar from "../Components/Dashboard/RightSideBar/Main.rightsidebar";
 import Timeline from "../Components/Dashboard/Timeline.dashboard";
 import VideoPlayer from "../Components/Dashboard/VideoPlayer.dashboard";
-import { Toaster } from "@/Components/ui/sonner";
+import { useParams, useNavigate } from "react-router-dom";
+import api from "@/api";
+import { toast } from "sonner";
+import LoadingSpinner from "@/Components/LoadingSpinner";
 
-// Initialization logic
-function DashboardInitializer() {
-  useEffect(() => {
-    const handleGlobalKeyPress = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        console.log('Global save triggered');
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        console.log('New project triggered');
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
-        e.preventDefault();
-        console.log('Open project triggered');
-      }
-      if (e.key === 'Escape') {
-        console.log('Escape pressed - clearing selections');
-      }
-    };
-
-    document.addEventListener('keydown', handleGlobalKeyPress);
-    return () => document.removeEventListener('keydown', handleGlobalKeyPress);
-  }, []);
-  return null;
-}
+import type { Project, User } from "@/State/Types";
 
 const DashboardLayout = () => {
+  const navigate = useNavigate();
+  const { projectId } = useParams();
+  const [isLoading, setIsLoading] = useState(true); 
+  const [project, setProject] = useState<Project>();
+  const [user, setUser] = useState<User>();
+
+  async function fetchProject() {
+    try {
+      setIsLoading(true);
+
+      const response = await api.get(`/project/${projectId}`);
+
+      if (response.status === 200 || response.status === 201) {
+        setProject(response.data);
+      } else {
+        toast.error(response.data?.message || "Failed to fetch project");
+        navigate("/home"); 
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to fetch project";
+      toast.error(errorMessage);
+      navigate("/home");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+  async function fetchUser() {
+    try {
+      setIsLoading(true);
+      const user = JSON.parse(localStorage.getItem('user') || "");
+      if (user.profilePhoto == ""){
+        user.profilePhoto = "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";
+      }
+      setUser(user);
+      toast.message(`Welcome ${user.username}`);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to fetch project";
+      toast.error(errorMessage);
+      navigate("/home");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!projectId) {
+      navigate("/home");
+    } else {
+      fetchProject();
+      fetchUser();
+    }
+  }, []); 
+
   return (
-    <RecoilRoot>
-      <div className="h-screen w-full bg-gradient-to-br from-gray-900 via-black to-gray-800 text-white flex flex-col overflow-hidden antialiased p-3">
-        <DashboardInitializer />
-
-        {/* Header */}
-        <div className="mb-3 rounded-2xl bg-white/5 backdrop-blur-md shadow-lg p-3">
-          <Header />
+    <>
+      {isLoading ? (
+        <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
+          <LoadingSpinner />
         </div>
+      ) : (
+        <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
+          <Header currentProject={project} user={user}/>
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden min-h-0 gap-3">
-          {/* Left Sidebar */}
-          <div className="w-64 rounded-2xl bg-white/5 backdrop-blur-lg shadow-md overflow-hidden">
-            <LeftSideBar />
+          <div className="flex-1 flex overflow-hidden">
+            <LeftSideBar currentProject={project} user={user}/>
+
+            <main className="flex-1 flex flex-col overflow-hidden">
+              <VideoPlayer currentProject={project} user={user} />
+              <Timeline currentProject={project} user={user} />
+            </main>
+
+            <RightSideBar currentProject={project} user={user} />
           </div>
 
-          {/* Center Section */}
-          <main className="flex-1 flex flex-col gap-3 min-w-0">
-            {/* Video Player */}
-            <div className="flex-1 rounded-2xl bg-white/5 backdrop-blur-lg shadow-md overflow-hidden">
-              <VideoPlayer />
-            </div>
-
-            {/* Timeline */}
-            <div className="h-48 rounded-2xl bg-white/5 backdrop-blur-lg shadow-md overflow-hidden">
-              <Timeline />
-            </div>
-          </main>
-
-          {/* Right Sidebar */}
-          <div className="w-80 rounded-2xl bg-white/5 backdrop-blur-lg shadow-md overflow-hidden">
-            <RightSideBar />
-          </div>
+          {/* <Footer /> */}
         </div>
-
-        {/* Toasts */}
-        <Toaster />
-      </div>
-    </RecoilRoot>
+      )}
+    </>
   );
 };
 
