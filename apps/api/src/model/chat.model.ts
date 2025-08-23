@@ -12,6 +12,7 @@ export interface IChatMessage {
 // Interface representing a Chat document in MongoDB
 export interface IChat extends Document {
     name: string; // Auto-generated or user-provided chat name
+    type: string;
     messages: IChatMessage[];
     projectId: Types.ObjectId;
     assetId?: Types.ObjectId; // Current video asset for this chat
@@ -22,7 +23,7 @@ export interface IChat extends Document {
 // Chat Message Schema
 const ChatMessageSchema = new Schema<IChatMessage>({
     role: { type: String, enum: ['user', 'assistant'], required: true },
-    content: { type: String, required: true },
+    content: { type: Schema.Types.Mixed, required: true },
     timestamp: { type: Date, default: Date.now },
     code: { type: String }, // Only for assistant messages
     metadata: { type: Schema.Types.Mixed, default: {} }
@@ -31,6 +32,7 @@ const ChatMessageSchema = new Schema<IChatMessage>({
 // Chat Schema
 const ChatSchema = new Schema<IChat>({
     name: { type: String, required: true },
+    type: { type: String, enum: ['generate', 'edit'], required: true },
     messages: [ChatMessageSchema],
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
     assetId: { type: Schema.Types.ObjectId, ref: 'Asset' },

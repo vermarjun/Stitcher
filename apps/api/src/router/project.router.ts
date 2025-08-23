@@ -4,7 +4,8 @@ import {
     getProjectsByUser,
     getProjectById,
     updateProject,
-    deleteProject
+    deleteProject,
+    getRecentProjectsByUser
 } from "../controller/project.controller";
 
 const router = Router();
@@ -14,6 +15,9 @@ router.post("/", createProject);
 
 // Get all projects for a user
 router.get("/user/:userId", getProjectsByUser);
+
+// Get 2 projects for a user
+router.get("/user/:userId", getRecentProjectsByUser);
 
 // Get single project by ID
 router.get("/:id", getProjectById);

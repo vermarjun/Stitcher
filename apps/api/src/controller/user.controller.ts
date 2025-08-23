@@ -66,7 +66,7 @@ export const login = async (req: IUserRequest, res: IUserResponse): Promise<Resp
 
     const user: IUser | null = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
+      return res.status(401).json({ message: 'User Not Found!' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);

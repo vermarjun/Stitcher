@@ -9,7 +9,7 @@ import {
   deleteUser, 
   requestPasswordReset, 
   resetPassword 
-} from '../controller/user.controller';
+} from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 
 const router: Router = express.Router();
