@@ -80,7 +80,11 @@ export const login = async (req: IUserRequest, res: IUserResponse): Promise<Resp
       user: { 
         id: user._id, 
         username: user.username, 
-        email: user.email 
+        email: user.email,
+        plan: user.plan,
+        role: user.role,
+        bio: user.bio,
+        profilePhoto: user.profilePhoto
       } 
     });
   } catch (err: any) {

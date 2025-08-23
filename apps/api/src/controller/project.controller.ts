@@ -14,7 +14,8 @@ export const createProject = async (req: Request, res: Response) => {
     session.startTransaction();
     
     try {
-        const { userId, name } = req.body;
+        const { name } = req.body;
+        const userId = req.userId;
         if (!userId || !name) {
             await session.abortTransaction();
             session.endSession();
@@ -40,19 +41,7 @@ export const createProject = async (req: Request, res: Response) => {
         // Update project with timeline reference
         savedProject.timeline = savedTimeline._id as mongoose.Types.ObjectId;
         await savedProject.save({ session });
-
-        // Create a default chat for the project
-        const chat = new Chat({
-            name: "Main Chat",
-            projectId: savedProject._id as mongoose.Types.ObjectId,
-            compiled: false
-        });
-        const savedChat = await chat.save({ session });
-
-        // Update project with chat reference
-        savedProject.chats = savedChat._id as mongoose.Types.ObjectId;
-        await savedProject.save({ session });
-
+        
         // Push project to user's projects array
         await User.findByIdAndUpdate(userId, {
             $push: { projects: savedProject._id }
@@ -64,7 +53,6 @@ export const createProject = async (req: Request, res: Response) => {
         res.status(201).json({
             ...savedProject.toObject(),
             timeline: savedTimeline,
-            chatId: savedChat._id
         });
     } catch (error) {
         await session.abortTransaction();
@@ -90,9 +78,6 @@ export const getProjectsByUser = async (req: Request, res: Response) => {
                             }
                         }
                     },
-                    {
-                        path: "chats" // Single chat reference
-                    }
                 ]
             });
 
@@ -125,9 +110,6 @@ export const getRecentProjectsByUser = async (req: Request, res: Response) => {
                             }
                         }
                     },
-                    {
-                        path: "chats" // Single chat reference
-                    }
                 ]
             });
 
@@ -153,7 +135,6 @@ export const getProjectById = async (req: Request, res: Response) => {
                     }
                 }
             })
-            .populate("chats"); // Single chat reference
 
         if (!project) return res.status(404).json({ message: "Project not found" });
 
@@ -214,8 +195,7 @@ export const deleteProject = async (req: Request, res: Response) => {
             await Timeline.findByIdAndDelete(timeline._id).session(session);
         }
 
-        // Delete chat using projectId (one-to-one relationship)
-        await Chat.deleteOne({ projectId: id }).session(session);
+        await Chat.deleteMany({ projectId: id }).session(session);
 
         // Delete assets using projectId
         await Asset.deleteMany({ projectId: id }).session(session);

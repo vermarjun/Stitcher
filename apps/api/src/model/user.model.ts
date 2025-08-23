@@ -20,6 +20,7 @@ export interface IUser extends Document {
   isActive: boolean;
   bio: string;
   role: 'user' | 'admin';
+  plan: string;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
   projects?: Types.ObjectId[];
@@ -49,7 +50,7 @@ const UserSchema = new Schema<IUser>({
   }],
   profilePhoto: {
     type: String,
-    default: '',
+    default: 'https://www.gravatar.com/avatar/?d=mp',
   },
   lastActive: {
     type: Date,
@@ -67,6 +68,11 @@ const UserSchema = new Schema<IUser>({
     type: String,
     enum: ['user', 'admin', 'test_account'],
     default: 'user',
+  },
+  plan: {
+    type: String,
+    enum: ['free', 'pro', 'enterprise'],
+    default: 'free'
   },
   projects: [{
     type: Schema.Types.ObjectId,

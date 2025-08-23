@@ -4,7 +4,7 @@ import {Schema, Document, Types, ObjectId, Model, model} from "mongoose";
 export interface IProject extends Document {
     name: string;
     timeline: Types.ObjectId; // Single Timeline reference
-    chats: Types.ObjectId; // Single chats reference
+    // chats: Types.ObjectId; // Single chats reference
     bytes: number;
     compiled: boolean;
     playback_url: string;
@@ -15,8 +15,8 @@ export interface IProject extends Document {
 // Project Schema
 const ProjectSchema = new Schema<IProject>({
     name: { type: String, required: true },
-    timeline: { type: Schema.Types.ObjectId, ref: 'Timeline', required: true }, // Reference to Timeline model
-    chats: { type: Schema.Types.ObjectId, ref: 'Chat', required: true }, // Reference to Chat model
+    timeline: { type: Schema.Types.ObjectId, ref: 'Timeline'}, // Reference to Timeline model
+    // chats: { type: Schema.Types.ObjectId, ref: 'Chat'}, // Reference to Chat model
     bytes: { type: Number, default: 0 },
     compiled: { type: Boolean, default: false },
     playback_url: { type: String, default: "" },

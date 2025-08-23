@@ -7,11 +7,12 @@ import {
     deleteProject,
     getRecentProjectsByUser
 } from "../controller/project.controller";
+import auth from "../middleware/auth.middleware";
 
 const router = Router();
 
 // Create project for a user
-router.post("/", createProject);
+router.post("/", auth ,createProject);
 
 // Get all projects for a user
 router.get("/user/:userId", getProjectsByUser);
