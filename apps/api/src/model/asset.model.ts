@@ -3,15 +3,21 @@ import {Schema, Document, Types, Model, model, ObjectId} from "mongoose";
 export enum AssetType {
   VIDEO = 'video',
   AUDIO = 'audio',
-  IMAGE = 'image',
-  TEXT = 'text' // For text overlays, though text might not need an asset if it's just string content
+}
+
+export enum AssetOrigin {
+  TEMPLATE = 'template',
+  UPLOAD = 'upload',
+  GENERATED_VIDEO = 'generated_video'
 }
 
 // Interface representing an Asset document in MongoDB
 export interface IAsset extends Document {
     name: string;
     type: AssetType;
-    url: string; // Storage URL (e.g., Cloudinary or S3)
+    origin: AssetOrigin;
+    url: string; // Storage URL (Cloudinary)
+    thumbnail: string;
     duration?: number; // For video/audio in seconds
     width?: number;
     height?: number;
@@ -24,7 +30,9 @@ export interface IAsset extends Document {
 const AssetSchema = new Schema<IAsset>({
     name: { type: String, required: true },
     type: { type: String, enum: Object.values(AssetType), required: true },
+    origin: {type:String, enum: Object.values(AssetOrigin), required: true, default:AssetOrigin.GENERATED_VIDEO},
     url: { type: String, required: true },
+    thumbnail: {type:String, required: true, default: ""},
     duration: { type: Number },
     width: { type: Number },
     height: { type: Number },
