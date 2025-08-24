@@ -9,6 +9,7 @@ import { Server } from "socket.io";
 import userRoutes from "./router/user.router"
 import projectRoutes from "./router/project.router"
 import searchRoutes from "./router/searchBar.router"
+import templateRoutes from "./router/templates.router"
 // import chatRoutes from "./router/chat.routes"
 
 // Config
@@ -37,6 +38,7 @@ app.get(`${API_PREFIX}/health`, (req: Request, res: Response): Response => {
 // API Routes
 app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/project`, projectRoutes);
+app.use(`${API_PREFIX}/template`, templateRoutes);
 app.use(`${API_PREFIX}/search`, searchRoutes);
 // app.use(`${API_PREFIX}/chat`, chatRoutes);
 

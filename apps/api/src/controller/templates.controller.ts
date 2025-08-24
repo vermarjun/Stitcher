@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import Template, { TemplateType } from '../model/template.model';
-import Asset, { AssetType } from '../model/asset.model';
+import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
+import { TemplateLike } from '../model/templateLike.model';
 import { Types } from 'mongoose';
 
-// GET /templates - Fetch all templates with optional filtering
+// GET /templates - Fetch all templates with optional filtering, likes, and project status
 const fetchAllTemplates = async (req: Request, res: Response) => {
   try {
     const { 
@@ -12,8 +13,11 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
       limit = 20, 
       search,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      projectId, // To check if templates are already in project
     } = req.query;
+
+    const userId = req.userId;
 
     // Build filter object
     const filter: any = {};
@@ -38,17 +42,104 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
     const sortOptions: any = {};
     sortOptions[sortBy as string] = sortOrder === 'asc' ? 1 : -1;
 
-    // Execute query with pagination
+    // Aggregation pipeline to get templates with likes count and user interaction data
+    const aggregationPipeline: any[] = [
+      { $match: filter },
+      // Join with TemplateLike to get likes count
+      {
+        $lookup: {
+          from: 'templatelikes',
+          localField: '_id',
+          foreignField: 'templateId',
+          as: 'likes'
+        }
+      },
+      // Add likesCount field
+      {
+        $addFields: {
+          likesCount: { $size: '$likes' }
+        }
+      }
+    ];
+
+    // If userId provided, check if user has liked each template
+    if (userId && Types.ObjectId.isValid(userId as string)) {
+      aggregationPipeline.push({
+        $addFields: {
+          isLikedByUser: {
+            $in: [new Types.ObjectId(userId as string), '$likes.userId']
+          }
+        }
+      });
+    } else {
+      aggregationPipeline.push({
+        $addFields: {
+          isLikedByUser: false
+        }
+      });
+    }
+
+    // If projectId provided, check if templates are already in project
+    if (projectId && Types.ObjectId.isValid(projectId as string)) {
+      aggregationPipeline.push(
+        {
+          $lookup: {
+            from: 'assets',
+            let: { templateId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$projectId', new Types.ObjectId(projectId as string)] },
+                      { $eq: ['$originalTemplateId', '$$templateId'] },
+                      { $eq: ['$origin', AssetOrigin.TEMPLATE] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'projectAssets'
+          }
+        },
+        {
+          $addFields: {
+            isInProject: { $gt: [{ $size: '$projectAssets' }, 0] },
+            projectAssetId: { $arrayElemAt: ['$projectAssets._id', 0] }
+          }
+        }
+      );
+    } else {
+      aggregationPipeline.push({
+        $addFields: {
+          isInProject: false,
+          projectAssetId: null
+        }
+      });
+    }
+
+    // Remove the likes array as we only need the count and isLikedByUser
+    aggregationPipeline.push({
+      $project: {
+        likes: 0,
+        projectAssets: 0
+      }
+    });
+
+    // Add sorting and pagination
+    aggregationPipeline.push(
+      { $sort: sortOptions },
+      { $skip: skip },
+      { $limit: limitNum }
+    );
+
+    // Execute aggregation and count query
     const [templates, total] = await Promise.all([
-      Template.find(filter)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
+      Template.aggregate(aggregationPipeline),
       Template.countDocuments(filter)
     ]);
 
-    res.json({
+    res.status(201).json({
       success: true,
       data: {
         templates,
@@ -70,10 +161,12 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
   }
 };
 
-// GET /templates/:id - Get single template by ID
+// GET /templates/:id - Get single template by ID with likes and project status
 const getTemplateById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { projectId } = req.query;
+    const userId = req.userId;
 
     if (!Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -82,7 +175,91 @@ const getTemplateById = async (req: Request, res: Response) => {
       });
     }
 
-    const template = await Template.findById(id).lean();
+    const aggregationPipeline: any[] = [
+      { $match: { _id: new Types.ObjectId(id) } },
+      // Join with TemplateLike to get likes count
+      {
+        $lookup: {
+          from: 'templatelikes',
+          localField: '_id',
+          foreignField: 'templateId',
+          as: 'likes'
+        }
+      },
+      // Add likesCount field
+      {
+        $addFields: {
+          likesCount: { $size: '$likes' }
+        }
+      }
+    ];
+
+    // Check if user has liked this template
+    if (userId && Types.ObjectId.isValid(userId as string)) {
+      aggregationPipeline.push({
+        $addFields: {
+          isLikedByUser: {
+            $in: [new Types.ObjectId(userId as string), '$likes.userId']
+          }
+        }
+      });
+    } else {
+      aggregationPipeline.push({
+        $addFields: {
+          isLikedByUser: false
+        }
+      });
+    }
+
+    // Check if template is in project
+    if (projectId && Types.ObjectId.isValid(projectId as string)) {
+      aggregationPipeline.push(
+        {
+          $lookup: {
+            from: 'assets',
+            let: { templateId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$projectId', new Types.ObjectId(projectId as string)] },
+                      { $eq: ['$originalTemplateId', '$$templateId'] },
+                      { $eq: ['$origin', AssetOrigin.TEMPLATE] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'projectAssets'
+          }
+        },
+        {
+          $addFields: {
+            isInProject: { $gt: [{ $size: '$projectAssets' }, 0] },
+            projectAssetId: { $arrayElemAt: ['$projectAssets._id', 0] }
+          }
+        }
+      );
+    } else {
+      aggregationPipeline.push({
+        $addFields: {
+          isInProject: false,
+          projectAssetId: null
+        }
+      });
+    }
+
+    // Remove unnecessary fields
+    aggregationPipeline.push({
+      $project: {
+        likes: 0,
+        projectAssets: 0
+      }
+    });
+
+    const result = await Template.aggregate(aggregationPipeline);
+    const template = result[0];
 
     if (!template) {
       return res.status(404).json({
@@ -106,10 +283,14 @@ const getTemplateById = async (req: Request, res: Response) => {
 };
 
 // POST /templates/:id/add-to-project - Add template to project as asset
-const addTemplateToProject =  async (req: Request, res: Response) => {
+const addTemplateToProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { projectId, customName } = req.body;
+
+    console.log(id)
+    console.log(projectId)
+    console.log(customName)
 
     // Validate template ID
     if (!Types.ObjectId.isValid(id)) {
@@ -140,14 +321,13 @@ const addTemplateToProject =  async (req: Request, res: Response) => {
     const assetTypeMapping: Record<TemplateType, AssetType> = {
       [TemplateType.VIDEO]: AssetType.VIDEO,
       [TemplateType.AUDIO]: AssetType.AUDIO,
-      [TemplateType.IMAGE]: AssetType.IMAGE,
-      [TemplateType.GIF]: AssetType.IMAGE, // GIFs are treated as images
     };
 
     // Check if template is already added to this project
     const existingAsset = await Asset.findOne({
       projectId: new Types.ObjectId(projectId),
-      'metadata.templateId': template._id
+      originalTemplateId: template._id,
+      origin: AssetOrigin.TEMPLATE
     });
 
     if (existingAsset) {
@@ -162,13 +342,15 @@ const addTemplateToProject =  async (req: Request, res: Response) => {
     const newAsset = new Asset({
       name: customName || template.name,
       type: assetTypeMapping[template.type],
+      origin: AssetOrigin.TEMPLATE,
       url: template.url,
+      thumbnail: template.thumbnail || '',
       duration: template.duration,
       bytes: template.bytes,
       projectId: new Types.ObjectId(projectId),
+      originalTemplateId: template._id,
       metadata: {
         ...template.metadata,
-        templateId: template._id,
         isFromTemplate: true,
         originalTemplateName: template.name
       }
@@ -191,6 +373,100 @@ const addTemplateToProject =  async (req: Request, res: Response) => {
   }
 };
 
+// POST /templates/:id/like - Toggle like for template
+const toggleTemplateLike = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    // Validate template ID
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid template ID'
+      });
+    }
+
+    // Validate user ID
+    if (!userId || !Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid user ID is required'
+      });
+    }
+
+    // Check if template exists
+    const template = await Template.findById(id);
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: 'Template not found'
+      });
+    }
+
+    const userObjectId = new Types.ObjectId(userId);
+    const templateObjectId = new Types.ObjectId(id);
+
+    // Check if like already exists
+    const existingLike = await TemplateLike.findOne({
+      userId: userObjectId,
+      templateId: templateObjectId
+    });
+
+    if (existingLike) {
+      // Unlike - remove the like
+      await TemplateLike.deleteOne({
+        userId: userObjectId,
+        templateId: templateObjectId
+      });
+
+      // Get updated likes count
+      const likesCount = await TemplateLike.countDocuments({
+        templateId: templateObjectId
+      });
+
+      res.json({
+        success: true,
+        message: 'Template unliked successfully',
+        data: {
+          isLiked: false,
+          likesCount
+        }
+      });
+    } else {
+      // Like - create new like
+      const newLike = new TemplateLike({
+        userId: userObjectId,
+        templateId: templateObjectId
+      });
+
+      await newLike.save();
+
+      // Get updated likes count
+      const likesCount = await TemplateLike.countDocuments({
+        templateId: templateObjectId
+      });
+
+      res.json({
+        success: true,
+        message: 'Template liked successfully',
+        data: {
+          isLiked: true,
+          likesCount
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error toggling template like:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle template like',
+      error: process.env.NODE_ENV === 'development' ? error : undefined
+    });
+  }
+};
+
+
 // POST /templates - Create new template (Admin only)
 const createNewTemplate = async (req: Request, res: Response) => {
   try {
@@ -204,7 +480,7 @@ const createNewTemplate = async (req: Request, res: Response) => {
       bytes,
       metadata = {}
     } = req.body;
-
+    
     // Validation
     if (!name || !type || !thumbnail || !url) {
       return res.status(400).json({
@@ -313,7 +589,7 @@ const updateTemplate = async (req: Request, res: Response) => {
 };
 
 // DELETE /templates/:id - Delete template (Admin only)
-const deleteTemplate =  async (req: Request, res: Response) => {
+const deleteTemplate = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -325,7 +601,6 @@ const deleteTemplate =  async (req: Request, res: Response) => {
     }
 
     const deletedTemplate = await Template.findByIdAndDelete(id);
-
     if (!deletedTemplate) {
       return res.status(404).json({
         success: false,
@@ -333,9 +608,11 @@ const deleteTemplate =  async (req: Request, res: Response) => {
       });
     }
 
-    // Optionally, you might want to handle assets that were created from this template
-    // For now, we'll just delete the template and leave the assets as they are
-    // since they're now part of user projects
+    // Clean up associated likes
+    await TemplateLike.deleteMany({ templateId: new Types.ObjectId(id) });
+
+    // Note: We don't delete assets created from this template as they are now
+    // independent resources in user projects
 
     res.json({
       success: true,
@@ -352,4 +629,12 @@ const deleteTemplate =  async (req: Request, res: Response) => {
   }
 };
 
-export {deleteTemplate, updateTemplate, createNewTemplate, getTemplateById, addTemplateToProject, fetchAllTemplates}
+export {
+  deleteTemplate,
+  updateTemplate,
+  createNewTemplate,
+  getTemplateById,
+  addTemplateToProject,
+  fetchAllTemplates,
+  toggleTemplateLike,
+};

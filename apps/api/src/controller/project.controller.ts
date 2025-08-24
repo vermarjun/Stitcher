@@ -64,7 +64,7 @@ export const createProject = async (req: Request, res: Response) => {
 // Get all projects for a user
 export const getProjectsByUser = async (req: Request, res: Response) => {
     try {
-        const { userId } = req.params;
+        const userId = req.userId;
         const user = await User.findById(userId)
             .populate({
                 path: "projects",
@@ -92,7 +92,7 @@ export const getProjectsByUser = async (req: Request, res: Response) => {
 // Get recent projects (last 2 projects updated by user)
 export const getRecentProjectsByUser = async (req: Request, res: Response) => {
     try {
-        const { userId } = req.params;
+        const userId = req.userId;
         const user = await User.findById(userId)
             .populate({
                 path: "projects",

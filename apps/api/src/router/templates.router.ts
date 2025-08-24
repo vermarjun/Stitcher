@@ -5,7 +5,8 @@ import {
     createNewTemplate, 
     getTemplateById, 
     addTemplateToProject, 
-    fetchAllTemplates
+    fetchAllTemplates,
+    toggleTemplateLike
 } from '../controller/templates.controller';
 import auth from '../middleware/auth.middleware';
 
@@ -15,6 +16,7 @@ const router: Router = express.Router();
 router.get('/', auth, fetchAllTemplates);
 router.get('/:id', auth, getTemplateById);
 router.post('/:id/add-to-project', auth, addTemplateToProject)
+router.post('/:id/like', auth, toggleTemplateLike)
 
 // Admmin only functionality add karni hai
 router.post('/', createNewTemplate);
