@@ -1,31 +1,34 @@
 import { useState } from 'react';
 import { 
-  FolderTree, 
-  Palette, 
   FileText, 
   Users, 
-  ChevronRight
+  ChevronRight,
+  ScissorsLineDashedIcon,
+  LucideNetwork,
+  LayoutTemplateIcon
 } from 'lucide-react';
-import ExplorerComponent from './Explorer.leftsidebar';
+import AssetStash from './AssetStash.leftsidebar';
 import TemplatesComponent from './Template.leftsidebar';
-import ProjectDescriptionComponent from './ProjectDescription.leftsidebar';
+import ProjectDescriptionComponent from './Script.leftsidebar';
 import CollaboratorsComponent from './Collaborators.leftsidebar';
+import TimelineTracksSidebar from './Tracks.leftsidebar';
 
-import type { Project, User } from '@/State/Types';
+import type { Asset, Project, Template, User } from '@/State/Types';
 
 interface Props {
+  assets?: Asset[],
   currentProject?: Project,
-  user?: User
+  user?: User,
+  templates: Template[];
 }
 
-// @ts-ignore
-const MainSidebar = ({currentProject, user}:Props) => {
+const MainSidebar = ({assets, currentProject, user, templates}:Props) => {
   const [activeTab, setActiveTab] = useState('explorer');
   const [isExpanded, setIsExpanded] = useState(true);
-
   const sidebarTabs = [
-    { id: 'explorer', icon: FolderTree, label: 'Explorer' },
-    { id: 'templates', icon: Palette, label: 'Templates' },
+    { id: 'explorer', icon: LucideNetwork, label: 'Explorer' },
+    { id: 'tracks', icon: ScissorsLineDashedIcon, label: 'Tracks' },
+    { id: 'templates', icon: LayoutTemplateIcon, label: 'Templates' },
     { id: 'description', icon: FileText, label: 'Project Description' },
     { id: 'collaborators', icon: Users, label: 'Collaborators' }
   ];
@@ -33,15 +36,17 @@ const MainSidebar = ({currentProject, user}:Props) => {
   const renderActiveComponent = () => {
     switch (activeTab) {
       case 'explorer':
-        return <ExplorerComponent />;
+        return <AssetStash allAssets={assets} />;
+      case 'tracks':
+        return <TimelineTracksSidebar />;
       case 'templates':
-        return <TemplatesComponent />;
+        return <TemplatesComponent  allTemplates={templates} currentProject={currentProject}/>;
       case 'description':
         return <ProjectDescriptionComponent />;
       case 'collaborators':
         return <CollaboratorsComponent />;
       default:
-        return <ExplorerComponent />;
+        return <AssetStash />;
     }
   };
 

@@ -1,293 +1,396 @@
-import { useState, useEffect } from 'react';
-import { 
-  Search,
-  ChevronDown
-} from 'lucide-react';
-
+import React, { useState } from 'react';
+import { Search, Download, FileAudio, FileVideo, Check, Loader2, Heart } from 'lucide-react';
+import { toast } from 'sonner';
+import  { type Project, type Template, TemplateType } from '@/State/Types';
 import api from '@/api';
 
-// TO DO:
-// 1) SEARCH BAR IMPLEMENT KARNA HAI
-// 2) HANDLE SORT CHANGE FEATURE KO ADD KARNA HAI
-
-// Types
-interface Template {
-  _id: string;
-  name: string;
-  description?: string;
-  type: string;
-  createdAt: string;
-  updatedAt: string;
+interface TemplateStoreProps {
+  onImportTemplate?: (template: Template) => Promise<void>;
+  currentProject?: Project;
+  allTemplates: Template[];
 }
 
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  pages: number;
-}
-
-// interface TemplatesResponse {
-//   success: boolean;
-//   data: {
-//     templates: Template[];
-//     pagination: PaginationInfo;
-//   };
-// }
-
-// Mock API function - replace with your actual api import
-// const api = {
-//   get: async (url: string) => {
-//     // This is a mock - replace with your actual api.get call
-//     const mockData: TemplatesResponse = {
-//       success: true,
-//       data: {
-//         templates: Array.from({ length: 12 }, (_, i) => ({
-//           _id: `template_${i + 1}`,
-//           name: `Template ${i + 1}`,
-//           description: `Description for template ${i + 1}`,
-//           type: ['images', 'videos', 'audio', 'gifs'][i % 4],
-//           createdAt: new Date().toISOString(),
-//           updatedAt: new Date().toISOString(),
-//         })),
-//         pagination: {
-//           page: 1,
-//           limit: 20,
-//           total: 12,
-//           pages: 1
-//         }
-//       }
-//     };
-//     return { data: mockData };
-//   }
-// };
-
-const TemplatesComponent = () => {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
-  
-  // Filter states
-  const [activeCategory, setActiveCategory] = useState('');
+const TemplateStore: React.FC<TemplateStoreProps> = ({ 
+  onImportTemplate,
+  currentProject,
+  allTemplates
+}) => {
+  const [templates, setTemplates] = useState<Template[]>(allTemplates);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedType, setSelectedType] = useState<TemplateType | 'all'>('all');
+  const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
+  const [successAnimations, setSuccessAnimations] = useState<Set<string>>(new Set());
+  const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
+  const [likeAnimations, setLikeAnimations] = useState<Set<string>>(new Set());
 
-  const categories = [
-    { id: '', name: 'All', count: 0 },
-    { id: 'images', name: 'Images', count: 0 },
-    { id: 'videos', name: 'Videos', count: 0 },
-    { id: 'audio', name: 'Audio', count: 0 },
-    { id: 'gifs', name: 'GIFs', count: 0 },
-  ];
+  // Filter templates based on search, type, and liked status
+  const filteredTemplates = templates.filter(template => {
+    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = selectedType === 'all' || template.type === selectedType;
+    return matchesSearch && matchesType;
+  });
 
-  const sortOptions = [
-    { value: 'createdAt', label: 'Created Date' },
-    { value: 'updatedAt', label: 'Updated Date' },
-    { value: 'name', label: 'Name' },
-  ];
+  const formatFileSize = (bytes: number): string => {
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)}MB`;
+  };
 
-  const fetchTemplates = async () => {
+  const formatDuration = (seconds?: number): string => {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleLikeTemplate = async (template: Template) => {
+    setLikingIds(prev => new Set(prev).add(template._id));
+    
+    // Store the current liked state to determine if we should show animation
+    const wasLiked = template.isLikedByUser;
+    
     try {
-      setLoading(true);
-      
-      const params = new URLSearchParams();
-      if (activeCategory) params.append('type', activeCategory);
-      if (searchQuery) params.append('search', searchQuery);
-      params.append('page', currentPage.toString());
-      params.append('limit', '20');
-      params.append('sortBy', sortBy);
-      params.append('sortOrder', sortOrder);
-
-      // Replace this with: const response = await api.get(`/template?${params.toString()}`);
-      const response = await api.get(`/template?${params.toString()}`);
-      
-      if (response.data.success) {
-        setTemplates(response.data.data.templates);
-        setPagination(response.data.data.pagination);
+      const response = await api.post(`/template/${template._id}/like`);
+      console.log(response.data)
+      if (!response.data.success) {
+        throw new Error('Network connection failed. Please try again.');
+      } else {
+        toast.success(response.data.message)
       }
+
+      // Update template state - toggle the like status
+      setTemplates(prev => prev.map(t => 
+        t._id === template._id 
+          ? { 
+              ...t, 
+              isLikedByUser: !t.isLikedByUser,
+              likesCount: response.data.data.likesCount
+            }
+          : t
+      ));
+
+      // Show animation only if the item is being liked (not unliked)
+      if (!wasLiked) {
+        setLikeAnimations(prev => new Set(prev).add(template._id));
+        
+        // Remove animation after delay
+        setTimeout(() => {
+          setLikeAnimations(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(template._id);
+            return newSet;
+          });
+        }, 1000);
+      }
+      
     } catch (error) {
-      console.error('Error fetching templates:', error);
-      setTemplates([]);
+      toast.error('Like unsuccessful', {
+        description: error instanceof Error ? error.message : 'Failed to like template',
+        duration: 4000,
+      });
     } finally {
-      setLoading(false);
+      setLikingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(template._id);
+        return newSet;
+      });
     }
   };
 
-  useEffect(() => {
-    fetchTemplates();
-  }, [
-    activeCategory, 
-    // searchQuery, 
-    sortBy, 
-    sortOrder, 
-    currentPage
-  ]);
+  const handleImportTemplate = async (template: Template) => {
+    if (template.isInProject) {
+      toast.error('Template already in project');
+      return;
+    }
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1); // Reset to first page on new search
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    setImportingIds(prev => new Set(prev).add(template._id));
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
+    try {
+      // Simulate API call delay
+      // await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log(currentProject)
+      const response = await api.post(`/template/${template._id}/add-to-project`,{
+        projectId: currentProject?._id,
+        customName: template.name
+      });
+
+      console.log(response);
+
+      if (onImportTemplate) {
+        await onImportTemplate(template);
+      }
+
+      // Update template state to show it's now in project
+      setTemplates(prev => prev.map(t => 
+        t._id === template._id 
+          ? { ...t, isInProject: true, projectAssetId: `asset-${Date.now()}` }
+          : t
+      ));
+
+      // Show success animation
+      setSuccessAnimations(prev => new Set(prev).add(template._id));
+      
+      // Success toast with custom styling
+      toast.success('Template imported successfully!', {
+        description: `${template.name} has been added to your project`,
+        duration: 3000,
+      });
+
+      // Remove success animation after delay
+      setTimeout(() => {
+        setSuccessAnimations(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(template._id);
+          return newSet;
+        });
+      }, 2000);
+
+    } catch (error) {
+      toast.error('Failed to import template', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        duration: 4000,
+      });
+    } finally {
+      setImportingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(template._id);
+        return newSet;
+      });
+    }
   };
 
-  const handleCategoryChange = (categoryId: string) => {
-    setActiveCategory(categoryId);
-    setCurrentPage(1);
+  const TemplateCard: React.FC<{ template: Template }> = ({ template }) => {
+    const isImporting = importingIds.has(template._id);
+    const showSuccess = successAnimations.has(template._id);
+    const isLiking = likingIds.has(template._id);
+    const showLikeAnimation = likeAnimations.has(template._id);
+
+    return (
+      <div className={`relative bg-zinc-900 rounded-lg overflow-hidden cursor-pointer group hover:bg-zinc-800 transition-all duration-200 ${
+        template.isInProject 
+          ? 'shadow-lg shadow-green-500/20 ring-1 ring-green-500/30' 
+          : 'hover:shadow-lg'
+      }`}>
+        <div className="flex items-center p-2.5 gap-2.5">
+          {/* Thumbnail */}
+          <div className="flex-shrink-0 w-12 h-12 bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
+            {template.thumbnail ? (
+              <img
+                src={template.thumbnail}
+                alt={template.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-zinc-500">
+                {template.type === TemplateType.VIDEO ? (
+                  <FileVideo className="w-4 h-4" />
+                ) : (
+                  <FileAudio className="w-4 h-4" />
+                )}
+              </div>
+            )}
+            
+            {/* Duration overlay */}
+            {template.duration && (
+              <div className="absolute bottom-0 right-0 bg-black bg-opacity-80 text-white text-[9px] px-1 py-0.5 leading-none">
+                {formatDuration(template.duration)}
+              </div>
+            )}
+          </div>
+          
+          {/* Template Info */}
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-sm font-semibold text-white truncate pr-1 leading-tight">
+                {template.name}
+              </h3>
+              <div className="text-zinc-400 flex-shrink-0 ml-1">
+                {template.type === TemplateType.VIDEO ? (
+                  <FileVideo className="w-3 h-3" />
+                ) : (
+                  <FileAudio className="w-3 h-3" />
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-1">
+              <span className="uppercase font-medium tracking-wide">
+                {template.type}
+              </span>
+              <span className="text-zinc-500">{formatFileSize(template.bytes)}</span>
+            </div>
+            
+            {/* Likes and Actions Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                {/* Like Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLikeTemplate(template);
+                  }}
+                  disabled={isLiking}
+                  className={`relative flex items-center justify-center w-5 h-5 rounded-full transition-all duration-200 ${
+                    template.isLikedByUser 
+                      ? 'text-red-500 hover:text-red-600' 
+                      : 'text-white hover:text-red-400 hover:bg-red-500/10'
+                  }`}
+                >
+                  {isLiking ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Heart 
+                      className={`w-3 h-3 transition-all duration-200 ${
+                        template.isLikedByUser ? 'fill-current' : ''
+                      }`} 
+                    />
+                  )}
+                  
+                  {/* Cute animation overlay - only shows when liking (not unliking) */}
+                  {showLikeAnimation && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Heart className="w-4 h-4 text-red-500 fill-current animate-bounce" />
+                    </div>
+                  )}
+                </button>
+                
+                {/* Likes Count */}
+                <span className="text-[10px] font-medium text-white rounded-full">
+                  {template.likesCount} Likes
+                </span>
+              </div>
+              
+              {/* Import Status / Button */}
+              <div className="flex-shrink-0">
+                {isImporting ? (
+                  <div className="w-5 h-5 bg-zinc-700 rounded-full flex items-center justify-center">
+                    <Loader2 className="w-2.5 h-2.5 text-zinc-400 animate-spin" />
+                  </div>
+                ) : showSuccess ? (
+                  <div className="w-5 h-5 bg-green-600 rounded-full flex items-center justify-center animate-pulse">
+                    <Check className="w-2.5 h-2.5 text-white" />
+                  </div>
+                ) : template.isInProject ? (
+                  <div className="text-green-400 text-[9px] font-medium px-1.5 py-0.5 bg-green-500/10 rounded-full border border-green-500/20">
+                    Added
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleImportTemplate(template);
+                    }}
+                    className="bg-zinc-300 hover:bg-zinc-200 rounded-md flex items-center justify-center transition-all duration-200 py-0.5 px-2"
+                  >
+                    <div className='flex items-center justify-center gap-1'>
+                      <Download className="w-2.5 h-2.5 text-black" /> 
+                      <span className='text-[10px] text-black font-medium'>
+                        Import
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Success overlay animation */}
+        {showSuccess && (
+          <div className="absolute inset-0 bg-green-600/20 flex items-center justify-center animate-in fade-in duration-300">
+            <div className="bg-green-600 text-white rounded-full p-3 animate-in zoom-in duration-300">
+              <Check className="w-6 h-6" />
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
-
-  // ADD THIS
-
-  // const handleSortChange = (newSortBy: string) => {
-  //   if (newSortBy === sortBy) {
-  //     setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-  //   } else {
-  //     setSortBy(newSortBy);
-  //     setSortOrder('desc');
-  //   }
-  //   setCurrentPage(1);
-  // };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-3 border-b border-neutral-800 flex-shrink-0">
-        <h2 className="text-sm font-semibold text-white uppercase tracking-wide mb-3">Templates</h2>
-        <div className="relative mb-3">
-          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400" />
+    <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">
+      {/* Header */}
+      <div className="p-3 border-b border-zinc-800">
+        <h2 className="text-base font-semibold text-white mb-2">Template Store</h2>
+        
+        {/* Search */}
+        <div className="relative mb-2">
+          <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-zinc-400" />
           <input
             type="text"
             placeholder="Search templates..."
             value={searchQuery}
-            onChange={handleSearchChange}
-            className="w-full bg-neutral-900 border border-neutral-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-neutral-400 focus:outline-none focus:border-blue-500 transition-colors"
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:border-zinc-600 focus:outline-none transition-colors"
           />
         </div>
 
-        {/* Sort Dropdown */}
-        <div className="relative">
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [newSortBy, newSortOrder] = e.target.value.split('-');
-              setSortBy(newSortBy);
-              setSortOrder(newSortOrder as 'asc' | 'desc');
-              setCurrentPage(1);
-            }}
-            className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none"
+        {/* Type Filter Tabs */}
+        <div className="flex bg-zinc-900 rounded-lg p-1 mb-2">
+          <button
+            onClick={() => setSelectedType('all')}
+            className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              selectedType === 'all' 
+                ? 'bg-white text-black' 
+                : 'text-zinc-400 hover:text-white'
+            }`}
           >
-            {sortOptions.map(option => (
-              <>
-                <option key={`${option.value}-desc`} value={`${option.value}-desc`}>
-                  {option.label} (Newest First)
-                </option>
-                <option key={`${option.value}-asc`} value={`${option.value}-asc`}>
-                  {option.label} (Oldest First)
-                </option>
-              </>
-            ))}
-          </select>
-          <ChevronDown size={16} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            All
+          </button>
+          <button
+            onClick={() => setSelectedType(TemplateType.VIDEO)}
+            className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              selectedType === TemplateType.VIDEO 
+                ? 'bg-white text-black' 
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Video
+          </button>
+          <button
+            onClick={() => setSelectedType(TemplateType.AUDIO)}
+            className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              selectedType === TemplateType.AUDIO 
+                ? 'bg-white text-black' 
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Audio
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Category Tabs */}
-        <div className="border-b border-neutral-800 p-2 flex-shrink-0">
-          <div className="flex flex-wrap gap-2">
-            {categories.map(category => (
-              <button
-                key={category.id}
-                onClick={() => handleCategoryChange(category.id)}
-                className={`px-2 py-1 text-xs rounded transition-colors ${
-                  activeCategory === category.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Templates Grid */}
-        <div className="flex-1 overflow-y-auto p-3 min-h-0">
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="text-neutral-400 text-sm">Loading templates...</div>
-            </div>
-          ) : templates.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="text-neutral-400 text-sm">No templates found</div>
-            </div>
+      {/* Templates List - Single Column Tiles */}
+      <div className="flex-1 overflow-y-auto p-3">
+        <div className="space-y-2">
+          {filteredTemplates.length > 0 ? (
+            filteredTemplates.map((template) => (
+              <TemplateCard key={template._id} template={template} />
+            ))
           ) : (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                {templates.map(template => (
-                  <div
-                    key={template._id}
-                    className="bg-neutral-900 rounded-lg overflow-hidden border border-neutral-800 hover:border-neutral-600 cursor-pointer group transition-all"
-                  >
-                    <div className="aspect-video bg-neutral-800 relative">
-                      <div className="w-full h-full flex items-center justify-center text-neutral-500 text-xs">
-                        {template.type.toUpperCase()}
-                      </div>
-                    </div>
-                    <div className="p-2">
-                      <p className="text-xs text-neutral-300 truncate font-medium">{template.name}</p>
-                      {template.description && (
-                        <p className="text-xs text-neutral-500 truncate mt-1">{template.description}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Pagination */}
-              {pagination && pagination.pages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-neutral-800">
-                  <button
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 text-xs bg-neutral-800 text-neutral-300 rounded hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  
-                  <span className="text-xs text-neutral-400">
-                    Page {pagination.page} of {pagination.pages}
-                  </span>
-                  
-                  <button
-                    onClick={() => setCurrentPage(Math.min(pagination.pages, currentPage + 1))}
-                    disabled={currentPage === pagination.pages}
-                    className="px-3 py-1 text-xs bg-neutral-800 text-neutral-300 rounded hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-
-              {/* Results info */}
-              {pagination && (
-                <div className="text-center mt-2">
-                  <p className="text-xs text-neutral-500">
-                    Showing {templates.length} of {pagination.total} templates
-                  </p>
-                </div>
-              )}
-            </>
+            <div className="text-center text-zinc-500 mt-6">
+              <div className="text-2xl mb-2">🎬</div>
+              <p className="text-xs">No {selectedType === 'all' ? '' : selectedType} templates found</p>
+            </div>
           )}
+        </div>
+      </div>
+      
+      {/* Footer Stats */}
+      <div className="p-3 border-t border-zinc-800 bg-zinc-950">
+        <div className="text-[10px] text-zinc-400 space-y-1">
+          <div className="flex justify-between">
+            <span>Total Templates:</span>
+            <span className="text-white">{templates.length}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>In Project:</span>
+            <span className="text-white">{templates.filter(t => t.isInProject).length}</span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default TemplatesComponent;
+export default TemplateStore;

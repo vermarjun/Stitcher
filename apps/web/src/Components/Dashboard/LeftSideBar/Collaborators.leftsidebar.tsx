@@ -1,4 +1,3 @@
-// src/Components/Dashboard/Sidebar/Collaborators.tsx
 import { Users } from 'lucide-react';
 
 const CollaboratorsComponent = () => {
