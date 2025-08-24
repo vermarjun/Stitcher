@@ -9,15 +9,15 @@ export enum TextAnimationType {
 
 // Base interface for TimelineItem
 export interface ITimelineItemBase extends Document {
-    type: 'video' | 'audio' | 'image' | 'text';
+    type: 'video' | 'audio' | 'text';
     trackId: Types.ObjectId;
     startTime: number; // Position on timeline in seconds
     endTime: number;   // Position on timeline in seconds
-    assetId?: Types.ObjectId; // Reference to Asset for video/audio/image
+    assetId?: Types.ObjectId; // Reference to Asset for video/audio
     metadata: Record<string, any>;
     // Shared properties
     volume?: number; // For audio/video
-    opacity?: number; // 0-1 for video/image/text
+    opacity?: number; // 0-1 for video/text
     x?: number; // Position for overlays
     y?: number;
     scaleX?: number;
@@ -39,14 +39,10 @@ export interface IAudioTimelineItem extends ITimelineItemBase {
     assetId: Types.ObjectId;
     sourceStartTime: number;
     sourceEndTime: number;
+    speed: number; // Playback speed
     volume: number;
     fadeIn?: number;
     fadeOut?: number;
-}
-
-export interface IImageTimelineItem extends ITimelineItemBase {
-    type: 'image';
-    assetId: Types.ObjectId;
 }
 
 export interface ITextTimelineItem extends ITimelineItemBase {
@@ -57,14 +53,13 @@ export interface ITextTimelineItem extends ITimelineItemBase {
     color: string;
     animationIn?: TextAnimationType;
     animationOut?: TextAnimationType;
-    // Omit assetId for text
 }
 
-export type ITimelineItem = IVideoTimelineItem | IAudioTimelineItem | IImageTimelineItem | ITextTimelineItem;
+export type ITimelineItem = IVideoTimelineItem | IAudioTimelineItem | ITextTimelineItem;
 
 // TimelineItem Schema (flexible for all types)
 const TimelineItemSchema = new Schema<ITimelineItem>({
-    type: { type: String, enum: ['video', 'audio', 'image', 'text'], required: true },
+    type: { type: String, enum: ['video', 'audio', 'text'], required: true },
     trackId: { type: Schema.Types.ObjectId, ref: 'Track', required: true },
     startTime: { type: Number, required: true },
     endTime: { type: Number, required: true },
@@ -96,7 +91,7 @@ const TimelineItemSchema = new Schema<ITimelineItem>({
 // Pre-save hook to validate fields based on type (optional, for robustness)
 TimelineItemSchema.pre('save', function(next) {
     const item = this as ITimelineItem;
-    if (['video', 'audio', 'image'].includes(item.type) && !item.assetId) {
+    if (['video', 'audio'].includes(item.type) && !item.assetId) {
         return next(new Error(`${item.type} items require an assetId`));
     }
     if (item.type === 'text' && !item.content) {

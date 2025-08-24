@@ -1,29 +1,31 @@
-import {Schema, Document, Model, model} from "mongoose";
+import {Schema, Document, Model, model, Types} from "mongoose";
 
 export enum TemplateType {
   VIDEO = 'video',
   AUDIO = 'audio',
-  IMAGE = 'images',
-  GIF = 'gifs'
 }
 
 export interface ITemplate extends Document {
     name: string;
     description?: string;
-    type: TemplateType; // Fixed: was ITemplate, should be TemplateType
-    thumbnail?: string; // Not added in case of images, else always added.
+    type: TemplateType;
+    thumbnail?: string; 
     url: string; 
     duration?: number;
     bytes: number;
     metadata: Record<string, any>;
-    tags?: string[];
+    // Virtual fields for frontend
+    likesCount?: number;
+    isLikedByUser?: boolean;
+    isInProject?: boolean;  // New field to show if template is already in current project
+    projectAssetId?: string; // ID of the asset if already in project (for easy removal)
 }
 
 const TemplateSchema = new Schema<ITemplate>({
     name: { 
         type: String, 
         required: true,
-        unique: true, // Prevent duplicate template names
+        unique: true,
     },
     description: { 
         type: String,
@@ -35,7 +37,8 @@ const TemplateSchema = new Schema<ITemplate>({
     },
     thumbnail: { 
         type: String, 
-        required: true 
+        required: true,
+        default: ""
     },
     url: { 
         type: String, 
@@ -53,12 +56,19 @@ const TemplateSchema = new Schema<ITemplate>({
     metadata: { 
         type: Schema.Types.Mixed, 
         default: {} 
-    },
-    tags: [{
-        type: String,
-    }],
+    }
 }, { 
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+});
+
+// Virtual for likes count (will be populated via aggregation)
+TemplateSchema.virtual('likesCount', {
+    ref: 'TemplateLike',
+    localField: '_id',
+    foreignField: 'templateId',
+    count: true
 });
 
 const Template: Model<ITemplate> = model<ITemplate>('Template', TemplateSchema);

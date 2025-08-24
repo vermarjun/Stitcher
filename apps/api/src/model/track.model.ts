@@ -3,12 +3,11 @@ import {Schema, Document, Types, Model, model} from "mongoose";
 export enum TrackType {
   VIDEO = 'video',
   AUDIO = 'audio',
-  OVERLAY = 'overlay' // For images and text overlays
+  TEXT = 'text' // For text overlays
 }
 
 // Interface representing a Track document
 export interface ITrack extends Document {
-    name: string;
     type: TrackType;
     projectId: Types.ObjectId;
     timelineId: Types.ObjectId;
@@ -20,7 +19,6 @@ export interface ITrack extends Document {
 
 // Track Schema
 const TrackSchema = new Schema<ITrack>({
-    name: { type: String, required: true },
     type: { type: String, enum: Object.values(TrackType), required: true },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
     timelineId: { type: Schema.Types.ObjectId, ref: 'Timeline', required: true },
