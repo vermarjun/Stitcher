@@ -7,6 +7,7 @@ import Timeline from "../model/timeline.model";
 import Asset from "../model/asset.model";
 import Track from "../model/track.model";
 import TimelineItem from "../model/timelineitem.model";
+import { Types } from "mongoose";
 
 // Create a new project for a user
 export const createProject = async (req: Request, res: Response) => {
@@ -41,6 +42,42 @@ export const createProject = async (req: Request, res: Response) => {
         // Update project with timeline reference
         savedProject.timeline = savedTimeline._id as mongoose.Types.ObjectId;
         await savedProject.save({ session });
+
+        // Create videotrack 
+        const videoTrack = new Track({
+            type: 'video',
+            projectId: savedProject._id,
+            timelineId: savedTimeline._id,
+            items: []
+        });
+        const savedVideoTrack = await videoTrack.save({ session });
+        // Update timeline with video track reference
+        timeline.tracks.push(savedVideoTrack._id as Types.ObjectId);
+        await timeline.save();
+
+        // Create audio track
+        const audioTrack = new Track({
+            type: 'audio',
+            projectId: savedProject._id,
+            timelineId: savedTimeline._id,
+            items: []
+        });
+        const savedAudioTrack = await audioTrack.save({ session });
+        // Update timeline with video track reference
+        timeline.tracks.push(savedAudioTrack._id as Types.ObjectId);
+        await timeline.save();
+
+        // Create text track
+        const textTrack = new Track({
+            type: 'text',
+            projectId: savedProject._id,
+            timelineId: savedTimeline._id,
+            items: []
+        });
+        const savedTextTrack = await textTrack.save({ session });
+        // Update timeline with video track reference
+        timeline.tracks.push(savedTextTrack._id as Types.ObjectId);
+        await timeline.save();
         
         // Push project to user's projects array
         await User.findByIdAndUpdate(userId, {
@@ -74,7 +111,10 @@ export const getProjectsByUser = async (req: Request, res: Response) => {
                         populate: {
                             path: "tracks",
                             populate: {
-                                path: "items"
+                                path: 'items',
+                                populate: {
+                                    path: 'assetId'
+                                }
                             }
                         }
                     },

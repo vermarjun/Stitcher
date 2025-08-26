@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
 import { Types } from 'mongoose';
+import { v2 as cloudinary } from 'cloudinary';
 
 // Create a new asset
 export const createAsset = async (req: Request, res: Response): Promise<void> => {
@@ -80,7 +81,7 @@ export const createAsset = async (req: Request, res: Response): Promise<void> =>
     });
 
     const savedAsset = await asset.save();
-    
+
     res.status(201).json({
       success: true,
       data: savedAsset
@@ -267,43 +268,6 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// Delete asset
-export const deleteAsset = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-
-    if (!Types.ObjectId.isValid(id)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid asset ID format'
-      });
-      return;
-    }
-
-    const asset = await Asset.findByIdAndDelete(id);
-
-    if (!asset) {
-      res.status(404).json({
-        success: false,
-        message: 'Asset not found'
-      });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Asset deleted successfully',
-      data: asset
-    });
-  } catch (error) {
-    console.error('Error deleting asset:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-};
-
 // Get assets by project ID
 export const getAssetsByProject = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -479,3 +443,169 @@ export const getAssetsStats = async (req: Request, res: Response): Promise<void>
     });
   }
 };
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+interface UploadSignatureRequest {
+  projectId: string;
+  resourceType: 'video' | 'audio';
+}
+
+interface SaveAssetMetadataRequest {
+  name: string;
+  type: AssetType;
+  url: string;
+  thumbnail: string;
+  duration?: number;
+  width?: number;
+  height?: number;
+  bytes: number;
+  metadata: Record<string, any>;
+  projectId: string;
+  cloudinaryPublicId: string;
+}
+
+// Generate signed upload parameters for Cloudinary
+export const generateUploadSignature = async (req: Request<{}, {}, UploadSignatureRequest>, res: Response) => {
+  try {
+    const { projectId, resourceType } = req.body;
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+
+    if (!['video', 'audio'].includes(resourceType)) {
+      return res.status(400).json({ error: 'Resource type must be video or audio' });
+    }
+
+    // Generate timestamp for signature
+    const timestamp = Math.round(new Date().getTime() / 1000);
+
+    // Define upload parameters
+    const uploadParams = {
+      timestamp,
+      folder: `projects/${projectId}/${resourceType}s`,
+      resource_type: resourceType,
+      quality: 'auto',
+      fetch_format: 'auto',
+    };
+
+    // Generate signature
+    const signature = cloudinary.utils.api_sign_request(uploadParams, process.env.CLOUDINARY_API_SECRET!);
+
+    // Return upload parameters and signature
+    res.json({
+      signature,
+      timestamp,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      uploadParams,
+    });
+  } catch (error) {
+    console.error('Error generating upload signature:', error);
+    res.status(500).json({ error: 'Failed to generate upload signature' });
+  }
+}
+
+// Save asset metadata to MongoDB after successful Cloudinary upload
+export const saveAssetMetadata = async (req: Request<{}, {}, SaveAssetMetadataRequest>, res: Response) => {
+  try {
+    const {
+      name,
+      type,
+      url,
+      thumbnail,
+      duration,
+      width,
+      height,
+      bytes,
+      metadata,
+      projectId,
+      cloudinaryPublicId,
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !type || !url || !projectId) {
+      return res.status(400).json({
+        error: 'Name, type, url, and projectId are required'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!Types.ObjectId.isValid(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID format' });
+    }
+
+    // Create new asset document
+    const asset = new Asset({
+      name,
+      type,
+      origin: AssetOrigin.UPLOAD,
+      url,
+      thumbnail: thumbnail || '',
+      duration,
+      width,
+      height,
+      bytes,
+      metadata: {
+        ...metadata,
+        cloudinaryPublicId,
+      },
+      projectId: new Types.ObjectId(projectId),
+    });
+
+    // Save to database
+    const savedAsset = await asset.save();
+
+    res.status(201).json({
+      success: true,
+      asset: savedAsset,
+    });
+  } catch (error) {
+    console.error('Error saving asset metadata:', error);
+    res.status(500).json({ error: 'Failed to save asset metadata' });
+  }
+}
+
+// Delete asset from both database and Cloudinary
+export const deleteAsset = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+
+    if (!Types.ObjectId.isValid(assetId)) {
+      return res.status(400).json({ error: 'Invalid asset ID format' });
+    }
+
+    // Find asset in database
+    const asset = await Asset.findById(assetId);
+    if (!asset) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+
+    // Delete from Cloudinary if it has a public ID
+    const cloudinaryPublicId = asset.metadata?.cloudinaryPublicId;
+    if (cloudinaryPublicId) {
+      try {
+        await cloudinary.uploader.destroy(cloudinaryPublicId, {
+          resource_type: asset.type === AssetType.AUDIO ? 'video' : 'video'
+        });
+      } catch (cloudinaryError) {
+        console.error('Error deleting from Cloudinary:', cloudinaryError);
+        // Continue with database deletion even if Cloudinary deletion fails
+      }
+    }
+
+    // Delete from database
+    await Asset.findByIdAndDelete(assetId);
+
+    res.json({ success: true, message: 'Asset deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting asset:', error);
+    res.status(500).json({ error: 'Failed to delete asset' });
+  }
+}

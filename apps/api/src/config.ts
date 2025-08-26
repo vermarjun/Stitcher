@@ -32,6 +32,21 @@ if (process.env.EMAIL_APP_PASSWORD == undefined){
 }
 export const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
 
+if (process.env.CLOUDINARY_API_KEY == undefined){
+    throw new Error("CLOUDINARY_API_KEY is not defined in environment variables");
+}
+export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
+
+if (process.env.CLOUDINARY_API_SECRET == undefined){
+    throw new Error("CLOUDINARY_API_SECRET is not defined in environment variables");
+}
+export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
+
+if (process.env.CLOUDINARY_CLOUD_NAME == undefined){
+    throw new Error("CLOUDINARY_CLOUD_NAME is not defined in environment variables");
+}
+export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+
 export interface JwtConfig {
   secret: string;
   expiresIn: string | number;
@@ -57,3 +72,13 @@ export const EMAIL_CONFIG = {
     user: EMAIL_USER || "",
     pass: EMAIL_APP_PASSWORD || "",
 };
+
+console.log(CLOUDINARY_API_KEY)
+console.log(CLOUDINARY_API_SECRET)
+console.log(CLOUDINARY_CLOUD_NAME)
+
+export const CLOUDINARY_CONFIG = {
+    CLOUDINARY_CLOUD_NAME: CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY: CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET: CLOUDINARY_API_SECRET
+}

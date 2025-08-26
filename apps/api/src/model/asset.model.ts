@@ -23,6 +23,7 @@ export interface IAsset extends Document {
     bytes: number;
     metadata: Record<string, any>;
     projectId: Types.ObjectId;
+    isOnTimeline: Boolean;
     // Optional reference to original template (when origin is TEMPLATE)
     originalTemplateId?: Types.ObjectId;
 }
@@ -39,6 +40,7 @@ const AssetSchema = new Schema<IAsset>({
     bytes: { type: Number, default: 0 },
     metadata: { type: Schema.Types.Mixed, default: {} },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    isOnTimeline: {type: Boolean, default:false},
     // Reference to original template when asset is created from template
     originalTemplateId: { type: Schema.Types.ObjectId, ref: 'Template' }
 }, { timestamps: true });

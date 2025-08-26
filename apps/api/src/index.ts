@@ -10,7 +10,8 @@ import userRoutes from "./router/user.router"
 import projectRoutes from "./router/project.router"
 import searchRoutes from "./router/searchBar.router"
 import templateRoutes from "./router/templates.router"
-// import chatRoutes from "./router/chat.routes"
+import assetRoutes from "./router/asset.router"
+import trackRoutes from "./router/track.router"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -40,6 +41,9 @@ app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/project`, projectRoutes);
 app.use(`${API_PREFIX}/template`, templateRoutes);
 app.use(`${API_PREFIX}/search`, searchRoutes);
+app.use(`${API_PREFIX}/asset`, assetRoutes);
+app.use(`${API_PREFIX}/track`, trackRoutes);
+
 // app.use(`${API_PREFIX}/chat`, chatRoutes);
 
 // Start the server
