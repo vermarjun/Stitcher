@@ -1,262 +1,128 @@
-import React, { useState } from 'react';
-import { Play, Music, Type, Clock, Volume2, VolumeX, Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, Music, Type, Volume2, VolumeX, Eye, Lock } from 'lucide-react';
+import api from '@/api';
+import type { Project } from '@/State/Types';
 
-// Enums based on your schema
-enum TrackType {
-  VIDEO = 'video',
-  AUDIO = 'audio',
-  TEXT = 'text'
+import { TrackType } from '@/State/Types';
+import type { IAudioTimelineItem, IVideoTimelineItem, ITextTimelineItem, ITrack } from '@/State/Types';
+import BeautifulLoader from '@/Components/ShimmerDotLoader';
+
+interface Props {
+  currentProject?:Project
 }
 
-enum AssetType {
-  VIDEO = 'video',
-  AUDIO = 'audio',
-}
+// FIX UI:
 
-enum AssetOrigin {
-  TEMPLATE = 'template',
-  UPLOAD = 'upload',
-  GENERATED_VIDEO = 'generated_video'
-}
+// 1) ADD A DELETE BUTTON
+// 2) hOVER EFFECT AND ANIMATIONS FIX KAR BC
+// 3) THUMBNAIL LOOKS UGLY AF FIX IT
+// 4) ADD BUTTONS TO UPDATE THE VARIABLES LIKE VOLUME, MUTE, OPACITY ETC
+// 5) DISPLAY THE INFORMATION PROPERLY, EVERYTHING LOOKS REALLY REALLY UGLY RN
+// 6) Add a play button that will load the asset into video player directly
+// 7) What wrong with that green color stupid button at top right corner? Use proper labels to represent origin
 
-enum TextAnimationType {
-  FADE_IN = 'fadeIn',
-  FADE_OUT = 'fadeOut',
-  NONE = 'none'
-}
-
-// Interfaces based on your schema
-interface IAsset {
-  _id: string;
-  name: string;
-  type: AssetType;
-  origin: AssetOrigin;
-  url: string;
-  thumbnail: string;
-  duration?: number;
-  width?: number;
-  height?: number;
-  bytes: number;
-  metadata: Record<string, any>;
-  projectId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ITimelineItemBase {
-  _id: string;
-  type: 'video' | 'audio' | 'text';
-  trackId: string;
-  startTime: number;
-  endTime: number;
-  assetId?: string;
-  metadata: Record<string, any>;
-  volume?: number;
-  opacity?: number;
-  x?: number;
-  y?: number;
-  scaleX?: number;
-  scaleY?: number;
-  rotation?: number;
-}
-
-interface IVideoTimelineItem extends ITimelineItemBase {
-  type: 'video';
-  assetId: string;
-  sourceStartTime: number;
-  sourceEndTime: number;
-  speed: number;
-  asset?: IAsset;
-}
-
-interface IAudioTimelineItem extends ITimelineItemBase {
-  type: 'audio';
-  assetId: string;
-  sourceStartTime: number;
-  sourceEndTime: number;
-  speed: number;
-  volume: number;
-  fadeIn?: number;
-  fadeOut?: number;
-  asset?: IAsset;
-}
-
-interface ITextTimelineItem extends ITimelineItemBase {
-  type: 'text';
-  content: string;
-  fontFamily: string;
-  fontSize: number;
-  color: string;
-  animationIn?: TextAnimationType;
-  animationOut?: TextAnimationType;
-}
-
-type ITimelineItem = IVideoTimelineItem | IAudioTimelineItem | ITextTimelineItem;
-
-interface ITrack {
-  _id: string;
-  type: TrackType;
-  projectId: string;
-  timelineId: string;
-  order: number;
-  locked: boolean;
-  muted: boolean;
-  items: ITimelineItem[];
-}
-
-// Sample data
-const sampleAssets: IAsset[] = [
-  {
-    _id: '1',
-    name: 'Opening Scene.mp4',
-    type: AssetType.VIDEO,
-    origin: AssetOrigin.UPLOAD,
-    url: 'https://example.com/video1.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=400&h=120&fit=crop',
-    duration: 45,
-    width: 1920,
-    height: 1080,
-    bytes: 25600000,
-    metadata: {},
-    projectId: 'project1',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z'
-  },
-  {
-    _id: '2',
-    name: 'Background Music.mp3',
-    type: AssetType.AUDIO,
-    origin: AssetOrigin.TEMPLATE,
-    url: 'https://example.com/audio1.mp3',
-    thumbnail: '',
-    duration: 180,
-    bytes: 5120000,
-    metadata: {},
-    projectId: 'project1',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z'
-  }
-];
-
-const sampleTracks: ITrack[] = [
-  {
-    _id: 'track1',
-    type: TrackType.VIDEO,
-    projectId: 'project1',
-    timelineId: 'timeline1',
-    order: 1,
-    locked: false,
-    muted: false,
-    items: [
-      {
-        _id: 'item1',
-        type: 'video',
-        trackId: 'track1',
-        startTime: 0,
-        endTime: 30,
-        assetId: '1',
-        sourceStartTime: 5,
-        sourceEndTime: 35,
-        speed: 1,
-        volume: 0.8,
-        opacity: 1,
-        metadata: {},
-        asset: sampleAssets[0]
-      } as IVideoTimelineItem,
-      {
-        _id: 'item2',
-        type: 'video',
-        trackId: 'track1',
-        startTime: 35,
-        endTime: 50,
-        assetId: '1',
-        sourceStartTime: 10,
-        sourceEndTime: 25,
-        speed: 1.2,
-        volume: 1,
-        opacity: 0.9,
-        metadata: {},
-        asset: sampleAssets[0]
-      } as IVideoTimelineItem
-    ]
-  },
-  {
-    _id: 'track2',
-    type: TrackType.AUDIO,
-    projectId: 'project1',
-    timelineId: 'timeline1',
-    order: 2,
-    locked: false,
-    muted: true,
-    items: [
-      {
-        _id: 'item3',
-        type: 'audio',
-        trackId: 'track2',
-        startTime: 0,
-        endTime: 60,
-        assetId: '2',
-        sourceStartTime: 0,
-        sourceEndTime: 60,
-        speed: 1,
-        volume: 0.6,
-        fadeIn: 2,
-        fadeOut: 3,
-        metadata: {},
-        asset: sampleAssets[1]
-      } as IAudioTimelineItem
-    ]
-  },
-  {
-    _id: 'track3',
-    type: TrackType.TEXT,
-    projectId: 'project1',
-    timelineId: 'timeline1',
-    order: 3,
-    locked: true,
-    muted: false,
-    items: [
-      {
-        _id: 'item4',
-        type: 'text',
-        trackId: 'track3',
-        startTime: 10,
-        endTime: 25,
-        content: 'Welcome to our Video',
-        fontFamily: 'Arial',
-        fontSize: 48,
-        color: '#ffffff',
-        x: 100,
-        y: 50,
-        opacity: 1,
-        animationIn: TextAnimationType.FADE_IN,
-        animationOut: TextAnimationType.FADE_OUT,
-        metadata: {}
-      } as ITextTimelineItem,
-      {
-        _id: 'item5',
-        type: 'text',
-        trackId: 'track3',
-        startTime: 30,
-        endTime: 40,
-        content: 'Subscribe for more!',
-        fontFamily: 'Helvetica',
-        fontSize: 36,
-        color: '#ff6b6b',
-        x: 200,
-        y: 400,
-        opacity: 0.9,
-        animationIn: TextAnimationType.FADE_IN,
-        metadata: {}
-      } as ITextTimelineItem
-    ]
-  }
-];
-
-const TimelineTracksSidebar: React.FC = () => {
+const TimelineTracksSidebar = ({currentProject}:Props) => {
   const [activeTab, setActiveTab] = useState<'video' | 'audio' | 'text'>('video');
-  const [tracks] = useState<ITrack[]>(sampleTracks);
+  const [tracks, setTracks] = useState<ITrack[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // You'll need to get this from props, context, or route params
+  const timelineId = currentProject?.timeline._id; // Replace with actual timeline ID
+
+  // Fetch tracks from backend
+  const fetchTracks = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await api.get(`/track/timeline/${timelineId}`);
+      
+      if (response.data.success) {
+        setTracks(response.data.data);
+      } else {
+        setError(response.data.message || 'Failed to fetch tracks');
+      }
+    } catch (err: any) {
+      console.error('Error fetching tracks:', err);
+      setError(err.response?.data?.message || 'Failed to fetch tracks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update timeline item
+  // const updateTimelineItem = async (itemId: string, updateData: any) => {
+  //   try {
+  //     setLoading(true);
+  //     setError(null);
+
+  //     const response = await api.put(`/track/items/${itemId}`, updateData);
+      
+  //     if (response.data.success) {
+  //       // Refresh tracks after updating item
+  //       await fetchTracks();
+  //     } else {
+  //       setError(response.data.message || 'Failed to update timeline item');
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Error updating timeline item:', err);
+  //     setError(err.response?.data?.message || 'Failed to update timeline item');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // // Delete timeline item
+  // const deleteTimelineItem = async (itemId: string) => {
+  //   try {
+  //     setLoading(true);
+  //     setError(null);
+
+  //     const response = await api.delete(`/track/items/${itemId}`);
+      
+  //     if (response.data.success) {
+  //       // Refresh tracks after deleting item
+  //       await fetchTracks();
+  //     } else {
+  //       setError(response.data.message || 'Failed to delete timeline item');
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Error deleting timeline item:', err);
+  //     setError(err.response?.data?.message || 'Failed to delete timeline item');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // // Update track properties
+  // const updateTrack = async (trackId: string, updateData: { order?: number; locked?: boolean; muted?: boolean }) => {
+  //   try {
+  //     setLoading(true);
+  //     setError(null);
+
+  //     const response = await api.put(`/track/${trackId}`, updateData);
+      
+  //     if (response.data.success) {
+  //       // Refresh tracks after updating track
+  //       await fetchTracks();
+  //     } else {
+  //       setError(response.data.message || 'Failed to update track');
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Error updating track:', err);
+  //     setError(err.response?.data?.message || 'Failed to update track');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // Load tracks on component mount
+  useEffect(() => {
+      fetchTracks();
+  }, []);
+
+  // Your existing helper functions remain the same
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -276,11 +142,23 @@ const TimelineTracksSidebar: React.FC = () => {
       return false;
     });
 
-    return relevantTracks.flatMap(track => 
+    return relevantTracks.flatMap(track =>
       track.items.map(item => ({ ...item, track }))
     );
   };
 
+  if (loading){
+    return <BeautifulLoader/>;
+  }
+
+  if (error) {
+    return (
+      <div>
+        <p>Error: {error}</p>
+        <button onClick={fetchTracks}>Retry</button>
+      </div>
+    );
+  }
   const renderVideoItem = (item: IVideoTimelineItem & { track: ITrack }) => (
     <div key={item._id} className="bg-zinc-900 rounded-lg p-3 hover:bg-zinc-800 transition-colors">
       {/* Header */}
@@ -288,7 +166,7 @@ const TimelineTracksSidebar: React.FC = () => {
         <div className="flex items-center gap-2">
           <Play className="w-4 h-4 text-green-400" />
           <h3 className="text-sm font-medium text-white truncate">
-            {item.asset?.name || 'Video Item'}
+            {item.assetId?.name || 'Video Item'}
           </h3>
         </div>
         <div className="flex items-center gap-1">
@@ -298,15 +176,15 @@ const TimelineTracksSidebar: React.FC = () => {
       </div>
 
       {/* Thumbnail */}
-      {item.asset?.thumbnail && (
+      {item.assetId?.thumbnail && (
         <div className="relative mb-2 rounded-md overflow-hidden bg-zinc-800">
           <img
-            src={item.asset.thumbnail}
-            alt={item.asset.name}
+            src={item.assetId.thumbnail}
+            alt={item.assetId.name}
             className="w-full h-20 object-cover"
           />
           <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-[10px] px-1.5 py-0.5 rounded">
-            {formatDuration(item.asset.duration || 0)}
+            {formatDuration(item.assetId.duration || 0)}
           </div>
         </div>
       )}
@@ -340,11 +218,11 @@ const TimelineTracksSidebar: React.FC = () => {
       </div>
 
       {/* File info */}
-      {item.asset && (
+      {item.assetId && (
         <div className="mt-2 pt-2 border-t border-zinc-800 text-[10px] text-zinc-400">
           <div className="flex justify-between">
-            <span>{item.asset.width}x{item.asset.height}</span>
-            <span>{formatFileSize(item.asset.bytes)}</span>
+            <span>{item.assetId.width}x{item.assetId.height}</span>
+            <span>{formatFileSize(item.assetId.bytes)}</span>
           </div>
         </div>
       )}
@@ -358,7 +236,7 @@ const TimelineTracksSidebar: React.FC = () => {
         <div className="flex items-center gap-2">
           <Music className="w-4 h-4 text-blue-400" />
           <h3 className="text-sm font-medium text-white truncate">
-            {item.asset?.name || 'Audio Item'}
+            {item.assetId?.name || 'Audio Item'}
           </h3>
         </div>
         <div className="flex items-center gap-1">
@@ -419,11 +297,11 @@ const TimelineTracksSidebar: React.FC = () => {
       )}
 
       {/* File info */}
-      {item.asset && (
+      {item.assetId && (
         <div className="pt-2 border-t border-zinc-800 text-[10px] text-zinc-400">
           <div className="flex justify-between">
-            <span>Duration: {formatDuration(item.asset.duration || 0)}</span>
-            <span>{formatFileSize(item.asset.bytes)}</span>
+            <span>Duration: {formatDuration(item.assetId.duration || 0)}</span>
+            <span>{formatFileSize(item.assetId.bytes)}</span>
           </div>
         </div>
       )}
@@ -568,6 +446,7 @@ const TimelineTracksSidebar: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-3">
         <div className="space-y-3">
           {activeItems.map((item) => {
+            console.log(item);
             if (item.type === 'video') {
               return renderVideoItem(item as IVideoTimelineItem & { track: ITrack });
             } else if (item.type === 'audio') {

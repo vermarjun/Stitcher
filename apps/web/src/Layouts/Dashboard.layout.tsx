@@ -8,17 +8,15 @@ import VideoPlayer from "../Components/Dashboard/VideoPlayer.dashboard";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/api";
 import { toast } from "sonner";
-import LoadingSpinner from "@/Components/LoadingSpinner";
+import ThreeDotLoader from "@/Components/ThreeDotLoader";
 
-import type { Project, User, Template, Asset } from "@/State/Types";
+import type { Project, User } from "@/State/Types";
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState<Project>();
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
   const [user, setUser] = useState<User>();
 
   async function fetchData() {
@@ -35,29 +33,7 @@ const DashboardLayout = () => {
           projectResponse.data?.message || "Failed to fetch project"
         );
       }
-      
-      // FETCH ASSET DATA FOR THIS PROJECT ID
-      const assetResponse = await api.get(`/asset?projectId=${projectResponse.data._id}`);
-      
-      if (assetResponse.status === 200 || assetResponse.status === 201) {
-        setAssets(assetResponse.data.data.templates);
-      } else {
-        throw new Error(
-          assetResponse.data?.message || "Failed to fetch project"
-        );
-      }
 
-      // FETCH TEMPLATE DATA FOR THIS PROJECT ID
-      const templateResponse = await api.get(`/template?projectId=${projectResponse.data._id}`);
-      
-      if (templateResponse.status === 200 || templateResponse.status === 201) {
-        setTemplates(templateResponse.data.data.templates);
-      } else {
-        throw new Error(
-          templateResponse.data?.message || "Failed to fetch project"
-        );
-      }
-      
       // FETCH USER DATA FOR THIS PROJECT ID
       const user = JSON.parse(localStorage.getItem("user") || "");
       if (user.profilePhoto == "") {
@@ -92,7 +68,7 @@ const DashboardLayout = () => {
     <>
       {isLoading ? (
         <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-          <LoadingSpinner />
+          <ThreeDotLoader />
         </div>
       ) : (
         <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
@@ -100,10 +76,8 @@ const DashboardLayout = () => {
 
           <div className="flex-1 flex overflow-hidden">
             <LeftSideBar
-              assets={assets}
               currentProject={project}
               user={user}
-              templates={templates}
             />
 
             <main className="flex-1 flex flex-col overflow-hidden">

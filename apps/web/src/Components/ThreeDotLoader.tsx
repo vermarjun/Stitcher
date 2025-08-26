@@ -4,7 +4,7 @@ interface LoaderProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const Loader: React.FC<LoaderProps> = ({ size = 'md' }) => {
+const ThreeDotLoader: React.FC<LoaderProps> = ({ size = 'md' }) => {
   const sizeClasses = {
     sm: 'w-16 h-16',
     md: 'w-24 h-24', 
@@ -120,4 +120,4 @@ const Loader: React.FC<LoaderProps> = ({ size = 'md' }) => {
   );
 };
 
-export default Loader;
+export default ThreeDotLoader;

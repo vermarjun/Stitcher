@@ -30,6 +30,7 @@ export type Project = {
   videoUrl?: string;
   thumbnailUrl?: string;
   status: 'draft' | 'processing' | 'completed' | 'error';
+  timeline: Timeline;
 };
 
 export type User = {
@@ -70,6 +71,18 @@ export enum AssetType {
   AUDIO = "audio",
 }
 
+export enum TrackType {
+  VIDEO = 'video',
+  AUDIO = 'audio',
+  TEXT = 'text'
+}
+
+export enum TextAnimationType {
+  FADE_IN = 'fadeIn',
+  FADE_OUT = 'fadeOut',
+  NONE = 'none'
+}
+
 export enum AssetOrigin {
   TEMPLATE = "template",
   UPLOAD = "upload",
@@ -92,4 +105,63 @@ export interface Asset {
   createdAt: string;
   updatedAt: string;
   isOnTimeline?: boolean;
+}
+
+export interface ITimelineItemBase {
+  _id: string;
+  type: 'video' | 'audio' | 'text';
+  trackId: string;
+  startTime: number;
+  endTime: number;
+  assetId?: Asset;
+  metadata: Record<string, any>;
+  volume?: number;
+  opacity?: number;
+  x?: number;
+  y?: number;
+  scaleX?: number;
+  scaleY?: number;
+  rotation?: number;
+}
+
+export interface IVideoTimelineItem extends ITimelineItemBase {
+  type: 'video';
+  assetId: Asset;
+  sourceStartTime: number;
+  sourceEndTime: number;
+  speed: number;
+}
+
+export interface IAudioTimelineItem extends ITimelineItemBase {
+  type: 'audio';
+  assetId: Asset;
+  sourceStartTime: number;
+  sourceEndTime: number;
+  speed: number;
+  volume: number;
+  fadeIn?: number;
+  fadeOut?: number;
+}
+
+export interface ITextTimelineItem extends ITimelineItemBase {
+  type: 'text';
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  animationIn?: TextAnimationType;
+  animationOut?: TextAnimationType;
+}
+
+type ITimelineItem = IVideoTimelineItem | IAudioTimelineItem | ITextTimelineItem;
+
+export interface ITrack {
+  _id: string;
+  type: TrackType;
+  projectId: string;
+  timelineId: string;
+  order: number;
+  locked: boolean;
+  muted: boolean;
+  items: ITimelineItem[];
 }

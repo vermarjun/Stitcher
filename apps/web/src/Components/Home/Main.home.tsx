@@ -12,7 +12,8 @@ import ApiKeys from "./ApiKeys.home";
 import Templates from "./Templates.home";
 import Assets from "./Assets.home";
 import SettingsPage from "./Settings.home";
-import Loader from "../Loader";
+
+import ThreeDotLoader from "../ThreeDotLoader";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -32,7 +33,6 @@ const Main = () => {
   async function fetchRecentProjects() {
     try {
       const response = await api.get(`/project/user/${user.id}`);
-      console.log("fetched recent projects", response);
       setRecentProjects(response.data);
     } catch (error: any) {
       const errorMessage = error.message || "Failed to fetch recent projects";
@@ -92,7 +92,7 @@ const Main = () => {
   return (
     <div className="flex h-screen bg-neutral-950">
       {isLoading ? (
-        <Loader />
+        <ThreeDotLoader />
       ) : (
         <>
           {/* Sidebar */}

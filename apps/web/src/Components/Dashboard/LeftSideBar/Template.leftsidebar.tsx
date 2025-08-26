@@ -1,27 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Download, FileAudio, FileVideo, Check, Loader2, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import  { type Project, type Template, TemplateType } from '@/State/Types';
 import api from '@/api';
+import BeautifulLoader from '@/Components/ShimmerDotLoader';
 
 interface TemplateStoreProps {
   onImportTemplate?: (template: Template) => Promise<void>;
   currentProject?: Project;
-  allTemplates: Template[];
 }
 
 const TemplateStore: React.FC<TemplateStoreProps> = ({ 
   onImportTemplate,
-  currentProject,
-  allTemplates
+  currentProject
 }) => {
-  const [templates, setTemplates] = useState<Template[]>(allTemplates);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<TemplateType | 'all'>('all');
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
   const [successAnimations, setSuccessAnimations] = useState<Set<string>>(new Set());
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
   const [likeAnimations, setLikeAnimations] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
+  const [showContent, setShowContent] = useState(false);
 
   // Filter templates based on search, type, and liked status
   const filteredTemplates = templates.filter(template => {
@@ -30,6 +31,39 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     const matchesType = selectedType === 'all' || template.type === selectedType;
     return matchesSearch && matchesType;
   });
+
+  async function fetchTemplates() {
+    try {
+      setIsLoading(true);
+      setShowContent(false);
+
+      // FETCH TEMPLATE DATA FOR THIS PROJECT ID
+      const templateResponse = await api.get(
+        `/template?projectId=${currentProject?._id}`
+      );
+
+      if (templateResponse.status === 200 || templateResponse.status === 201) {
+        setTemplates(templateResponse.data.data.templates);
+      } else {
+        throw new Error(
+          templateResponse.data?.message || "Failed to fetch project"
+        );
+      }
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch project";
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setShowContent(true), 100);
+    }
+  }
+
+  useEffect(() => {
+    fetchTemplates();
+  },[]);
 
   const formatFileSize = (bytes: number): string => {
     const mb = bytes / (1024 * 1024);
@@ -106,9 +140,6 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     setImportingIds(prev => new Set(prev).add(template._id));
 
     try {
-      // Simulate API call delay
-      // await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log(currentProject)
       const response = await api.post(`/template/${template._id}/add-to-project`,{
         projectId: currentProject?._id,
         customName: template.name
@@ -307,6 +338,10 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     );
   };
 
+  if (isLoading){
+    return <BeautifulLoader/>;
+  }
+
   return (
     <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">
       {/* Header */}
@@ -389,7 +424,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>  
   );
 };
 
