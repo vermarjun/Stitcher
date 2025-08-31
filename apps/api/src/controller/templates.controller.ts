@@ -288,10 +288,6 @@ const addTemplateToProject = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { projectId, customName } = req.body;
 
-    console.log(id)
-    console.log(projectId)
-    console.log(customName)
-
     // Validate template ID
     if (!Types.ObjectId.isValid(id)) {
       return res.status(400).json({

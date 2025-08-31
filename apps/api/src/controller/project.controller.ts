@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Project from "../model/project.model";
-import Chat from "../model/chat.model";
+import EditChat from "../model/editChat.model";
 import User from "../model/user.model";
 import mongoose from "mongoose";
 import Timeline from "../model/timeline.model";
@@ -8,6 +8,7 @@ import Asset from "../model/asset.model";
 import Track from "../model/track.model";
 import TimelineItem from "../model/timelineitem.model";
 import { Types } from "mongoose";
+import path from "path";
 
 // Create a new project for a user
 export const createProject = async (req: Request, res: Response) => {
@@ -22,14 +23,14 @@ export const createProject = async (req: Request, res: Response) => {
             session.endSession();
             return res.status(400).json({ message: "userId and name are required" });
         }
-
+        
         // Create project first
         const project = new Project({ 
             name,
             status: 'draft'
         });
         const savedProject = await project.save({ session });
-
+        
         // Create timeline with projectId reference
         const timeline = new Timeline({
             projectId: savedProject._id,
@@ -38,12 +39,12 @@ export const createProject = async (req: Request, res: Response) => {
             duration: 0
         });
         const savedTimeline = await timeline.save({ session });
-
+        
         // Update project with timeline reference
         savedProject.timeline = savedTimeline._id as mongoose.Types.ObjectId;
         await savedProject.save({ session });
-
-        // Create videotrack 
+        
+        // Create video track 
         const videoTrack = new Track({
             type: 'video',
             projectId: savedProject._id,
@@ -51,10 +52,11 @@ export const createProject = async (req: Request, res: Response) => {
             items: []
         });
         const savedVideoTrack = await videoTrack.save({ session });
+        
         // Update timeline with video track reference
         timeline.tracks.push(savedVideoTrack._id as Types.ObjectId);
-        await timeline.save();
-
+        await timeline.save({ session });
+        
         // Create audio track
         const audioTrack = new Track({
             type: 'audio',
@@ -63,10 +65,11 @@ export const createProject = async (req: Request, res: Response) => {
             items: []
         });
         const savedAudioTrack = await audioTrack.save({ session });
-        // Update timeline with video track reference
+        
+        // Update timeline with audio track reference
         timeline.tracks.push(savedAudioTrack._id as Types.ObjectId);
-        await timeline.save();
-
+        await timeline.save({ session });
+        
         // Create text track
         const textTrack = new Track({
             type: 'text',
@@ -75,18 +78,29 @@ export const createProject = async (req: Request, res: Response) => {
             items: []
         });
         const savedTextTrack = await textTrack.save({ session });
-        // Update timeline with video track reference
+        
+        // Update timeline with text track reference
         timeline.tracks.push(savedTextTrack._id as Types.ObjectId);
-        await timeline.save();
+        await timeline.save({ session });
+        
+        // Create EditChat instance
+        const editChat = new EditChat({
+            messages: []
+        });
+        const savedEditChat = await editChat.save({ session });
+        
+        // Update project with EditChat reference
+        savedProject.edit_chat = savedEditChat._id as mongoose.Types.ObjectId;
+        await savedProject.save({ session }); 
         
         // Push project to user's projects array
         await User.findByIdAndUpdate(userId, {
             $push: { projects: savedProject._id }
         }, { session });
-
+        
         await session.commitTransaction();
         session.endSession();
-
+        
         res.status(201).json({
             ...savedProject.toObject(),
             timeline: savedTimeline,
@@ -118,11 +132,15 @@ export const getProjectsByUser = async (req: Request, res: Response) => {
                             }
                         }
                     },
+                    {
+                        path: "edit_chat", // Populate EditChat
+                        select: "messages"
+                    }
                 ]
             });
-
+        
         if (!user) return res.status(404).json({ message: "User not found" });
-
+        
         res.status(200).json(user.projects);
     } catch (error) {
         res.status(500).json({ message: "Error fetching projects", error });
@@ -150,11 +168,15 @@ export const getRecentProjectsByUser = async (req: Request, res: Response) => {
                             }
                         }
                     },
+                    {
+                        path: "edit_chat", // Populate EditChat
+                        select: "messages" // Only select messages field
+                    }
                 ]
             });
-
+            
         if (!user) return res.status(404).json({ message: "User not found" });
-
+        
         res.status(200).json(user.projects);
     } catch (error) {
         res.status(500).json({ message: "Error fetching recent projects", error });
@@ -175,9 +197,13 @@ export const getProjectById = async (req: Request, res: Response) => {
                     }
                 }
             })
-
+            .populate({
+                path: "edit_chat", // Populate EditChat
+                select: "messages" // Only select messages field
+            });
+            
         if (!project) return res.status(404).json({ message: "Project not found" });
-
+        
         res.status(200).json(project);
     } catch (error) {
         res.status(500).json({ message: "Error fetching project", error });
@@ -191,10 +217,16 @@ export const updateProject = async (req: Request, res: Response) => {
             req.params.id,
             { $set: req.body },
             { new: true }
-        );
+        )
+        .populate({
+            path: "edit_chat", // Populate EditChat in updated project
+            select: "messages"
+        });
+        
         if (!updatedProject) {
             return res.status(404).json({ message: "Project not found" });
         }
+        
         res.status(200).json(updatedProject);
     } catch (error) {
         res.status(500).json({ message: "Error updating project", error });
@@ -216,7 +248,7 @@ export const deleteProject = async (req: Request, res: Response) => {
             session.endSession();
             return res.status(404).json({ message: "Project not found" });
         }
-
+        
         // Find timeline using projectId (one-to-one relationship)
         const timeline = await Timeline.findOne({ projectId: id }).session(session);
         if (timeline) {
@@ -234,24 +266,27 @@ export const deleteProject = async (req: Request, res: Response) => {
             // Delete timeline
             await Timeline.findByIdAndDelete(timeline._id).session(session);
         }
-
-        await Chat.deleteMany({ projectId: id }).session(session);
-
+        
+        // Delete EditChat associated with the project
+        if (project.edit_chat) {
+            await EditChat.findByIdAndDelete(project.edit_chat).session(session);
+        }
+        
         // Delete assets using projectId
         await Asset.deleteMany({ projectId: id }).session(session);
-
+        
         // Delete project
         await Project.findByIdAndDelete(id).session(session);
-
+        
         // Remove project from any user's projects array
         await User.updateMany(
             { projects: id },
             { $pull: { projects: id } }
         ).session(session);
-
+        
         await session.commitTransaction();
         session.endSession();
-
+        
         res.status(200).json({ message: "Project and all related data deleted successfully" });
     } catch (error) {
         await session.abortTransaction();

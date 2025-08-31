@@ -4,11 +4,12 @@ import {Schema, Document, Types, ObjectId, Model, model} from "mongoose";
 export interface IProject extends Document {
     name: string;
     timeline: Types.ObjectId; // Single Timeline reference
-    // chats: Types.ObjectId; // Single chats reference
+    edit_chat: Types.ObjectId // Har project ke liye ek hi unique edit chat hogi!! Generate ke liye projectId se fetch it
     bytes: number;
     compiled: boolean;
     playback_url: string;
     preview_url?: string;
+    project_script: string; // This is the projectDescription 
     status: 'draft' | 'in_progress' | 'compiled' | 'error';
 }
 
@@ -16,11 +17,12 @@ export interface IProject extends Document {
 const ProjectSchema = new Schema<IProject>({
     name: { type: String, required: true },
     timeline: { type: Schema.Types.ObjectId, ref: 'Timeline'}, // Reference to Timeline model
-    // chats: { type: Schema.Types.ObjectId, ref: 'Chat'}, // Reference to Chat model
+    edit_chat: { type: Schema.Types.ObjectId, ref: 'EditChat'}, // Reference to Edit Chat 
     bytes: { type: Number, default: 0 },
     compiled: { type: Boolean, default: false },
     playback_url: { type: String, default: "" },
     preview_url: { type: String, default: "" },
+    project_script:{ type: String, default: ""},
     status: { type: String, enum: ['draft', 'in_progress', 'compiled', 'error'], default: 'draft' }
 }, { timestamps: true });
 
