@@ -13,7 +13,7 @@ import Templates from "./Templates.home";
 import Assets from "./Assets.home";
 import SettingsPage from "./Settings.home";
 
-import ThreeDotLoader from "../ThreeDotLoader";
+import ThreeDotLoader from "../LoadingScreens/ThreeDotLoader";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -34,6 +34,7 @@ const Main = () => {
     try {
       const response = await api.get(`/project/user/${user.id}`);
       setRecentProjects(response.data);
+      console.log(response.data)
     } catch (error: any) {
       const errorMessage = error.message || "Failed to fetch recent projects";
       toast.error(errorMessage);

@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   FileText,
   Users,
-  ChevronRight,
-  ScissorsLineDashedIcon,
-  LucideNetwork,
-  LayoutTemplateIcon,
+  ChevronLeft,
+  Scissors,
+  FolderOpen,
+  Layout,
 } from "lucide-react";
 import AssetStash from "./AssetStash.leftsidebar";
 import TemplatesComponent from "./Template.leftsidebar";
@@ -19,16 +19,16 @@ interface Props {
   user?: User;
 }
 
-const MainSidebar = ({ currentProject, user }: Props) => {
-  const [activeTab, setActiveTab] = useState("explorer");
+const MainSidebar = ({ currentProject }: Props) => {
+  const [activeTab, setActiveTab] = useState("assetstash");
   const [isExpanded, setIsExpanded] = useState(true);
 
   const sidebarTabs = [
-    { id: "explorer", icon: LucideNetwork, label: "Explorer" },
-    { id: "tracks", icon: ScissorsLineDashedIcon, label: "Tracks" },
-    { id: "templates", icon: LayoutTemplateIcon, label: "Templates" },
-    { id: "description", icon: FileText, label: "Project Description" },
-    { id: "collaborators", icon: Users, label: "Collaborators" },
+    { id: "assetstash", icon: FolderOpen, label: "Asset Stash" },
+    { id: "tracks", icon: Scissors, label: "Tracks" },
+    { id: "templates", icon: Layout, label: "Templates" },
+    { id: "description", icon: FileText, label: "Project Script" },
+    { id: "collaborators", icon: Users, label: "Add Collaborators" },
   ];
 
   const renderActiveComponent = () => {
@@ -49,11 +49,26 @@ const MainSidebar = ({ currentProject, user }: Props) => {
   };
 
   return (
-    <div className="flex h-full bg-neutral-950 border-r border-neutral-800">
-      {/* Icon Strip (Always Visible) - Aligned with header height (48px) */}
-      <div className="w-12 bg-neutral-950 border-r border-neutral-800 flex flex-col">
-        {/* Top spacing to align with logo - matches header height */}
+    <div className="flex h-full bg-black border-r border-zinc-800">
+      {/* Icon Strip (Always Visible) */}
+      <div className="w-12 bg-black border-r border-zinc-800 flex flex-col">
+        {/* Toggle Button - Now at the top */}
+        <div className="p-2 border-b border-zinc-800">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-md transition-all duration-200"
+            title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            <ChevronLeft
+              size={16}
+              className={`text-zinc-400 hover:text-white transform transition-all duration-300 ${
+                isExpanded ? "" : "rotate-180"
+              }`}
+            />
+          </button>
+        </div>
 
+        {/* Tab Icons */}
         <div className="flex flex-col py-2">
           {sidebarTabs.map((tab) => {
             const IconComponent = tab.icon;
@@ -66,48 +81,47 @@ const MainSidebar = ({ currentProject, user }: Props) => {
                 }}
                 className={`
                   w-12 h-12 flex items-center justify-center
-                  hover:bg-neutral-800 transition-colors
+                  hover:bg-zinc-800 transition-all duration-200
                   ${
                     activeTab === tab.id
-                      ? "bg-neutral-800 border-r-2 border-blue-500"
+                      ? "bg-zinc-800 border-r-2 border-white"
                       : ""
                   }
                 `}
                 title={tab.label}
               >
                 <IconComponent
-                  size={20}
-                  className={`${
-                    activeTab === tab.id ? "text-white" : "text-neutral-400"
+                  size={18}
+                  className={`transition-colors duration-200 ${
+                    activeTab === tab.id ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                   }`}
                 />
               </button>
             );
           })}
         </div>
-
-        {/* Toggle Button */}
-        <div className="mt-auto mb-2">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="w-12 h-8 flex items-center justify-center hover:bg-neutral-800 transition-colors"
-          >
-            <ChevronRight
-              size={16}
-              className={`text-neutral-400 transform transition-transform ${
-                isExpanded ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-        </div>
       </div>
 
-      {/* Expanded Content - Reduced width from 320px to 280px */}
-      {isExpanded && (
-        <div className="w-70 bg-neutral-950 flex flex-col overflow-hidden">
-          {renderActiveComponent()}
+      {/* Expanded Content with smooth animation */}
+      <div 
+        className={`bg-black flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+          isExpanded ? "w-80 opacity-100" : "w-0 opacity-0"
+        }`}
+      >
+        {/* Header with active tab title */}
+        <div className="p-3 border-b border-zinc-800 bg-black">
+          <h2 className="text-base font-semibold text-white">
+            {sidebarTabs.find(tab => tab.id === activeTab)?.label || "Sidebar"}
+          </h2>
         </div>
-      )}
+
+        {/* Content area */}
+        <div className={`flex-1 transition-all duration-300 ${
+          isExpanded ? "opacity-100 transform translate-x-0" : "opacity-0 transform translate-x-[-10px]"
+        }`}>
+          {isExpanded && renderActiveComponent()}
+        </div>
+      </div>
     </div>
   );
 };

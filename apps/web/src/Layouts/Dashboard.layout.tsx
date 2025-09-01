@@ -3,12 +3,14 @@ import Header from "../Components/Dashboard/Header/Main.header";
 import LeftSideBar from "../Components/Dashboard/LeftSideBar/Main.leftsidebar";
 // import Footer from "../Components/Dashboard/Footer.dashboard"
 import RightSideBar from "../Components/Dashboard/RightSideBar/Main.rightsidebar";
-import Timeline from "../Components/Dashboard/Timeline.dashboard";
-import VideoPlayer from "../Components/Dashboard/VideoPlayer.dashboard";
+
+import VideoEditor from "@/Components/Dashboard/VideoEditor.dashboard";
+
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/api";
 import { toast } from "sonner";
-import ThreeDotLoader from "@/Components/ThreeDotLoader";
+import ThreeDotLoader from "@/Components/LoadingScreens/ThreeDotLoader";
+import { RefreshProvider } from "@/Components/Dashboard/RefreshContextProvider";
 
 import type { Project, User } from "@/State/Types";
 
@@ -65,7 +67,7 @@ const DashboardLayout = () => {
   }, []);
 
   return (
-    <>
+    <RefreshProvider>
       {isLoading ? (
         <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
           <ThreeDotLoader />
@@ -81,17 +83,16 @@ const DashboardLayout = () => {
             />
 
             <main className="flex-1 flex flex-col overflow-hidden">
-              <VideoPlayer currentProject={project} user={user} />
-              <Timeline currentProject={project} user={user} />
+              <VideoEditor currentProject={project}/>
             </main>
 
-            <RightSideBar currentProject={project} user={user} />
+            <RightSideBar currentProject={project}/>
           </div>
 
           {/* <Footer /> */}
         </div>
       )}
-    </>
+    </RefreshProvider>
   );
 };
 

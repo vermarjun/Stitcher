@@ -3,8 +3,8 @@ import { Users } from 'lucide-react';
 const CollaboratorsComponent = () => {
   return (
     <div className="h-full flex flex-col">
-      <div className="p-3 border-b border-neutral-800 flex-shrink-0">
-        <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Collaborators</h2>
+      <div className="border-b border-neutral-800 flex-shrink-0">
+        {/* <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Collaborators</h2> */}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center p-3 text-center">

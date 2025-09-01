@@ -6,22 +6,17 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/Components/ui/button';
 import { Textarea } from '@/Components/ui/textarea';
 
-// Input Component with fixed text overlapping
-const MessageInput = ({ 
-  value, 
-  onChange, 
-  onSubmit, 
-  disabled, 
-  placeholder,
-  mode 
-}: {
+interface Props {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   disabled: boolean;
   placeholder: string;
   mode: 'generate' | 'edit';
-}) => {
+}
+
+// Input Component with fixed text overlapping
+const MessageInput = ({ value, onChange, onSubmit, disabled, placeholder,mode }: Props) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
-import LoadingSpinner from '../Components/ShimmerDotLoader.tsx';
+import LoadingSpinner from '../Components/LoadingScreens/Templatestore.loader.tsx';
 import AppLayout from '../Layouts/App.layout';
 import ErrorPage from '../Pages/Error.page';
 

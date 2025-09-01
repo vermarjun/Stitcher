@@ -3,32 +3,69 @@ import {
   Copy,
   Check,
   Download,
-  Share2,
-  Bookmark,
-  RotateCcw,
 } from 'lucide-react';
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/Components/ui/button';
-import { type Message } from '@/State/Dashboard.state';
+import type { Message } from '@/State/Types';
 
-// Message Component
-const MessageBubble = ({ 
-  message, 
-  onCopy, 
-  onRegenerate, 
-  onSave, 
-  mode 
-}: { 
+interface Props { 
   message: Message, 
   onCopy: (content: string) => void,
   onRegenerate?: (message: Message) => void,
   onSave?: (message: Message) => void,
   mode: 'generate' | 'edit'
-}) => {
+}
+
+
+// Video Player Component
+const VideoPlayer = ({ asset }: { asset: any }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  
+  const handlePlayClick = () => {
+    setIsPlaying(true);
+  };
+  
+  return (
+    <div className="mt-3 rounded-md overflow-hidden w-[85%] min-h-full">
+      {!isPlaying ? (
+        <div 
+          className="relative cursor-pointer"
+          onClick={handlePlayClick}
+        >
+          <img 
+            src={asset.thumbnail} 
+            alt={asset.name}
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-opacity-30">
+            <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center">
+              <svg 
+                className="w-6 h-6 text-black" 
+                viewBox="0 0 24 24" 
+                fill="currentColor"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <video 
+          src={asset.url} 
+          autoPlay 
+          playsInline
+          onEnded={() => setIsPlaying(false)}
+        />
+      )}
+    </div>
+  );
+};
+  
+
+// Message Component
+const MessageBubble = ({ message, onCopy, mode }: Props) => {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -37,16 +74,10 @@ const MessageBubble = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSave = () => {
-    onSave?.(message);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
   if (message.role === 'user') {
     return (
       <div className="flex justify-end mb-4 group">
-        <div className="max-w-[85%] bg-neutral-800/60 border border-neutral-700/50 rounded-lg px-3 py-2.5">
+        <div className="w-[85%] bg-neutral-800/60 border border-neutral-700/50 rounded-lg px-3 py-1.5">
           <div className="text-xs text-neutral-200 leading-relaxed">
             {message.content}
           </div>
@@ -64,17 +95,6 @@ const MessageBubble = ({
               >
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               </Button>
-              {onRegenerate && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
-                  onClick={() => onRegenerate(message)}
-                  title="Regenerate response"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -98,6 +118,10 @@ const MessageBubble = ({
       <div className="flex-1 min-w-0">
         <div className="text-xs text-neutral-200 leading-relaxed mb-2">
           {message.content}
+          {
+            message.role === 'assistant' && message.assetId && (
+                <VideoPlayer asset={message.assetId} />
+          )}
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-neutral-500">
@@ -113,17 +137,6 @@ const MessageBubble = ({
             >
               {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             </Button>
-            {onSave && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
-                onClick={handleSave}
-                title="Save to templates"
-              >
-                {saved ? <Check className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="sm"
@@ -131,14 +144,6 @@ const MessageBubble = ({
               title="Download response"
             >
               <Download className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
-              title="Share response"
-            >
-              <Share2 className="w-3 h-3" />
             </Button>
           </div>
         </div>

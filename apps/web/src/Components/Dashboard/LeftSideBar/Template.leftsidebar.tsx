@@ -3,7 +3,7 @@ import { Search, Download, FileAudio, FileVideo, Check, Loader2, Heart } from 'l
 import { toast } from 'sonner';
 import  { type Project, type Template, TemplateType } from '@/State/Types';
 import api from '@/api';
-import BeautifulLoader from '@/Components/ShimmerDotLoader';
+import BeautifulLoader from '@/Components/LoadingScreens/Templatestore.loader';
 
 interface TemplateStoreProps {
   onImportTemplate?: (template: Template) => Promise<void>;
@@ -22,7 +22,6 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
   const [likeAnimations, setLikeAnimations] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
-  const [showContent, setShowContent] = useState(false);
 
   // Filter templates based on search, type, and liked status
   const filteredTemplates = templates.filter(template => {
@@ -35,7 +34,6 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
   async function fetchTemplates() {
     try {
       setIsLoading(true);
-      setShowContent(false);
 
       // FETCH TEMPLATE DATA FOR THIS PROJECT ID
       const templateResponse = await api.get(
@@ -57,7 +55,6 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
-      setTimeout(() => setShowContent(true), 100);
     }
   }
 
@@ -346,7 +343,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">
       {/* Header */}
       <div className="p-3 border-b border-zinc-800">
-        <h2 className="text-base font-semibold text-white mb-2">Template Store</h2>
+        {/* <h2 className="text-base font-semibold text-white mb-2">Template Store</h2> */}
         
         {/* Search */}
         <div className="relative mb-2">

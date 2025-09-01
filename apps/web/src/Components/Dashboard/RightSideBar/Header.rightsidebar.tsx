@@ -1,15 +1,6 @@
-import {useState } from 'react';
-import { ScrollArea } from '@/Components/ui/scroll-area';
-import { Bot, Settings, History, PlusIcon, Clock, MessageSquare, Trash2, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot, Settings, History, PlusIcon, Trash2, Download, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/Components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,208 +10,45 @@ import {
   DropdownMenuTrigger,
 } from "@/Components/ui/dropdown-menu";
 import { Button } from '@/Components/ui/button';
-import { Badge } from '@/Components/ui/badge';
+import { ScrollArea } from '@/Components/ui/scroll-area';
 import { type Message } from '@/State/Dashboard.state';
-
-// Mock chat history data (replace with actual API calls)
-const mockChatHistory = {
-  generate: [
-    {
-      id: '1',
-      title: 'Product Demo Video',
-      timestamp: new Date('2024-01-15T10:30:00'),
-      messageCount: 5,
-      lastMessage: 'Create a 30-second product showcase video',
-      messages: [
-        { id: '1', content: 'Create a 30-second product showcase video', role: 'user' as const, timestamp: new Date('2024-01-15T10:30:00') },
-        { id: '2', content: 'I\'ll create a professional product showcase video for you...', role: 'assistant' as const, timestamp: new Date('2024-01-15T10:31:00') },
-      ]
-    },
-    {
-      id: '2',
-      title: 'Social Media Campaign',
-      timestamp: new Date('2024-01-14T15:45:00'),
-      messageCount: 8,
-      lastMessage: 'Generate an engaging social media video',
-      messages: [
-        { id: '3', content: 'Generate an engaging social media video', role: 'user' as const, timestamp: new Date('2024-01-14T15:45:00') },
-        { id: '4', content: 'I\'ll create an engaging social media video that captures attention...', role: 'assistant' as const, timestamp: new Date('2024-01-14T15:46:00') },
-      ]
-    }
-  ],
-  edit: [
-    {
-      id: '3',
-      title: 'Timeline Adjustments',
-      timestamp: new Date('2024-01-13T09:20:00'),
-      messageCount: 6,
-      lastMessage: 'Add smooth transitions between clips',
-      messages: [
-        { id: '5', content: 'Add smooth transitions between clips', role: 'user' as const, timestamp: new Date('2024-01-13T09:20:00') },
-        { id: '6', content: 'I\'ll add smooth transitions between all your clips...', role: 'assistant' as const, timestamp: new Date('2024-01-13T09:21:00') },
-      ]
-    }
-  ]
-};
-
-// Modern Confirmation Dialog Component
-const ConfirmationDialog = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  title, 
-  description,
-  confirmText = "Continue",
-  cancelText = "Cancel"
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  description: string;
-  confirmText?: string;
-  cancelText?: string;
-}) => (
-  <Dialog open={isOpen} onOpenChange={onClose}>
-    <DialogContent className="xs:max-w-md bg-neutral-900 border-neutral-700">
-      <DialogHeader>
-        <DialogTitle className="text-neutral-200">{title}</DialogTitle>
-        <DialogDescription className="text-neutral-400">
-          {description}
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter className="flex gap-2">
-        <Button variant="outline" onClick={onClose} className="bg-neutral-800 border-neutral-600 text-neutral-300 hover:bg-neutral-700">
-          {cancelText}
-        </Button>
-        <Button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white">
-          {confirmText}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-);
-
-// Chat History Modal Component
-const ChatHistoryModal = ({ 
-  isOpen, 
-  onClose, 
-  mode, 
-  onSelectHistory 
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  mode: 'generate' | 'edit';
-  onSelectHistory: (messages: Message[]) => void;
-}) => {
-  const historyData = mockChatHistory[mode] || [];
-
-  const handleSelectHistory = (historyItem: any) => {
-    // Convert mock messages to proper Message format
-    const messages = historyItem.messages.map((msg: any) => ({
-      ...msg,
-      timestamp: new Date(msg.timestamp)
-    }));
-    onSelectHistory(messages);
-    onClose();
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="xs:max-w-2xl max-h-[80vh] bg-neutral-900 border-neutral-700">
-        <DialogHeader>
-          <DialogTitle className="text-neutral-200 flex items-center gap-2">
-            <History className="w-5 h-5" />
-            {mode === 'generate' ? 'Generate' : 'Edit'} Chat History
-          </DialogTitle>
-          <DialogDescription className="text-neutral-400">
-            Select a previous chat to continue the conversation
-          </DialogDescription>
-        </DialogHeader>
-        
-        <ScrollArea className="max-h-[60vh]">
-          <div className="space-y-3 pr-4">
-            {historyData.length === 0 ? (
-              <div className="text-center py-8 text-neutral-500">
-                <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No chat history found for {mode} mode</p>
-              </div>
-            ) : (
-              historyData.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => handleSelectHistory(item)}
-                  className="p-4 rounded-lg border border-neutral-700 hover:border-neutral-600 bg-neutral-800/50 hover:bg-neutral-800/70 cursor-pointer transition-all group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-medium text-neutral-200 group-hover:text-white transition-colors">
-                      {item.title}
-                    </h4>
-                    <div className="flex items-center gap-2 text-xs text-neutral-500">
-                      <Clock className="w-3 h-3" />
-                      {item.timestamp.toLocaleDateString()}
-                    </div>
-                  </div>
-                  
-                  <p className="text-xs text-neutral-400 mb-3 line-clamp-2">
-                    {item.lastMessage}
-                  </p>
-                  
-                  <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="text-xs bg-neutral-700/50 text-neutral-300">
-                      <MessageSquare className="w-3 h-3 mr-1" />
-                      {item.messageCount} messages
-                    </Badge>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs">
-                        Load Chat
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
-  );
-};
+import api from '@/api';
+import { toast } from 'sonner';
 
 // Settings Dropdown Component
 const SettingsDropdown = () => {
   const [isAnimating, setIsAnimating] = useState(false);
-
+  
   const handleClick = () => {
     setIsAnimating(true);
     setTimeout(() => setIsAnimating(false), 1000);
   };
-
+  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
           onClick={handleClick}
         >
-          <Settings className={cn("w-4 h-4 transition-transform duration-1000", isAnimating && "animate-spin")} />
+          <Settings className={cn("w-3 h-3 transition-transform duration-1000", isAnimating && "animate-spin")} />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56 bg-neutral-900 border-neutral-700" align="end">
-        <DropdownMenuLabel className="text-neutral-200">Settings</DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-neutral-700" />
-        <DropdownMenuItem className="text-neutral-300 hover:bg-neutral-800 hover:text-white">
-          <Settings className="w-4 h-4 mr-2" />
+      <DropdownMenuContent className="w-56 bg-zinc-900 border-zinc-700" align="end">
+        <DropdownMenuLabel className="text-zinc-200 text-xs">Settings</DropdownMenuLabel>
+        <DropdownMenuSeparator className="bg-zinc-700" />
+        <DropdownMenuItem className="text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs">
+          <Settings className="w-3 h-3 mr-2" />
           AI Preferences
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-neutral-300 hover:bg-neutral-800 hover:text-white">
-          <Download className="w-4 h-4 mr-2" />
+        <DropdownMenuItem className="text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs">
+          <Download className="w-3 h-3 mr-2" />
           Export Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-neutral-300 hover:bg-neutral-800 hover:text-white">
-          <Trash2 className="w-4 h-4 mr-2" />
+        <DropdownMenuItem className="text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs">
+          <Trash2 className="w-3 h-3 mr-2" />
           Clear All Data
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -228,30 +56,254 @@ const SettingsDropdown = () => {
   );
 };
 
-// Enhanced Header Component
+// Chat History Component
+const ChatHistoryComponent = ({ 
+  mode, 
+  onGoBack, 
+  onSelectHistory, 
+  currentProject 
+}: {
+  mode: 'generate' | 'edit';
+  onGoBack: () => void;
+  onSelectHistory: (messages: Message[]) => void;
+  currentProject?: any;
+}) => {
+  const [chats, setChats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchChatHistory();
+  }, [mode, currentProject]);
+
+  const fetchChatHistory = async () => {
+    if (!currentProject?._id) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (mode === 'generate') {
+        const response = await api.get(`/generatechat/project/${currentProject._id}`);
+        if (response.data.success) {
+          setChats(response.data.data || []);
+        }
+      } 
+    } catch (error) {
+      console.error('Error fetching chat history:', error);
+      toast.error('Failed to load chat history');
+      setChats([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChatSelect = async (chat: any) => {
+    try {
+      if (mode === 'generate') {
+        const response = await api.get(`/generatechat/${chat._id}`);
+        if (response.data.success) {
+          const messages = convertBackendMessages(response.data.data.messages || []);
+          onSelectHistory(messages);
+          onGoBack();
+        }
+      } else {
+        // For edit mode, use the messages directly
+        if (chat.messages) {
+          const messages = convertBackendMessages(chat.messages);
+          onSelectHistory(messages);
+          onGoBack();
+        }
+      }
+    } catch (error) {
+      console.error('Error selecting chat:', error);
+      toast.error('Failed to load selected chat');
+    }
+  };
+
+  const convertBackendMessages = (backendMessages: any[]): Message[] => {
+    return backendMessages.map(msg => ({
+      id: msg._id || Math.random().toString(),
+      role: msg.role,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp),
+    }));
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffInHours < 24 * 7) {
+      return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-black">
+      {/* Header */}
+      <div className="flex items-center gap-3 p-3 border-b border-zinc-800">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+          onClick={onGoBack}
+        >
+          <ArrowLeft className="w-3 h-3" />
+        </Button>
+        <div className="flex items-center gap-2">
+          <History className="w-4 h-4 text-zinc-400" />
+          <span className="text-xs font-semibold text-white">
+            {mode === 'generate' ? 'Generate History' : 'Edit History'}
+          </span>
+        </div>
+      </div>
+
+      {/* Chat List */}
+      <ScrollArea className="flex-1">
+        <div className="p-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="flex items-center gap-2 text-zinc-400">
+                <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
+                <span className="text-xs">Loading history...</span>
+              </div>
+            </div>
+          ) : chats.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <History className="w-8 h-8 text-zinc-600 mb-3" />
+              <p className="text-xs text-zinc-500 mb-1">No chat history</p>
+              <p className="text-xs text-zinc-600">
+                Start a conversation to see your history here
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {chats.map((chat) => (
+                <div
+                  key={chat._id}
+                  className={cn(
+                    "p-3 rounded-lg border cursor-pointer transition-all duration-200",
+                    "bg-zinc-900/50 border-zinc-800/50 hover:bg-zinc-800/50 hover:border-zinc-700/50",
+                    selectedChatId === chat._id && "bg-zinc-800/70 border-zinc-700"
+                  )}
+                  onClick={() => {
+                    setSelectedChatId(chat._id);
+                    handleChatSelect(chat);
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-medium text-zinc-200 truncate">
+                        {chat.title || 'Untitled Chat'}
+                      </h4>
+                      {/* Removed message count since it's not available in the list response */}
+                      <p className="text-xs text-zinc-500 mt-1">
+                        {formatDate(chat.updatedAt || chat.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Removed message preview since messages aren't available in the list response */}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+};
+
+// Confirmation Dialog Component - exported for use in main component
+const ConfirmationDialog = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  description,
+  confirmText,
+  cancelText 
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description: string;
+  confirmText: string;
+  cancelText: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 max-w-sm mx-4 shadow-xl">
+        <h3 className="text-white text-sm font-medium mb-2">{title}</h3>
+        <p className="text-zinc-400 text-xs mb-4">{description}</p>
+        <div className="flex gap-2 justify-end">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="bg-zinc-200 border-zinc-700 text-black hover:bg-zinc-400 text-xs h-8"
+          >
+            {cancelText}
+          </Button>
+          <Button 
+            onClick={onConfirm}
+            className="bg-green-600 hover:bg-green-700 text-white text-xs h-8"
+          >
+            {confirmText}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Header Component
 const AISidebarHeader = ({ 
   mode, 
   setMode, 
-  onNewChat, 
+  onNewChatClick, 
   onExportChat,
-  messageCount 
+  messageCount,
+  onSelectHistory,
+  currentProject
 }: { 
   mode: 'generate' | 'edit', 
   setMode: (mode: 'generate' | 'edit') => void,
-  onNewChat: () => void,
+  onNewChatClick: () => void,
   onClearChat: () => void,
   onExportChat: () => void,
   messageCount: number,
-  onSelectHistory: (messages: Message[]) => void
+  onSelectHistory: (messages: Message[]) => void,
+  currentProject?: any
 }) => {
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
+  if (showHistory) {
+    return (
+      <ChatHistoryComponent
+        mode={mode}
+        onGoBack={() => setShowHistory(false)}
+        onSelectHistory={onSelectHistory}
+        currentProject={currentProject}
+      />
+    );
+  }
+  
   return (
-    <div className="border-b border-neutral-800 bg-neutral-950">
-      <div className="flex items-center justify-between px-4 py-2">
+    <div className="border-b border-zinc-800 bg-black">
+      <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
           <div className={cn(
-            "w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-300",
+            "w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300",
             mode === 'generate' 
               ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 border-emerald-500/30" 
               : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-blue-500/30"
@@ -261,90 +313,72 @@ const AISidebarHeader = ({
               mode === 'generate' ? "text-emerald-400" : "text-blue-400"
             )} />
           </div>
-          <span className="text-sm font-medium text-neutral-200">AI Assistant</span>
+          <span className="text-xs font-semibold text-white">AI Assistant</span>
         </div>
         
         <div className="flex items-center gap-1">
-          {messageCount > 0 && (
+          {messageCount > 0 && mode == 'generate' && (
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-8 w-8 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
-              onClick={onNewChat}
+              className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+              onClick={onNewChatClick}
               title="New Chat (resets context)"
             >
-              <PlusIcon className="w-4 h-4" />
+              <PlusIcon className="w-3 h-3" />
             </Button>
           )}
+          {
+            (mode == 'generate') && <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+              onClick={() => setShowHistory(true)}
+              title="Chat History"
+            >
+              <History className="w-3 h-3" />
+            </Button>
+          }
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
             onClick={onExportChat}
             title="Export chat"
           >
-            <Download className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
-            onClick={() => setIsHistoryOpen(true)}
-            title="Chat History"
-          >
-            <History className="w-4 h-4" />
+            <Download className="w-3 h-3" />
           </Button>
           <SettingsDropdown />
         </div>
       </div>
       
-      {/* Creative Mode Toggle */}
-      <div className="px-4 pb-4">
-        <div className="relative bg-neutral-900 rounded-xl p-1 overflow-hidden">
-          <div 
+      {/* Mode Toggle */}
+      <div className="px-3 pb-3">
+        <div className="flex bg-zinc-900 rounded-lg p-1">
+          <button
+            onClick={() => setMode('generate')}
             className={cn(
-              "absolute top-1 bottom-1 w-1/2 rounded-lg transition-all duration-300 ease-out",
+              "flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
               mode === 'generate' 
-                ? "left-1 bg-gradient-to-r from-emerald-500/30 to-green-500/30 border border-emerald-500/50" 
-                : "left-1/2 bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border border-blue-500/50"
+                ? "bg-white text-black" 
+                : "text-zinc-400 hover:text-white"
             )}
-          />
-          
-          <div className="relative flex">
-            <button
-              onClick={() => setMode('generate')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-lg transition-all duration-300",
-                mode === 'generate' 
-                  ? "text-emerald-300 relative z-10" 
-                  : "text-neutral-400 hover:text-neutral-300"
-              )}
-            >
-              <Bot className="w-4 h-4" />
-              <span>Generate</span>
-            </button>
-            <button
-              onClick={() => setMode('edit')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-lg transition-all duration-300",
-                mode === 'edit' 
-                  ? "text-blue-300 relative z-10" 
-                  : "text-neutral-400 hover:text-neutral-300"
-              )}
-            >
-              <Bot className="w-4 h-4" />
-              <span>Edit</span>
-            </button>
-          </div>
+          >
+            Generate
+          </button>
+          <button
+            onClick={() => setMode('edit')}
+            className={cn(
+              "flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
+              mode === 'edit' 
+                ? "bg-white text-black" 
+                : "text-zinc-400 hover:text-white"
+            )}
+          >
+            Edit
+          </button>
         </div>
       </div>
-
-      <ChatHistoryModal 
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        mode={mode}
-        onSelectHistory={() => {}} // This will be passed from parent
-      />
     </div>
   );
 };

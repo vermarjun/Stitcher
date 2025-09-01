@@ -5,7 +5,7 @@ import type { Project } from '@/State/Types';
 
 import { TrackType } from '@/State/Types';
 import type { IAudioTimelineItem, IVideoTimelineItem, ITextTimelineItem, ITrack } from '@/State/Types';
-import BeautifulLoader from '@/Components/ShimmerDotLoader';
+import BeautifulLoader from '@/Components/LoadingScreens/Templatestore.loader';
 
 interface Props {
   currentProject?:Project
@@ -50,72 +50,6 @@ const TimelineTracksSidebar = ({currentProject}:Props) => {
       setLoading(false);
     }
   };
-
-  // Update timeline item
-  // const updateTimelineItem = async (itemId: string, updateData: any) => {
-  //   try {
-  //     setLoading(true);
-  //     setError(null);
-
-  //     const response = await api.put(`/track/items/${itemId}`, updateData);
-      
-  //     if (response.data.success) {
-  //       // Refresh tracks after updating item
-  //       await fetchTracks();
-  //     } else {
-  //       setError(response.data.message || 'Failed to update timeline item');
-  //     }
-  //   } catch (err: any) {
-  //     console.error('Error updating timeline item:', err);
-  //     setError(err.response?.data?.message || 'Failed to update timeline item');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-  // // Delete timeline item
-  // const deleteTimelineItem = async (itemId: string) => {
-  //   try {
-  //     setLoading(true);
-  //     setError(null);
-
-  //     const response = await api.delete(`/track/items/${itemId}`);
-      
-  //     if (response.data.success) {
-  //       // Refresh tracks after deleting item
-  //       await fetchTracks();
-  //     } else {
-  //       setError(response.data.message || 'Failed to delete timeline item');
-  //     }
-  //   } catch (err: any) {
-  //     console.error('Error deleting timeline item:', err);
-  //     setError(err.response?.data?.message || 'Failed to delete timeline item');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-  // // Update track properties
-  // const updateTrack = async (trackId: string, updateData: { order?: number; locked?: boolean; muted?: boolean }) => {
-  //   try {
-  //     setLoading(true);
-  //     setError(null);
-
-  //     const response = await api.put(`/track/${trackId}`, updateData);
-      
-  //     if (response.data.success) {
-  //       // Refresh tracks after updating track
-  //       await fetchTracks();
-  //     } else {
-  //       setError(response.data.message || 'Failed to update track');
-  //     }
-  //   } catch (err: any) {
-  //     console.error('Error updating track:', err);
-  //     setError(err.response?.data?.message || 'Failed to update track');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   // Load tracks on component mount
   useEffect(() => {
@@ -402,7 +336,7 @@ const TimelineTracksSidebar = ({currentProject}:Props) => {
     <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">
       {/* Header */}
       <div className="p-3 border-b border-zinc-800">
-        <h2 className="text-base font-semibold text-white mb-3">Timeline Tracks</h2>
+        {/* <h2 className="text-base font-semibold text-white mb-3">Timeline Tracks</h2> */}
         
         {/* Tab Buttons */}
         <div className="flex bg-zinc-900 rounded-lg p-1">

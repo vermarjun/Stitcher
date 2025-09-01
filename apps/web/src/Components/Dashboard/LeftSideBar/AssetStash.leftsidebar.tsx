@@ -13,7 +13,8 @@ import type { Asset, ITrack, Project } from "@/State/Types";
 import { AssetOrigin, AssetType } from "@/State/Types";
 import api from "@/api";
 import { toast } from "sonner";
-import BeautifulLoader from "@/Components/ShimmerDotLoader";
+import BeautifulLoader from "@/Components/LoadingScreens/Templatestore.loader.tsx";
+import { useRefresh } from "../RefreshContextProvider.tsx";
 
 interface Props {
   currentProject?: Project;
@@ -35,6 +36,8 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({});
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { refreshKey } = useRefresh();
 
   async function fetchAssets() {
     try {
@@ -64,7 +67,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
   useEffect(() => {
     fetchAssets();
-  },[]);
+  },[refreshKey]);
 
   const formatDuration = (seconds?: number): string => {
     if (!seconds) return "";
@@ -227,7 +230,7 @@ const handleAddToTimeline = async (asset: Asset) => {
   const processUploadedFile = async (file: File, fileId: string) => {
     try {
       const isVideo = file.type.startsWith("video/");
-      const isAudio = file.type.startsWith("audio/");
+      // const isAudio = file.type.startsWith("audio/");
       const resourceType = isVideo ? "video" : "audio";
 
       setUploadProgress((prev) => ({
@@ -243,7 +246,7 @@ const handleAddToTimeline = async (asset: Asset) => {
 
       console.log(signatureResponse.data);
 
-      const { signature, timestamp, cloudName, apiKey, uploadParams } =
+      const { signature, cloudName, apiKey, uploadParams } =
         signatureResponse.data;
 
       // Step 2: Upload to Cloudinary
@@ -406,7 +409,7 @@ const handleAddToTimeline = async (asset: Asset) => {
     <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">
       {/* Header */}
       <div className="p-3 border-b border-zinc-800">
-        <h2 className="text-base font-semibold text-white mb-2">Asset Stash</h2>
+        {/* <h2 className="text-base font-semibold text-white mb-2">Asset Stash</h2> */}
         {/* Filter Tabs */}
         <div className="flex bg-zinc-900 rounded-lg p-1 mb-2">
           <button
