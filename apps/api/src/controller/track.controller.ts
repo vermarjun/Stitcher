@@ -483,3 +483,97 @@ export const updateTimelineItem = async (req: Request, res: Response): Promise<v
         });
     }
 };
+
+interface DeleteTimelineItemRequest extends Request {
+  params: {
+    timelineItemId: string;
+  };
+}
+
+export const deleteTimelineItem = async (req: DeleteTimelineItemRequest, res: Response) => {
+  try {
+    const { timelineItemId } = req.params;
+
+    // Validate the timelineItemId
+    if (!Types.ObjectId.isValid(timelineItemId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid timeline item ID'
+      });
+    }
+
+    // Find the timeline item first to get the trackId and assetId
+    const timelineItem = await TimelineItem.findById(timelineItemId);
+    
+    if (!timelineItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Timeline item not found'
+      });
+    }
+
+    const { trackId, assetId } = timelineItem;
+
+    // Start a transaction to ensure data consistency
+    const session = await TimelineItem.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        // 1. Delete the timeline item
+        await TimelineItem.findByIdAndDelete(timelineItemId).session(session);
+
+        // 2. Remove the timeline item reference from the track
+        await Track.findByIdAndUpdate(
+          trackId,
+          { $pull: { items: new Types.ObjectId(timelineItemId) } },
+          { session }
+        );
+
+        // 3. If the timeline item has an associated asset, update its isOnTimeline status
+        if (assetId) {
+          // Check if this asset is still being used by other timeline items
+          const remainingUsage = await TimelineItem.countDocuments({ 
+            assetId: assetId,
+            _id: { $ne: new Types.ObjectId(timelineItemId) }
+          }).session(session);
+
+          // If no other timeline items are using this asset, mark it as not on timeline
+          if (remainingUsage === 0) {
+            await Asset.findByIdAndUpdate(
+              assetId,
+              { isOnTimeline: false },
+              { session }
+            );
+          }
+        }
+      });
+
+      // Success response
+      res.status(200).json({
+        success: true,
+        message: 'Timeline item deleted successfully',
+        data: {
+          deletedItemId: timelineItemId,
+          trackId: trackId.toString(),
+          assetId: assetId?.toString() || null
+        }
+      });
+
+    } catch (transactionError) {
+      console.error('Transaction error:', transactionError);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete timeline item due to database transaction error'
+      });
+    } finally {
+      await session.endSession();
+    }
+
+  } catch (error) {
+    console.error('Error deleting timeline item:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while deleting timeline item'
+    });
+  }
+};
