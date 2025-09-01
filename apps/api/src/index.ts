@@ -14,6 +14,7 @@ import assetRoutes from "./router/asset.router"
 import trackRoutes from "./router/track.router"
 import editChatRoutes from "./router/editChat.router"
 import generateChatRoutes from "./router/generateChat.router"
+import timelineRoutes from "./router/timeline.router"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -47,6 +48,7 @@ app.use(`${API_PREFIX}/asset`, assetRoutes);
 app.use(`${API_PREFIX}/track`, trackRoutes);
 app.use(`${API_PREFIX}/editchat`, editChatRoutes);
 app.use(`${API_PREFIX}/generatechat`, generateChatRoutes);
+app.use(`${API_PREFIX}/timeline`, timelineRoutes);
 
 // Start the server
 httpServer.listen(PORT, async () => {

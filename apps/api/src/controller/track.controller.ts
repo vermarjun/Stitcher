@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import Track, { ITrack, TrackType } from '../model/track.model';
 import TimelineItem, { ITimelineItem, IVideoTimelineItem, IAudioTimelineItem, ITextTimelineItem, TextAnimationType } from '../model/timelineitem.model';
 import Asset, { IAsset, AssetType } from '../model/asset.model';
+import Timeline from '../model/timeline.model';
 
 // Interface for request bodies
 interface AddAssetToTrackRequest {
@@ -104,6 +105,7 @@ export const getAllTracks = async (req: Request, res: Response): Promise<void> =
 /**
  * Add an asset to a track (creates TimelineItem and adds to track)
  */
+
 export const addAssetToTrack = async (req: Request, res: Response): Promise<void> => {
     try {
         const { trackId } = req.params;
@@ -117,7 +119,6 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-
         const { assetId } = requestBody;
         if (!assetId || !Types.ObjectId.isValid(assetId)) {
             res.status(400).json({
@@ -126,7 +127,7 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-
+        
         // Find the track and populate its items
         const track = await Track.findById(trackId).populate('items');
         if (!track) {
@@ -136,7 +137,7 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-
+        
         // Find the asset and validate it matches track type
         const asset = await Asset.findById(assetId);
         if (!asset) {
@@ -146,7 +147,7 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-
+        
         // Validate asset type matches track type
         if ((track.type === TrackType.VIDEO && asset.type !== AssetType.VIDEO) ||
             (track.type === TrackType.AUDIO && asset.type !== AssetType.AUDIO)) {
@@ -156,7 +157,7 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-
+        
         // Calculate start time based on existing items
         let startTime = 0;
         if (track.items && track.items.length > 0) {
@@ -165,7 +166,7 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             const lastItem = sortedItems[sortedItems.length - 1];
             startTime = lastItem.endTime;
         }
-
+        
         // Calculate end time based on asset duration
         const assetDuration = asset.duration || 0;
         const sourceStartTime = requestBody.sourceStartTime ?? 0;
@@ -176,7 +177,7 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
         const sourceDuration = sourceEndTime - sourceStartTime;
         const playbackDuration = sourceDuration / speed;
         const endTime = startTime + playbackDuration;
-
+        
         // Create timeline item based on track type
         let timelineItemData: Partial<ITimelineItem>;
         if (track.type === TrackType.VIDEO) {
@@ -220,27 +221,50 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             });
             return;
         }
-
+        
         // Create the timeline item
         const timelineItem = new TimelineItem(timelineItemData);
         await timelineItem.save();
-
+        
         // Add timeline item to track
         track.items.push(timelineItem._id as Types.ObjectId);
         await track.save();
-
+        
         asset.isOnTimeline = true;
         await asset.save();
-
+        
+        // Update timeline duration
+        const timeline = await Timeline.findOne({ _id: track.timelineId });
+        if (timeline) {
+            // Calculate new timeline duration by finding the maximum end time across all tracks
+            const allTracks = await Track.find({ timelineId: timeline._id }).populate('items');
+            let maxEndTime = 0;
+            
+            for (const t of allTracks) {
+                if (t.items && t.items.length > 0) {
+                    const trackItems = t.items as any[];
+                    for (const item of trackItems) {
+                        if (item.endTime > maxEndTime) {
+                            maxEndTime = item.endTime;
+                        }
+                    }
+                }
+            }
+            
+            timeline.duration = maxEndTime;
+            await timeline.save();
+        }
+        
         // Populate the created timeline item with asset data
         const populatedTimelineItem = await TimelineItem.findById(timelineItem._id).populate('assetId');
-
+        
         res.status(201).json({
             success: true,
             message: 'Asset added to track successfully',
             data: {
                 timelineItem: populatedTimelineItem,
-                track
+                track,
+                timelineDuration: timeline?.duration || 0
             }
         });
     } catch (error) {
