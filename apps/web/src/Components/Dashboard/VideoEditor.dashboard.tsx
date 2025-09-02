@@ -1,24 +1,19 @@
 import TimelineEditor from "./TimeLine/main.timeline";
 import VideoPlayer from "./VideoPlayer/main.videoplayer";
-import { useState, useEffect, useRef } from "react";
-
-import VideoPlayerLoading from "@/Components/LoadingScreens/videoplayer.loader";
+import { useState, useEffect, useRef, useCallback } from "react";
+import VideoPlayerLoading from "@/Components/LoadingScreens/VideoPlayer.loader";
 import TimelineEditorLoading from "@/Components/LoadingScreens/Timeline.loader";
-
 import api from "@/api";
-
 import {
   ResizablePanel,
   ResizablePanelGroup,
   ResizableHandle,
 } from "@/Components/ui/resizable";
-
 import type {
   Project,
   Timeline,
   ITimelineItemBase,
 } from "@/State/Types";
-
 import { toast } from "sonner";
 
 interface Props {
@@ -30,24 +25,17 @@ const VideoEditor = ({ currentProject }: Props) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const animationFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
-
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-
   const [isLoading, setLoading] = useState<boolean>(false);
-
   const [timeline, setTimeline] = useState<Timeline | null>(null);
 
   const fetchTimeline = async () => {
     try {
       setLoading(true);
       const projectId = currentProject?._id;
-
       if (!projectId) return;
-
       const response = await api.get(`/timeline/project/${projectId}`);
-
       console.log(response.data);
-
       setTimeline(response.data);
     } catch (err) {
       console.error("Error fetching timeline:", err);
@@ -64,7 +52,6 @@ const VideoEditor = ({ currentProject }: Props) => {
   // playback loop
   useEffect(() => {
     if (!timeline) return;
-
     if (isPlaying) {
       const animate = (ts: number) => {
         if (lastTimeRef.current) {
@@ -101,7 +88,8 @@ const VideoEditor = ({ currentProject }: Props) => {
     updates: Partial<ITimelineItemBase>
   ) => {
     if (!timeline) return;
-
+    console.log("TEXT ITEM UPDATED: ",itemId, updates);
+    console.log(timeline)
     setTimeline((prev) =>
       prev
         ? {
@@ -119,13 +107,19 @@ const VideoEditor = ({ currentProject }: Props) => {
           }
         : prev
     );
+    console.log(timeline);
   };
 
-  // Backend sync
-  const syncToBackend = async (tl: Timeline) => {
-      const res = await api.put(`/timeline/${tl._id}`,tl);
-      if (!res.data.success) throw new Error("Failed to sync");
-  };
+  useEffect(()=>{
+    console.log("updated hogyi!!!: ",timeline);
+  }, [timeline]);
+
+  // FIXED: Backend sync with useCallback and timeline dependency
+  const syncToBackend = useCallback(async (tl: Timeline) => {
+    console.log("Syncing timeline:", tl); // Debug log
+    const res = await api.put(`/timeline/${tl._id}`, tl);
+    if (!res.data.success) throw new Error("Failed to sync");
+  }, [timeline]); // Add timeline as dependency
 
   return (
     <ResizablePanelGroup direction="vertical" className="h-full w-full">
@@ -146,9 +140,7 @@ const VideoEditor = ({ currentProject }: Props) => {
           />
         )}
       </ResizablePanel>
-
       <ResizableHandle withHandle />
-
       {/* Timeline Resizable */}
       <ResizablePanel defaultSize={38}>
         {isLoading || !timeline ? (

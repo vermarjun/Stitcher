@@ -11,11 +11,9 @@ import {
 import type { 
   Timeline, 
   ITrack, 
-  ITimelineItemBase, 
   IVideoTimelineItem, 
   IAudioTimelineItem, 
   ITextTimelineItem,
-  Asset 
 } from "@/State/Types";
 
 // Color palette options
@@ -537,8 +535,8 @@ const VideoPlayer = ({
 
   const onTextMouseDown = (e: React.MouseEvent, item: ITextTimelineItem) => {
     if (editingTextId === item._id) return; // don't drag while editing text
-    e.preventDefault();
 
+    e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -592,7 +590,6 @@ const VideoPlayer = ({
       draggingRef.current = null;
       setLivePos(null);
       livePosRef.current = null;
-
       document.removeEventListener("mousemove", handleMove);
       document.removeEventListener("mouseup", handleUp);
 
@@ -629,11 +626,25 @@ const VideoPlayer = ({
                 const timelineTime =
                   activeVideo.startTime +
                   (sourceTime - activeVideo.sourceStartTime);
-                onTimeUpdate(timelineTime);
+                
+                // CRITICAL FIX: Only update if we're within the bounds of the current video item
+                // This prevents looping back to the start when the video ends
+                if (timelineTime <= activeVideo.endTime) {
+                  onTimeUpdate(timelineTime);
+                }
               }
             }
           }}
+          onEnded={() => {
+            // When video ends, advance timeline to next item if available
+            const activeVideo = getActiveVideo();
+            if (activeVideo) {
+              // Move timeline to the end of current video item
+              onTimeUpdate(activeVideo.endTime);
+            }
+          }}
         />
+
         {/* Text overlays */}
         <TextOverlays 
           overlays={overlays}

@@ -31,7 +31,7 @@ const formatTime = (seconds: number): string => {
 };
 
 const TimelineEditor = ({
-  timeline: initialTimeline,
+  timeline, // Use the prop directly instead of local state
   currentTime,
   onTimeUpdate,
   onTimelineUpdate,
@@ -43,7 +43,8 @@ const TimelineEditor = ({
   onTimelineUpdate: (timeline: Timeline) => void;
   onSync: (timeline: Timeline) => Promise<void>;
 }) => {
-  const [timeline, setTimeline] = useState(initialTimeline);
+  // REMOVED: const [timeline, setTimeline] = useState(initialTimeline);
+  
   const [selectedItem, setSelectedItem] = useState<ITimelineItemBase | null>(
     null
   );
@@ -58,26 +59,14 @@ const TimelineEditor = ({
   const [rulerDuration] = useState<number>(
     Math.max(50, Number(timeline.duration) + 1)
   );
-
   const [isLoading, setLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
-
-    console.log(selectedItem);
-
-    console.log(selectedItem._id);
-
     setIsDeleting(true);
     try {
       const response = await api.delete(`/track/items/${selectedItem._id}`);
-      // const response = {
-      //   data: {
-      //     success: true,
-      //   },
-      // };
-
       if (response.data.success) {
         // Remove the item from the timeline
         const updatedTimeline = {
@@ -94,8 +83,7 @@ const TimelineEditor = ({
             return track;
           }),
         };
-
-        setTimeline(updatedTimeline);
+        // Use onTimelineUpdate instead of setTimeline
         onTimelineUpdate(updatedTimeline);
         setSelectedItem(null);
         toast.success("Item deleted successfully");
@@ -124,7 +112,7 @@ const TimelineEditor = ({
     }
     // if not found, deselect
     setSelectedItem(null);
-  }, [timeline]);
+  }, [timeline, selectedItem]);
 
   const secondsPerPixel = useCallback(() => {
     const rect = timelineRef.current?.getBoundingClientRect();
@@ -177,14 +165,16 @@ const TimelineEditor = ({
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
       if (!dragAction || !dragData || !timelineRef.current) return;
+
       const spp = secondsPerPixel();
       const deltaTime = (e.clientX - dragData.startX) * spp;
       const timelineDuration = Number(timeline.duration);
 
-      setTimeline((prev) => ({
-        ...prev,
-        tracks: (prev.tracks as ITrack[]).map((track) => {
+      const updatedTimeline = {
+        ...timeline,
+        tracks: (timeline.tracks as ITrack[]).map((track) => {
           if (track._id !== dragData.track._id) return track;
+
           return {
             ...track,
             items: track.items.map((it) => {
@@ -213,12 +203,10 @@ const TimelineEditor = ({
                     dragData.initialStart + deltaTime
                   )
                 );
-
                 // for media, shift sourceStartTime; for text, just change startTime
                 if (it.type === "text") {
                   return { ...it, startTime: newStart };
                 }
-
                 const cropDelta = newStart - dragData.initialStart;
                 const newSourceStart = Math.max(
                   0,
@@ -240,11 +228,9 @@ const TimelineEditor = ({
                   dragData.initialStart + 0.1,
                   dragData.initialEnd + deltaTime
                 );
-
                 if (it.type === "text") {
                   return { ...it, endTime: Math.min(timelineDuration, newEnd) };
                 }
-
                 const cropDelta = newEnd - dragData.initialEnd;
                 const newSourceEnd = dragData.initialSourceEnd + cropDelta;
                 return {
@@ -262,16 +248,18 @@ const TimelineEditor = ({
             }),
           };
         }),
-      }));
+      };
+
+      // Use onTimelineUpdate instead of setTimeline
+      onTimelineUpdate(updatedTimeline);
     },
-    [dragAction, dragData, secondsPerPixel]
+    [dragAction, dragData, secondsPerPixel, timeline, onTimelineUpdate]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (dragAction) onTimelineUpdate(timeline);
     setDragAction(null);
     setDragData(null);
-  }, [dragAction, timeline, onTimelineUpdate]);
+  }, []);
 
   useEffect(() => {
     if (!dragAction) return;
@@ -283,19 +271,21 @@ const TimelineEditor = ({
     };
   }, [dragAction, handleMouseMove, handleMouseUp]);
 
-  const handlePlayheadDrag = (e: React.MouseEvent) => {
+  const handlePlayheadDrag = () => {
     const rect = timelineRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const startX = e.clientX;
+
     const onMove = (ev: MouseEvent) => {
       const x = Math.max(0, Math.min(ev.clientX - rect.left, rect.width));
       const time = (x / rect.width) * Number(timeline.duration);
       onTimeUpdate(time);
     };
+
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
+
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   };
@@ -303,9 +293,11 @@ const TimelineEditor = ({
   // Add new text item (duration default 3s); position is later adjusted in VideoPlayer by dragging
   const handleTextTrackClick = async (e: React.MouseEvent) => {
     if (!isAddingText || !timelineRef.current) return;
+
     const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const clickTime = (x / rect.width) * Number(timeline.duration);
+
     const tracks = timeline.tracks as ITrack[];
     const textTrack = tracks.find((t) => t.type === "text");
     if (!textTrack) return;
@@ -330,7 +322,6 @@ const TimelineEditor = ({
         `/track/${textTrack._id}/text`,
         newTextItem
       );
-
       if (!response.data.success) {
         throw Error(
           "Operation failed, backend responded with",
@@ -346,7 +337,7 @@ const TimelineEditor = ({
               : t
           ),
         };
-        setTimeline(updated);
+        // Use onTimelineUpdate instead of setTimeline
         onTimelineUpdate(updated);
         setIsAddingText(false);
       }
@@ -367,7 +358,8 @@ const TimelineEditor = ({
   const handleSyncClick = async () => {
     setLoading(true);
     try {
-      await onSync(timeline);
+      console.log("Syncing timeline:", timeline); // Debug log
+      await onSync(timeline); // Now this will have the updated timeline
       toast.success("Project Synced Successfully!");
     } catch (e) {
       toast.error("Project Syncing error!");
@@ -526,7 +518,7 @@ const TimelineEditor = ({
 
             {/* Enhanced Tracks */}
             <div ref={timelineRef} className="flex flex-col gap-2 p-2">
-              {tracks.map((track, trackIndex) => (
+              {tracks.map((track) => (
                 <div
                   key={track._id}
                   className="relative flex-1 min-h-[60px] max-h-[150px] bg-zinc-900/80 border border-zinc-700 rounded-lg overflow-hidden backdrop-blur-sm shadow-inner"
