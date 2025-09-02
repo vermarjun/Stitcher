@@ -84,12 +84,12 @@ export const updateTimeline = async (req: Request, res: Response) => {
             }
           },
         );
-
+        
         // --- 3) Update timeline items inside this track ---
         if (Array.isArray(trackUpdate.items)) {
           for (const itemUpdate of trackUpdate.items) {
             if (!itemUpdate._id || !Types.ObjectId.isValid(itemUpdate._id)) continue;
-
+            
             await TimelineItem.findByIdAndUpdate(
               itemUpdate._id,
               { $set: { ...itemUpdate } }

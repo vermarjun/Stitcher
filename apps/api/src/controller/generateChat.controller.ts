@@ -113,7 +113,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
                 cloudinaryMetadata: {
                     url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1754918935/Ajun_manim_animation.mp4",
                     thumbnail: "https://res.cloudinary.com/dloh4tkp5/image/upload/v1754803489/main-sample.png",
-                    duration: 69,
+                    duration: 13,
                     width: 1200,
                     height: 1000,
                     bytes: 128,
