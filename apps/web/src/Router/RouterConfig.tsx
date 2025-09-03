@@ -1,14 +1,12 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
-import LoadingSpinner from '../Components/LoadingScreens/Templatestore.loader.tsx';
-import AppLayout from '../Layouts/App.layout';
+import { lazy } from 'react';
 import ErrorPage from '../Pages/Error.page';
 
 import AuthRoute from './ProtectedRoute.tsx';
 import PublicRoute from './PublicRoute.tsx';
 
 // Lazy-loaded pages
-const LandingPage = lazy(() => import('../Pages/Landing.page'));
+const LandingPage = lazy(() => import('../Pages/LandingPage/Main.landing.page.tsx'));
 const AuthPage = lazy(() => import('../Pages/Auth.page.tsx'));
 const HomePage = lazy(() => import('../Components/Home/Main.home.tsx'));
 const DashboardLayout = lazy(() => import('../Layouts/Dashboard.layout'));
@@ -19,18 +17,7 @@ const router = createBrowserRouter([
 // LANDING PAGE
   {
     path: '/',
-    element: <AppLayout />,
-    errorElement: <ErrorPage />,
-    children: [
-      {
-        index: true,
-        element: (
-          <Suspense fallback={<LoadingSpinner />}>
-            <LandingPage />
-          </Suspense>
-        ),
-      },
-    ],
+    element: <LandingPage />
   },
   {
     path: '/home',
