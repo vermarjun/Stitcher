@@ -120,8 +120,7 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
                       if (el) mediaRefs.current[index] = el;
                     }}
                     preload="none"
-                    // use lightweight poster
-                    poster={`https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_300/${item.mediaSrc.split("/").pop()?.replace(".mp4", ".jpg")}`}
+                    poster="https://dummyimage.com/400x300/1a1a1a/ffffff&text=Loading..."
                     data-src={item.mediaSrc} // lazy-load actual video
                     muted
                     loop

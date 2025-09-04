@@ -9,91 +9,104 @@ import { Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { AuroraText } from "@/Components/magicui/aurora-text";
 import { SparklesText } from "@/Components/magicui/sparkles-text";
-
-// Utility function for classnames
-const cn = (...classes) => {
-  return classes.filter(Boolean).join(" ");
-};
+import { cn } from "@/lib/utils";
 
 // Aceternity FlipWords Component (exact implementation)
-const FlipWords = ({ words, duration = 3000, className }) => {
+const FlipWords = ({ words, duration = 3000, className }:{words:any, duration:number, className:string}) => {
   const [currentWord, setCurrentWord] = useState(words[0]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const startAnimation = useCallback(() => {
+    if (!isVisible) return;
     const word = words[words.indexOf(currentWord) + 1] || words[0];
     setCurrentWord(word);
     setIsAnimating(true);
-  }, [currentWord, words]);
+  }, [currentWord, words, isVisible]);
+
+  // Observe visibility
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.2 } // trigger when 20% visible
+    );
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
-    if (!isAnimating)
-      setTimeout(() => {
+    if (!isAnimating && isVisible) {
+      const timeout = setTimeout(() => {
         startAnimation();
       }, duration);
-  }, [isAnimating, duration, startAnimation]);
+      return () => clearTimeout(timeout);
+    }
+  }, [isAnimating, duration, startAnimation, isVisible]);
 
   return (
-    <AnimatePresence
-      onExitComplete={() => {
-        setIsAnimating(false);
-      }}
-    >
-      <motion.div
-        initial={{
-          opacity: 0,
-          y: 10,
+    <div ref={containerRef} className={className}>
+      <AnimatePresence
+        onExitComplete={() => {
+          setIsAnimating(false);
         }}
-        animate={{
-          opacity: 1,
-          y: 0,
-        }}
-        transition={{
-          type: "spring",
-          stiffness: 100,
-          damping: 10,
-        }}
-        exit={{
-          opacity: 0,
-          y: -40,
-          x: 40,
-          filter: "blur(8px)",
-          scale: 2,
-          position: "absolute",
-        }}
-        className={cn("z-10 inline-block relative px-2", className)}
-        key={currentWord}
       >
-        {currentWord.split(" ").map((word, wordIndex) => (
-          <motion.span
-            key={word + wordIndex}
-            initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{
-              delay: wordIndex * 0.3,
-              duration: 0.3,
-            }}
-            className="inline-block whitespace-nowrap"
-          >
-            {word.split("").map((letter, letterIndex) => (
-              <motion.span
-                key={word + letterIndex}
-                initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                transition={{
-                  delay: wordIndex * 0.3 + letterIndex * 0.05,
-                  duration: 0.2,
-                }}
-                className="inline-block"
-              >
-                {letter}
-              </motion.span>
-            ))}
-            <span className="inline-block">&nbsp;</span>
-          </motion.span>
-        ))}
-      </motion.div>
-    </AnimatePresence>
+        <motion.div
+          initial={{
+            opacity: 0,
+            y: 10,
+          }}
+          animate={{
+            opacity: 1,
+            y: 0,
+          }}
+          transition={{
+            type: "spring",
+            stiffness: 100,
+            damping: 10,
+          }}
+          exit={{
+            opacity: 0,
+            y: -40,
+            x: 40,
+            filter: "blur(8px)",
+            scale: 2,
+            position: "absolute",
+          }}
+          className={cn("z-10 inline-block relative px-2", className)}
+          key={currentWord}
+        >
+          {currentWord.split(" ").map(({word, wordIndex}:{word:any, wordIndex: any}) => (
+            <motion.span
+              key={word + wordIndex}
+              initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{
+                delay: wordIndex * 0.3,
+                duration: 0.3,
+              }}
+              className="inline-block whitespace-nowrap"
+            >
+              {word.split("").map(({letter, letterIndex}:{letter: any, letterIndex: any}) => (
+                <motion.span
+                  key={word + letterIndex}
+                  initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{
+                    delay: wordIndex * 0.3 + letterIndex * 0.05,
+                    duration: 0.2,
+                  }}
+                  className="inline-block"
+                >
+                  {letter}
+                </motion.span>
+              ))}
+              <span className="inline-block">&nbsp;</span>
+            </motion.span>
+          ))}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 };
 
@@ -158,7 +171,7 @@ const UserRatingCard: React.FC<UserRatingCardProps> = ({ className = "" }) => {
       <div className="flex -space-x-4">
         {avatars.map((avatar, index) => (
           <Avatar key={index} className="w-12 h-12 border-2 border-neutral-300">
-            <AvatarImage src={avatar.src} alt={avatar.alt} />
+            <AvatarImage loading="lazy" src={avatar.src} alt={avatar.alt} />
             <AvatarFallback className="bg-neutral-300 text-gray-200">
               {avatar.fallback}
             </AvatarFallback>
@@ -233,6 +246,51 @@ export const ContainerScroll = ({
   );
 };
 
+const VideoElement: React.FC = () => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.5 }
+    );
+    if (videoRef.current) observer.observe(videoRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    if (isVisible) {
+      videoRef.current.play().catch(() => {});
+    } else {
+      videoRef.current.pause();
+    }
+  }, [isVisible]);
+
+  return (
+    <video
+      ref={videoRef}
+      muted
+      playsInline
+      loop
+      preload="none"
+      poster="https://dummyimage.com/400x300/1a1a1a/ffffff&text=Loading..."
+      className="w-full h-full object-cover rounded-2xl"
+    >
+      <source
+        src="https://remotionlambda-useast1-vpt8nii3zp.s3.amazonaws.com/cdn-landing-page/animstats-hero-video.webm"
+        type="video/webm"
+      />
+      <source
+        src="https://remotionlambda-useast1-vpt8nii3zp.s3.amazonaws.com/cdn-landing-page/animstats-hero-video.mp4"
+        type="video/mp4"
+      />
+      Your browser does not support the video tag.
+    </video>
+  );
+};
+
 export const Header = ({ translate, titleComponent }: any) => {
   return (
     <motion.div
@@ -300,16 +358,21 @@ const Hero = () => {
               {/* Content */}
               <div className="relative text-center justify-center items-center">
                 <div className="flex justify-center items-center">
-                  <img src={ProductOfTheDay} alt="" className="max-h-26" />
+                  <img
+                    loading="lazy"
+                    src={ProductOfTheDay}
+                    alt=""
+                    className="max-h-26"
+                  />
                 </div>
-                <div className="mb-8">
-                  <div className="flex flex-col justify-center items-center text-5xl md:text-7xl lg:text-8xl font-black text-white leading-tight tracking-tighter">
-                    <div className="flex w-screen">
+                <div className="mb-8 overflow-hidden">
+                  <div className="overflow-hidden flex flex-col justify-center items-center text-5xl md:text-7xl lg:text-8xl font-black text-white leading-tight tracking-tighter">
+                    <div className="flex items-center w-screen overflow-hidden">
                       <div className="w-1/2 flex items-center justify-end">
                         Need to
                       </div>
-                      <div className="w-1/2 flex justify-start items-center text-left">
-                        <FlipWords words={words} className="text-neutral-400" />
+                      <div className="w-1/2 flex justify-start items-center overflow-hidden">
+                        <FlipWords duration={3000} words={words} className="text-neutral-400" />
                       </div>
                     </div>
                     <div className="flex justify-center items-center">
@@ -319,16 +382,11 @@ const Hero = () => {
 
                   {/* Tagline */}
                   <div className="mt-2 text-xl md:text-2xl text-neutral-400 font-bold">
-                    Explain 
+                    Explain
                     <span> </span>
-                    <AuroraText>
-                      VISUALLY
-                    </AuroraText>
-                    , Try 
+                    <AuroraText>VISUALLY</AuroraText>, Try
                     <SparklesText sparklesCount={5}>
-                      <p className="text-white">
-                        STITCHER
-                      </p>
+                      <p className="text-white">STITCHER</p>
                     </SparklesText>
                   </div>
                 </div>
@@ -336,8 +394,7 @@ const Hero = () => {
                 {/* Subheading - Fixed typography and presentation */}
                 <div className="md:mb-8 mb-14 max-w-4xl text-center mx-auto w-full">
                   <p className="text-xl md:text-2xl text-neutral-400 leading-relaxed font-normal tracking-wide">
-                    Turn your prompts into engaging videos, no editing
-                    required.
+                    Turn your prompts into engaging videos, no editing required.
                     <br className="md:flex hidden" />
                     <span> </span>
                     Just explain, Stitcher animates! Tough concepts or tricky
@@ -368,20 +425,7 @@ const Hero = () => {
           {/* This is where you'll add your video */}
           <div className="flex items-center justify-center h-full w-full">
             <div className="bg-black w-full h-full flex items-center justify-center rounded-2xl">
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover rounded-2xl"
-              >
-                {/* Add your video source here */}
-                <source
-                  src="https://remotionlambda-useast1-vpt8nii3zp.s3.amazonaws.com/cdn-landing-page/animstats-hero-video.webm"
-                  type="video/mp4"
-                />
-                Your browser does not support the video tag.
-              </video>
+              <VideoElement />
             </div>
           </div>
         </ContainerScroll>

@@ -4,12 +4,12 @@ import { HyperText } from "@/Components/magicui/hyper-text";
 export function VideoFeaturesDemo() {
   return (
     <>
-      <div className="w-full flex justify-center items-center text-white pt-10 pb-10">
+      <div className="w-full flex justify-center items-center text-white pt-10 pb-10 md:px-0">
         <HyperText className="font-bold text-5xl md:text-6xl" startOnView={true} animateOnHover={true}>
           Features
         </HyperText>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-7xl mx-auto w-full ">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-7xl mx-auto w-full px-4 md:px-0">
         {/* Main Feature - AI Chat Animation */}
         <WobbleCard
           containerClassName="col-span-1 lg:col-span-2 h-full bg-gradient-to-br from-purple-600 to-blue-700 min-h-[500px] lg:min-h-[300px]"
