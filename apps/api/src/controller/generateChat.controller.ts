@@ -111,8 +111,8 @@ export const generateChatResponse = async (req: Request, res: Response) => {
                 llmResponse: "Hey I have made the changes as you requested",
                 code: "python code will come here",
                 cloudinaryMetadata: {
-                    url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1754918935/Ajun_manim_animation.mp4",
-                    thumbnail: "https://res.cloudinary.com/dloh4tkp5/image/upload/v1754803489/main-sample.png",
+                    url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
+                    thumbnail: "https://docs.manim.community/en/stable/_images/FixedInFrameMObjectTest-1.png",
                     duration: 13,
                     width: 1200,
                     height: 1000,
