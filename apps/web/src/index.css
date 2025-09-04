@@ -200,3 +200,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes metallicGlare {
+                  0% { 
+                    transform: translateX(-100%) skewX(-15deg);
+                    opacity: 0.4;
+                  }
+                  50% { 
+                    transform: translateX(100%) skewX(-15deg);
+                    opacity: 0.8;
+                  }
+                  100% { 
+                    transform: translateX(-100%) skewX(-15deg);
+                    opacity: 0.4;
+                  }
+                }

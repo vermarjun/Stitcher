@@ -1,60 +1,73 @@
 import React from "react";
 import Prism from "./Prism.landing.page";
+import { useState, useEffect, useMemo } from "react";
 
 const CTA: React.FC = () => {
+  const [isMobile, setIsMobile] = useState<boolean>(
+    typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 768px)").matches
+  );
+
+  const prismProps = useMemo(
+    () =>
+      isMobile
+        ? {
+            animationType: "rotate",
+            height: 14,
+            baseWidth: 10,
+            scale: 1.6,
+            hueShift: -1,
+            timeScale: 0.05, 
+            colorFrequency: 1,
+            noise: 0.2,
+            glow: 0.8,
+          }
+        : {
+            animationType: "rotate",
+            height: 24,
+            baseWidth: 14,
+            scale: 3.6,
+            hueShift: -1,
+            timeScale: 0.08, 
+            colorFrequency: 1,
+            noise: 0.2,
+            glow: 0.8,
+          },
+    [isMobile]
+  );
+
+  // Debounced resize handler to detect mobile screens
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const handleResize = () => {
+      setIsMobile(mediaQuery.matches);
+    };
+
+
+    let timeoutId: NodeJS.Timeout;
+    const debouncedResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleResize, 150);
+    };
+
+    mediaQuery.addEventListener("change", debouncedResize);
+    return () => {
+      mediaQuery.removeEventListener("change", debouncedResize);
+      clearTimeout(timeoutId);
+    };
+  }, []);
   return (
     <section className="relative w-full h-full px-4 rounded-b-2xl">
       <div className="max-w-5xl py-18 px-4 mx-auto text-center">
         <div className="pointer-events-none absolute inset-0 z-0">
-          <Prism
-            animationType="rotate"
-            height={24}
-            baseWidth={14}
-            scale={3.6}
-            hueShift={-1}
-            timeScale={0.1}
-            colorFrequency={1}
-            noise={0.2}
-            glow={0.8}
-          />
-        </div>
-        <div className="pointer-events-none md:hidden absolute inset-0 z-0">
-          <Prism
-            animationType="rotate"
-            height={14}
-            baseWidth={10}
-            scale={1.6}
-            hueShift={-1}
-            timeScale={0.1}
-            colorFrequency={1}
-            noise={0.2}
-            glow={0.8}
-          />
+          <Prism {...prismProps}/>
         </div>
         <h2 className="text-5xl font-bold md:text-6xl mb-6 text-neutral-200 md:flex justify-center items-center">
           Don't just tell.
           <div className="md:w-fit md:mt-0 mt-2 w-full flex justify-center items-center">
             <div className="relative overflow-hidden w-fit">
-              {/* Define keyframes inline */}
-              <style>
-                {`
-                @keyframes metallicGlare {
-                  0% { 
-                    transform: translateX(-100%) skewX(-15deg);
-                    opacity: 0.4;
-                  }
-                  50% { 
-                    transform: translateX(100%) skewX(-15deg);
-                    opacity: 0.8;
-                  }
-                  100% { 
-                    transform: translateX(-100%) skewX(-15deg);
-                    opacity: 0.4;
-                  }
-                }
-              `}
-              </style>
-
               {/* Metallic text */}
               <span
                 className="font-extrabold text-transparent bg-clip-text 

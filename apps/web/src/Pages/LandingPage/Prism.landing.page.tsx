@@ -4,7 +4,7 @@ import { Renderer, Triangle, Program, Mesh } from "ogl";
 type PrismProps = {
   height?: number;
   baseWidth?: number;
-  animationType?: "rotate" | "hover" | "3drotate";
+  animationType?: string;
   glow?: number;
   offset?: { x?: number; y?: number };
   noise?: number;

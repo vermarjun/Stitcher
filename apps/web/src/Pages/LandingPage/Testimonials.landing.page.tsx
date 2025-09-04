@@ -1,23 +1,19 @@
 import React, { useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import dashboardimage from "/dashboard.png";
-import timelineimage from "/timeline.png";
-import AIchatimage from "/AIchat.png";
-import homepageimage from "/homepage.png";
 
 const images = [
-  homepageimage,
-  AIchatimage,
-  dashboardimage,
-  timelineimage,
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1756994906/202509040734_h1ndhn.mp4", //earth
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1756997181/heartequation_bpcizy.mp4", //heart
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1756997561/pi_dqd5m6.mp4", //pi
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1756997854/doublependulum_mbckjs.mp4", //doublependulum
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/image/upload/v1756999225/3d_calculus_ziwjza.gif",
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1757006283/Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1757006850/tree_yoifqz.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013261/homepage_adu6yp.png",
+  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013258/AIchat_ew3k83.png",
+  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013264/dashboard_tnfxym.png",
+  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013262/timeline_cfnxyu.png",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756994906/202509040734_h1ndhn.mp4", //earth
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997181/heartequation_bpcizy.mp4", //heart
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997561/pi_dqd5m6.mp4", //pi
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997854/doublependulum_mbckjs.mp4", //doublependulum
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006283/Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
 ];
 
 const firstRow = images.slice(0, 4);
@@ -28,11 +24,16 @@ const ImageCard = ({ img }: { img: string }) => {
   return (
     <figure
       className={cn(
-        "relative md:h-48 md:w-86 h-30 w-48 cursor-pointer overflow-hidden rounded-xl border",
+        "relative aspect-[16/9] w-40 sm:w-60 md:w-80 lg:w-96 cursor-pointer overflow-hidden rounded-xl border",
         "border-gray-700 bg-gray-800 hover:bg-gray-700 transition-colors duration-300"
       )}
     >
-      <img className="w-full h-full object-cover rounded-xl" alt="" src={img} />
+      <img
+        loading="lazy"
+        className="w-full h-full object-cover rounded-xl"
+        alt=""
+        src={img}
+      />
     </figure>
   );
 };
@@ -41,29 +42,44 @@ const VideoCard = ({ vid }: { vid: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // Ensure video plays when component mounts and handles any autoplay restrictions
-    if (videoRef.current) {
-      videoRef.current.play().catch(error => {
-        console.log("Autoplay prevented:", error);
-        // Handle autoplay restrictions if needed
-      });
-    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (videoRef.current) {
+            if (entry.isIntersecting) {
+              videoRef.current.play().catch(() => {});
+            } else {
+              videoRef.current.pause();
+            }
+          }
+        });
+      },
+      { threshold: 0.5 } // play only when at least 50% visible
+    );
+
+    if (videoRef.current) observer.observe(videoRef.current);
+
+    return () => {
+      if (videoRef.current) observer.unobserve(videoRef.current);
+    };
   }, []);
 
   return (
     <figure
       className={cn(
-        "relative md:h-48 md:w-86 h-30 w-48 cursor-pointer overflow-hidden rounded-xl border",
+        "relative aspect-[16/9] w-40 sm:w-60 md:w-80 lg:w-96 cursor-pointer overflow-hidden rounded-xl border",
         "border-gray-700 hover:bg-gray-700 transition-colors duration-300"
       )}
     >
       <video
+        preload="none"
         ref={videoRef}
         loop
         muted // Added muted to help with autoplay restrictions
         autoPlay
         playsInline // Added for iOS compatibility
         className="w-full h-full object-cover rounded-xl"
+        poster="https://dummyimage.com/400x300/1a1a1a/ffffff&text=Loading..."
         src={vid}
       />
     </figure>
@@ -112,9 +128,9 @@ function Marquee({
   );
 }
 
-export function MarqueeDemo() {
+export function ProductVideos() {
   return (
-    <div className="relative flex h-screen flex-col items-center justify-center overflow-hidden bg-black">
+    <div className="relative flex h-fit flex-col items-center justify-center overflow-hidden bg-black py-10">
       <style>{`
         @keyframes marquee {
           from { transform: translateX(0); }
@@ -124,7 +140,7 @@ export function MarqueeDemo() {
 
       <Marquee className="[--duration:20s] mb-4">
         {firstRow.map((item, index) => {
-          if (item.endsWith('.mp4')) {
+          if (item.endsWith(".mp4")) {
             return <VideoCard key={`first-${index}`} vid={item} />;
           } else {
             return <ImageCard key={`first-${index}`} img={item} />;
@@ -134,7 +150,7 @@ export function MarqueeDemo() {
 
       <Marquee reverse className="[--duration:25s] mb-4">
         {secondRow.map((item, index) => {
-          if (item.endsWith('.mp4')) {
+          if (item.endsWith(".mp4")) {
             return <VideoCard key={`second-${index}`} vid={item} />;
           } else {
             return <ImageCard key={`second-${index}`} img={item} />;
@@ -144,7 +160,7 @@ export function MarqueeDemo() {
 
       <Marquee className="[--duration:30s]">
         {thirdRow.map((item, index) => {
-          if (item.endsWith('.mp4')) {
+          if (item.endsWith(".mp4")) {
             return <VideoCard key={`third-${index}`} vid={item} />;
           } else {
             return <ImageCard key={`third-${index}`} img={item} />;
@@ -161,4 +177,4 @@ export function MarqueeDemo() {
   );
 }
 
-export default MarqueeDemo;
+export default ProductVideos;
