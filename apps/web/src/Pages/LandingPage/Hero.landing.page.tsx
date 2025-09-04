@@ -11,8 +11,14 @@ import { AuroraText } from "@/Components/magicui/aurora-text";
 import { SparklesText } from "@/Components/magicui/sparkles-text";
 import { cn } from "@/lib/utils";
 
+interface FlipWordsProps {
+  words: string[];          
+  duration?: number; 
+  className?: string;    
+}
+
 // Aceternity FlipWords Component (exact implementation)
-const FlipWords = ({ words, duration = 3000, className }:{words:any, duration:number, className:string}) => {
+const FlipWords = ({ words, duration = 3000, className }: FlipWordsProps) => {
   const [currentWord, setCurrentWord] = useState(words[0]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -76,7 +82,7 @@ const FlipWords = ({ words, duration = 3000, className }:{words:any, duration:nu
           className={cn("z-10 inline-block relative px-2", className)}
           key={currentWord}
         >
-          {currentWord.split(" ").map(({word, wordIndex}:{word:any, wordIndex: any}) => (
+          {currentWord.split(" ").map((word, wordIndex) => (
             <motion.span
               key={word + wordIndex}
               initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
@@ -87,7 +93,7 @@ const FlipWords = ({ words, duration = 3000, className }:{words:any, duration:nu
               }}
               className="inline-block whitespace-nowrap"
             >
-              {word.split("").map(({letter, letterIndex}:{letter: any, letterIndex: any}) => (
+              {word.split("").map((letter, letterIndex) => (
                 <motion.span
                   key={word + letterIndex}
                   initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
@@ -372,7 +378,7 @@ const Hero = () => {
                         Need to
                       </div>
                       <div className="w-1/2 flex justify-start items-center overflow-hidden">
-                        <FlipWords duration={3000} words={words} className="text-neutral-400" />
+                        <FlipWords words={words} className="text-neutral-400" />
                       </div>
                     </div>
                     <div className="flex justify-center items-center">
