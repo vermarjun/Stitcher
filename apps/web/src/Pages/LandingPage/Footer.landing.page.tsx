@@ -1,15 +1,68 @@
 import React from 'react';
 
 const Footer: React.FC = () => {
+  const currentYear = 2025;
+
   return (
-    <footer className="bg-black text-white py-12 border-t border-gray-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid md:grid-cols-4 gap-8">
-          {/* Footer content goes here */}
+    <footer className="bg-black text-gray-300 py-8 px-4 md:px-8">
+      <div className="mx-auto">
+        {/* Main footer content */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+          <div className="text-center md:text-left mb-4 md:mb-0">
+            <p className="text-sm md:text-base">
+              This was built with ❤️ by Arjun Verma
+            </p>
+          </div>
+          
+          <div className="flex space-x-6">
+            <a
+              href="#"
+              className="text-gray-400 hover:text-white transition-colors duration-200 text-sm"
+            >
+              Get in Touch
+            </a>
+            <a
+              href="#"
+              className="text-gray-400 hover:text-white transition-colors duration-200 text-sm"
+            >
+              Privacy Policy
+            </a>
+            <a
+              href="#"
+              className="text-gray-400 hover:text-white transition-colors duration-200 text-sm"
+            >
+              Terms & Conditions
+            </a>
+          </div>
         </div>
-        
-        <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-          <p>&copy; 2025 Brand Name. All rights reserved.</p>
+
+        {/* Copyright section */}
+        <div className="border-t border-gray-800 pt-6">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <p className="text-xs text-gray-500 mb-2 md:mb-0">
+              © {currentYear} Arjun Verma. All rights reserved.
+            </p>
+            <div className="flex space-x-4">
+              <a
+                href="#"
+                className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
+              >
+                LinkedIn
+              </a>
+              <a
+                href="#"
+                className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
+              >
+                GitHub
+              </a>
+              <a
+                href="#"
+                className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
+              >
+                Twitter
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </footer>

@@ -5,9 +5,10 @@ import GlassyNavbar from './Navbar.landing.page';
 // Lazy load all components except Navbar (which should load immediately)
 const Hero = lazy(() => import('./Hero.landing.page'));
 const Features = lazy(() => import('./Features.landing.page'));
-const Pricing = lazy(() => import('./Pricing.landing.page'));
+const Examples = lazy(() => import('./Examples.landing.page'));
 const Testimonials = lazy(() => import('./Testimonials.landing.page'));
 const Footer = lazy(() => import('./Footer.landing.page'));
+const EndPageCTA = lazy(() => import('./EndpageCTA.landing.page'));
 
 // Loading fallback component
 const LoadingFallback: React.FC<{ height?: string }> = ({ height = 'h-64' }) => (
@@ -35,19 +36,25 @@ const LandingPage: React.FC = () => {
       
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <Features features={[]} />
+          <Features />
         </Suspense>
       </LazyWrapper>
       
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <Pricing pricingTiers={[]} />
+          <Examples />
         </Suspense>
       </LazyWrapper>
       
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <Testimonials testimonials={[]} />
+          <Testimonials />
+        </Suspense>
+      </LazyWrapper>
+
+      <LazyWrapper fallback={<LoadingFallback />}>
+        <Suspense fallback={<LoadingFallback />}>
+          <EndPageCTA />
         </Suspense>
       </LazyWrapper>
       

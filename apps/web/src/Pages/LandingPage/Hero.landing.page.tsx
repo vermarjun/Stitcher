@@ -7,6 +7,8 @@ import Prism from "./Prism.landing.page";
 import ProductOfTheDay from "/ProductOfTheDay.png";
 import { Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
+import { AuroraText } from "@/Components/magicui/aurora-text";
+import { SparklesText } from "@/Components/magicui/sparkles-text";
 
 // Utility function for classnames
 const cn = (...classes) => {
@@ -165,7 +167,7 @@ const UserRatingCard: React.FC<UserRatingCardProps> = ({ className = "" }) => {
       </div>
 
       {/* Rating and Text */}
-      <div className="flex flex-col justify-center items-center gap-2">
+      <div className="flex flex-col md:items-start justify-center items-center gap-2">
         {/* Stars */}
         <div className="flex">{renderStars()}</div>
 
@@ -213,11 +215,11 @@ export const ContainerScroll = ({
 
   return (
     <div
-      className="flex items-center justify-center relative p-2 md:p-20"
+      className="flex items-center justify-center relative"
       ref={containerRef}
     >
       <div
-        className="w-full relative"
+        className="md:w-full w-screen relative"
         style={{
           perspective: "1000px",
         }}
@@ -262,9 +264,9 @@ export const Card = ({
         boxShadow:
           "0 0 #0000004d, 0 9px 20px #0000004a, 0 37px 37px #00000042, 0 84px 50px #00000026, 0 149px 60px #0000000a, 0 233px 65px #00000003",
       }}
-      className="w-full bg-[#222222] rounded-[30px] shadow-2xl"
+      className="md:w-full w-screen bg-[#222222] rounded-[30px] shadow-2xl"
     >
-      <div className=" h-full w-full  overflow-hidden rounded-2xl dark:bg-zinc-900 md:rounded-2xl md:p-4 ">
+      <div className="h-full md:w-full w-screen overflow-hidden rounded-2xl dark:bg-zinc-900 md:rounded-2xl md:p-4 ">
         {children}
       </div>
     </motion.div>
@@ -290,13 +292,13 @@ const Hero = () => {
         />
       </div>
 
-      <div className="">
+      <div className="pt-20">
         {/* Container Scroll Section */}
         <ContainerScroll
           titleComponent={
             <>
               {/* Content */}
-              <div className="relative z-10 text-center justify-center items-center">
+              <div className="relative text-center justify-center items-center">
                 <div className="flex justify-center items-center">
                   <img src={ProductOfTheDay} alt="" className="max-h-26" />
                 </div>
@@ -316,8 +318,18 @@ const Hero = () => {
                   </div>
 
                   {/* Tagline */}
-                  <div className="mt-4 text-xl md:text-2xl text-neutral-400 font-bold flex justify-center items-center">
-                    Explain visually, Try Stitcher!
+                  <div className="mt-2 text-xl md:text-2xl text-neutral-400 font-bold">
+                    Explain 
+                    <span> </span>
+                    <AuroraText>
+                      VISUALLY
+                    </AuroraText>
+                    , Try 
+                    <SparklesText sparklesCount={5}>
+                      <p className="text-white">
+                        STITCHER
+                      </p>
+                    </SparklesText>
                   </div>
                 </div>
 
@@ -335,10 +347,10 @@ const Hero = () => {
                 </div>
 
                 {/* CTA Buttons */}
-                <div className="flex justify-center items-center">
+                <div className="flex justify-center items-center md:mb-8 mb-14">
                   <ShimmerButton
                     background="black"
-                    className="shadow-2xl px-16 py-5 md:mb-8 mb-14"
+                    className="shadow-2xl px-16 py-5"
                   >
                     <div className="whitespace-pre-wrap text-center text-sm font-medium leading-none tracking-tight text-white dark:from-white dark:to-slate-900/10 lg:text-lg">
                       Start Creating Today
@@ -346,7 +358,7 @@ const Hero = () => {
                     <ArrowRightIcon className="ml-4" />
                   </ShimmerButton>
                 </div>
-                <div className="w-full flex justify-center items-center">
+                <div className="w-full flex justify-center items-center -mb-1 -z-20">
                   <UserRatingCard />
                 </div>
               </div>
