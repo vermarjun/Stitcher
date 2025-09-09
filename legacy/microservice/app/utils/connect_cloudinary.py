@@ -1,6 +1,4 @@
 import cloudinary
-import cloudinary.uploader
-import cloudinary.api
 
 from config.environment import CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY
 

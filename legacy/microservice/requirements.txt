@@ -1,10 +1,16 @@
 # FastAPI and web framework dependencies
-fastapi==0.104.1
-uvicorn==0.24.0
+fastapi
+uvicorn
 
 # Authentication and security
-python-dotenv==1.0.0
+python-dotenv
 
 # Database
-motor==3.3.1
-pymongo==4.6.1
+motor
+pymongo
+
+cloudinary
+numpy
+manim
+
+openai-agents
