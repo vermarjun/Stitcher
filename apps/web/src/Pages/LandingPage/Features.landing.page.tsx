@@ -3,7 +3,7 @@ import { HyperText } from "@/Components/magicui/hyper-text";
 
 export function VideoFeaturesDemo() {
   return (
-    <>
+    <section id="features">
       <div className="w-full flex justify-center items-center text-white pt-10 pb-10 md:px-0">
         <HyperText className="font-bold text-5xl md:text-6xl" startOnView={true} animateOnHover={true}>
           Features
@@ -67,7 +67,7 @@ export function VideoFeaturesDemo() {
           </div>
         </WobbleCard>
       </div>
-    </>
+    </section>
   );
 }
 

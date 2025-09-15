@@ -17,11 +17,34 @@ type PrismProps = {
   bloom?: number;
   suspendWhenOffscreen?: boolean;
   timeScale?: number;
-
   // New optional optimisation knobs (non-destructive; defaults preserve original)
   uSteps?: number; // how many ray-march steps to run (default 40 to match original)
   staticWallpaper?: boolean; // if true: render once and stop (default false)
   capDPR?: boolean; // if true: cap devicePixelRatio to 1 for consistent, cheaper rendering (default false)
+  // New props for browser-specific adjustments
+  safariGlow?: number; // Override glow for Safari
+  chromeGlow?: number; // Override glow for Chrome
+  safariNoise?: number; // Override noise for Safari
+  chromeNoise?: number; // Override noise for Chrome
+};
+
+// Browser detection utility
+const getBrowserType = (): 'safari' | 'chrome' | 'other' => {
+  if (typeof window === 'undefined') return 'other';
+  
+  const userAgent = window.navigator.userAgent;
+  
+  // Check for Safari (but not Chrome, as Chrome also contains "Safari" in user agent)
+  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    return 'safari';
+  }
+  
+  // Check for Chrome
+  if (userAgent.includes('Chrome')) {
+    return 'chrome';
+  }
+  
+  return 'other';
 };
 
 const Prism: React.FC<PrismProps> = ({
@@ -40,11 +63,15 @@ const Prism: React.FC<PrismProps> = ({
   bloom = 1,
   suspendWhenOffscreen = false,
   timeScale = 0.5,
-
   // new
   uSteps = 30,
   staticWallpaper = false,
-  capDPR = false
+  capDPR = false,
+  // Browser-specific overrides
+  safariGlow,
+  chromeGlow,
+  safariNoise,
+  chromeNoise
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,12 +79,26 @@ const Prism: React.FC<PrismProps> = ({
     const container = containerRef.current;
     if (!container) return;
 
+    // Detect browser and apply appropriate settings
+    const browserType = getBrowserType();
+    
+    let finalGlow = glow;
+    let finalNoise = noise;
+    
+    if (browserType === 'safari' || browserType === 'other') {
+      finalGlow = safariGlow !== undefined ? safariGlow : glow;
+      finalNoise = safariNoise !== undefined ? safariNoise : noise;
+    } else if (browserType === 'chrome') {
+      finalGlow = chromeGlow !== undefined ? chromeGlow : glow;
+      finalNoise = chromeNoise !== undefined ? chromeNoise : noise;
+    }
+
     // preserve original semantics
     const H = Math.max(0.001, height);
     const BW = Math.max(0.001, baseWidth);
     const BASE_HALF = BW * 0.5;
-    const GLOW = Math.max(0.0, glow);
-    const NOISE = Math.max(0.0, noise);
+    const GLOW = Math.max(0.0, finalGlow);
+    const NOISE = Math.max(0.0, finalNoise);
     const offX = offset?.x ?? 0;
     const offY = offset?.y ?? 0;
     const SAT = transparent ? 1.5 : 1;
@@ -71,19 +112,28 @@ const Prism: React.FC<PrismProps> = ({
     const TS = Math.max(0, timeScale || 1);
     const HOVSTR = Math.max(0, hoverStrength || 1);
     const INERT = Math.max(0, Math.min(1, inertia || 0.12));
-
     const dpr = 1;
-
+    
     const renderer = new Renderer({
       dpr,
       alpha: transparent,
       antialias: false
     });
     const gl = renderer.gl;
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
-    gl.disable(gl.BLEND);
-
+    
+    // Browser-specific WebGL context settings
+    if (browserType === 'safari') {
+      // Safari-specific optimizations
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.CULL_FACE);
+      gl.disable(gl.BLEND);
+    } else {
+      // Chrome and other browsers
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.CULL_FACE);
+      gl.disable(gl.BLEND);
+    }
+    
     Object.assign(gl.canvas.style, {
       position: "absolute",
       inset: "0",
@@ -93,7 +143,6 @@ const Prism: React.FC<PrismProps> = ({
       pointerEvents: "none",
       willChange: "transform"
     } as Partial<CSSStyleDeclaration>);
-
     container.appendChild(gl.canvas);
 
     const vertex = /* glsl */ `
@@ -102,14 +151,12 @@ const Prism: React.FC<PrismProps> = ({
         gl_Position = vec4(position, 0.0, 1.0);
       }
     `;
-
+    
     // --- ORIGINAL fragment shader logic preserved exactly ---
     const fragment = /* glsl */ `
       precision highp float;
-
       uniform vec2  iResolution;
       uniform float iTime;
-
       uniform float uHeight;
       uniform float uBaseHalf;
       uniform mat3  uRot;
@@ -128,32 +175,26 @@ const Prism: React.FC<PrismProps> = ({
       uniform float uMinAxis;
       uniform float uPxScale;
       uniform float uTimeScale;
-
       // new: control steps at runtime (we still need a compile-time upper bound)
       uniform int uSteps;
       const int MAX_STEPS = 30;
-
       vec4 tanh4(vec4 x){
         vec4 e2x = exp(2.0*x);
         return (e2x - 1.0) / (e2x + 1.0);
       }
-
       float rand(vec2 co){
         return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453123);
       }
-
       float sdOctaAnisoInv(vec3 p){
         vec3 q = vec3(abs(p.x) * uInvBaseHalf, abs(p.y) * uInvHeight, abs(p.z) * uInvBaseHalf);
         float m = q.x + q.y + q.z - 1.0;
         return m * uMinAxis * 0.5773502691896258;
       }
-
       float sdPyramidUpInv(vec3 p){
         float oct = sdOctaAnisoInv(p);
         float halfSpace = -p.y;
         return max(oct, halfSpace);
       }
-
       mat3 hueRotation(float a){
         float c = cos(a), s = sin(a);
         mat3 W = mat3(
@@ -173,19 +214,14 @@ const Prism: React.FC<PrismProps> = ({
         );
         return W + U * c + V * s;
       }
-
       void main(){
         vec2 f = (gl_FragCoord.xy - 0.5 * iResolution.xy - uOffsetPx) * uPxScale;
-
         float z = 5.0;
         float d = 0.0;
-
         vec3 p;
         vec4 o = vec4(0.0);
-
         float centerShift = uCenterShift;
         float cf = uColorFreq;
-
         mat2 wob = mat2(1.0);
         if (uUseBaseWobble == 1) {
           float t = iTime * uTimeScale;
@@ -194,7 +230,6 @@ const Prism: React.FC<PrismProps> = ({
           float c2 = cos(t + 11.0);
           wob = mat2(c0, c1, c2, c0);
         }
-
         // use runtime-controlled number of steps but keep compile-time max for GLSL
         for (int i = 0; i < MAX_STEPS; i++) {
           if(i >= uSteps) break;
@@ -207,21 +242,16 @@ const Prism: React.FC<PrismProps> = ({
           z -= d;
           o += (sin((p.y + z) * cf + vec4(0.0, 1.0, 2.0, 3.0)) + 1.0) / d;
         }
-
         o = tanh4(o * o * (uGlow * uBloom) / 1e5);
-
         vec3 col = o.rgb;
         float n = rand(gl_FragCoord.xy + vec2(iTime));
         col += (n - 0.5) * uNoise;
         col = clamp(col, 0.0, 1.0);
-
         float L = dot(col, vec3(0.2126, 0.7152, 0.0722));
         col = clamp(mix(vec3(L), col, uSaturation), 0.0, 1.0);
-
         if(abs(uHueShift) > 0.0001){
           col = clamp(hueRotation(uHueShift) * col, 0.0, 1.0);
         }
-
         gl_FragColor = vec4(col, o.a);
       }
     `;
@@ -229,7 +259,6 @@ const Prism: React.FC<PrismProps> = ({
     const geometry = new Triangle(gl);
     const iResBuf = new Float32Array(2);
     const offsetPxBuf = new Float32Array(2);
-
     const program = new Program(gl, {
       vertex,
       fragment,
@@ -271,14 +300,12 @@ const Prism: React.FC<PrismProps> = ({
       offsetPxBuf[0] = offX * dpr;
       offsetPxBuf[1] = offY * dpr;
       program.uniforms.uPxScale.value = 1 / ((gl.drawingBufferHeight || 1) * 0.1 * SCALE);
-
       // if static wallpaper requested, draw once
       if (staticWallpaper) {
         program.uniforms.iTime.value = 0.0;
         renderer.render({ scene: mesh });
       }
     };
-
     const ro = new ResizeObserver(resize);
     ro.observe(container);
     resize();
@@ -295,15 +322,12 @@ const Prism: React.FC<PrismProps> = ({
       const r00 = cy * cz + sy * sx * sz;
       const r01 = -cy * sz + sy * sx * cz;
       const r02 = sy * cx;
-
       const r10 = cx * sz;
       const r11 = cx * cz;
       const r12 = -sx;
-
       const r20 = -sy * cz + cy * sx * sz;
       const r21 = sy * sz + cy * sx * cz;
       const r22 = cy * cx;
-
       out[0] = r00;
       out[1] = r10;
       out[2] = r20;
@@ -328,21 +352,18 @@ const Prism: React.FC<PrismProps> = ({
       cancelAnimationFrame(raf);
       raf = 0;
     };
-
     const rnd = () => Math.random();
     const wX = (0.3 + rnd() * 0.6) * RSX;
     const wY = (0.2 + rnd() * 0.7) * RSY;
     const wZ = (0.1 + rnd() * 0.5) * RSZ;
     const phX = rnd() * Math.PI * 2;
     const phZ = rnd() * Math.PI * 2;
-
     let yaw = 0,
       pitch = 0,
       roll = 0;
     let targetYaw = 0,
       targetPitch = 0;
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
     const pointer = { x: 0, y: 0, inside: true };
     const onMove = (e: PointerEvent) => {
       const ww = Math.max(1, window.innerWidth);
@@ -361,7 +382,6 @@ const Prism: React.FC<PrismProps> = ({
     const onBlur = () => {
       pointer.inside = false;
     };
-
     let onPointerMove: ((e: PointerEvent) => void) | null = null;
     if (animationType === "hover") {
       onPointerMove = (e: PointerEvent) => {
@@ -381,9 +401,7 @@ const Prism: React.FC<PrismProps> = ({
     function render(t: number) {
       const time = (t - t0) * 0.001;
       program.uniforms.iTime.value = time;
-
       let continueRAF = true;
-
       if (animationType === "hover") {
         const maxPitch = 0.6 * HOVSTR;
         const maxYaw = 0.6 * HOVSTR;
@@ -396,7 +414,6 @@ const Prism: React.FC<PrismProps> = ({
         pitch = lerp(prevPitch, targetPitch, INERT);
         roll = lerp(prevRoll, 0, 0.1);
         program.uniforms.uRot.value = setMat3FromEuler(yaw, pitch, roll, rotBuf);
-
         if (NOISE_IS_ZERO) {
           const settled =
             Math.abs(yaw - targetYaw) < 1e-4 && Math.abs(pitch - targetPitch) < 1e-4 && Math.abs(roll) < 1e-4;
@@ -422,7 +439,6 @@ const Prism: React.FC<PrismProps> = ({
         program.uniforms.uRot.value = rotBuf;
         if (TS < 1e-6) continueRAF = false;
       }
-
       renderer.render({ scene: mesh });
       if (continueRAF) {
         raf = requestAnimationFrame(render);
@@ -476,11 +492,15 @@ const Prism: React.FC<PrismProps> = ({
     inertia,
     bloom,
     suspendWhenOffscreen,
-
     // new knobs
     uSteps,
     staticWallpaper,
-    capDPR
+    capDPR,
+    // browser-specific overrides
+    safariGlow,
+    chromeGlow,
+    safariNoise,
+    chromeNoise
   ]);
 
   return <div className="w-full h-full relative" ref={containerRef} />;

@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { AuroraText } from "@/Components/magicui/aurora-text";
 import { SparklesText } from "@/Components/magicui/sparkles-text";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 
 interface FlipWordsProps {
   words: string[];          
@@ -337,22 +338,28 @@ export const Card = ({
   );
 };
 
+
 const Hero = () => {
+  const navigate = useNavigate();
   const words = ["Explain", "Visualize", "Present", "Illustrate", "Learn"];
 
   return (
-    <div className="relative w-full h-full z-10 px-4 rounded-b-2xl">
+    <section id="home" className="relative w-full h-full z-10 px-4 rounded-b-2xl">
       {/* Prism animated background */}
       <div className="absolute inset-0 z-0">
         <Prism
           animationType="hover"
           height={3.5}
-          baseWidth={4.5}
+          baseWidth={5.5}
           scale={3.6}
           hueShift={0}
-          colorFrequency={1}
-          noise={0.2}
-          glow={1}
+          colorFrequency={0.8}
+          // Safari-specific settings (darker/less bright)
+          safariGlow={0.14}
+          safariNoise={0.05}
+          // Chrome-specific settings (brighter)
+          chromeGlow={1}
+          chromeNoise={0.2}
         />
       </div>
 
@@ -410,7 +417,7 @@ const Hero = () => {
                 </div>
 
                 {/* CTA Buttons */}
-                <div className="flex justify-center items-center md:mb-8 mb-14">
+                <div onClick={()=>navigate("/home")} className="flex justify-center items-center md:mb-8 mb-14">
                   <ShimmerButton
                     background="black"
                     className="shadow-2xl px-16 py-5"
@@ -436,7 +443,7 @@ const Hero = () => {
           </div>
         </ContainerScroll>
       </div>
-    </div>
+    </section>
   );
 };
 

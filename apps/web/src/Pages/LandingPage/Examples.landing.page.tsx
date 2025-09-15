@@ -34,9 +34,9 @@ export function Examples() {
   }
 ];
   return (
-    <div className="relative w-full overflow-clip">
+    <section id="examples" className="relative w-full overflow-clip">
       <Timeline data={data} />
-    </div>
+    </section>
   );
 }
 

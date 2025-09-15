@@ -1,8 +1,13 @@
 import React from "react";
 import Prism from "./Prism.landing.page";
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+
 
 const CTA: React.FC = () => {
+
+  const navigate = useNavigate();
+
   const [isMobile, setIsMobile] = useState<boolean>(
     typeof window !== "undefined" &&
       window.matchMedia("(max-width: 768px)").matches
@@ -59,7 +64,7 @@ const CTA: React.FC = () => {
     };
   }, []);
   return (
-    <section className="relative w-full h-full px-4 rounded-b-2xl">
+    <section id="endpagecta" className="relative w-full h-full px-4 rounded-b-2xl">
       <div className="max-w-5xl py-18 px-4 mx-auto text-center">
         <div className="pointer-events-none absolute inset-0 z-0">
           <Prism {...prismProps}/>
@@ -91,7 +96,7 @@ const CTA: React.FC = () => {
         <p className="text-neutral-200 text-xl md:text-2xl mb-10 opacity-90 max-w-3xl mx-auto">
           Create captivating videos & GIFs that explain, engage, and convert.
         </p>
-        <button className="cursor-pointer z-50 text-white px-12 py-4 rounded-lg border-1 tracking-widest font-normal bg-transparent hover:bg-[#b2bbc3] hover:text-black transition duration-500">
+        <button onClick={() => navigate("/home")} className="cursor-pointer z-50 text-white px-12 py-4 rounded-lg border-1 tracking-widest font-normal bg-transparent hover:bg-[#b2bbc3] hover:text-black transition duration-500">
           Start Creating Now
         </button>
       </div>

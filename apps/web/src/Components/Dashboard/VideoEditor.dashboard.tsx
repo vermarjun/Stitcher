@@ -35,7 +35,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       const projectId = currentProject?._id;
       if (!projectId) return;
       const response = await api.get(`/timeline/project/${projectId}`);
-      console.log(response.data);
+      console.log("Timeline Object: ",response.data);
       setTimeline(response.data);
     } catch (err) {
       console.error("Error fetching timeline:", err);

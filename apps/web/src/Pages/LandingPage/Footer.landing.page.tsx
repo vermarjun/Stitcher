@@ -1,7 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Footer: React.FC = () => {
   const currentYear = 2025;
+  const navigate = useNavigate();
 
   return (
     <footer className="bg-black text-gray-300 py-8 px-4 md:px-8">
@@ -15,24 +17,24 @@ const Footer: React.FC = () => {
           </div>
           
           <div className="flex space-x-6">
-            <a
-              href="#"
-              className="text-gray-400 hover:text-white transition-colors duration-200 text-sm"
+            <button
+              onClick={()=>window.location.href = "https://linkedin.com/in/vermarjun"}
+              className= "hover:cursor-pointer text-gray-400 hover:text-white transition-colors duration-200 text-sm"
             >
               Get in Touch
-            </a>
-            <a
-              href="#"
-              className="text-gray-400 hover:text-white transition-colors duration-200 text-sm"
+            </button>
+            <button
+              onClick={()=>navigate("/privacypolicy")}
+              className= "hover:cursor-pointer text-gray-400 hover:text-white transition-colors duration-200 text-sm"
             >
               Privacy Policy
-            </a>
-            <a
-              href="#"
-              className="text-gray-400 hover:text-white transition-colors duration-200 text-sm"
+            </button>
+            <button
+              onClick={()=>navigate("/termsconditions")}
+              className= "hover:cursor-pointer text-gray-400 hover:text-white transition-colors duration-200 text-sm"
             >
               Terms & Conditions
-            </a>
+            </button>
           </div>
         </div>
 
@@ -44,19 +46,19 @@ const Footer: React.FC = () => {
             </p>
             <div className="flex space-x-4">
               <a
-                href="#"
+                href="https://linkedin.com/in/vermarjun"
                 className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
               >
                 LinkedIn
               </a>
               <a
-                href="#"
+                href="https://github.com/vermarjun"
                 className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
               >
                 GitHub
               </a>
               <a
-                href="#"
+                href="https://x.com/Arjunv3rm4"
                 className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
               >
                 Twitter

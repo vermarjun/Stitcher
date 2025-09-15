@@ -401,8 +401,8 @@ const QuickActions = ({navigate}:Props3) => {
                 onClick={startNewProject}
                 className="relative overflow-hidden border border-neutral-800 hover:border-neutral-700 transition-all duration-300 cursor-pointer group bg-neutral-950 hover:bg-neutral-900 transform hover:scale-105 hover:shadow-lg hover:shadow-neutral-900/20"
               >
-                <ShineBorder shineColor="white" />
-
+                <ShineBorder borderWidth={2} duration={8} shineColor={["#A07CFE", "#FE8FB5", "#FFBE7B"]} />
+             
                 <CardContent className="p-4">
                   <div className="flex flex-col items-center text-center space-y-3">
                     <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-neutral-700 transition-all duration-300">
