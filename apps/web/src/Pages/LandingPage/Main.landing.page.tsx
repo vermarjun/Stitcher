@@ -25,7 +25,7 @@ const LoadingFallback: React.FC<{ height?: string }> = ({
 
 const LandingPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black overflow-hidden">
       <div className="absolute w-screen">
         <GlassyNavbar />
       </div>

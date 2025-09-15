@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '@/api';
 import { toast } from 'sonner';
 import type { User } from '@/State/Types';
+import { FlickeringGrid } from '@/Components/ui/flickering-grid';
+
 
 // Define types
 interface FormData {
@@ -194,13 +196,18 @@ const AuthPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="bg-black w-screen h-screen flex justify-center items-center z-10 relative overflow-hidden">
       {/* Background subtle pattern */}
-      <div className="absolute inset-0 opacity-[0.02]" style={{
-        backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
-        backgroundSize: '40px 40px'
-      }} />
-      
+      <div className="w-full h-full absolute inset-0 z-0">
+        <FlickeringGrid
+          className="relative inset-0 z-0 [mask-image:radial-gradient(650px_circle_at_center,white,transparent)]"
+          squareSize={4}
+          gridGap={6}
+          color="#60A5FA"
+          maxOpacity={0.5}
+          flickerChance={0.1}
+        />
+      </div>
       {/* Main auth card */}
       <div className="relative w-full max-w-md z-10">
         <div className={`relative transition-all duration-500 ease-out ${

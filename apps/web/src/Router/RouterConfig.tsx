@@ -5,8 +5,8 @@ import ErrorPage from '../Pages/Error.page';
 import AuthRoute from './ProtectedRoute.tsx';
 import PublicRoute from './PublicRoute.tsx';
 
-import TermsAndConditions from '@/Pages/LandingPage/TermsConditions.landing.page.tsx';
-import PrivacyPolicy from '@/Pages/LandingPage/PrivacyPolicy.landing.page.tsx';
+import TermsAndConditions from '@/Pages/TermsConditions.page.tsx';
+import PrivacyPolicy from '@/Pages/PrivacyPolicy.page.tsx';
 
 // Lazy-loaded pages
 const LandingPage = lazy(() => import('../Pages/LandingPage/Main.landing.page.tsx'));
