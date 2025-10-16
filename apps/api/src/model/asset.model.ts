@@ -14,6 +14,7 @@ export enum AssetOrigin {
 export interface IAsset extends Document {
     name: string;
     type: AssetType;
+    code?: string; // Templates, community videos and generated videos will have it, other videos (uploaded) or audio or text objects will not have it
     origin: AssetOrigin;
     url: string;
     thumbnail: string;

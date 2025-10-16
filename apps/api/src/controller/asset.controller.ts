@@ -11,6 +11,7 @@ export const createAsset = async (req: Request, res: Response): Promise<void> =>
       type,
       origin,
       url,
+      code,
       thumbnail,
       duration,
       width,
@@ -68,6 +69,7 @@ export const createAsset = async (req: Request, res: Response): Promise<void> =>
     const asset = new Asset({
       name,
       type,
+      code: code || "",
       origin,
       url,
       thumbnail: thumbnail || '',

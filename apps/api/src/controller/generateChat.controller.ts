@@ -54,6 +54,13 @@ async function fetchApiKeysForUser(userId: string): Promise<ApiKeyMapping> {
     return apiKeyMapping;
 }
 
+interface GenerateChatRequest {
+    projectId: string;
+    prompt: string;
+    chatId?: string;
+    assetId?: string[];
+}
+
 async function callVideoGenerationMicroservice(
     prompt: string,
     userName: string,
@@ -108,11 +115,67 @@ async function callVideoGenerationMicroservice(
     }
 }
 
+async function callVideoEditMicroservice(
+    prompt: string,
+    userName: string,
+    projectId: string,
+    userId: string,
+    chatId: string,
+    assetId: string[],
+    apiKeys: ApiKeyMapping
+): Promise<{ status: 'success' | 'error', error?: any }> {
+    try {
+        const response = await axios.post(
+            `${MICROSERVICE_BASE_URL}/edit/video`,
+            {
+                userName: userName,
+                prompt: prompt,
+                projectId: projectId,
+                userId: userId,
+                assetId: assetId,
+                chatId: chatId
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-planner-api-key': apiKeys.planner.keyValue,
+                    'x-planner-base-url': apiKeys.planner.baseUrl,
+                    'x-planner-model': apiKeys.planner.modelName,
+                    'x-generator-api-key': apiKeys.coder.keyValue,
+                    'x-generator-base-url': apiKeys.coder.baseUrl,
+                    'x-generator-model': apiKeys.coder.modelName,
+                    'x-merger-api-key': apiKeys.reviewer.keyValue,
+                    'x-merger-base-url': apiKeys.reviewer.baseUrl,
+                    'x-merger-model': apiKeys.reviewer.modelName,
+                    'x-debugger-api-key': apiKeys.debugger.keyValue,
+                    'x-debugger-base-url': apiKeys.debugger.baseUrl,
+                    'x-debugger-model': apiKeys.debugger.modelName,
+                    'x-general-api-key': apiKeys.general.keyValue,
+                    'x-general-base-url': apiKeys.general.baseUrl,
+                    'x-general-model': apiKeys.general.modelName
+                },
+                timeout: 300000
+            }
+        );
+        
+        console.log('Microservice response:', response.data);
+        return { status: 'success' };
+    } catch (error) {
+        console.error('Microservice call error:', error);
+        if (axios.isAxiosError(error)) {
+            console.error('Response data:', error.response?.data);
+            console.error('Response status:', error.response?.status);
+            console.error('Request config:', error.config);
+        }
+        return { status: 'error', error };
+    }
+}
+
 export const generateChatResponse = async (req: Request, res: Response) => {
     try {
-        const { projectId, prompt, chatId }: GenerateChatRequest = req.body;
+        const { projectId, prompt, chatId, assetId }: GenerateChatRequest = req.body;
         const userId = req.userId;
-
+        
         // Validation
         if (!projectId || !prompt?.trim()) {
             res.status(400).json({
@@ -121,7 +184,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-
+        
         if (!userId) {
             res.status(401).json({
                 success: false,
@@ -129,9 +192,9 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-
+        
         const user = await User.findById(userId);
-
+        
         // Verify project exists
         const project = await Project.findById(projectId);
         if (!project) {
@@ -141,7 +204,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-
+        
         // Fetch API keys for the user
         let apiKeys: ApiKeyMapping;
         try {
@@ -153,11 +216,11 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-
+        
         // Get or create chat
         let chat: IGenerateChat | null;
         let isNewChat = false;
-
+        
         if (chatId) {
             chat = await GenerateChat.findOne({
                 _id: chatId,
@@ -180,7 +243,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             isNewChat = true;
         }
-
+        
         // Add user message to chat
         const userMessage: IGenerateChatMessage = {
             role: 'user',
@@ -194,7 +257,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             error: "none"
         };
         chat.messages.push(userMessage);
-
+        
         // Add placeholder assistant message
         const assistantMessage: IGenerateChatMessage = {
             role: 'assistant',
@@ -211,32 +274,45 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             error: "none"
         };
         chat.messages.push(assistantMessage);
-
+        
         // Save chat
         await chat.save();
-
+        
         // Update project's edit_chat reference if it's a new chat
         if (isNewChat) {
             project.edit_chat = chat._id as Types.ObjectId;
             await project.save();
         }
-
+        
         console.log("username: ", user?.username)
         console.log("projectId: ", projectId)
         console.log("userId: ", userId)
         console.log("chatId from request: ", chatId)
         console.log("chatId being sent: ", chat._id)
-
-        // Call microservice
-        const microserviceResult = await callVideoGenerationMicroservice(
-            prompt,
-            user?.username || "arjun",
-            projectId,
-            userId,
-            (chat._id as Types.ObjectId).toString(),
-            apiKeys
-        );
-
+        
+        // Call appropriate microservice based on assetId presence
+        let microserviceResult;
+        if (assetId && assetId.length > 0) {
+            microserviceResult = await callVideoEditMicroservice(
+                prompt,
+                user?.username || "arjun",
+                projectId,
+                userId,
+                (chat._id as Types.ObjectId).toString(),
+                assetId,
+                apiKeys
+            );
+        } else {
+            microserviceResult = await callVideoGenerationMicroservice(
+                prompt,
+                user?.username || "arjun",
+                projectId,
+                userId,
+                (chat._id as Types.ObjectId).toString(),
+                apiKeys
+            );
+        }
+        
         if (microserviceResult.status === 'error') {
             res.status(503).json({
                 success: false,
@@ -244,7 +320,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-
+        
         // Return success response
         res.status(200).json({
             success: true,
@@ -253,7 +329,6 @@ export const generateChatResponse = async (req: Request, res: Response) => {
                 message: 'Request sent to microservice successfully'
             }
         });
-
     } catch (error) {
         console.error('Generate chat error:', error);
         res.status(500).json({
