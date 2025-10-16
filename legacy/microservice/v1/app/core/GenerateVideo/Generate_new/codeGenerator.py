@@ -1,9 +1,8 @@
 from agents import Agent, Runner, RunConfig
 from pydantic import BaseModel
 from typing import Optional, List
-import asyncio
-from scenePlanner import Scene
-from config import MULTI_MODEL_PROVIDER
+from .scenePlanner import Scene
+from utils.model_provider import get_model  
 
 class GeneratorOutput(BaseModel):
     scene_name: str
@@ -26,7 +25,7 @@ code_generator_agent = Agent(
         "but never copy-paste them. Always regenerate the scene cleanly from scratch. "
         "The new scene generated is the continuation of previous code. "
         "Ensure the total duration does not exceed the given limit. "
-        # "Keep the scenes simple and small, try to do what user wants with minimum complexity for smaller codes and faster renders with manim community v0.19.0"
+        "Keep the scenes simple and small, try to do what user wants with minimum complexity for smaller codes and faster renders with manim community v0.19.0"
         "THE ONLY EXPECTED OUTPUT IS VALID PYTHON CODE."
     ),
     model="CODER",
@@ -34,10 +33,10 @@ code_generator_agent = Agent(
 )
 
 async def code_gen_function(req: Scene, previous_code: Optional[str] = None):
-    # print("request came")
-    context_part = f"\nHere is the previous code context:\n{previous_code}\n" if previous_code else ""
+    context_part = ""
+    if (previous_code):
+        context_part = f"\nHere is the previous code context:\n{previous_code}\n"
 
-    # print("context ready!")
     modified_prompt = (
         f"Generate a new manim Scene based on this request: {req.Prompt}. "
         f"Strictly name the Scene class as: {req.SceneName}. "
@@ -46,19 +45,19 @@ async def code_gen_function(req: Scene, previous_code: Optional[str] = None):
         f"End the animation with a {req.Transition} transition. "
         f"{context_part}"
     )
-    # print("Prompt ready!")
 
+    # Get the model from context instead of passed provider
+    generator_model = get_model("GENERATOR")
+    print("generator model milgya hai")
     result = await Runner.run(
         code_generator_agent,
         modified_prompt,
-        run_config=RunConfig(model_provider=MULTI_MODEL_PROVIDER)
+        run_config=RunConfig(model=generator_model)  # Pass the actual model instance
     )
-    # print("result ready!")
-    # print(result.final_output)
+    print("############################################################################generator used: input_tokens: ", result.context_wrapper.usage.input_tokens, "outputtokens: ", result.context_wrapper.usage.output_tokens ," across: ", result.context_wrapper.usage.requests, " requests")
     return result.final_output
 
 async def generate_all_scenes(scenes: List[Scene]):
-    # print("Request came")
     results = []
     previous_code = None
 
@@ -68,5 +67,4 @@ async def generate_all_scenes(scenes: List[Scene]):
         results.append(output)
         previous_code = output.code 
 
-    # print(results)
     return results

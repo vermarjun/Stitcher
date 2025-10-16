@@ -44,7 +44,6 @@ def render_and_upload_manim(
                     "metadata": None,
                     "error": f"Render error: {process.stderr.strip()}",
                 }
-            # print("render results: ",process)
 
             # --- Locate video ---
             generated_video = None
@@ -75,13 +74,33 @@ def render_and_upload_manim(
                     "metadata": None,
                     "error": f"Upload error: {str(e)}",
                 }
+            print("render ka result: ",response)
+
+            # --- Generate thumbnail dynamically ---
+            public_id = response.get("public_id")
+            duration = response.get("duration") or 2  # fallback in case duration not found
+            seek_time = round(duration / 2, 2)        # middle frame
+
+            thumbnail_url = cloudinary.CloudinaryImage(public_id).build_url(
+                resource_type="video",
+                format="jpg",
+                # CLOUDINARY'S AI CHOOSES BEST FRAME
+                # transformation=[{"start_offset": "auto", "w": 600, "h": 338, "c": "fill"}]
+                # IF THE AI THING FAILS (TEST IT) JUST USE THE MIDDLE FRAME
+                transformation=[
+                    {"so": seek_time, "w": 600, "h": 338, "c": "fill"}
+                ]
+            )
 
             # --- Success ---
             return {
                 "success": True,
                 "metadata": {
                     "url": response.get("secure_url"),
+                    "thumbnail": thumbnail_url,
                     "duration": response.get("duration"),
+                    "width": response.get("width"),
+                    "height": response.get("height"),
                     "bytes": response.get("bytes"),
                     "public_id": response.get("public_id"),
                 },

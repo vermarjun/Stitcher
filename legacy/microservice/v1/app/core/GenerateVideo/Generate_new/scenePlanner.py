@@ -62,15 +62,16 @@ planner_agent = Agent(
 
 async def planner_agent_function(prompt: str):
     """Updated to use context-based model provider"""
-    print("planner agent reached! prompt: ", prompt)
     
     # Get the model from context instead of passed provider
     planner_model = get_model("PLANNER")
-    
+    print("planner model agya")
     result = await Runner.run(
         planner_agent, 
         prompt, 
         run_config=RunConfig(model=planner_model)  # Pass model instance
     )
+    print("planner result")
+    print("################################################################planner used: input: ", result.context_wrapper.usage.input_tokens, " output_tokens: ", result.context_wrapper.usage.output_tokens, " across: ", result.context_wrapper.usage.requests, " requests")
 
     return result.final_output

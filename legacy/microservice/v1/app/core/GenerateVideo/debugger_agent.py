@@ -1,7 +1,7 @@
 from agents import Agent, Runner, RunConfig
 from pydantic import BaseModel
 from typing import Optional
-from config import MULTI_MODEL_PROVIDER
+from utils.model_provider import get_model  
 
 class DebuggerOutput(BaseModel):
     fixed_code: str
@@ -23,17 +23,13 @@ manim_debugger_agent = Agent(
         "7) Ensure the final code uses only APIs compatible with manim-community v0.19.0; do not use deprecated methods from older manim versions.\n"
         "8) The agent's output must be validated (syntactically correct Python). Keep code concise and avoid adding long unrelated utilities.\n"
     ),
-    model="DEBUGGER",
     output_type=DebuggerOutput,
 )
 
-
 async def debugger_agent_wrapper(original_code: str, error_msg: str, extra_context: Optional[str] = None):
-    # print("trying to debug")
-    # print("Original code: ", original_code)
-
+    """Updated to use context-based model provider"""
     prompt = (
-        "The user attempted to render the following manim Python file and it failed.\n\n"
+        f"Fix this broken Manim code:\n\n"
         "--- BEGIN ORIGINAL CODE ---\n"
         f"{original_code}\n"
         "--- END ORIGINAL CODE ---\n\n"
@@ -45,13 +41,17 @@ async def debugger_agent_wrapper(original_code: str, error_msg: str, extra_conte
     if extra_context:
         prompt += f"\nAdditional context: {extra_context}\n"
 
-    # print("context prompt ready")
+    print("context prompt ready")
 
+    # Get the model from context instead of passed provider
+    debugger_model = get_model("DEBUGGER")
+    
     result = await Runner.run(
         manim_debugger_agent,
         prompt,
-        run_config=RunConfig(model_provider=MULTI_MODEL_PROVIDER)
+        run_config=RunConfig(model=debugger_model)  # Pass model instance
     )
+    print("debugger used: input_tokens used: ", result.context_wrapper.usage.input_tokens, " outputtokens_used: " , result.context_wrapper.usage.output_tokens," across: ", result.context_wrapper.usage.requests, " requests")
 
-    # print("debugger result came: ", result.final_output)
-    return result.final_output
+    print("debugger result came: ", result.final_output)
+    return result.final_output.fixed_code
