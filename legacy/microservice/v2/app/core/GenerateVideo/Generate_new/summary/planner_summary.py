@@ -12,16 +12,23 @@ class SceneObject(BaseModel):
     SceneName: str
     Prompt: str
 
-SUMMARIZER_SYSTEM_PROMPT = """You are a video generation summary specialist. Your task is to create a concise, engaging summary of the video generation plan that helps users understand what their video will contain.
-Given a list of scenes with their names and prompts, create a clear summary that:
-1. Captures the essence and flow of the entire video
-2. Highlights the key elements and transitions between scenes
-3. Uses natural, engaging language that's easy to understand
+SUMMARIZER_SYSTEM_PROMPT = """
+You are plan summarizer agent. Your job is to summarize the plans made by other agents. You are provided with an 
+array of Scenes where each Scene has a SceneName and it's description. You have to summarize entire thing to a human.
+You have to explain in short: 
+1. How many scenes are planned.
+2. Scene Name
+3. What each scene has to explain
+4. What the user can expect when these scenes are rendered independently and merged as a single video as output
+
+You have to just brief the user about intensions and plans of the planner agent, whose plan is given to you and you have 
+to give a summary of that plan as an output;
+
 CRITICAL REQUIREMENTS:
-- Keep your summary under 200 words (approximately 3-4 sentences)
+- Use a natural and engaging language which is conforting attracting and soothing to read, 
+- Keep your summary under 80 words at max. 
 - Focus on the overall narrative and visual journey
-- Avoid listing scenes - instead describe the flow and content naturally
-- Make it informative yet concise"""
+"""
 
 summarizer_agent = Agent(
     name="Video Summary Generator",
@@ -53,22 +60,20 @@ async def summarizer_agent_function(planner_output: List[Union[Dict, object]]) -
             f"Scene {i+1} ({scene.SceneName}): {scene.Prompt}"
             for i, scene in enumerate(scenes)
         ])
-        
-        user_prompt = f"""Summarize this video generation plan in under 200 words (3-4 sentences). Focus on the overall flow and key visual elements:
-{scenes_text}
-Create a concise, engaging summary that captures the essence of this video."""
-        
+
+        print("This is what is given as input to planner_summary: ",scenes_text)
+
         # Get the model
         summarizer_model = get_model("GENERAL")
         
         result = await Runner.run(
             summarizer_agent,
-            user_prompt,
+            scenes_text,
             run_config=RunConfig(model=summarizer_model)
         )
         
         summary = result.final_output.summary
-        print(f"✓ Summarizer agent completed: {len(summary.split())} words")
+        # print(f"✓ Summarizer agent completed: {len(summary.split())} words")
         return summary
         
     except Exception as e:
@@ -82,17 +87,8 @@ async def summarizer_agent_wrapper(
     chat_id: str,
     planner_output: List[Union[Dict, object]]
 ):
-    """
-    Wrapper that calls summarizer agent and updates MongoDB
-    This runs asynchronously to not block the main flow
-    
-    Args:
-        chat_id: MongoDB chat document ID
-        planner_output: List of Scene objects or {sceneName, prompt} dictionaries
-    """
     try:
-        print(f"Starting summarizer agent for chat {chat_id}...")
-        
+        # print(f"Starting summarizer agent for chat {chat_id}...")
         # Get summary from LLM
         summary = await summarizer_agent_function(planner_output)
         
@@ -105,12 +101,12 @@ async def summarizer_agent_wrapper(
             planner_summary=summary,
             scenes=normalized_scenes
         )
-        
-        print(f"✓ Summarizer wrapper completed for chat {chat_id}")
+        # print(f"✓ Summarizer wrapper completed for chat {chat_id}")
         
     except Exception as e:
         print(f"Error in summarizer wrapper: {e}")
-        # Update with a basic summary even if LLM fails
+
+        # Update with a basic summary if agent fails
         scenes = [normalize_scene(scene) for scene in planner_output]
         scene_names = [s.SceneName for s in scenes]
         await ChatUpdater.update_planner_output(
