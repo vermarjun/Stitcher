@@ -1,30 +1,61 @@
 import {Schema, Document, Types, Model, model} from "mongoose";
 
+// Interface for Scene
+export interface IScene {
+    prompt: string;
+    code: string;
+    sceneName: string;
+    summary: string;
+    assetId: Types.ObjectId;
+    error: string | null;
+}
+
+// Interface for assistant message content
+export interface IAssistantContent {
+    plannerOutput: string;
+    llmResponse: string;
+}
+
 // Interface for individual messages in a chat
 export interface IGenerateChatMessage {
     role: string; //'user' | 'assistant'
-    content: any; //User's message and LLM's textual response
+    content: string | IAssistantContent; // String for user, IAssistantContent for assistant
     timestamp: Date; 
-    code?: string; // Code that was generate for this prompt
-    assetId? : Types.ObjectId; // Unique asset for every chat, this asset is updated always for new message in the same chat 
-    projectDescription: String;
+    scenes: IScene[]; // Empty array for user messages, array of scenes for assistant messages
+    projectDescription: string;
+    completed: boolean;
+    plannerOut: boolean;
+    generatorOutput: boolean;
+    error: string;
 }
 
 // Interface representing a Chat document in MongoDB
 export interface IGenerateChat extends Document {
     title: string; // Auto-generated from the first prompt
     messages: IGenerateChatMessage[];
-    projectId: Types.ObjectId; // Gnerate chat's projectId
+    projectId: Types.ObjectId; // Generate chat's projectId
 }
+
+// Scene Schema
+const SceneSchema = new Schema<IScene>({
+    prompt: { type: String, required: false},
+    code: { type: String, required: false},
+    sceneName: { type: String, required: false },
+    summary: { type: String, required: false },
+    assetId: { type: Schema.Types.ObjectId, ref: 'Asset', required: true },
+    error: { type: String, default: null }
+}, { _id: false });
 
 // Chat Message Schema
 const ChatMessageSchema = new Schema<IGenerateChatMessage>({
     role: { type: String, enum: ['user', 'assistant'], required: true },
     content: { type: Schema.Types.Mixed, required: true },
-    code: { type: String }, // Only for assistant messages
-    assetId: { type: Schema.Types.ObjectId, ref: 'Asset' },
+    scenes: { type: [SceneSchema], default: [] },
     timestamp: { type: Date, default: Date.now },
-    projectDescription: {type: String, default: ""}
+    projectDescription: { type: String, default: "" },
+    completed: { type: Boolean, default: false },
+    plannerOut: { type: Boolean, default: false },
+    generatorOutput: { type: Boolean, default: false }
 }, { _id: false });
 
 // Chat Schema
@@ -34,18 +65,7 @@ const GenerateChatSchema = new Schema<IGenerateChat>({
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
 }, { timestamps: true });
 
-// Auto-generate chat name from first user message if not provided
-// GenerateChatSchema.pre('save', function(next) {
-//     if (this.isNew && !this.name && this.messages.length > 0) {
-//         const firstUserMessage = this.messages.find(msg => msg.role === 'user');
-//         if (firstUserMessage) {
-//             // Take first 50 chars of first user message as name
-//             this.name = firstUserMessage.content.substring(0, 50).trim() + '...';
-//         }
-//     }
-//     next();
-// });
-
 // Create the Chat model
 const GenerateChat: Model<IGenerateChat> = model<IGenerateChat>('GenerateChat', GenerateChatSchema);
+
 export default GenerateChat;

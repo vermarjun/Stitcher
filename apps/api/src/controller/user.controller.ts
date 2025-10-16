@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import sendMail from '../util/mailer.util';
 import { JWT_CONFIG, PASSWORD_RESET_CONFIG } from '../config';
+import cloudinary from '../util/cloudinary.util';
 
 interface IUserRequest extends Request {
   userId?: string;
@@ -146,21 +147,38 @@ export const changePassword = async (req: IUserRequest, res: IUserResponse): Pro
   }
 };
 
-export const uploadProfilePhoto = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+export const uploadProfilePhoto = async (req: any, res: Response): Promise<Response> => {
   try {
     const user: IUser | null = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
-    
-    // Mock profile photo URL - in real implementation, you'd save the file and return the URL
-    const profilePhotoUrl = `https://example.com/profile-photos/${user._id}.jpg`;
-    
-    user.profilePhoto = profilePhotoUrl;
-    await user.save();
-    
-    return res.status(200).json({ 
-      message: 'Profile photo uploaded successfully.',
-      profilePhoto: profilePhotoUrl
-    });
+
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+
+    // Upload buffer to cloudinary
+    const uploadResult = await cloudinary.uploader.upload_stream(
+      { folder: 'profile_photos', public_id: user._id.toString(), overwrite: true },
+      async (error, result) => {
+        if (error || !result) {
+          return res.status(500).json({ message: 'Cloudinary upload failed.', error });
+        }
+
+        user.profilePhoto = result.secure_url;
+        await user.save();
+
+        return res.status(200).json({
+          message: 'Profile photo uploaded successfully.',
+          profilePhoto: result.secure_url,
+        });
+      }
+    );
+
+    // Pipe file buffer into Cloudinary upload_stream
+    if (req.file && req.file.buffer) {
+      const stream = uploadResult;
+      stream.end(req.file.buffer);
+    }
+
+    return res; // prevents TS warnings
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }

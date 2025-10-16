@@ -1,30 +1,52 @@
-// models/ApiKey.ts
-import mongoose, { Document, Schema } from 'mongoose';
+import { Document, Schema, model, Types } from 'mongoose';
 
 export interface IApiKey extends Document {
-  userId: mongoose.Types.ObjectId;
-  name: string;
-  key: string;
-  service: 'openai' | 'anthropic' | 'cohere' | 'mistral' | 'gemini'; // or any other services you support
-  weight: number; // Higher weight = used for heavier tasks
+  userId: Types.ObjectId;
+  agentId: string;
+  agentName: string;
+  keyValue: string;
+  baseUrl: string;
+  modelName: string;
   isActive: boolean;
-  apicalls: number; //number of api calls that have been made for this api
   createdAt: Date;
   updatedAt: Date;
 }
 
-const ApiKeySchema = new Schema<IApiKey>(
-  {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    name: { type: String, required: true },
-    key: { type: String, required: true },
-    service: { type: String, required: true, enum: ['openai', 'anthropic', 'cohere', 'mistral', 'gemini'] },
-    weight: { type: Number, required: true, default: 1, min: 1, max: 10 },
-    apicalls: {type: Number, required: true, default:0},
-    isActive: { type: Boolean, default: true },
+const ApiKeySchema = new Schema<IApiKey>({
+  userId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
   },
-  { timestamps: true }
-);
+  agentId: {
+    type: String,
+    required: true,
+    enum: ['general', 'coder', 'reviewer', 'debugger', 'planner', 'optimizer']
+  },
+  agentName: {
+    type: String,
+    required: true
+  },
+  keyValue: {
+    type: String,
+    required: true
+  },
+  baseUrl: {
+    type: String,
+    required: true
+  },
+  modelName: {
+    type: String,
+    required: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, { timestamps: true });
 
-export const ApiKey = mongoose.model<IApiKey>('ApiKey', ApiKeySchema);
+// Compound index to ensure one key per agent per user
+ApiKeySchema.index({ userId: 1, agentId: 1 }, { unique: true });
 
+export default model<IApiKey>('ApiKey', ApiKeySchema);

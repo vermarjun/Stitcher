@@ -1,5 +1,12 @@
 import { Router } from 'express';
-import { generateChatResponse, getChatHistory, getProjectChats, rollbackToDescription } from '../controller/generateChat.controller';
+import { 
+    generateChatResponse, 
+    getChatHistory, 
+    getProjectChats,
+    getChatUpdate,
+    getLatestAssistantMessage,
+    stopGeneration,
+} from '../controller/generateChat.controller';
 import auth from "../middleware/auth.middleware"; 
 
 const router = Router();
@@ -13,12 +20,22 @@ const router = Router();
 router.post('/', auth, generateChatResponse);
 
 /**
- * @route   GET /api/generate-chat/:chatId
- * @desc    Get chat history
+ * @route   GET /api/generate-chat/update/:chatId
+ * @desc    Get updated chat 
  * @access  Private
  * @params  chatId: string
+ * @query   projectId: string
  */
-router.get('/:chatId', auth, getChatHistory);
+router.get('/update/:chatId', auth, getChatUpdate);
+
+/**
+ * @route   GET /api/generate-chat/latest-message/:chatId
+ * @desc    Get latest assistant message (for polling updates from microservice)
+ * @access  Private
+ * @params  chatId: string
+ * @query   projectId: string, userId: string
+ */
+router.get('/latest-message/:chatId', getLatestAssistantMessage);
 
 /**
  * @route   GET /api/generate-chat/project/:projectId
@@ -26,14 +43,16 @@ router.get('/:chatId', auth, getChatHistory);
  * @access  Private
  * @params  projectId: string
  */
-router.get('/project/:projectId', auth, getProjectChats );
+router.get('/project/:projectId', auth, getProjectChats);
 
 /**
- * @route   POST /api/generate-chat/rollback
- * @desc    Rollback to a specific project description
+ * @route   GET /api/generate-chat/:chatId
+ * @desc    Get chat history
  * @access  Private
- * @body    { chatId: string, messageIndex: number }
+ * @params  chatId: string
  */
-router.post('/rollback', auth, rollbackToDescription);
+router.get('/:chatId', auth, getChatHistory);
+
+router.post('/cancel/:chatId', auth, stopGeneration);
 
 export default router;

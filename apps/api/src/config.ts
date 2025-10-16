@@ -45,6 +45,13 @@ export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 if (process.env.CLOUDINARY_CLOUD_NAME == undefined){
     throw new Error("CLOUDINARY_CLOUD_NAME is not defined in environment variables");
 }
+
+if (process.env.MICROSERVICE_URL == undefined){
+    throw new Error("CLOUDINARY_CLOUD_NAME is not defined in environment variables");
+}
+
+export const MICROSERVICE_BASE_URL = process.env.MICROSERVICE_URL;
+
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 
 export interface JwtConfig {
@@ -73,12 +80,8 @@ export const EMAIL_CONFIG = {
     pass: EMAIL_APP_PASSWORD || "",
 };
 
-console.log(CLOUDINARY_API_KEY)
-console.log(CLOUDINARY_API_SECRET)
-console.log(CLOUDINARY_CLOUD_NAME)
-
 export const CLOUDINARY_CONFIG = {
-    CLOUDINARY_CLOUD_NAME: CLOUDINARY_CLOUD_NAME,
-    CLOUDINARY_API_KEY: CLOUDINARY_API_KEY,
-    CLOUDINARY_API_SECRET: CLOUDINARY_API_SECRET
+    cloud_name: CLOUDINARY_CLOUD_NAME,
+    api_key: CLOUDINARY_API_KEY,
+    api_secret: CLOUDINARY_API_SECRET
 }

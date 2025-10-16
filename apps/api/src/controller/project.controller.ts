@@ -8,7 +8,6 @@ import Asset from "../model/asset.model";
 import Track from "../model/track.model";
 import TimelineItem from "../model/timelineitem.model";
 import { Types } from "mongoose";
-import path from "path";
 
 // Create a new project for a user
 export const createProject = async (req: Request, res: Response) => {
