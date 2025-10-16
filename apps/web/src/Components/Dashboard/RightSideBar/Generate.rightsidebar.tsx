@@ -95,8 +95,9 @@ const GenerateComponent = ({
   currentChatId,
   setCurrentChatId,
 }: Props) => {
-  console.log(messages);
-
+  const plannerOutputRef = useRef("");
+  const streamSummaryRef = useRef(false);
+  const llmSummaryRef = useRef("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { triggerRefresh } = useRefreshAssetStash();
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -130,6 +131,8 @@ const GenerateComponent = ({
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
     }
+
+    streamSummaryRef.current = true; 
 
     // Poll every 2 seconds
     pollingIntervalRef.current = setInterval(async () => {
@@ -474,6 +477,11 @@ const GenerateComponent = ({
           message={message}
           onCopy={handleCopy}
           onSaveToTemplates={handleSaveToTemplates}
+          plannerOutputRef={plannerOutputRef}
+          isLastMessage={false}
+          llmSummaryRef={llmSummaryRef}
+          isProcessing={isProcessing}
+          streamSummaryRef={streamSummaryRef}
         />
       );
     }
@@ -482,10 +490,13 @@ const GenerateComponent = ({
   // Get loading text and progress based on polling status
   const getLoadingStatus = () => {
     switch (pollingStatus) {
-      case "generating":
-        return { text: "Generating...", progress: 10 };
+      // Scene 1 => MS plans each scene
       case "planning":
         return { text: "Planning...", progress: 25 };
+      // Scene 2 => MS generates code for each scene
+      case "generating":
+        return { text: "Generating...", progress: 10 };
+      // Scene 3 => MS renders each generated code
       case "generating-scenes":
         return { text: "Rendering...", progress: 60 };
       default:
@@ -518,7 +529,10 @@ const GenerateComponent = ({
                 // Skip the last assistant message if it's being processed
                 const isLastMessage = index === messages.length - 1;
                 const isAssistantProcessing =
-                  isLastMessage && message.role === "assistant" && isProcessing;
+                  isLastMessage &&
+                  message.role === "assistant" &&
+                  isProcessing &&
+                  getLoadingStatus().text === "Planning...";
 
                 if (isAssistantProcessing) {
                   return null; // Don't render the last assistant message while processing
@@ -535,6 +549,11 @@ const GenerateComponent = ({
                         message={message}
                         onCopy={handleCopy}
                         onSaveToTemplates={handleSaveToTemplates}
+                        streamSummaryRef={streamSummaryRef}
+                        plannerOutputRef={plannerOutputRef}
+                        isLastMessage={isLastMessage}
+                        llmSummaryRef={llmSummaryRef}
+                        isProcessing={isProcessing}
                       />
                     )}
                   </div>
@@ -581,7 +600,6 @@ const GenerateComponent = ({
                   </div>
                 </div>
               )}
-
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>

@@ -82,7 +82,7 @@ function UserSection({
           <div className="px-3 py-3 border-b border-neutral-600 z-50">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarImage src={user?.profilePhoto} alt={user?.username} />
+                <AvatarImage src={user?.profilePhoto} alt={user?.username} className="object-cover"/>
                 <AvatarFallback className="bg-gradient-to-br from-purple-600 to-blue-600 text-white">
                   {user?.username?.charAt(0)?.toUpperCase() || 'U'}
                 </AvatarFallback>

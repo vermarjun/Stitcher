@@ -1,7 +1,8 @@
 import { Bot, Copy, Check, Download } from "lucide-react";
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Button } from "@/Components/ui/button";
 import type { Message } from "./Main.rightsidebar";
+import LiveTextStream from "./LivestreamText.rightsidebar";
 
 interface Props {
   message: Message;
@@ -9,33 +10,38 @@ interface Props {
   onRegenerate?: (message: Message) => void;
   onSave?: (message: Message) => void;
   onSaveToTemplates?: (message: Message) => void;
+  llmSummaryRef: RefObject<string>;
+  plannerOutputRef: RefObject<string>,
+  isProcessing: boolean;
+  isLastMessage: boolean;
+  streamSummaryRef: RefObject<boolean>;
 }
 
 const VideoPlayer = ({ scene }: { scene: any }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   const handlePlayClick = () => {
     setIsPlaying(true);
   };
-  
+
   const handleToggleExpand = () => {
     setIsExpanded(!isExpanded);
   };
-  
+
   console.log("scene: ", scene);
-  
+
   // Access the asset data from the new schema structure
-  const videoUrl = scene.assetId?.url || '';
-  const thumbnailUrl = scene.assetId?.thumbnail || '';
+  const videoUrl = scene.assetId?.url || "";
+  const thumbnailUrl = scene.assetId?.thumbnail || "";
   const duration = scene.assetId?.duration || 0;
-  
+
   return (
     <div className="mt-3 rounded-md overflow-hidden w-full border border-neutral-600 shadow-lg">
       {!isPlaying ? (
         <div className="relative cursor-pointer" onClick={handlePlayClick}>
-          <img 
-            src={thumbnailUrl} 
+          <img
+            src={thumbnailUrl}
             alt={scene.sceneName}
             className="aspect-video"
           />
@@ -71,25 +77,34 @@ const VideoPlayer = ({ scene }: { scene: any }) => {
           <p className="text-xs font-medium text-neutral-200">
             {scene.sceneName}
           </p>
-            <button 
-              onClick={handleToggleExpand}
-              className="text-xs gap-2 h-5 flex items-center justify-center text-neutral-400 cursor-pointer hover:text-neutral-200 transition-colors"
+          <button
+            onClick={handleToggleExpand}
+            className="text-xs gap-2 h-5 flex items-center justify-center text-neutral-400 cursor-pointer hover:text-neutral-200 transition-colors"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${
+                isExpanded ? "rotate-180" : ""
+              }`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
             >
-              <svg 
-                className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor"
-              >
-                <path d="M6 9l6 6 6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <p className="text-neutral-400 hover:text-neutral-200">See More</p>
-            </button>
+              <path
+                d="M6 9l6 6 6-6"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <p className="text-neutral-400 hover:text-neutral-200">See More</p>
+          </button>
         </div>
-        <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-60'}`}>
-          <p className="text-xs text-neutral-400 mt-1">
-            {scene.prompt}
-          </p>
+        <div
+          className={`overflow-hidden transition-all duration-300 ${
+            isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-60"
+          }`}
+        >
+          <p className="text-xs text-neutral-400 mt-1">{scene.prompt}</p>
         </div>
       </div>
     </div>
@@ -97,49 +112,59 @@ const VideoPlayer = ({ scene }: { scene: any }) => {
 };
 
 // Message Component
-const MessageBubble = ({ message, onCopy }: Props) => {
+const MessageBubble = ({
+  message,
+  onCopy,
+  llmSummaryRef,
+  plannerOutputRef,
+  isLastMessage,
+  isProcessing,
+  streamSummaryRef
+}: Props) => {
   console.log("message: ", message);
   const [copied, setCopied] = useState(false);
-  
+
   const handleCopy = async () => {
-    const contentText = typeof message.content === 'string' 
-      ? message.content 
-      : message.content.llmResponse || message.content.plannerOutput || '';
-    
+    const contentText =
+      typeof message.content === "string"
+        ? message.content
+        : message.content.llmResponse || message.content.plannerOutput || "";
+
     await navigator.clipboard.writeText(contentText);
     onCopy(contentText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-  
+
   const handleDownload = () => {
-    const contentText = typeof message.content === 'string' 
-      ? message.content 
-      : JSON.stringify(message.content, null, 2);
-    
-    const blob = new Blob([contentText], { type: 'text/plain' });
+    const contentText =
+      typeof message.content === "string"
+        ? message.content
+        : JSON.stringify(message.content, null, 2);
+
+    const blob = new Blob([contentText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `message-${new Date(message.timestamp).getTime()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
-  
+
   const formatTimestamp = (timestamp: string | Date) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
-  
+
   if (message.role === "user") {
     return (
       <div className="flex justify-end mb-4 group">
         <div className="max-w-[85%] bg-neutral-800 rounded-lg px-3 py-2">
           <div className="text-sm text-neutral-200 leading-relaxed break-words">
-            {typeof message.content === 'string' ? message.content : ''}
+            {typeof message.content === "string" ? message.content : ""}
           </div>
           <div className="flex items-center justify-between mt-2 gap-2">
             <span className="text-xs text-neutral-400">
@@ -165,31 +190,47 @@ const MessageBubble = ({ message, onCopy }: Props) => {
       </div>
     );
   }
-  
+
   // Assistant message
-  const isContentObject = typeof message.content !== 'string';
-  const plannerOutput = isContentObject ? (message.content as { plannerOutput: string; llmResponse: string }).plannerOutput : '';
-  const llmResponse = isContentObject ? (message.content as { plannerOutput: string; llmResponse: string }).llmResponse : '';
+  const isContentObject = typeof message.content !== "string";
+  const plannerOutput = isContentObject
+    ? (message.content as { plannerOutput: string; llmResponse: string })
+        .plannerOutput
+    : "";
+  const llmResponse = isContentObject
+    ? (message.content as { plannerOutput: string; llmResponse: string })
+        .llmResponse
+    : "";
   const hasScenes = message.scenes && message.scenes.length > 0;
-  
+
   // Filter out scenes that don't have a valid assetId
-  const validScenes = message.scenes?.filter(scene => scene.assetId && scene.assetId.url) || [];
-  
+  const validScenes =
+    message.scenes?.filter((scene) => scene.assetId && scene.assetId.url) || [];
+
   return (
     <div className="mb-6">
       <div className="flex items-start gap-3 group">
         <div className="w-6 h-6 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-300 bg-gradient-to-br from-emerald-500/20 to-green-500/20 border-emerald-500/30">
           <Bot className="w-3 h-3 text-emerald-400 transition-colors duration-300" />
         </div>
-        
+
         <div className="flex-1 min-w-0">
           {/* Planner Output */}
           {plannerOutput && (
-            <div className="text-xs text-neutral-400 leading-relaxed mb-3 rounded-lg">
-              <p className="break-words">{plannerOutput}</p>
+            <div className="text-sm text-zinc-400 leading-relaxed mb-3 rounded-lg">
+              {(isProcessing && plannerOutputRef.current != plannerOutput && isLastMessage) ? (
+                (plannerOutputRef.current = plannerOutput) && 
+                <LiveTextStream
+                  text={plannerOutputRef.current}
+                  streamingSpeed={200}
+                  onStreamingComplete={() => console.log("planner output stream finished")}
+                />
+              ) : ( 
+                <p className="break-words">{plannerOutput}</p>
+              )}
             </div>
           )}
-          
+
           {/* Status indicators */}
           {/* {isContentObject && (
             <div className="flex items-center gap-2 mb-3 text-xs">
@@ -210,7 +251,7 @@ const MessageBubble = ({ message, onCopy }: Props) => {
               )}
             </div>
           )} */}
-          
+
           {/* Scenes */}
           {validScenes.length > 0 && (
             <div className="space-y-3 mb-3">
@@ -219,28 +260,38 @@ const MessageBubble = ({ message, onCopy }: Props) => {
               ))}
             </div>
           )}
-          
+
           {/* Show scene count if there are scenes */}
           {hasScenes && validScenes.length > 0 && (
             <div className="text-xs text-neutral-500 mb-2">
-              {validScenes.length} scene{validScenes.length !== 1 ? 's' : ''} generated
+              {validScenes.length} scene{validScenes.length !== 1 ? "s" : ""}{" "}
+              generated
             </div>
           )}
-          
+
           {/* LLM Response */}
           {llmResponse && (
-            <div className="text-sm text-neutral-200 leading-relaxed mb-2 break-words">
-              {llmResponse}
+            <div className="text-sm text-zinc-400 leading-relaxed mb-2 break-words">
+              {(streamSummaryRef.current && llmSummaryRef.current != llmResponse && isLastMessage) ? (
+                (llmSummaryRef.current = llmResponse) && 
+                <LiveTextStream
+                  text={llmSummaryRef.current}
+                  streamingSpeed={200}
+                  onStreamingComplete={() => console.log("LLM response completed")}
+                />
+              ) : (
+                <p className="break-words">{llmResponse}</p>
+              )}
             </div>
           )}
-          
+
           {/* String content fallback */}
-          {!isContentObject && typeof message.content === 'string' && (
+          {!isContentObject && typeof message.content === "string" && (
             <div className="text-sm text-neutral-200 leading-relaxed mb-2 break-words">
               {message.content}
             </div>
           )}
-          
+
           {/* Footer with timestamp and actions */}
           <div className="flex items-center justify-between mt-3">
             <span className="text-xs text-neutral-500">
