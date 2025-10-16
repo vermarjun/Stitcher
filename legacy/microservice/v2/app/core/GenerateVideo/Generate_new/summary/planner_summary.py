@@ -26,8 +26,10 @@ to give a summary of that plan as an output;
 
 CRITICAL REQUIREMENTS:
 - Use a natural and engaging language which is conforting attracting and soothing to read, 
-- Keep your summary under 80 words at max. 
+- Keep your summary under 30 words at max. 
 - Focus on the overall narrative and visual journey
+- Use first person voice ("I have...", "I created...", "I generated...")
+- Be conversational and friendly, not robotic. Use a friendly tone
 """
 
 summarizer_agent = Agent(

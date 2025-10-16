@@ -6,11 +6,9 @@ import traceback
 from datetime import datetime, timezone
 
 class ChatUpdater:
-    """Utility class to update chat documents in MongoDB progressively"""
-    
+
     @staticmethod
     async def get_latest_assistant_message(chat_id: str):
-        """Get the latest assistant message from the chat"""
         
         try:
             # Get database connection
@@ -38,7 +36,6 @@ class ChatUpdater:
     
     @staticmethod
     async def update_planner_output(chat_id: str, planner_summary: str, scenes: List[Dict[str, str]]):
-        """Update planner output for the LAST assistant message only"""
         
         try:
             # Get database connection
@@ -182,7 +179,6 @@ class ChatUpdater:
     
     @staticmethod
     async def update_scene_code(chat_id: str, scene_name: str, new_code: str):
-        """Update scene code in the LAST assistant message only"""
         
         try:
             # Get database connection
@@ -242,14 +238,12 @@ class ChatUpdater:
     
     @staticmethod
     async def update_scene_render(
+        code: str,
         chat_id: str, 
         scene_name: str, 
         project_id: str,
         metadata: Dict[str, Any]
     ):
-        """
-        Creates an Asset and updates the scene with assetId reference in the LAST assistant message only
-        """
         try:
             # Get database connection
             db = await mongodb.get_db()
@@ -260,6 +254,7 @@ class ChatUpdater:
             asset_doc = {
                 "name": f"{scene_name}_video",  
                 "type": "video",  
+                "code": code,
                 "origin": "generated_video",  
                 "url": metadata.get("url"),
                 "thumbnail": metadata.get("thumbnail", ""),
@@ -279,10 +274,10 @@ class ChatUpdater:
             
             # Insert the asset
             asset_result = await assets_collection.insert_one(asset_doc)
-            print("\n ########&&&&&&&&&&&&**********((((((((((((((((((99(((((((((((())))))))))))))))))))))))))))))")
-            print(asset_result)
+            # print("\n ########&&&&&&&&&&&&**********((((((((((((((((((99(((((((((((())))))))))))))))))))))))))))))")
+            # print(asset_result)
             asset_id = asset_result.inserted_id
-            print(asset_id)
+            # print(asset_id)
             
             # Step 2: Get current chat to find the last assistant message index
             generatechats_collection = db.generatechats
@@ -348,7 +343,6 @@ class ChatUpdater:
     
     @staticmethod
     async def update_scene_error(chat_id: str, scene_name: str, error: str):
-        """Update scene error in the LAST assistant message only"""
         
         try:
             # Get database connection
@@ -408,7 +402,6 @@ class ChatUpdater:
     
     @staticmethod
     async def update_final_response(chat_id: str, llm_response: str):
-        """Update final response in the LAST assistant message only"""
         
         try:
             # Get database connection

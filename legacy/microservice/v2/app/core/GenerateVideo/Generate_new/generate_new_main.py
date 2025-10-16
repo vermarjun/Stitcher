@@ -20,6 +20,7 @@ async def debug_render_upload(Scene, req, chat_id: str, project_id: str):
             print(f"Uploaded: {Scene['sceneName']}")
             
             await ChatUpdater.update_scene_render(
+                code=Scene["code"],
                 chat_id=chat_id,
                 scene_name=Scene["sceneName"],
                 project_id=project_id,
