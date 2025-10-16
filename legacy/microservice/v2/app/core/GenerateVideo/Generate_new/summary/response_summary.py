@@ -9,17 +9,19 @@ class CompletionSummary(BaseModel):
 RESPONSE_GENERATOR_SYSTEM_PROMPT = """You are a completion summary specialist for video generation. Your task is to create a final closing message that summarizes what has been accomplished.
 
 Given information about the video generation process, create a summary that:
-1. Starts with a variation of "I have completed what you asked for" or "I have done what you requested"
-2. Briefly mentions the original user request
-3. Summarizes the overall process and what was created
-4. Highlights successful outcomes
-5. Mentions any issues if they occurred (be honest but positive)
-6. Ends with a helpful closing statement
+1. Briefly mentions the original user request
+2. Summarizes the overall process and what was created
+3. Highlights successful outcomes
+4. Mentions any issues if they occurred (be honest but positive)
+5. Ends with a helpful closing statement
+6. You have to summarize that what scenes were created, how many were successful and what scenes failed. Explain what was the error and why the scenes failed. 
+
+Keep everything concise as ending remarks.
 
 CRITICAL REQUIREMENTS:
-- Keep the ENTIRE summary under 200 words (3-5 sentences)
-- Use first person ("I have...", "I created...", "I generated...")
-- Be conversational and friendly, not robotic
+- Keep the ENTIRE summary under 50 words
+- Use first person voice ("I have...", "I created...", "I generated...")
+- Be conversational and friendly, not robotic. Use a friendly tone
 - Focus on accomplishments and the final result
 - If there were failures, acknowledge them but maintain a positive, solution-oriented tone
 - Make the user feel their request was handled well"""
@@ -35,16 +37,6 @@ async def response_generator(
     scenes: List[Dict[str, Any]],
     original_prompt: str
 ) -> str:
-    """
-    Generate a final summary response about the video generation process
-    
-    Args:
-        scenes: List of scene objects with code, metadata, error, etc.
-        original_prompt: The user's original prompt
-        
-    Returns:
-        A natural language summary of the generation results
-    """
     try:
         # Analyze the results
         total_scenes = len(scenes)
@@ -54,7 +46,7 @@ async def response_generator(
         # Build context for the LLM
         scenes_summary = []
         for i, scene in enumerate(scenes, 1):
-            status = "Successfully rendered" if scene.get("metadata") else "Had issues"
+            status = "Successfully rendered" if scene.get("metadata") else scene.get("error")
             scene_name = scene.get("sceneName", f"Scene {i}")
             scenes_summary.append(f"- {scene_name}: {status}")
         
@@ -69,11 +61,9 @@ Video generation process completed:
 
 Scene breakdown:
 {scenes_text}
-
-Create a closing summary (under 200 words) that tells the user what you accomplished. Start with a variation of "I have done what you asked" and summarize the entire process."""
-
+"""
         # Get the model
-        response_model = get_model("RESPONSE_GENERATOR")
+        response_model = get_model("GENERAL")
         
         result = await Runner.run(
             response_generator_agent,

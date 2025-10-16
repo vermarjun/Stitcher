@@ -1,81 +1,3 @@
-# from pydantic import BaseModel
-# from core.GenerateVideo.debugger_agent import debugger_agent_wrapper
-# from core.GenerateVideo.render_and_upload import render_and_upload_manim
-# from .codeGenerator import generate_all_scenes
-# from .scenePlanner import planner_agent_function
-# from utils.model_provider import MultiTenantModelManager, get_model  # Updated imports
-
-# async def debug_render_upload(Scene, req):
-#     for attempt in range(3):
-#         result = render_and_upload_manim(code=Scene["code"], scene_name=Scene["sceneName"], public_id=req.userId)
-        
-#         if result["success"]:
-#             print(f"Uploaded: {result['metadata']}")
-#             return {
-#                 "code": Scene["code"],
-#                 "metadata": result["metadata"],
-#                 "error": None
-#             }
-#         else:
-#             error_msg = result["error"]
-#             print(f"Render failed: {error_msg}")
-
-#             if attempt < 2:
-#                 Scene["code"] = await debugger_agent_wrapper(Scene["code"], error_msg)
-#             else:
-#                 return {
-#                     "code": Scene["code"],
-#                     "metadata": None,
-#                     "error": error_msg
-#                 }
-
-
-# class RequestSchema(BaseModel):
-#     prompt: str 
-#     userId: str
-
-# async def generate_new_video_main(req: RequestSchema, api_config: dict):
-#     async with MultiTenantModelManager.request_scope(api_config):
-        
-#         # Step 1: Plan scenes
-#         # iska output is array of:
-#         """
-#             [
-#                 {
-#                     SceneName: str
-#                     Prompt: str
-#                 }
-#             ]
-#         """
-#         planner_output = await planner_agent_function(prompt=req.prompt)
-#         print("\n planner output recieved!", len(planner_output))
-#         print("Planner output:", planner_output)
-
-#         # Step 2: Generate code for each scene
-#         # iska output is array of:
-#         """
-#             [
-#                 {
-#                     code: generated_code,
-#                     sceneName: name_of_this_class
-#                 }
-#             ]
-#         """
-#         coder_output = await generate_all_scenes(Scenes=planner_output) 
-#         print("Generated results recieved!", len(coder_output))
-#         print("Generated results:", coder_output)
-
-#         final_results = []
-
-#         for scene in coder_output:
-#             result = await debug_render_upload(Scene=scene, req=req)
-#             print("\ndebug and upload result recieved", result)
-#             final_results.append(result)
-        
-#         print(final_results)
-#         return final_results
-
-import asyncio
 from pydantic import BaseModel
 from core.GenerateVideo.debugger_agent import debugger_agent_wrapper
 from core.GenerateVideo.render_and_upload import render_and_upload_manim
@@ -148,16 +70,7 @@ class RequestSchema(BaseModel):
     userName: str
 
 async def generate_new_video_main(req: RequestSchema, api_config: dict):
-    """
-    Main video generation function with progressive MongoDB updates
-    
-    Args:
-        req: Request with prompt, userId, chatId, projectId, userName
-        api_config: API configuration for models
-        
-    Returns:
-        List of final scene results
-    """
+
     async with MultiTenantModelManager.request_scope(api_config):
         
         # Step 1: Plan scenes
