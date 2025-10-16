@@ -34,22 +34,22 @@ const MainSidebar = ({ currentProject }: Props) => {
   const renderActiveComponent = () => {
     switch (activeTab) {
       case "explorer":
-        return <AssetStash currentProject={currentProject} />
+        return <AssetStash currentProject={currentProject} />;
       case "tracks":
-        return <TimelineTracksSidebar currentProject={currentProject} />
+        return <TimelineTracksSidebar currentProject={currentProject} />;
       case "templates":
-        return <TemplatesComponent currentProject={currentProject} />
+        return <TemplatesComponent currentProject={currentProject} />;
       case "description":
-        return <ProjectDescriptionComponent />
+        return <ProjectDescriptionComponent currentProject={currentProject} />;
       case "collaborators":
         return <CollaboratorsComponent />;
       default:
-        return <AssetStash currentProject={currentProject}/>;
+        return <AssetStash currentProject={currentProject} />;
     }
   };
 
   return (
-    <div className="flex h-full bg-black border-r border-zinc-800">
+    <div className="flex h-full bg-black border-r border-zinc-600 z-50">
       {/* Icon Strip (Always Visible) */}
       <div className="w-12 bg-black border-r border-zinc-800 flex flex-col">
         {/* Toggle Button - Now at the top */}
@@ -69,7 +69,7 @@ const MainSidebar = ({ currentProject }: Props) => {
         </div>
 
         {/* Tab Icons */}
-        <div className="flex flex-col py-2">
+        <div className="flex flex-col">
           {sidebarTabs.map((tab) => {
             const IconComponent = tab.icon;
             return (
@@ -93,7 +93,9 @@ const MainSidebar = ({ currentProject }: Props) => {
                 <IconComponent
                   size={18}
                   className={`transition-colors duration-200 ${
-                    activeTab === tab.id ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                    activeTab === tab.id
+                      ? "text-white"
+                      : "text-zinc-400 hover:text-zinc-300"
                   }`}
                 />
               </button>
@@ -103,7 +105,7 @@ const MainSidebar = ({ currentProject }: Props) => {
       </div>
 
       {/* Expanded Content with smooth animation */}
-      <div 
+      <div
         className={`bg-black flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
           isExpanded ? "w-80 opacity-100" : "w-0 opacity-0"
         }`}
@@ -111,14 +113,19 @@ const MainSidebar = ({ currentProject }: Props) => {
         {/* Header with active tab title */}
         <div className="p-3 border-b border-zinc-800 bg-black">
           <h2 className="text-base font-semibold text-white">
-            {sidebarTabs.find(tab => tab.id === activeTab)?.label || "Sidebar"}
+            {sidebarTabs.find((tab) => tab.id === activeTab)?.label ||
+              "Sidebar"}
           </h2>
         </div>
 
         {/* Content area */}
-        <div className={`flex-1 transition-all duration-300 ${
-          isExpanded ? "opacity-100 transform translate-x-0" : "opacity-0 transform translate-x-[-10px]"
-        }`}>
+        <div
+          className={`flex-1 transition-all duration-300 ${
+            isExpanded
+              ? "opacity-100 transform translate-x-0"
+              : "opacity-0 transform translate-x-[-10px]"
+          }`}
+        >
           {isExpanded && renderActiveComponent()}
         </div>
       </div>

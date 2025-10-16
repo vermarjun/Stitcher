@@ -14,7 +14,8 @@ import { AssetOrigin, AssetType } from "@/State/Types";
 import api from "@/api";
 import { toast } from "sonner";
 import BeautifulLoader from "@/Components/LoadingScreens/Templatestore.loader.tsx";
-import { useRefresh } from "../RefreshContextProvider.tsx";
+
+import { useRefreshAssetStash, useRefreshTimeline, useRefreshTracks } from "../RefreshContextProvider";
 
 interface Props {
   currentProject?: Project;
@@ -37,7 +38,13 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { refreshKey } = useRefresh();
+  // Subscribe to refresh from GenerateChat
+  const { refreshKey: refreshFromGenerateChat } = useRefreshAssetStash();
+  
+  // Get triggers to refresh Timeline and Tracks
+  const { triggerRefresh: triggerTimelineRefresh } = useRefreshTimeline();
+  const { triggerRefresh: triggerTracksRefresh } = useRefreshTracks();
+
 
   async function fetchAssets() {
     try {
@@ -67,18 +74,24 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
   useEffect(() => {
     fetchAssets();
-  },[refreshKey]);
+  },[refreshFromGenerateChat]);
 
-  const formatDuration = (seconds?: number): string => {
-    if (!seconds) return "";
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  const formatDuration = (seconds:any) => {
+  if (!seconds && seconds !== 0) return '0:00.00';
+  
+  const totalSeconds = Number(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  
+  // Format seconds to 2 decimal places, ensuring we always have 2 digits before decimal
+  const formattedSeconds = remainingSeconds.toFixed(2).padStart(5, '0');
+  
+  return `${minutes}:${formattedSeconds}`;
+};
 
   const formatFileSize = (bytes: number): string => {
     const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)}MB`;
+    return `${mb.toFixed(2)}MB`;
   };
 
   const getOriginIcon = (origin: AssetOrigin) => {
@@ -159,6 +172,8 @@ const handleAddToTimeline = async (asset: Asset) => {
 
     // Check if response indicates success
     if (response.data?.success) {
+      triggerTimelineRefresh();
+      triggerTracksRefresh();
       toast.success("Successfully Added to timeline");
     } else {
       // Display error message from response
@@ -560,7 +575,7 @@ const handleAddToTimeline = async (asset: Asset) => {
         )}
       </div>
       {/* Asset List - Single Column Tiles */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-3 pb-12">
         <div className="space-y-2">
           {filteredAssets.map((asset) => (
             <div

@@ -1,22 +1,19 @@
-import {useRef, useEffect, useImperativeHandle} from 'react';
-import { ScrollArea } from '@/Components/ui/scroll-area';
-import { Bot } from 'lucide-react';
-import {
-  messageActions,
-  type Message
-} from '@/State/Types';
-import EmptyState from './EmptyState.rightsidebar';
-import MessageBubble from './MessageBubble.rightsidebar';
-import QuickPrompts from './QuickPrompts.rightsidebar';
-import MessageInput from './MessageInput.rightsidebar';
-import api from '@/api';
-import { toast } from 'sonner';
-import type { Project } from '@/State/Types';
-import { useRefresh } from "../RefreshContextProvider";
-
+import { useRef, useEffect, useImperativeHandle, useState } from "react";
+import { ScrollArea } from "@/Components/ui/scroll-area";
+import { AlertCircle, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { messageActions, type Message } from "./Main.rightsidebar";
+import EmptyState from "./EmptyState.rightsidebar";
+import MessageBubble from "./MessageBubble.rightsidebar";
+import QuickPrompts from "./QuickPrompts.rightsidebar";
+import MessageInput from "./MessageInput.rightsidebar";
+import api from "@/api";
+import { toast } from "sonner";
+import type { Project, User } from "@/State/Types";
+import { useRefreshAssetStash } from "../RefreshContextProvider";
 
 interface Props {
   currentProject?: Project;
+  user?: User;
   ref: any;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -27,170 +24,579 @@ interface Props {
   currentChatId: string | null;
   setCurrentChatId: React.Dispatch<React.SetStateAction<string | null>>;
 }
+
+// Helper function to format error messages
+const formatErrorMessage = (error: any): string => {
+  if (!error) return "Unknown error occurred";
+
+  if (error?.response?.status === 429) {
+    const errorData = error.response.data;
+    if (errorData?.error?.message) {
+      return errorData.error.message;
+    }
+  }
+
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+
+  if (error?.message) {
+    return error.message;
+  }
+
+  return "An unexpected error occurred";
+};
+
+// Helper function to extract error details for display
+const getErrorDetails = (error: any) => {
+  if (error?.response?.status === 429) {
+    const errorData = error.response.data;
+    const metadata = errorData?.error?.metadata;
+
+    return {
+      title: "Rate Limit Exceeded",
+      message: errorData?.error?.message || "Too many requests",
+      code: 429,
+      details: metadata
+        ? {
+            limit: metadata.headers?.["X-RateLimit-Limit"],
+            remaining: metadata.headers?.["X-RateLimit-Remaining"],
+            reset: metadata.headers?.["X-RateLimit-Reset"]
+              ? new Date(
+                  parseInt(metadata.headers["X-RateLimit-Reset"])
+                ).toLocaleString()
+              : null,
+          }
+        : null,
+      rawError: error,
+    };
+  }
+
+  return {
+    title: "Request Failed",
+    message: formatErrorMessage(error),
+    code: error?.response?.status || "Unknown",
+    details: null,
+    rawError: error,
+  };
+};
+
 // Generate Component
 const GenerateComponent = ({
   currentProject,
-  ref, 
-  messages, 
-  setMessages, 
-  input, 
-  setInput, 
-  isProcessing, 
+  user,
+  ref,
+  messages,
+  setMessages,
+  input,
+  setInput,
+  isProcessing,
   setIsProcessing,
   currentChatId,
-  setCurrentChatId
+  setCurrentChatId,
 }: Props) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  console.log(messages);
 
-  const { triggerRefresh } = useRefresh();
-  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { triggerRefresh } = useRefreshAssetStash();
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [pollingStatus, setPollingStatus] = useState<
+    "generating" | "planning" | "generating-scenes" | null
+  >(null);
+
   useImperativeHandle(ref, () => ({
     handleNewChat: () => {},
     handleExportChat,
-    getMessageCount: () => messages.length
+    getMessageCount: () => messages.length,
   }));
-  
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    console.log("message recieved: ", messages);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    console.log("message received: ", messages);
   }, [messages]);
-  
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Start polling for updates
+  const startPolling = (chatId: string) => {
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Poll every 2 seconds
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await api.get(
+          `/generatechat/latest-message/${chatId}`,
+          {
+            params: {
+              projectId: currentProject?._id,
+              userId: user?.id,
+            },
+          }
+        );
+
+        if (response.data.success) {
+          const latestMessage = response.data.data;
+
+          // Update the last assistant message with the latest data
+          setMessages((prevMessages) => {
+            const updatedMessages = [...prevMessages];
+            const lastAssistantIndex = updatedMessages.length - 1;
+
+            if (
+              lastAssistantIndex >= 0 &&
+              updatedMessages[lastAssistantIndex].role === "assistant"
+            ) {
+              updatedMessages[lastAssistantIndex] = {
+                ...updatedMessages[lastAssistantIndex],
+                content: latestMessage.content,
+                scenes: latestMessage.scenes || [],
+                completed: latestMessage.completed,
+                plannerOut: latestMessage.plannerOut,
+                generatorOutput: latestMessage.generatorOutput,
+                projectDescription: latestMessage.projectDescription,
+                timestamp: latestMessage.timestamp,
+              };
+            }
+
+            return updatedMessages;
+          });
+
+          // Update polling status based on the response
+          if (latestMessage.completed) {
+            setPollingStatus(null);
+            stopPolling();
+            setIsProcessing(false);
+            triggerRefresh();
+          } else if (
+            latestMessage.plannerOut &&
+            !latestMessage.generatorOutput
+          ) {
+            setPollingStatus("generating-scenes");
+          } else if (latestMessage.plannerOut) {
+            setPollingStatus("generating-scenes");
+          }
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  // Stop polling
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  };
+
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
-    
-    const userMessage = messageActions.createMessage(input.trim(), 'user');
+
+    const userMessage = messageActions.createMessage(input.trim(), "user");
     setMessages((prev: Message[]) => [...prev, userMessage]);
-    
+
     const userInput = input.trim();
-    setInput('');
+    setInput("");
     setIsProcessing(true);
-    
+    // processing request, means backend + MS ko request send ho rahi hai
+    setPollingStatus("generating");
+
     try {
       const requestData = {
         projectId: currentProject?._id,
         prompt: userInput,
-        ...(currentChatId && { chatId: currentChatId }) // Include chatId if continuing existing chat
+        userId: user?.id,
+        ...(currentChatId && { chatId: currentChatId }),
       };
 
-      const responseContent = await api.post(`/generatechat/`, requestData);
-      
-      if (responseContent.data.success) {
+      const response = await api.post(`/generatechat/`, requestData);
+
+      if (response.data.success) {
+        const chatData = response.data.data;
+
         // Update current chat ID if it's a new chat
-        if (!currentChatId && responseContent.data.data.chatId) {
-          setCurrentChatId(responseContent.data.data.chatId);
+        const chatIdToUse = currentChatId || chatData.chatId;
+        if (!currentChatId && chatData.chatId) {
+          setCurrentChatId(chatData.chatId);
         }
 
-        // Create assistant message from the response
-        const assistantMessage = messageActions.createMessage(
-          responseContent.data.data.llmResponse, 
-          'assistant',
-          responseContent.data.data.asset // Include asset data in the message
-        );
-        
-        setMessages((prev: Message[]) => [...prev, assistantMessage]);
-        triggerRefresh();
+        // Add a placeholder assistant message
+        const placeholderMessage: Message = {
+          _id: `msg_${Date.now()}`,
+          content: {
+            plannerOutput: "",
+            llmResponse: "",
+          },
+          role: "assistant",
+          timestamp: new Date().toISOString(),
+          scenes: [],
+          projectDescription: "",
+          completed: false,
+          plannerOut: false,
+          generatorOutput: false,
+        };
+
+        setMessages((prev: Message[]) => [...prev, placeholderMessage]);
+
+        // Change status to planning and start polling
+        setPollingStatus("planning");
+        startPolling(chatIdToUse);
       } else {
-        toast.error(responseContent.data.message);
-        throw new Error(responseContent.data.message);
+        toast.error(response.data.message);
+        throw new Error(response.data.message);
       }
-    } catch (error) {
-      console.error('Error processing request:', error);
+    } catch (error: any) {
+      const errorDetails = getErrorDetails(error);
+
       const errorMessage = messageActions.createMessage(
-        'Sorry, I encountered an error processing your request. Please try again.',
-        'assistant'
+        `error:${JSON.stringify(errorDetails)}`,
+        "assistant"
       );
       setMessages((prev: Message[]) => [...prev, errorMessage]);
-    } finally {
       setIsProcessing(false);
+      setPollingStatus(null);
     }
   };
-  
+
+  const handleCancelGeneration = async () => {
+    if (!currentChatId || !isProcessing) return;
+
+    try {
+      const response = await api.post(`/generatechat/cancel/${currentChatId}`);
+
+      if (response.data.success) {
+        toast.success("Generation cancelled");
+        setIsProcessing(false);
+        setPollingStatus(null);
+        stopPolling();
+
+        // Update the last message to show it was cancelled
+        setMessages((prevMessages) => {
+          const updatedMessages = [...prevMessages];
+          const lastMessageIndex = updatedMessages.length - 1;
+
+          if (
+            lastMessageIndex >= 0 &&
+            updatedMessages[lastMessageIndex].role === "assistant"
+          ) {
+            updatedMessages[lastMessageIndex] = {
+              ...updatedMessages[lastMessageIndex],
+              content: {
+                plannerOutput: "",
+                llmResponse: "Generation was cancelled by user.",
+              },
+              completed: true,
+            };
+          }
+
+          return updatedMessages;
+        });
+      } else {
+        toast.error("Failed to cancel generation");
+      }
+    } catch (error: any) {
+      console.error("Cancel generation error:", error);
+      toast.error("Failed to cancel generation");
+    }
+  };
+
   const handleExportChat = () => {
     const chatData = {
-      mode: 'generate',
+      mode: "generate",
       timestamp: new Date().toISOString(),
-      messages: messages.map(msg => ({
+      messages: messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
         timestamp: msg.timestamp,
-        asset: msg.assetId // Include asset in export
+        scenes: msg.scenes,
+        completed: msg.completed,
+        plannerOut: msg.plannerOut,
+        generatorOutput: msg.generatorOutput,
       })),
-      chatId: currentChatId
+      chatId: currentChatId,
     };
-    
-    const blob = new Blob([JSON.stringify(chatData, null, 2)], { type: 'application/json' });
+
+    const blob = new Blob([JSON.stringify(chatData, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `ai-chat-generate-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
-  
+
   const handleSaveToTemplates = (message: Message) => {
-    console.log('Save to templates:', message.content);
+    console.log("Save to templates:", message.content);
   };
-  
+
   const handlePromptSelect = (prompt: string) => {
     setInput(prompt);
   };
-  
+
   const handleCopy = (_content: string) => {};
-  
+
   const getPlaceholder = () => {
-    return currentProject 
-      ? `Ask AI to generate videos for "${currentProject.name}"...`
-      : "Ask AI to generate videos or create a project first...";
+    return "Describe the animation...";
+  };
+
+  // Custom error message component
+  const ErrorMessageBubble = ({ message }: { message: Message }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    try {
+      const errorData = JSON.parse(
+        (message.content as string).replace("error:", "")
+      );
+
+      const handleCopyError = () => {
+        const errorText = JSON.stringify(
+          errorData.rawError || errorData,
+          null,
+          2
+        );
+        navigator.clipboard.writeText(errorText);
+        toast.success("Error details copied to clipboard");
+      };
+
+      return (
+        <div className="flex gap-3 text-sm break-words">
+          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
+            <AlertCircle className="w-4 h-4 text-red-400" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 break-words">
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-red-400 break-words">
+                      {errorData.title}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-zinc-300 text-xs break-words">
+                  {errorData.message}
+                </div>
+
+                {errorData.details && (
+                  <div className="text-[10px] text-zinc-400 space-y-1 pt-2 border-t border-red-500/20">
+                    {errorData.details.limit && (
+                      <div className="flex justify-between">
+                        <span>Limit:</span>
+                        <span className="text-zinc-300">
+                          {errorData.details.limit} requests
+                        </span>
+                      </div>
+                    )}
+                    {errorData.details.remaining && (
+                      <div className="flex justify-between">
+                        <span>Remaining:</span>
+                        <span className="text-zinc-300">
+                          {errorData.details.remaining}
+                        </span>
+                      </div>
+                    )}
+                    {errorData.details.reset && (
+                      <div className="flex justify-between">
+                        <span>Resets:</span>
+                        <span className="text-zinc-300">
+                          {errorData.details.reset}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {isExpanded && errorData.rawError && (
+                  <div className="mt-3 pt-3 border-t border-red-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-zinc-400 font-medium">
+                        Full Error Details:
+                      </span>
+                      <button
+                        onClick={handleCopyError}
+                        className="text-[10px] text-zinc-400 hover:text-zinc-300 flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Copy
+                      </button>
+                    </div>
+                    <pre className="text-[10px] text-zinc-400 bg-black/30 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto">
+                      {JSON.stringify(errorData.rawError, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-red-500/20">
+                  <span className="text-[10px] text-zinc-500">
+                    Error {errorData.code} •{" "}
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </span>
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors flex-shrink-0"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp className="w-3 h-3" />
+                        Less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3 h-3" />
+                        More
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    } catch {
+      return (
+        <MessageBubble
+          message={message}
+          onCopy={handleCopy}
+          onSaveToTemplates={handleSaveToTemplates}
+        />
+      );
+    }
+  };
+
+  // Get loading text and progress based on polling status
+  const getLoadingStatus = () => {
+    switch (pollingStatus) {
+      case "generating":
+        return { text: "Generating...", progress: 10 };
+      case "planning":
+        return { text: "Planning...", progress: 25 };
+      case "generating-scenes":
+        return { text: "Rendering...", progress: 60 };
+      default:
+        return { text: "Processing...", progress: 0 };
+    }
   };
 
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0">
       {messages.length === 0 ? (
-        <ScrollArea className="flex-1 overflow-y-auto">
-          <EmptyState mode="generate" onPromptSelect={handlePromptSelect} />
-          <QuickPrompts mode="generate" onPromptSelect={handlePromptSelect} />
-        </ScrollArea>
+        <>
+          <div className="flex-1 flex flex-col overflow-y-auto">
+            <EmptyState mode="generate" onPromptSelect={handlePromptSelect} />
+            <QuickPrompts mode="generate" onPromptSelect={handlePromptSelect} />
+          </div>
+          <MessageInput
+            input={input}
+            setInput={setInput}
+            onSubmit={handleSubmit}
+            isProcessing={isProcessing}
+            placeholder={getPlaceholder()}
+            onCancel={handleCancelGeneration}
+          />
+        </>
       ) : (
-        <ScrollArea className="flex-1 overflow-y-auto">
-          <div className="p-3 space-y-2">
-            {messages.map((message) => (
-              <div key={message.id}>
-                <MessageBubble 
-                  message={message} 
-                  onCopy={handleCopy}
-                  onSave={handleSaveToTemplates}
-                  mode="generate"
-                />
-              </div>
-            ))}
-            {isProcessing && (
-              <div className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-300 bg-gradient-to-br from-emerald-500/20 to-green-500/20 border-emerald-500/30">
-                  <Bot className="w-3 h-3 transition-colors duration-300 text-emerald-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                    <div className="w-1.5 h-1.5 rounded-full animate-pulse transition-colors duration-300 bg-emerald-400"></div>
-                    <div className="w-1.5 h-1.5 rounded-full animate-pulse delay-75 transition-colors duration-300 bg-emerald-400"></div>
-                    <div className="w-1.5 h-1.5 rounded-full animate-pulse delay-150 transition-colors duration-300 bg-emerald-400"></div>
-                    <span className="ml-1.5 text-[10px]">Generating...</span>
+        <>
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="px-4 space-y-4 pt-4">
+              {messages.map((message, index) => {
+                // Skip the last assistant message if it's being processed
+                const isLastMessage = index === messages.length - 1;
+                const isAssistantProcessing =
+                  isLastMessage && message.role === "assistant" && isProcessing;
+
+                if (isAssistantProcessing) {
+                  return null; // Don't render the last assistant message while processing
+                }
+
+                return (
+                  <div key={message._id || index} className="break-words">
+                    {typeof message.content === "string" &&
+                    message.content.startsWith("error:") &&
+                    message.role === "assistant" ? (
+                      <ErrorMessageBubble message={message} />
+                    ) : (
+                      <MessageBubble
+                        message={message}
+                        onCopy={handleCopy}
+                        onSaveToTemplates={handleSaveToTemplates}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
+              {isProcessing && (
+                <div className="flex items-center w-full gap-3 text-sm">
+                  <div className="flex-shrink-0">
+                    <img
+                      src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760610643/loading_animation_phpia7.gif"
+                      alt="Loading..."
+                      className="w-14 h-14 rounded-full"
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <span className="text-xs text-zinc-200 animate-pulse mb-2">
+                      {getLoadingStatus().text}
+                    </span>
+
+                    {/* Enhanced Progress Bar */}
+                    <div className="w-full bg-zinc-700 rounded-full h-1.5 relative overflow-hidden">
+                      {/* Main Progress Bar */}
+                      <div
+                        className="bg-white h-1.5 rounded-full transition-all duration-300 ease-in-out absolute top-0 left-0 z-10"
+                        style={{ width: `${getLoadingStatus().progress}%` }}
+                      ></div>
+
+                      {/* Moving Shimmer Effect */}
+                      <div
+                        className="h-1.5 rounded-full absolute top-0 left-0 animate-pulse"
+                        style={{
+                          width: `${Math.min(
+                            getLoadingStatus().progress + 20,
+                            100
+                          )}%`,
+                          background:
+                            "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 25%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.3) 75%, transparent 100%)",
+                          animation: "shimmer 2s infinite",
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+
+          <MessageInput
+            input={input}
+            setInput={setInput}
+            onSubmit={handleSubmit}
+            isProcessing={isProcessing}
+            placeholder={getPlaceholder()}
+            onCancel={handleCancelGeneration}
+          />
+        </>
       )}
-      <MessageInput
-        value={input}
-        onChange={setInput}
-        onSubmit={handleSubmit}
-        disabled={isProcessing || !currentProject}
-        placeholder={getPlaceholder()}
-        mode="generate"
-      />
-    </>
+    </div>
   );
 };
 

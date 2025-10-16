@@ -10,7 +10,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "@/api";
 import { toast } from "sonner";
 import ThreeDotLoader from "@/Components/LoadingScreens/ThreeDotLoader";
-import { RefreshProvider } from "@/Components/Dashboard/RefreshContextProvider";
+import {
+  RefreshProviderAssetStash,
+  RefreshProviderTimeline,
+  RefreshProviderTracks,
+} from "@/Components/Dashboard/RefreshContextProvider";
 
 import type { Project, User } from "@/State/Types";
 
@@ -27,7 +31,7 @@ const DashboardLayout = () => {
 
       // FETCH PROJECT DATA FOR THIS PROJECT ID
       const projectResponse = await api.get(`/project/${projectId}`);
-      
+
       if (projectResponse.status === 200 || projectResponse.status === 201) {
         setProject(projectResponse.data);
       } else {
@@ -45,7 +49,6 @@ const DashboardLayout = () => {
       setUser(user);
 
       toast.message(`Welcome ${user.username}`);
-
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message ||
@@ -67,32 +70,35 @@ const DashboardLayout = () => {
   }, []);
 
   return (
-    <RefreshProvider>
+    <div>
       {isLoading ? (
         <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
           <ThreeDotLoader />
         </div>
       ) : (
-        <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-          <Header currentProject={project} user={user} />
+        <RefreshProviderTracks>
+          <RefreshProviderTimeline>
+            <RefreshProviderAssetStash>
+              <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
+                <Header currentProject={project} user={user} />
 
-          <div className="flex-1 flex overflow-hidden">
-            <LeftSideBar
-              currentProject={project}
-              user={user}
-            />
+                <div className="flex-1 flex overflow-hidden">
+                  <LeftSideBar currentProject={project} user={user} />
 
-            <main className="flex-1 flex flex-col overflow-hidden">
-              <VideoEditor currentProject={project}/>
-            </main>
+                  <main className="flex-1 flex flex-col overflow-hidden">
+                    <VideoEditor currentProject={project} />
+                  </main>
 
-            <RightSideBar currentProject={project}/>
-          </div>
+                  <RightSideBar currentProject={project} user={user}/>
+                </div>
 
-          {/* <Footer /> */}
-        </div>
+                {/* <Footer /> */}
+              </div>
+            </RefreshProviderAssetStash>
+          </RefreshProviderTimeline>
+        </RefreshProviderTracks>
       )}
-    </RefreshProvider>
+    </div>
   );
 };
 

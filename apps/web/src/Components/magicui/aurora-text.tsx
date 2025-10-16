@@ -7,6 +7,7 @@ interface AuroraTextProps {
   className?: string;
   colors?: string[];
   speed?: number;
+  padding?: string; // Add padding prop
 }
 
 export const AuroraText = memo(
@@ -15,6 +16,7 @@ export const AuroraText = memo(
     className = "",
     colors = ["#FF0080", "#7928CA", "#0070F3", "#38bdf8"],
     speed = 1,
+    padding = "py-1", // Default padding
   }: AuroraTextProps) => {
     const gradientStyle = {
       backgroundImage: `linear-gradient(135deg, ${colors.join(", ")}, ${
@@ -26,7 +28,7 @@ export const AuroraText = memo(
     };
 
     return (
-      <span className={`relative inline-block ${className}`}>
+      <span className={`relative inline-block ${padding} ${className}`}>
         <span className="sr-only">{children}</span>
         <span
           className="relative animate-aurora bg-[length:200%_auto] bg-clip-text text-transparent"

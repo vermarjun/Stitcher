@@ -22,6 +22,9 @@ import type {
 import api from "@/api";
 import { toast } from "sonner";
 
+
+import { useRefreshTracks } from "../RefreshContextProvider";
+
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -30,8 +33,143 @@ const formatTime = (seconds: number): string => {
     .padStart(2, "0")}`;
 };
 
+// Waveform visualization component for audio items
+const AudioWaveform = ({ 
+  audioUrl, 
+  width,
+  duration 
+}: { 
+  audioUrl: string;
+  width: number;
+  duration?: number;
+}) => {
+  const [waveformData, setWaveformData] = useState<number[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const generateWaveform = async () => {
+      if (!audioUrl) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        //---------------- REMEBER BC------------------
+        // Abhi ke liye dummy waveforms daal raha hun, baad me backend se generate karni padegi
+        const simulatedData = Array.from({ length: Math.floor(width / 3) }, () => 
+          Math.random() * 40 + 10
+        );
+        setWaveformData(simulatedData);
+      } catch (error) {
+        console.error('Error generating waveform:', error);
+        // Fallback to empty waveform
+        setWaveformData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    generateWaveform();
+  }, [audioUrl, width, duration]);
+
+  if (isLoading) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="animate-pulse text-emerald-400 text-xs">Loading waveform...</div>
+      </div>
+    );
+  }
+
+  if (waveformData.length === 0) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-emerald-600 text-xs">Audio Track</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center px-2">
+      <svg
+        width={width - 16}
+        height="100%"
+        viewBox={`0 0 ${waveformData.length} 50`}
+        preserveAspectRatio="none"
+        className="opacity-80"
+      >
+        {waveformData.map((amplitude, index) => (
+          <rect
+            key={index}
+            x={index}
+            y={25 - amplitude / 2}
+            width="1"
+            height={amplitude}
+            fill="currentColor"
+            className="text-emerald-400"
+          />
+        ))}
+      </svg>
+    </div>
+  );
+};
+
+// Component to render video frames background
+const VideoFramesBackground = ({ 
+  videoUrl, 
+  sourceStartTime,
+  sourceEndTime,
+  width 
+}: { 
+  videoUrl: string;
+  duration?: number;
+  sourceStartTime: number;
+  sourceEndTime: number;
+  width: number;
+}) => {
+  const clipDuration = sourceEndTime - sourceStartTime;
+  // Calculate how many frames we need based on width (one frame every ~40px)
+  const frameCount = Math.max(3, Math.ceil(width / 40));
+  
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  
+  useEffect(() => {
+    // Generate thumbnails based on the source time range
+    const thumbs: string[] = [];
+    const interval = clipDuration / frameCount;
+    
+    for (let i = 0; i < frameCount; i++) {
+      const timeOffset = Math.floor(sourceStartTime + (i * interval));
+      const thumbnailUrl = videoUrl.replace(
+        '/upload/',
+        `/upload/so_${timeOffset},w_80,h_60,c_fill,q_auto:low/`
+      ).replace('.mp4', '.jpg');
+      thumbs.push(thumbnailUrl);
+    }
+    
+    setThumbnails(thumbs);
+  }, [videoUrl, clipDuration, sourceStartTime, frameCount]);
+  
+  return (
+    <div className="absolute inset-0 flex overflow-hidden rounded-md">
+      {thumbnails.map((thumb, idx) => (
+        <div
+          key={idx}
+          className="flex-shrink-0 bg-cover bg-center border-r border-purple-900/30"
+          style={{
+            width: `${width / frameCount}px`,
+            backgroundImage: `url(${thumb})`,
+            backgroundSize: 'cover',
+          }}
+        />
+      ))}
+      {/* Overlay for better text readability */}
+      {/* <div className="absolute inset-0 bg-gradient-to-b from-purple-900/60 to-purple-950/80" /> */}
+    </div>
+  );
+};
+
 const TimelineEditor = ({
-  timeline, // Use the prop directly instead of local state
+  timeline,
   currentTime,
   onTimeUpdate,
   onTimelineUpdate,
@@ -43,8 +181,6 @@ const TimelineEditor = ({
   onTimelineUpdate: (timeline: Timeline) => void;
   onSync: (timeline: Timeline) => Promise<void>;
 }) => {
-  // REMOVED: const [timeline, setTimeline] = useState(initialTimeline);
-  
   const [selectedItem, setSelectedItem] = useState<ITimelineItemBase | null>(
     null
   );
@@ -61,6 +197,9 @@ const TimelineEditor = ({
   );
   const [isLoading, setLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Get trigger to refresh Tracks
+  const { triggerRefresh: triggerTracksRefresh } = useRefreshTracks();
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
@@ -86,6 +225,7 @@ const TimelineEditor = ({
         // Use onTimelineUpdate instead of setTimeline
         onTimelineUpdate(updatedTimeline);
         setSelectedItem(null);
+        triggerTracksRefresh();
         toast.success("Item deleted successfully");
       } else {
         throw new Error("Failed to delete item");
@@ -540,7 +680,7 @@ const TimelineEditor = ({
                     // Enhanced color scheme for different item types
                     const getItemStyle = () => {
                       const baseClasses =
-                        "absolute top-3 bottom-3 rounded-md shadow-lg transition-all duration-200 border";
+                        "absolute top-3 bottom-3 rounded-md shadow-lg transition-all duration-200 border overflow-hidden";
                       const isSelected = selectedItem?._id === item._id;
                       const isDragging =
                         dragAction && dragData?.item._id === item._id;
@@ -548,12 +688,12 @@ const TimelineEditor = ({
                       let colorClasses = "";
                       if (item.type === "video") {
                         colorClasses = isSelected
-                          ? "bg-gradient-to-r from-purple-600 to-purple-700 border-purple-400 shadow-purple-600/30"
-                          : "bg-gradient-to-r from-purple-700 to-purple-800 border-purple-600 hover:from-purple-600 hover:to-purple-700";
+                          ? "border-0 shadow-purple-600/30"
+                          : "border-0";
                       } else if (item.type === "audio") {
                         colorClasses = isSelected
-                          ? "bg-gradient-to-r from-emerald-600 to-emerald-700 border-emerald-400 shadow-emerald-600/30"
-                          : "bg-gradient-to-r from-emerald-700 to-emerald-800 border-emerald-600 hover:from-emerald-600 hover:to-emerald-700";
+                          ? "border-0 bg-gradient-to-r from-emerald-600/50 to-emerald-700/50 border-emerald-400/50 shadow-emerald-600/30"
+                          : "border-0 bg-gradient-to-r from-emerald-700/50 to-emerald-800/50 border-emerald-600/50 hover:from-emerald-600/50 hover:to-emerald-700/50";
                       } else {
                         colorClasses = isSelected
                           ? "bg-gradient-to-r from-amber-600 to-amber-700 border-amber-400 shadow-amber-600/30"
@@ -596,8 +736,28 @@ const TimelineEditor = ({
                           handleItemMouseDown(item, track, e, "move")
                         }
                       >
+                        {/* Video frames background */}
+                        {item.type === "video" && (item as IVideoTimelineItem).assetId?.url && (
+                          <VideoFramesBackground
+                            videoUrl={(item as IVideoTimelineItem).assetId!.url}
+                            duration={(item as IVideoTimelineItem).assetId!.duration}
+                            sourceStartTime={(item as IVideoTimelineItem).sourceStartTime}
+                            sourceEndTime={(item as IVideoTimelineItem).sourceEndTime}
+                            width={widthPx}
+                          />
+                        )}
+
+                        {/* Audio waveform visualization - NEW FUNCTIONALITY */}
+                        {item.type === "audio" && (item as IAudioTimelineItem).assetId?.url && (
+                          <AudioWaveform
+                            audioUrl={(item as IAudioTimelineItem).assetId!.url}
+                            width={widthPx}
+                            duration={(item as IAudioTimelineItem).assetId!.duration}
+                          />
+                        )}
+
                         {/* Item content with better readability */}
-                        <div className="px-2 py-1 text-xs font-semibold text-white truncate pointer-events-none flex items-center gap-1.5">
+                        <div className="relative px-2 py-1 text-xs font-semibold text-white truncate pointer-events-none flex items-center gap-1.5 z-10">
                           {item.type === "video" && (
                             <Play className="w-2.5 h-2.5 opacity-75" />
                           )}
@@ -614,7 +774,7 @@ const TimelineEditor = ({
                         {tool === "crop" && (
                           <>
                             <div
-                              className="absolute left-0 top-0 bottom-0 w-2 bg-white/80 cursor-ew-resize rounded-l-lg flex items-center justify-center hover:bg-white transition-colors"
+                              className="absolute left-0 top-0 bottom-0 w-2 bg-white/80 cursor-ew-resize rounded-l-lg flex items-center justify-center hover:bg-white transition-colors z-20"
                               onMouseDown={(e) =>
                                 handleItemMouseDown(
                                   item,
@@ -627,7 +787,7 @@ const TimelineEditor = ({
                               <div className="w-0.5 h-4 bg-black/50 rounded" />
                             </div>
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-2 bg-white/80 cursor-ew-resize rounded-r-lg flex items-center justify-center hover:bg-white transition-colors"
+                              className="absolute right-0 top-0 bottom-0 w-2 bg-white/80 cursor-ew-resize rounded-r-lg flex items-center justify-center hover:bg-white transition-colors z-20"
                               onMouseDown={(e) =>
                                 handleItemMouseDown(
                                   item,

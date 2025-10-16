@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import Sidebar from "./Sidebar.home";
-import Dashboard from "./Dashboard.home";
+import Dashboard from "./Dashboard/Dashboard.home";
 import api from "@/api";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { Project } from "@/State/Types";
 import AllProjects from "./AllProjects.home";
 import Teams from "./Teams.home";
-import Pricing from "./Pricing.home";
+// import Pricing from "./Pricing.home";
 import ApiKeys from "./ApiKeys.home";
 import Templates from "./Templates.home";
 import Assets from "./Assets.home";
@@ -24,7 +24,6 @@ const Main = () => {
 
   // Mock user data
   const user = JSON.parse(localStorage.getItem("user") || "");
-
   if (user.profilePhoto == "") {
     user.profilePhoto =
       "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";
@@ -64,14 +63,15 @@ const Main = () => {
           <Dashboard
             recentProjects={recentProjects}
             fecthRecentProjects={fetchRecentProjects}
+            onNavigate={handleNavigation}
           />
         );
       case "projects":
-        return <AllProjects />;
+        return <AllProjects user={user}/>;
       case "teams":
         return <Teams />;
-      case "pricing":
-        return <Pricing />;
+      // case "pricing":
+        // return <Pricing />;
       case "api-keys":
         return <ApiKeys />;
       case "templates":
@@ -85,6 +85,7 @@ const Main = () => {
           <Dashboard
             recentProjects={recentProjects}
             fecthRecentProjects={fetchRecentProjects}
+            onNavigate={handleNavigation}
           />
         );
     }

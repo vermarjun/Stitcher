@@ -1,89 +1,149 @@
-import { 
-  Bot, 
-  Copy,
-  Check,
-  Download,
-} from 'lucide-react';
+import { Bot, Copy, Check, Download } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/Components/ui/button";
+import type { Message } from "./Main.rightsidebar";
 
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/Components/ui/button';
-import type { Message } from '@/State/Types';
-
-interface Props { 
-  message: Message, 
-  onCopy: (content: string) => void,
-  onRegenerate?: (message: Message) => void,
-  onSave?: (message: Message) => void,
-  mode: 'generate' | 'edit'
+interface Props {
+  message: Message;
+  onCopy: (content: string) => void;
+  onRegenerate?: (message: Message) => void;
+  onSave?: (message: Message) => void;
+  onSaveToTemplates?: (message: Message) => void;
 }
 
-
-// Video Player Component
-const VideoPlayer = ({ asset }: { asset: any }) => {
+const VideoPlayer = ({ scene }: { scene: any }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   const handlePlayClick = () => {
     setIsPlaying(true);
   };
   
+  const handleToggleExpand = () => {
+    setIsExpanded(!isExpanded);
+  };
+  
+  console.log("scene: ", scene);
+  
+  // Access the asset data from the new schema structure
+  const videoUrl = scene.assetId?.url || '';
+  const thumbnailUrl = scene.assetId?.thumbnail || '';
+  const duration = scene.assetId?.duration || 0;
+  
   return (
-    <div className="mt-3 rounded-md overflow-hidden w-[85%] min-h-full">
+    <div className="mt-3 rounded-md overflow-hidden w-full border border-neutral-600 shadow-lg">
       {!isPlaying ? (
-        <div 
-          className="relative cursor-pointer"
-          onClick={handlePlayClick}
-        >
+        <div className="relative cursor-pointer" onClick={handlePlayClick}>
           <img 
-            src={asset.thumbnail} 
-            alt={asset.name}
+            src={thumbnailUrl} 
+            alt={scene.sceneName}
+            className="aspect-video"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-opacity-30">
-            <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center">
-              <svg 
-                className="w-6 h-6 text-black" 
-                viewBox="0 0 24 24" 
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+            <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center hover:bg-opacity-100 transition-all">
+              <svg
+                className="w-6 h-6 text-black ml-1"
+                viewBox="0 0 24 24"
                 fill="currentColor"
               >
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
           </div>
+          {duration > 0 && (
+            <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 rounded text-xs text-white">
+              {Math.floor(duration)}s
+            </div>
+          )}
         </div>
       ) : (
-        <video 
-          src={asset.url} 
-          autoPlay 
+        <video
+          src={videoUrl}
+          autoPlay
           playsInline
+          controls
+          className="aspect-video"
           onEnded={() => setIsPlaying(false)}
         />
       )}
+      <div className="p-2 bg-neutral-800/50">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-neutral-200">
+            {scene.sceneName}
+          </p>
+            <button 
+              onClick={handleToggleExpand}
+              className="text-xs gap-2 h-5 flex items-center justify-center text-neutral-400 cursor-pointer hover:text-neutral-200 transition-colors"
+            >
+              <svg 
+                className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor"
+              >
+                <path d="M6 9l6 6 6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <p className="text-neutral-400 hover:text-neutral-200">See More</p>
+            </button>
+        </div>
+        <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-60'}`}>
+          <p className="text-xs text-neutral-400 mt-1">
+            {scene.prompt}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
-  
 
 // Message Component
-const MessageBubble = ({ message, onCopy, mode }: Props) => {
+const MessageBubble = ({ message, onCopy }: Props) => {
+  console.log("message: ", message);
   const [copied, setCopied] = useState(false);
-
+  
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(message.content);
-    onCopy(message.content);
+    const contentText = typeof message.content === 'string' 
+      ? message.content 
+      : message.content.llmResponse || message.content.plannerOutput || '';
+    
+    await navigator.clipboard.writeText(contentText);
+    onCopy(contentText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  if (message.role === 'user') {
+  
+  const handleDownload = () => {
+    const contentText = typeof message.content === 'string' 
+      ? message.content 
+      : JSON.stringify(message.content, null, 2);
+    
+    const blob = new Blob([contentText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `message-${new Date(message.timestamp).getTime()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  
+  const formatTimestamp = (timestamp: string | Date) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+  
+  if (message.role === "user") {
     return (
       <div className="flex justify-end mb-4 group">
-        <div className="w-[85%] bg-neutral-800/60 border border-neutral-700/50 rounded-lg px-3 py-1.5">
-          <div className="text-xs text-neutral-200 leading-relaxed">
-            {message.content}
+        <div className="max-w-[85%] bg-neutral-800 rounded-lg px-3 py-2">
+          <div className="text-sm text-neutral-200 leading-relaxed break-words">
+            {typeof message.content === 'string' ? message.content : ''}
           </div>
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-neutral-500">
-              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <div className="flex items-center justify-between mt-2 gap-2">
+            <span className="text-xs text-neutral-400">
+              {formatTimestamp(message.timestamp)}
             </span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button
@@ -93,7 +153,11 @@ const MessageBubble = ({ message, onCopy, mode }: Props) => {
                 onClick={handleCopy}
                 title="Copy message"
               >
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copied ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
               </Button>
             </div>
           </div>
@@ -101,50 +165,111 @@ const MessageBubble = ({ message, onCopy, mode }: Props) => {
       </div>
     );
   }
-
+  
+  // Assistant message
+  const isContentObject = typeof message.content !== 'string';
+  const plannerOutput = isContentObject ? (message.content as { plannerOutput: string; llmResponse: string }).plannerOutput : '';
+  const llmResponse = isContentObject ? (message.content as { plannerOutput: string; llmResponse: string }).llmResponse : '';
+  const hasScenes = message.scenes && message.scenes.length > 0;
+  
+  // Filter out scenes that don't have a valid assetId
+  const validScenes = message.scenes?.filter(scene => scene.assetId && scene.assetId.url) || [];
+  
   return (
-    <div className="flex items-start gap-3 mb-6 group">
-      <div className={cn(
-        "w-6 h-6 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-300",
-        mode === 'generate'
-          ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 border-emerald-500/30"
-          : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-blue-500/30"
-      )}>
-        <Bot className={cn(
-          "w-3 h-3 transition-colors duration-300",
-          mode === 'generate' ? "text-emerald-400" : "text-blue-400"
-        )} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-neutral-200 leading-relaxed mb-2">
-          {message.content}
-          {
-            message.role === 'assistant' && message.assetId && (
-                <VideoPlayer asset={message.assetId} />
-          )}
+    <div className="mb-6">
+      <div className="flex items-start gap-3 group">
+        <div className="w-6 h-6 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-300 bg-gradient-to-br from-emerald-500/20 to-green-500/20 border-emerald-500/30">
+          <Bot className="w-3 h-3 text-emerald-400 transition-colors duration-300" />
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-neutral-500">
-            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
-              onClick={handleCopy}
-              title="Copy response"
-            >
-              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
-              title="Download response"
-            >
-              <Download className="w-3 h-3" />
-            </Button>
+        
+        <div className="flex-1 min-w-0">
+          {/* Planner Output */}
+          {plannerOutput && (
+            <div className="text-xs text-neutral-400 leading-relaxed mb-3 rounded-lg">
+              <p className="break-words">{plannerOutput}</p>
+            </div>
+          )}
+          
+          {/* Status indicators */}
+          {/* {isContentObject && (
+            <div className="flex items-center gap-2 mb-3 text-xs">
+              {message.plannerOut && (
+                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md border border-blue-500/30">
+                  Planner ✓
+                </span>
+              )}
+              {message.generatorOutput && (
+                <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-md border border-green-500/30">
+                  Generated ✓
+                </span>
+              )}
+              {message.completed && (
+                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/30">
+                  Completed ✓
+                </span>
+              )}
+            </div>
+          )} */}
+          
+          {/* Scenes */}
+          {validScenes.length > 0 && (
+            <div className="space-y-3 mb-3">
+              {validScenes.map((scene, index) => (
+                <VideoPlayer key={scene.assetId?._id || index} scene={scene} />
+              ))}
+            </div>
+          )}
+          
+          {/* Show scene count if there are scenes */}
+          {hasScenes && validScenes.length > 0 && (
+            <div className="text-xs text-neutral-500 mb-2">
+              {validScenes.length} scene{validScenes.length !== 1 ? 's' : ''} generated
+            </div>
+          )}
+          
+          {/* LLM Response */}
+          {llmResponse && (
+            <div className="text-sm text-neutral-200 leading-relaxed mb-2 break-words">
+              {llmResponse}
+            </div>
+          )}
+          
+          {/* String content fallback */}
+          {!isContentObject && typeof message.content === 'string' && (
+            <div className="text-sm text-neutral-200 leading-relaxed mb-2 break-words">
+              {message.content}
+            </div>
+          )}
+          
+          {/* Footer with timestamp and actions */}
+          <div className="flex items-center justify-between mt-3">
+            <span className="text-xs text-neutral-500">
+              {formatTimestamp(message.timestamp)}
+            </span>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
+                onClick={handleCopy}
+                title="Copy response"
+              >
+                {copied ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
+                onClick={handleDownload}
+                title="Download response"
+              >
+                <Download className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -152,4 +277,4 @@ const MessageBubble = ({ message, onCopy, mode }: Props) => {
   );
 };
 
-export default MessageBubble
+export default MessageBubble;

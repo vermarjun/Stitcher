@@ -344,7 +344,7 @@ const Hero = () => {
   const words = ["Explain", "Visualize", "Present", "Illustrate", "Learn"];
 
   return (
-    <section id="home" className="relative w-full h-full z-10 px-4 rounded-b-2xl">
+    <section id="home" className="relative w-full h-full z-10 px-4 rounded-b-2xl overflow-hidden">
       {/* Prism animated background */}
       <div className="absolute inset-0 z-0">
         <Prism
@@ -358,8 +358,11 @@ const Hero = () => {
           safariGlow={0.14}
           safariNoise={0.05}
           // Chrome-specific settings (brighter)
-          chromeGlow={1}
+          chromeGlow={1.2}
           chromeNoise={0.2}
+          // Mobile 
+          mobileGlow={1.2}
+          mobileNoise={0.2}
         />
       </div>
 

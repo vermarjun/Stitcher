@@ -26,20 +26,54 @@ type PrismProps = {
   chromeGlow?: number; // Override glow for Chrome
   safariNoise?: number; // Override noise for Safari
   chromeNoise?: number; // Override noise for Chrome
+  mobileNoise?: number;
+  mobileGlow?: number;
 };
 
 // Browser detection utility
-const getBrowserType = (): 'safari' | 'chrome' | 'other' => {
+const getBrowserType = (): 'safari' | 'chrome' | 'other' | 'mobile' => {
   if (typeof window === 'undefined') return 'other';
   
   const userAgent = window.navigator.userAgent;
   
-  // Check for Safari (but not Chrome, as Chrome also contains "Safari" in user agent)
+  // Enhanced mobile detection
+  const isMobileDevice = () => {
+    // Screen size check
+    if (window.innerWidth <= 1024) return true; // Includes tablets
+    
+    // User agent patterns for mobile devices
+    const mobilePatterns = [
+      /Android/i,
+      /webOS/i,
+      /iPhone/i,
+      /iPad/i,
+      /iPod/i,
+      /BlackBerry/i,
+      /Windows Phone/i,
+      /Mobile/i
+    ];
+    
+    if (mobilePatterns.some(pattern => pattern.test(userAgent))) return true;
+    
+    // Touch capability
+    if ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 1) return true;
+    
+    // Platform indicators
+    if (navigator.platform && (/iPad|iPhone|iPod/.test(navigator.platform))) return true;
+    
+    return false;
+  };
+  
+  // Treat all mobile/tablet devices as Chrome
+  if (isMobileDevice()) {
+    return 'mobile';
+  }
+  
+  // Desktop browser detection
   if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
     return 'safari';
   }
   
-  // Check for Chrome
   if (userAgent.includes('Chrome')) {
     return 'chrome';
   }
@@ -71,7 +105,9 @@ const Prism: React.FC<PrismProps> = ({
   safariGlow,
   chromeGlow,
   safariNoise,
-  chromeNoise
+  chromeNoise,
+  mobileGlow,
+  mobileNoise
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,12 +121,21 @@ const Prism: React.FC<PrismProps> = ({
     let finalGlow = glow;
     let finalNoise = noise;
     
-    if (browserType === 'safari' || browserType === 'other') {
+    if (browserType === 'mobile'){
+      console.log("fuck3");
+      animationType = "3drotate";
+      finalGlow = mobileGlow !== undefined ? mobileGlow: glow;
+      finalNoise = mobileNoise !== undefined ? mobileNoise: glow;
+    } else if (browserType === 'safari') {
+      console.log("fuck2")
       finalGlow = safariGlow !== undefined ? safariGlow : glow;
       finalNoise = safariNoise !== undefined ? safariNoise : noise;
     } else if (browserType === 'chrome') {
+      console.log("fuck1")
       finalGlow = chromeGlow !== undefined ? chromeGlow : glow;
       finalNoise = chromeNoise !== undefined ? chromeNoise : noise;
+    } else {
+      console.log("fuck")
     }
 
     // preserve original semantics
@@ -120,7 +165,9 @@ const Prism: React.FC<PrismProps> = ({
       antialias: false
     });
     const gl = renderer.gl;
-    
+
+    console.log(browserType)
+
     // Browser-specific WebGL context settings
     if (browserType === 'safari') {
       // Safari-specific optimizations

@@ -394,7 +394,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
 
       {/* Templates List - Single Column Tiles */}
       <div className="flex-1 overflow-y-auto p-3">
-        <div className="space-y-2">
+        <div className="space-y-2 mb-8">
           {filteredTemplates.length > 0 ? (
             filteredTemplates.map((template) => (
               <TemplateCard key={template._id} template={template} />

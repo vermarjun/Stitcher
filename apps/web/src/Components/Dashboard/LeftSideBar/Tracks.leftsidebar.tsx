@@ -7,6 +7,8 @@ import { TrackType } from '@/State/Types';
 import type { IAudioTimelineItem, IVideoTimelineItem, ITextTimelineItem, ITrack } from '@/State/Types';
 import BeautifulLoader from '@/Components/LoadingScreens/Templatestore.loader';
 
+import { useRefreshTracks } from "../RefreshContextProvider";
+
 interface Props {
   currentProject?:Project
 }
@@ -20,16 +22,19 @@ interface Props {
 // 5) DISPLAY THE INFORMATION PROPERLY, EVERYTHING LOOKS REALLY REALLY UGLY RN
 // 6) Add a play button that will load the asset into video player directly
 // 7) What wrong with that green color stupid button at top right corner? Use proper labels to represent origin
+// 8) THE CONTENT IS OVERFLOWING HERE, The 
 
 const TimelineTracksSidebar = ({currentProject}:Props) => {
   const [activeTab, setActiveTab] = useState<'video' | 'audio' | 'text'>('video');
   const [tracks, setTracks] = useState<ITrack[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-
-  // You'll need to get this from props, context, or route params
-  const timelineId = currentProject?.timeline._id; // Replace with actual timeline ID
-
+  
+  // Subscribe to refresh from both AssetStash AND Timeline
+  const { refreshKey: refreshFromAssetStashAndTimeline } = useRefreshTracks();
+    
+  const timelineId = currentProject?.timeline._id; 
+  
   // Fetch tracks from backend
   const fetchTracks = async () => {
     try {
@@ -54,14 +59,20 @@ const TimelineTracksSidebar = ({currentProject}:Props) => {
   // Load tracks on component mount
   useEffect(() => {
       fetchTracks();
-  }, []);
+  }, [refreshFromAssetStashAndTimeline]);
 
-  // Your existing helper functions remain the same
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatDuration = (seconds:any) => {
+  if (!seconds && seconds !== 0) return '0:00.00';
+  
+  const totalSeconds = Number(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  
+  // Format seconds to 2 decimal places, ensuring we always have 2 digits before decimal
+  const formattedSeconds = remainingSeconds.toFixed(2).padStart(5, '0');
+  
+  return `${minutes}:${formattedSeconds}`;
+};
 
   const formatFileSize = (bytes: number): string => {
     const mb = bytes / (1024 * 1024);
@@ -96,8 +107,8 @@ const TimelineTracksSidebar = ({currentProject}:Props) => {
   const renderVideoItem = (item: IVideoTimelineItem & { track: ITrack }) => (
     <div key={item._id} className="bg-zinc-900 rounded-lg p-3 hover:bg-zinc-800 transition-colors">
       {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between mb-2 w-fit">
+        <div className="flex items-center gap-2 max-w-[60%]">
           <Play className="w-4 h-4 text-green-400" />
           <h3 className="text-sm font-medium text-white truncate">
             {item.assetId?.name || 'Video Item'}
@@ -115,7 +126,7 @@ const TimelineTracksSidebar = ({currentProject}:Props) => {
           <img
             src={item.assetId.thumbnail}
             alt={item.assetId.name}
-            className="w-full h-20 object-cover"
+            className="aspect-video object-center"
           />
           <div className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-[10px] px-1.5 py-0.5 rounded">
             {formatDuration(item.assetId.duration || 0)}

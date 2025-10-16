@@ -17,10 +17,10 @@ interface Props {
 
 function Header({currentProject, user}:Props) {
   const [searchQuery, setSearchQuery] = useRecoilState(searchQueryState);
-
+ 
   return (
     <>
-      <header className="flex h-12 items-center justify-between border-b border-zinc-800/50 bg-neutral-950 backdrop-blur-sm px-4 text-sm transition-all duration-200">
+      <header className="flex h-12 items-center justify-between border-b border-zinc-700 bg-neutral-950 backdrop-blur-sm px-4 text-sm transition-all duration-200">
         {/* Left section - Logo and Menu */}
         <div className="flex items-center gap-6">
           <LogoSection />

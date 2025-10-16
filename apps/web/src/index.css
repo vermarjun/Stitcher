@@ -1,5 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Italianno&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Satisfy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Licorice&family=Satisfy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@theme {
+  --font-satisfy: "Satisfy", cursive;
+  --font-licorice: "Licorice", cursive;
+  --font-pacifico: "Pacifico", cursive;
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -213,5 +224,14 @@
                   100% { 
                     transform: translateX(-100%) skewX(-15deg);
                     opacity: 0.4;
+                  }
+                }
+
+                @keyframes shimmer {
+                  0% {
+                    transform: translateX(-100%);
+                  }
+                  100% {
+                    transform: translateX(100%);
                   }
                 }

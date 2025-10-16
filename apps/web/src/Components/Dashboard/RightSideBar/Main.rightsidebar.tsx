@@ -1,16 +1,111 @@
 import { useState, useRef, useEffect } from 'react';
-import type { Message } from '@/State/Dashboard.state';
 import { AISidebarHeader, ConfirmationDialog } from './Header.rightsidebar';
 import GenerateComponent from './Generate.rightsidebar';
 import EditComponent from './Edit.rightsidebar';
-import type { Project } from '@/State/Types';
+import type { Project, User } from '@/State/Types';
 import api from '@/api';
 
 interface Props {
   currentProject?: Project,
+  user?: User
 }
 
-const AISidebar = ({ currentProject }: Props) => {
+export type VideoGenerationRequest = {
+  id: string;
+  prompt: string;
+  status: "pending" | "processing" | "completed" | "error";
+  progress: number;
+  projectId: string;
+  createdAt: Date;
+  completedAt?: Date;
+  videoUrl?: string;
+  error?: string;
+};
+
+interface IAssistant {
+  plannerOutput: string;
+  llmResponse: string;
+}
+
+interface AssetMetadata {
+  public_id: string;
+  cloudinary_metadata: {
+    url: string;
+    thumbnail: string;
+    duration: number;
+    width: number;
+    height: number;
+    bytes: number;
+    public_id: string;
+  };
+}
+
+interface Asset {
+  _id: string;
+  name: string;
+  type: string;
+  origin: string;
+  url: string;
+  thumbnail: string;
+  duration: number;
+  width: number;
+  height: number;
+  bytes: number;
+  metadata: AssetMetadata;
+  isOnTimeline: boolean;
+}
+
+interface Scene {
+  sceneName: string;
+  prompt: string;
+  summary: string;
+  code: string;
+  assetId: Asset | null;
+  error: string | null;
+}
+
+export type Message = {
+  _id?: string;
+  content: string | IAssistant; 
+  role: "user" | "assistant";
+  timestamp: string | Date;
+  scenes: Scene[];
+  projectDescription: string;
+  completed: boolean;
+  plannerOut: boolean;
+  generatorOutput: boolean;
+};
+
+export const messageActions = {
+  createMessage: (
+    content: string,
+    role: Message["role"]
+  ): Message => ({
+    _id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    content,
+    role,
+    timestamp: new Date().toISOString(),
+    scenes: [],
+    projectDescription: '',
+    completed: false,
+    plannerOut: false,
+    generatorOutput: false,
+  }),
+  
+  createVideoGenerationRequest: (
+    prompt: string,
+    projectId: string
+  ): VideoGenerationRequest => ({
+    id: `req_${Date.now()}`,
+    prompt,
+    status: "pending",
+    progress: 0,
+    projectId,
+    createdAt: new Date(),
+  }),
+};
+
+const AISidebar = ({ currentProject, user }: Props) => {
   const [mode, setMode] = useState<'generate' | 'edit'>('generate');
   
   const [generateMessages, setGenerateMessages] = useState<Message[]>([]);
@@ -18,24 +113,13 @@ const AISidebar = ({ currentProject }: Props) => {
   const [generateIsProcessing, setGenerateIsProcessing] = useState(false);
   
   const [editMessages, setEditMessages] = useState<Message[]>([]);
-  const [editInput, setEditInput] = useState('');
-  const [editIsProcessing, setEditIsProcessing] = useState(false);
+  const [, setEditInput] = useState('');
+  const [, setEditIsProcessing] = useState(false);
   
   const [currentGenerateChatId, setCurrentGenerateChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   
-  // Function to convert backend message format to frontend Message format
-  const convertBackendMessages = (backendMessages: any[]): Message[] => {
-    return backendMessages.map(msg => ({
-      id: msg._id || Math.random().toString(),
-      role: msg.role,
-      content: msg.content,
-      assetId: msg.assetId,
-      timestamp: new Date(msg.timestamp),
-    }));
-  };
-
   // Fetch the latest generate chat for the current project
   async function fetchLatestGenerateChat() {
     if (!currentProject?._id) return;
@@ -43,7 +127,6 @@ const AISidebar = ({ currentProject }: Props) => {
     setIsLoadingChats(true);
     try {
       const generateChats = await api.get(`/generatechat/project/${currentProject._id}`);
-      
       if (generateChats?.data.success && generateChats.data.data.length > 0) {
         const latestChat = generateChats.data.data[0];
         setCurrentGenerateChatId(latestChat._id);
@@ -51,7 +134,7 @@ const AISidebar = ({ currentProject }: Props) => {
         const chatHistory = await api.get(`/generatechat/${latestChat._id}`);
         
         if (chatHistory?.data.success) {
-          const messages = convertBackendMessages(chatHistory.data.data.messages || []);
+          const messages = chatHistory.data.data.messages || [];
           setGenerateMessages(messages);
         }
       } else {
@@ -75,8 +158,7 @@ const AISidebar = ({ currentProject }: Props) => {
       const editChatHistory = await api.get(`/editchat/history/${currentProject._id}`);
       
       if (editChatHistory?.data.success) {
-        const messages = convertBackendMessages(editChatHistory.data.messages || []);
-        setEditMessages(messages);
+        setEditMessages(editChatHistory.data.messages || []);
       }
     } catch (error) {
       console.error('Error fetching edit chat history:', error);
@@ -151,7 +233,7 @@ const AISidebar = ({ currentProject }: Props) => {
   };
   
   return (
-    <div className="bg-black border-l-2 border-zinc-800 flex flex-col w-80 relative">
+    <div className="bg-black border-l border-zinc-700 flex flex-col w-80 relative">
       <AISidebarHeader 
         mode={mode} 
         setMode={setMode} 
@@ -185,17 +267,10 @@ const AISidebar = ({ currentProject }: Props) => {
               setIsProcessing={setGenerateIsProcessing}
               currentChatId={currentGenerateChatId}
               setCurrentChatId={setCurrentGenerateChatId}
-            /> : 
-            <EditComponent
-              currentProject={currentProject} 
-              ref={editRef}
-              messages={editMessages}
-              setMessages={setEditMessages}
-              input={editInput}
-              setInput={setEditInput}
-              isProcessing={editIsProcessing}
-              setIsProcessing={setEditIsProcessing}
+              user={user}
             />
+            : 
+            <EditComponent/>
           }
         </>
       )}

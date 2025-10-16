@@ -1,60 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Bot, Settings, History, PlusIcon, Trash2, Download, ArrowLeft } from 'lucide-react';
+import { Bot, History, PlusIcon, Download, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/Components/ui/dropdown-menu";
 import { Button } from '@/Components/ui/button';
 import { ScrollArea } from '@/Components/ui/scroll-area';
-import { type Message } from '@/State/Dashboard.state';
 import api from '@/api';
 import { toast } from 'sonner';
-
-// Settings Dropdown Component
-const SettingsDropdown = () => {
-  const [isAnimating, setIsAnimating] = useState(false);
-  
-  const handleClick = () => {
-    setIsAnimating(true);
-    setTimeout(() => setIsAnimating(false), 1000);
-  };
-  
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-          onClick={handleClick}
-        >
-          <Settings className={cn("w-3 h-3 transition-transform duration-1000", isAnimating && "animate-spin")} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56 bg-zinc-900 border-zinc-700" align="end">
-        <DropdownMenuLabel className="text-zinc-200 text-xs">Settings</DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-zinc-700" />
-        <DropdownMenuItem className="text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs">
-          <Settings className="w-3 h-3 mr-2" />
-          AI Preferences
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs">
-          <Download className="w-3 h-3 mr-2" />
-          Export Settings
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs">
-          <Trash2 className="w-3 h-3 mr-2" />
-          Clear All Data
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-};
+import type { Message } from './Main.rightsidebar';
 
 // Chat History Component
 const ChatHistoryComponent = ({ 
@@ -104,14 +55,14 @@ const ChatHistoryComponent = ({
       if (mode === 'generate') {
         const response = await api.get(`/generatechat/${chat._id}`);
         if (response.data.success) {
-          const messages = convertBackendMessages(response.data.data.messages || []);
+          const messages = response.data.data.messages || [];
           onSelectHistory(messages);
           onGoBack();
         }
       } else {
         // For edit mode, use the messages directly
         if (chat.messages) {
-          const messages = convertBackendMessages(chat.messages);
+          const messages = chat.messages;
           onSelectHistory(messages);
           onGoBack();
         }
@@ -120,15 +71,6 @@ const ChatHistoryComponent = ({
       console.error('Error selecting chat:', error);
       toast.error('Failed to load selected chat');
     }
-  };
-
-  const convertBackendMessages = (backendMessages: any[]): Message[] => {
-    return backendMessages.map(msg => ({
-      id: msg._id || Math.random().toString(),
-      role: msg.role,
-      content: msg.content,
-      timestamp: new Date(msg.timestamp),
-    }));
   };
 
   const formatDate = (dateString: string) => {
@@ -348,7 +290,6 @@ const AISidebarHeader = ({
           >
             <Download className="w-3 h-3" />
           </Button>
-          <SettingsDropdown />
         </div>
       </div>
       
