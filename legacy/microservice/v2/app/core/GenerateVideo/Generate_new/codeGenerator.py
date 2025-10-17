@@ -47,7 +47,8 @@ async def generate_all_scenes(Scenes: List[Scene]):
         code = await code_gen_function(Scene)
         results.append({
             "code" : code,
-            "sceneName" : Scene.SceneName
+            "sceneName" : Scene.SceneName,
+            "description": Scene.Prompt
         })
 
     return results

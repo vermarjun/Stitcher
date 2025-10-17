@@ -1,5 +1,4 @@
-from typing import List, Dict, Any, Optional
-from motor.motor_asyncio import AsyncIOMotorClient
+from typing import List, Dict, Any
 from bson import ObjectId
 from utils.connect_mongo import mongodb
 import traceback
@@ -241,6 +240,7 @@ class ChatUpdater:
         code: str,
         chat_id: str, 
         scene_name: str, 
+        scene_description: str,
         project_id: str,
         metadata: Dict[str, Any]
     ):
@@ -255,6 +255,8 @@ class ChatUpdater:
                 "name": f"{scene_name}_video",  
                 "type": "video",  
                 "code": code,
+                "scene_name": scene_name,
+                "scene_description": scene_description,
                 "origin": "generated_video",  
                 "url": metadata.get("url"),
                 "thumbnail": metadata.get("thumbnail", ""),

@@ -1,46 +1,6 @@
-# from fastapi import APIRouter, HTTPException, Request
-# from pydantic import BaseModel
-# from core.GenerateVideo.Generate_new.generate_new_main import generate_new_video_main
-# from utils.model_provider import MultiTenantModelManager  # New import
-
-# router = APIRouter()
-
-# class GenerateVideoRequest(BaseModel):
-#     userId: str
-#     prompt: str
-
-# @router.post("/video")
-# async def generate_video(req: GenerateVideoRequest, request: Request):
-#     try:
-#         Scenes = await generate_new_video_main(
-#             req=req,
-#             api_config=request.state.api_config  # Pass config instead of provider
-#         )
-#         print("\n Scenes Recieved! \n", len(Scenes))
-#         for scene in Scenes:
-#             print("\n", scene)
-
-#         # NOTE SCENES HERE IS:
-#         """
-#         [
-#             {
-#                 code
-#                 metadata
-#                 error
-#             }
-#         ]
-#         """
-
-#         return {
-#             "llmResponse": "success",
-#             "Scenes": Scenes
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
-import asyncio
+
 from core.GenerateVideo.Generate_new.generate_new_main import generate_new_video_main
 
 router = APIRouter()
@@ -79,23 +39,11 @@ async def process_video_generation(req: GenerateVideoRequest, api_config):
         print(f"Chat: {req.chatId}")
         print(f"Error: {str(e)}")
         print(f"{'='*60}\n")
-        # Error should already be logged in MongoDB by generate_new_video_main
-        # If not, you might want to add a final error update to MongoDB here
+        # TO DO !!
+        # POORE ME JO ERROR KA SCENE HAI WO YAHA SE ADD HOGA, WILL ADD IT LATER, AGAR KOI BHI SCENE NAHI GENERATE HUA MS ne hug diya to yaha se add karna padega main error
 
 @router.post("/video")
 async def generate_video(req: GenerateVideoRequest, request: Request, background_tasks: BackgroundTasks):
-    """
-    Generate video endpoint - immediately returns success after queuing the task.
-    
-    Flow:
-    1. Validates request
-    2. Adds generation task to background tasks
-    3. Returns immediate success response
-    4. Microservice updates MongoDB progressively (backend polls for updates)
-    
-    Returns:
-        Immediate acknowledgment that request was received and queued
-    """
     try:
         print(f"\n{'='*60}")
         print(f"VIDEO GENERATION REQUEST RECEIVED")
@@ -112,10 +60,7 @@ async def generate_video(req: GenerateVideoRequest, request: Request, background
             req=req,                            # Pass as keyword argument
             api_config=request.state.api_config # Pass as keyword argument
         )
-        
-        # Alternatively, you can pass positional arguments:
-        # background_tasks.add_task(process_video_generation, req, request.state.api_config)
-        
+
         # Return immediately - don't wait for processing
         return {
             "status": "success",

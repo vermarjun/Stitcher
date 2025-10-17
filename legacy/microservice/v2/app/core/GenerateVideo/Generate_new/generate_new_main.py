@@ -23,6 +23,7 @@ async def debug_render_upload(Scene, req, chat_id: str, project_id: str):
                 code=Scene["code"],
                 chat_id=chat_id,
                 scene_name=Scene["sceneName"],
+                scene_description=Scene["description"],
                 project_id=project_id,
                 metadata=result["metadata"]
             )
@@ -46,6 +47,7 @@ async def debug_render_upload(Scene, req, chat_id: str, project_id: str):
                 await ChatUpdater.update_scene_code(
                     chat_id=chat_id,
                     scene_name=Scene["sceneName"],
+                    scene_description=Scene["description"],
                     new_code=Scene["code"]
                 )
             else:
@@ -100,14 +102,17 @@ async def generate_new_video_main(req: RequestSchema, api_config: dict):
         scenes_with_code = [
             {
                 "sceneName": scene["sceneName"],
-                "code": scene["code"]
+                "code": scene["code"],
+                "description": scene["description"]
             }
             for scene in coder_output
         ]
+
         await ChatUpdater.update_generator_output(
             chat_id=req.chatId,
             scenes_with_code=scenes_with_code
         )
+
         print("Generator output updated in MongoDB")
 
         # Step 3: Debug, render and upload each scene
