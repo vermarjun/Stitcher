@@ -172,9 +172,15 @@ async function callVideoEditMicroservice(
 }
 
 export const generateChatResponse = async (req: Request, res: Response) => {
+    console.log("HIT")
     try {
         const { projectId, prompt, chatId, assetId }: GenerateChatRequest = req.body;
         const userId = req.userId;
+
+        console.log(projectId)
+        console.log(prompt)
+        console.log(chatId)
+        console.log(assetId)
         
         // Validation
         if (!projectId || !prompt?.trim()) {

@@ -1,4 +1,4 @@
-import {Schema, Document, Types, Model, model, ObjectId} from "mongoose";
+import {Schema, Document, Types, Model, model} from "mongoose";
 
 export enum AssetType {
   VIDEO = 'video',
@@ -14,7 +14,9 @@ export enum AssetOrigin {
 export interface IAsset extends Document {
     name: string;
     type: AssetType;
-    code?: string; // Templates, community videos and generated videos will have it, other videos (uploaded) or audio or text objects will not have it
+    code?: string;
+    scene_name?: string;
+    scene_description?: string;
     origin: AssetOrigin;
     url: string;
     thumbnail: string;
@@ -24,14 +26,16 @@ export interface IAsset extends Document {
     bytes: number;
     metadata: Record<string, any>;
     projectId: Types.ObjectId;
-    isOnTimeline: Boolean;
-    // Optional reference to original template (when origin is TEMPLATE)
+    isOnTimeline: boolean;
     originalTemplateId?: Types.ObjectId;
 }
 
 const AssetSchema = new Schema<IAsset>({
     name: { type: String, required: true },
     type: { type: String, enum: Object.values(AssetType), required: true },
+    code: { type: String, required: false },
+    scene_name: { type: String, required: false },
+    scene_description: { type: String, required: false },
     origin: {type: String, enum: Object.values(AssetOrigin), required: true, default: AssetOrigin.GENERATED_VIDEO},
     url: { type: String, required: true },
     thumbnail: {type: String, required: true, default: ""},
@@ -41,12 +45,10 @@ const AssetSchema = new Schema<IAsset>({
     bytes: { type: Number, default: 0 },
     metadata: { type: Schema.Types.Mixed, default: {} },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
-    isOnTimeline: {type: Boolean, default:false},
-    // Reference to original template when asset is created from template
+    isOnTimeline: {type: Boolean, default: false},
     originalTemplateId: { type: Schema.Types.ObjectId, ref: 'Template' }
 }, { timestamps: true });
 
-// Index for efficient querying by project and origin
 AssetSchema.index({ projectId: 1, origin: 1 });
 
 const Asset: Model<IAsset> = model<IAsset>('Asset', AssetSchema);
