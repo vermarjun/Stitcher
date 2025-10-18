@@ -17,12 +17,17 @@ const EditComponent = () => {
         <QuickPrompts mode="edit" onPromptSelect={()=>{console.log("prompt selected")}} />
       </ScrollArea>
       <MessageInput
-        value={"arjun"}
-        onChange={(x:string)=>{console.log(x, "changed")}}
+        input="arjun"
         onSubmit={()=>{console.log("hogya sumbit lawde")}}
-        disabled={true}
         placeholder={getPlaceholder()}
         mode="edit"
+        setInput={()=>console.log("asd")}
+        isProcessing={false}
+        onCancel={()=>console.log("asrjun")}
+        onFileDrop={()=>console.log("asd")}
+        onAssetDrop={()=>console.log("asd")}
+        droppedItems = {[]}
+        onRemoveItem={()=>console.log("Asda")}
       />
     </>
   );

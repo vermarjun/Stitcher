@@ -294,8 +294,6 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
         resourceType,
       });
 
-      console.log(signatureResponse.data);
-
       const { signature, cloudName, apiKey, uploadParams } =
         signatureResponse.data;
 
@@ -308,8 +306,6 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
         cloudName,
         fileId
       );
-
-      console.log(cloudinaryResponse);
 
       setUploadProgress((prev) => ({
         ...prev,
@@ -338,12 +334,10 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
         projectId: "project1",
         cloudinaryPublicId: cloudinaryResponse.public_id,
       };
-      console.log(metadataPayload);
       const metadataResponse = await api.post(
         "/asset/save-metadata",
         metadataPayload
       );
-      console.log(metadataResponse);
 
       // Add the new asset to the local state
       const newAsset: Asset = {
@@ -623,7 +617,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
               <div className="flex items-center p-1 gap-2.5">
                 {/* Thumbnail/Icon */}
                 <div className="flex-shrink-0 aspect-video h-16 bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
-                  {asset.type === AssetType.VIDEO && asset.thumbnail ? (
+                  {asset.type === (AssetType.VIDEO || AssetType.AUDIO) && asset.thumbnail ? (
                     <img
                       src={asset.thumbnail}
                       alt={asset.name}

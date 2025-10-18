@@ -9,7 +9,6 @@ interface Props {
   onCopy: (content: string) => void;
   onRegenerate?: (message: Message) => void;
   onSave?: (message: Message) => void;
-  onSaveToTemplates?: (message: Message) => void;
   llmSummaryRef: RefObject<string>;
   plannerOutputRef: RefObject<string>,
   isProcessing: boolean;
@@ -28,8 +27,6 @@ const VideoPlayer = ({ scene }: { scene: any }) => {
   const handleToggleExpand = () => {
     setIsExpanded(!isExpanded);
   };
-
-  console.log("scene: ", scene);
 
   // Access the asset data from the new schema structure
   const videoUrl = scene.assetId?.url || "";
@@ -121,7 +118,6 @@ const MessageBubble = ({
   isProcessing,
   streamSummaryRef
 }: Props) => {
-  console.log("message: ", message);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -223,7 +219,6 @@ const MessageBubble = ({
                 <LiveTextStream
                   text={plannerOutputRef.current}
                   streamingSpeed={200}
-                  onStreamingComplete={() => console.log("planner output stream finished")}
                 />
               ) : ( 
                 <p className="break-words">{plannerOutput}</p>
@@ -277,7 +272,6 @@ const MessageBubble = ({
                 <LiveTextStream
                   text={llmSummaryRef.current}
                   streamingSpeed={200}
-                  onStreamingComplete={() => console.log("LLM response completed")}
                 />
               ) : (
                 <p className="break-words">{llmResponse}</p>

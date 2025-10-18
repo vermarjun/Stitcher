@@ -243,7 +243,7 @@ const MessageInput = ({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          disabled={isProcessing}
+          disabled={isProcessing || mode == "edit"}
           className={cn(
             "min-h-[40px] max-h-[80px] bg-neutral-900/60 border-neutral-700/60 text-neutral-200 text-sm",
             "placeholder-neutral-500 resize-none pr-16 py-2",

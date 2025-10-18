@@ -118,7 +118,6 @@ const GenerateComponent = ({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    console.log("message received: ", messages);
   }, [messages]);
 
   // Cleanup polling on unmount
@@ -352,10 +351,6 @@ const GenerateComponent = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleSaveToTemplates = (message: Message) => {
-    console.log("Save to templates:", message.content);
-  };
-
   const handlePromptSelect = (prompt: string) => {
     setInput(prompt);
   };
@@ -487,7 +482,6 @@ const GenerateComponent = ({
         <MessageBubble
           message={message}
           onCopy={handleCopy}
-          onSaveToTemplates={handleSaveToTemplates}
           plannerOutputRef={plannerOutputRef}
           isLastMessage={false}
           llmSummaryRef={llmSummaryRef}
@@ -562,7 +556,6 @@ const GenerateComponent = ({
                       <MessageBubble
                         message={message}
                         onCopy={handleCopy}
-                        onSaveToTemplates={handleSaveToTemplates}
                         streamSummaryRef={streamSummaryRef}
                         plannerOutputRef={plannerOutputRef}
                         isLastMessage={isLastMessage}
