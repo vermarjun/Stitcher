@@ -12,7 +12,6 @@ declare global {
 }
 
 const auth = (req: Request, res: Response, next: NextFunction) => {
-  console.log("auth hit")
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
