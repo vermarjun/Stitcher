@@ -617,7 +617,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
               <div className="flex items-center p-1 gap-2.5">
                 {/* Thumbnail/Icon */}
                 <div className="flex-shrink-0 aspect-video h-16 bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
-                  {asset.type === (AssetType.VIDEO || AssetType.AUDIO) && asset.thumbnail ? (
+                  {asset.thumbnail ? (
                     <img
                       src={asset.thumbnail}
                       alt={asset.name}
