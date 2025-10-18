@@ -223,7 +223,7 @@ const ScriptSidebar: React.FC<ScriptSidebarProps> = ({
 
       {/* Editor Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="bg-zinc-900 border-b border-zinc-800 px-3 py-2">
+        <div className="bg-zinc-800 border-b border-zinc-800 px-3 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex gap-1">

@@ -94,6 +94,9 @@ export interface Asset {
   name: string;
   type: AssetType;
   origin: AssetOrigin;
+  code?: string;
+  scene_name?:string;
+  scene_description?:string;
   url: string;
   thumbnail: string;
   duration?: number;

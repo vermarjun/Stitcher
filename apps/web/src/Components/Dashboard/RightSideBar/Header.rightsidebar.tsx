@@ -241,7 +241,7 @@ const AISidebarHeader = ({
   }
   
   return (
-    <div className="border-b border-zinc-800 bg-black">
+    <div className="border-b border-zinc-600 bg-zinc-800">
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
           <div className={cn(

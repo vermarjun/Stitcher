@@ -1,33 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Download, FileAudio, FileVideo, Check, Loader2, Heart } from 'lucide-react';
-import { toast } from 'sonner';
-import  { type Project, type Template, TemplateType } from '@/State/Types';
-import api from '@/api';
-import BeautifulLoader from '@/Components/LoadingScreens/Templatestore.loader';
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Download,
+  FileAudio,
+  FileVideo,
+  Check,
+  Loader2,
+  Heart,
+} from "lucide-react";
+import { toast } from "sonner";
+import { type Project, type Template, TemplateType } from "@/State/Types";
+import api from "@/api";
+import BeautifulLoader from "@/Components/LoadingScreens/Templatestore.loader";
 
 interface TemplateStoreProps {
   onImportTemplate?: (template: Template) => Promise<void>;
   currentProject?: Project;
 }
 
-const TemplateStore: React.FC<TemplateStoreProps> = ({ 
+const TemplateStore: React.FC<TemplateStoreProps> = ({
   onImportTemplate,
-  currentProject
+  currentProject,
 }) => {
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<TemplateType | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState<TemplateType | "all">("all");
   const [importingIds, setImportingIds] = useState<Set<string>>(new Set());
-  const [successAnimations, setSuccessAnimations] = useState<Set<string>>(new Set());
+  const [successAnimations, setSuccessAnimations] = useState<Set<string>>(
+    new Set()
+  );
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
   const [likeAnimations, setLikeAnimations] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
   // Filter templates based on search, type, and liked status
-  const filteredTemplates = templates.filter(template => {
-    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         template.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'all' || template.type === selectedType;
+  const filteredTemplates = templates.filter((template) => {
+    const matchesSearch =
+      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType =
+      selectedType === "all" || template.type === selectedType;
     return matchesSearch && matchesType;
   });
 
@@ -60,7 +72,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
 
   useEffect(() => {
     fetchTemplates();
-  },[]);
+  }, []);
 
   const formatFileSize = (bytes: number): string => {
     const mb = bytes / (1024 * 1024);
@@ -68,59 +80,61 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
   };
 
   const formatDuration = (seconds?: number): string => {
-    if (!seconds) return '';
+    if (!seconds) return "";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const handleLikeTemplate = async (template: Template) => {
-    setLikingIds(prev => new Set(prev).add(template._id));
-    
+    setLikingIds((prev) => new Set(prev).add(template._id));
+
     // Store the current liked state to determine if we should show animation
     const wasLiked = template.isLikedByUser;
-    
+
     try {
       const response = await api.post(`/template/${template._id}/like`);
-      console.log(response.data)
+      console.log(response.data);
       if (!response.data.success) {
-        throw new Error('Network connection failed. Please try again.');
+        throw new Error("Network connection failed. Please try again.");
       } else {
-        toast.success(response.data.message)
+        toast.success(response.data.message);
       }
 
       // Update template state - toggle the like status
-      setTemplates(prev => prev.map(t => 
-        t._id === template._id 
-          ? { 
-              ...t, 
-              isLikedByUser: !t.isLikedByUser,
-              likesCount: response.data.data.likesCount
-            }
-          : t
-      ));
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t._id === template._id
+            ? {
+                ...t,
+                isLikedByUser: !t.isLikedByUser,
+                likesCount: response.data.data.likesCount,
+              }
+            : t
+        )
+      );
 
       // Show animation only if the item is being liked (not unliked)
       if (!wasLiked) {
-        setLikeAnimations(prev => new Set(prev).add(template._id));
-        
+        setLikeAnimations((prev) => new Set(prev).add(template._id));
+
         // Remove animation after delay
         setTimeout(() => {
-          setLikeAnimations(prev => {
+          setLikeAnimations((prev) => {
             const newSet = new Set(prev);
             newSet.delete(template._id);
             return newSet;
           });
         }, 1000);
       }
-      
     } catch (error) {
-      toast.error('Like unsuccessful', {
-        description: error instanceof Error ? error.message : 'Failed to like template',
+      toast.error("Like unsuccessful", {
+        description:
+          error instanceof Error ? error.message : "Failed to like template",
         duration: 4000,
       });
     } finally {
-      setLikingIds(prev => {
+      setLikingIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(template._id);
         return newSet;
@@ -130,17 +144,20 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
 
   const handleImportTemplate = async (template: Template) => {
     if (template.isInProject) {
-      toast.error('Template already in project');
+      toast.error("Template already in project");
       return;
     }
 
-    setImportingIds(prev => new Set(prev).add(template._id));
+    setImportingIds((prev) => new Set(prev).add(template._id));
 
     try {
-      const response = await api.post(`/template/${template._id}/add-to-project`,{
-        projectId: currentProject?._id,
-        customName: template.name
-      });
+      const response = await api.post(
+        `/template/${template._id}/add-to-project`,
+        {
+          projectId: currentProject?._id,
+          customName: template.name,
+        }
+      );
 
       console.log(response);
 
@@ -149,37 +166,41 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
       }
 
       // Update template state to show it's now in project
-      setTemplates(prev => prev.map(t => 
-        t._id === template._id 
-          ? { ...t, isInProject: true, projectAssetId: `asset-${Date.now()}` }
-          : t
-      ));
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t._id === template._id
+            ? { ...t, isInProject: true, projectAssetId: `asset-${Date.now()}` }
+            : t
+        )
+      );
 
       // Show success animation
-      setSuccessAnimations(prev => new Set(prev).add(template._id));
-      
+      setSuccessAnimations((prev) => new Set(prev).add(template._id));
+
       // Success toast with custom styling
-      toast.success('Template imported successfully!', {
+      toast.success("Template imported successfully!", {
         description: `${template.name} has been added to your project`,
         duration: 3000,
       });
 
       // Remove success animation after delay
       setTimeout(() => {
-        setSuccessAnimations(prev => {
+        setSuccessAnimations((prev) => {
           const newSet = new Set(prev);
           newSet.delete(template._id);
           return newSet;
         });
       }, 2000);
-
     } catch (error) {
-      toast.error('Failed to import template', {
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      toast.error("Failed to import template", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
         duration: 4000,
       });
     } finally {
-      setImportingIds(prev => {
+      setImportingIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(template._id);
         return newSet;
@@ -194,19 +215,21 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     const showLikeAnimation = likeAnimations.has(template._id);
 
     return (
-      <div className={`relative bg-zinc-900 rounded-lg overflow-hidden cursor-pointer group hover:bg-zinc-800 transition-all duration-200 ${
-        template.isInProject 
-          ? 'shadow-lg shadow-green-500/20 ring-1 ring-green-500/30' 
-          : 'hover:shadow-lg'
-      }`}>
-        <div className="flex items-center p-2.5 gap-2.5">
+      <div
+        className={`relative bg-zinc-800 rounded-lg overflow-hidden cursor-pointer group hover:bg-zinc-800 transition-all duration-200 ${
+          template.isInProject
+            ? "shadow-sm shadow-green-500/20 ring-1 ring-green-500/30"
+            : "hover:shadow-lg"
+        }`}
+      >
+        <div className="flex items-center p-1">
           {/* Thumbnail */}
-          <div className="flex-shrink-0 w-12 h-12 bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
+          <div className="flex-shrink-0 h-16 aspect-video bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
             {template.thumbnail ? (
               <img
                 src={template.thumbnail}
                 alt={template.name}
-                className="w-full h-full object-cover"
+                className="aspect-video object-cover"
               />
             ) : (
               <div className="text-zinc-500">
@@ -217,37 +240,39 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
                 )}
               </div>
             )}
-            
+
             {/* Duration overlay */}
             {template.duration && (
-              <div className="absolute bottom-0 right-0 bg-black bg-opacity-80 text-white text-[9px] px-1 py-0.5 leading-none">
+              <div className="absolute bottom-1 right-1 bg-zinc-700 bg-opacity-80 rounded-xs text-white text-[9px] px-1 py-0.5 leading-none">
                 {formatDuration(template.duration)}
               </div>
             )}
           </div>
-          
+
           {/* Template Info */}
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex-1 px-2.5 min-w-0 overflow-hidden">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-sm font-semibold text-white truncate pr-1 leading-tight">
+              <h3 className="text-xs font-semibold text-white truncate pr-1 leading-tight">
                 {template.name}
               </h3>
-              <div className="text-zinc-400 flex-shrink-0 ml-1">
+              {/* <div className="text-zinc-400 flex-shrink-0 ml-1">
                 {template.type === TemplateType.VIDEO ? (
                   <FileVideo className="w-3 h-3" />
                 ) : (
                   <FileAudio className="w-3 h-3" />
                 )}
-              </div>
+              </div> */}
             </div>
-            
+
             <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-1">
               <span className="uppercase font-medium tracking-wide">
                 {template.type}
               </span>
-              <span className="text-zinc-500">{formatFileSize(template.bytes)}</span>
+              <span className="text-zinc-500">
+                {formatFileSize(template.bytes)}
+              </span>
             </div>
-            
+
             {/* Likes and Actions Row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
@@ -259,21 +284,21 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
                   }}
                   disabled={isLiking}
                   className={`relative flex items-center justify-center w-5 h-5 rounded-full transition-all duration-200 ${
-                    template.isLikedByUser 
-                      ? 'text-red-500 hover:text-red-600' 
-                      : 'text-white hover:text-red-400 hover:bg-red-500/10'
+                    template.isLikedByUser
+                      ? "text-red-500 hover:text-red-600"
+                      : "text-white hover:text-red-400 hover:bg-red-500/10"
                   }`}
                 >
                   {isLiking ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
                   ) : (
-                    <Heart 
+                    <Heart
                       className={`w-3 h-3 transition-all duration-200 ${
-                        template.isLikedByUser ? 'fill-current' : ''
-                      }`} 
+                        template.isLikedByUser ? "fill-current" : ""
+                      }`}
                     />
                   )}
-                  
+
                   {/* Cute animation overlay - only shows when liking (not unliking) */}
                   {showLikeAnimation && (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -281,13 +306,13 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
                     </div>
                   )}
                 </button>
-                
+
                 {/* Likes Count */}
                 <span className="text-[10px] font-medium text-white rounded-full">
                   {template.likesCount} Likes
                 </span>
               </div>
-              
+
               {/* Import Status / Button */}
               <div className="flex-shrink-0">
                 {isImporting ? (
@@ -299,8 +324,13 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
                     <Check className="w-2.5 h-2.5 text-white" />
                   </div>
                 ) : template.isInProject ? (
-                  <div className="text-green-400 text-[9px] font-medium px-1.5 py-0.5 bg-green-500/10 rounded-full border border-green-500/20">
-                    Added
+                  <div className="flex items-center text-green-400 text-[10px] font-medium px-1 py-0 bg-green-500/10 rounded-full border border-green-500/20">
+                    <div className="flex items-center justify-center gap-1">
+                      <Check className="w-2.5 h-2.5" />
+                      <span className="text-[10px] font-medium">
+                        Added
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <button
@@ -308,11 +338,11 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
                       e.stopPropagation();
                       handleImportTemplate(template);
                     }}
-                    className="bg-zinc-300 hover:bg-zinc-200 rounded-md flex items-center justify-center transition-all duration-200 py-0.5 px-2"
+                    className="bg-zinc-300 hover:bg-zinc-200 rounded-sm flex items-center justify-center transition-all duration-200 py-0 px-1"
                   >
-                    <div className='flex items-center justify-center gap-1'>
-                      <Download className="w-2.5 h-2.5 text-black" /> 
-                      <span className='text-[10px] text-black font-medium'>
+                    <div className="flex items-center justify-center gap-1">
+                      <Download className="w-2.5 h-2.5 text-black" />
+                      <span className="text-[10px] text-black font-medium">
                         Import
                       </span>
                     </div>
@@ -335,8 +365,8 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     );
   };
 
-  if (isLoading){
-    return <BeautifulLoader/>;
+  if (isLoading) {
+    return <BeautifulLoader />;
   }
 
   return (
@@ -344,7 +374,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
       {/* Header */}
       <div className="p-3 border-b border-zinc-800">
         {/* <h2 className="text-base font-semibold text-white mb-2">Template Store</h2> */}
-        
+
         {/* Search */}
         <div className="relative mb-2">
           <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-zinc-400" />
@@ -358,13 +388,13 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
         </div>
 
         {/* Type Filter Tabs */}
-        <div className="flex bg-zinc-900 rounded-lg p-1 mb-2">
+        <div className="flex bg-zinc-800 rounded-lg p-1 mb-2">
           <button
-            onClick={() => setSelectedType('all')}
+            onClick={() => setSelectedType("all")}
             className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              selectedType === 'all' 
-                ? 'bg-white text-black' 
-                : 'text-zinc-400 hover:text-white'
+              selectedType === "all"
+                ? "bg-white text-black"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
             All
@@ -372,9 +402,9 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
           <button
             onClick={() => setSelectedType(TemplateType.VIDEO)}
             className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              selectedType === TemplateType.VIDEO 
-                ? 'bg-white text-black' 
-                : 'text-zinc-400 hover:text-white'
+              selectedType === TemplateType.VIDEO
+                ? "bg-white text-black"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
             Video
@@ -382,9 +412,9 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
           <button
             onClick={() => setSelectedType(TemplateType.AUDIO)}
             className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              selectedType === TemplateType.AUDIO 
-                ? 'bg-white text-black' 
-                : 'text-zinc-400 hover:text-white'
+              selectedType === TemplateType.AUDIO
+                ? "bg-white text-black"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
             Audio
@@ -402,12 +432,14 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
           ) : (
             <div className="text-center text-zinc-500 mt-6">
               <div className="text-2xl mb-2">🎬</div>
-              <p className="text-xs">No {selectedType === 'all' ? '' : selectedType} templates found</p>
+              <p className="text-xs">
+                No {selectedType === "all" ? "" : selectedType} templates found
+              </p>
             </div>
           )}
         </div>
       </div>
-      
+
       {/* Footer Stats */}
       <div className="p-3 border-t border-zinc-800 bg-zinc-950">
         <div className="text-[10px] text-zinc-400 space-y-1">
@@ -417,11 +449,13 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
           </div>
           <div className="flex justify-between">
             <span>In Project:</span>
-            <span className="text-white">{templates.filter(t => t.isInProject).length}</span>
+            <span className="text-white">
+              {templates.filter((t) => t.isInProject).length}
+            </span>
           </div>
         </div>
       </div>
-    </div>  
+    </div>
   );
 };
 

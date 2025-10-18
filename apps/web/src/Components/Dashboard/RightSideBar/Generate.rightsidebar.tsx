@@ -8,7 +8,7 @@ import QuickPrompts from "./QuickPrompts.rightsidebar";
 import MessageInput from "./MessageInput.rightsidebar";
 import api from "@/api";
 import { toast } from "sonner";
-import type { Project, User } from "@/State/Types";
+import type { Project, User, Asset } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
 
 interface Props {
@@ -23,6 +23,9 @@ interface Props {
   setIsProcessing: React.Dispatch<React.SetStateAction<boolean>>;
   currentChatId: string | null;
   setCurrentChatId: React.Dispatch<React.SetStateAction<string | null>>;
+  onAssetDrop?: (asset: any) => void; 
+  droppedItems?: Asset[];
+  onRemoveItem?: (id: string) => void;
 }
 
 // Helper function to format error messages
@@ -94,6 +97,9 @@ const GenerateComponent = ({
   setIsProcessing,
   currentChatId,
   setCurrentChatId,
+  onAssetDrop, 
+  droppedItems, 
+  onRemoveItem
 }: Props) => {
   const plannerOutputRef = useRef("");
   const streamSummaryRef = useRef(false);
@@ -104,7 +110,6 @@ const GenerateComponent = ({
   const [pollingStatus, setPollingStatus] = useState<
     "generating" | "planning" | "generating-scenes" | null
   >(null);
-
   useImperativeHandle(ref, () => ({
     handleNewChat: () => {},
     handleExportChat,
@@ -215,11 +220,17 @@ const GenerateComponent = ({
     // processing request, means backend + MS ko request send ho rahi hai
     setPollingStatus("generating");
 
+    const assetsAttached = [];
+    for (const asset of droppedItems || []){
+      assetsAttached.push(asset._id)
+    }
+
     try {
       const requestData = {
         projectId: currentProject?._id,
         prompt: userInput,
         userId: user?.id,
+        assetId: assetsAttached,
         ...(currentChatId && { chatId: currentChatId }),
       };
 
@@ -519,6 +530,9 @@ const GenerateComponent = ({
             isProcessing={isProcessing}
             placeholder={getPlaceholder()}
             onCancel={handleCancelGeneration}
+            onAssetDrop={onAssetDrop}
+            droppedItems={droppedItems}
+            onRemoveItem={onRemoveItem}
           />
         </>
       ) : (
@@ -611,6 +625,9 @@ const GenerateComponent = ({
             isProcessing={isProcessing}
             placeholder={getPlaceholder()}
             onCancel={handleCancelGeneration}
+            onAssetDrop={onAssetDrop}
+            droppedItems={droppedItems}
+            onRemoveItem={onRemoveItem}
           />
         </>
       )}

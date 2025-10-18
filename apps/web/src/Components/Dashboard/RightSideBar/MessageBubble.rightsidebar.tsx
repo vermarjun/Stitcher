@@ -37,15 +37,15 @@ const VideoPlayer = ({ scene }: { scene: any }) => {
   const duration = scene.assetId?.duration || 0;
 
   return (
-    <div className="mt-3 rounded-md overflow-hidden w-full border border-neutral-600 shadow-lg">
+    <div className="mt-3 rounded-md overflow-hidden w-full border border-zinc-800 shadow-lg">
       {!isPlaying ? (
-        <div className="relative cursor-pointer" onClick={handlePlayClick}>
+        <div className="relative cursor-pointer aspect-video" onClick={handlePlayClick}>
           <img
             src={thumbnailUrl}
             alt={scene.sceneName}
             className="aspect-video"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="absolute inset-0 flex items-center justify-center ">
             <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center hover:bg-opacity-100 transition-all">
               <svg
                 className="w-6 h-6 text-black ml-1"
@@ -72,7 +72,7 @@ const VideoPlayer = ({ scene }: { scene: any }) => {
           onEnded={() => setIsPlaying(false)}
         />
       )}
-      <div className="p-2 bg-neutral-800/50">
+      <div className="p-2 bg-zinc-800">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-neutral-200">
             {scene.sceneName}
@@ -162,7 +162,7 @@ const MessageBubble = ({
   if (message.role === "user") {
     return (
       <div className="flex justify-end mb-4 group">
-        <div className="max-w-[85%] bg-neutral-800 rounded-lg px-3 py-2">
+        <div className="max-w-[85%] bg-zinc-700 rounded-lg px-3 py-2">
           <div className="text-sm text-neutral-200 leading-relaxed break-words">
             {typeof message.content === "string" ? message.content : ""}
           </div>

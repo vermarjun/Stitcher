@@ -15,7 +15,11 @@ import api from "@/api";
 import { toast } from "sonner";
 import BeautifulLoader from "@/Components/LoadingScreens/Templatestore.loader.tsx";
 
-import { useRefreshAssetStash, useRefreshTimeline, useRefreshTracks } from "../RefreshContextProvider";
+import {
+  useRefreshAssetStash,
+  useRefreshTimeline,
+  useRefreshTracks,
+} from "../RefreshContextProvider";
 
 interface Props {
   currentProject?: Project;
@@ -36,15 +40,38 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddingToTimeline, setAddingToTimeline] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Subscribe to refresh from GenerateChat
   const { refreshKey: refreshFromGenerateChat } = useRefreshAssetStash();
-  
+
   // Get triggers to refresh Timeline and Tracks
   const { triggerRefresh: triggerTimelineRefresh } = useRefreshTimeline();
   const { triggerRefresh: triggerTracksRefresh } = useRefreshTracks();
 
+  const handleDragStart = (e: React.DragEvent, asset: Asset) => {
+    // Set drag image to be a copy (transparent original)
+    e.dataTransfer.setData("application/json", JSON.stringify(asset));
+    e.dataTransfer.effectAllowed = "copy";
+
+    // Create a drag image that's a copy of the card
+    const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+    dragImage.style.opacity = "0.7";
+    dragImage.style.transform = "rotate(5deg)";
+    dragImage.style.width = `${e.currentTarget.clientWidth}px`;
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 20, 20);
+
+    // Remove the temporary element after drag starts
+    setTimeout(() => {
+      document.body.removeChild(dragImage);
+    }, 0);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    console.log(`drag ended ${e}`)
+  };
 
   async function fetchAssets() {
     try {
@@ -74,20 +101,20 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
   useEffect(() => {
     fetchAssets();
-  },[refreshFromGenerateChat]);
+  }, [refreshFromGenerateChat]);
 
-  const formatDuration = (seconds:any) => {
-  if (!seconds && seconds !== 0) return '0:00.00';
-  
-  const totalSeconds = Number(seconds);
-  const minutes = Math.floor(totalSeconds / 60);
-  const remainingSeconds = totalSeconds % 60;
-  
-  // Format seconds to 2 decimal places, ensuring we always have 2 digits before decimal
-  const formattedSeconds = remainingSeconds.toFixed(2).padStart(5, '0');
-  
-  return `${minutes}:${formattedSeconds}`;
-};
+  const formatDuration = (seconds: any) => {
+    if (!seconds && seconds !== 0) return "0:00.00";
+
+    const totalSeconds = Number(seconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+
+    // Format seconds to 2 decimal places, ensuring we always have 2 digits before decimal
+    const formattedSeconds = remainingSeconds.toFixed(2).padStart(5, "0");
+
+    return `${minutes}:${formattedSeconds}`;
+  };
 
   const formatFileSize = (bytes: number): string => {
     const mb = bytes / (1024 * 1024);
@@ -120,72 +147,80 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
     }
   };
 
-const handleAddToTimeline = async (asset: Asset) => {
-  try {
-    // Determine asset type and find matching track
-    let assetType: string;
-    let trackId: string | null = null;
+  const handleAddToTimeline = async (asset: Asset) => {
+    try {
+      setAddingToTimeline(true);
+      // Determine asset type and find matching track
+      let assetType: string;
+      let trackId: string | null = null;
 
-    if (asset.type === 'video') {
-      assetType = 'video';
-    } else if (asset.type === 'audio') {
-      assetType = 'audio';
-    } else if (asset.type === 'image') {
-      // Images typically go to video track
-      assetType = 'video';
-    } else {
-      toast.error('Unsupported asset type');
-      return;
-    }
+      if (asset.type === "video") {
+        assetType = "video";
+      } else if (asset.type === "audio") {
+        assetType = "audio";
+      } else if (asset.type === "image") {
+        // Images typically go to video track
+        assetType = "video";
+      } else {
+        toast.error("Unsupported asset type");
+        setAddingToTimeline(false);
+        return;
+      }
 
-    // Find the track that matches the asset type
-    const matchingTrack = currentProject?.timeline.tracks.find(
-      (track:ITrack) => track.type === assetType
-    );
+      // Find the track that matches the asset type
+      const matchingTrack = currentProject?.timeline.tracks.find(
+        (track: ITrack) => track.type === assetType
+      );
 
-    if (!matchingTrack) {
-      toast.error(`No ${assetType} track found`);
-      return;
-    }
+      if (!matchingTrack) {
+        toast.error(`No ${assetType} track found`);
+        setAddingToTimeline(false);
+        return;
+      }
 
-    trackId = matchingTrack._id;
+      trackId = matchingTrack._id;
 
-    // Prepare request body
-    const requestBody = {
-      assetId: asset._id,
-      sourceStartTime: 0,
-      sourceEndTime: asset.duration,
-      speed: 1,
-      volume: 1,
-      opacity: 1,
-      x: 0,
-      y: 0,
-      scaleX: 1,
-      scaleY: 1,
-      rotation: 0,
-      fadeIn: 0,
-      fadeOut: 0
-    };
+      // Prepare request body
+      const requestBody = {
+        assetId: asset._id,
+        sourceStartTime: 0,
+        sourceEndTime: asset.duration,
+        speed: 1,
+        volume: 1,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        scaleX: 1,
+        scaleY: 1,
+        rotation: 0,
+        fadeIn: 0,
+        fadeOut: 0,
+      };
 
-    // Make API request
-    const response = await api.post(`/track/${trackId}/asset`, requestBody);
+      // Make API request
+      const response = await api.post(`/track/${trackId}/asset`, requestBody);
 
-    // Check if response indicates success
-    if (response.data?.success) {
-      triggerTimelineRefresh();
-      triggerTracksRefresh();
-      toast.success("Successfully Added to timeline");
-    } else {
-      // Display error message from response
-      const errorMessage = response.data?.message || 'Failed to add asset to timeline';
+      // Check if response indicates success
+      if (response.data?.success) {
+        triggerTimelineRefresh();
+        triggerTracksRefresh();
+        toast.success("Successfully Added to timeline");
+      } else {
+        // Display error message from response
+        const errorMessage =
+          response.data?.message || "Failed to add asset to timeline";
+        toast.error(errorMessage);
+      }
+    } catch (error: any) {
+      // Handle network errors or other exceptions
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "An unexpected error occurred";
       toast.error(errorMessage);
     }
-  } catch (error: any) {
-    // Handle network errors or other exceptions
-    const errorMessage = error.response?.data?.message || error.message || 'An unexpected error occurred';
-    toast.error(errorMessage);
-  }
-};
+    setAddingToTimeline(false);
+  };
   const uploadFileToCloudinary = async (
     file: File,
     uploadParams: any,
@@ -418,7 +453,7 @@ const handleAddToTimeline = async (asset: Asset) => {
 
   const hasActiveUploads = Object.keys(uploadProgress).length > 0;
 
-  if (isLoading) return <BeautifulLoader/>;
+  if (isLoading) return <BeautifulLoader />;
 
   return (
     <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">
@@ -426,7 +461,7 @@ const handleAddToTimeline = async (asset: Asset) => {
       <div className="p-3 border-b border-zinc-800">
         {/* <h2 className="text-base font-semibold text-white mb-2">Asset Stash</h2> */}
         {/* Filter Tabs */}
-        <div className="flex bg-zinc-900 rounded-lg p-1 mb-2">
+        <div className="flex bg-zinc-800 rounded-lg p-1 mb-2">
           <button
             onClick={() => setFilter("all")}
             className={`flex-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
@@ -462,7 +497,7 @@ const handleAddToTimeline = async (asset: Asset) => {
         <div className="relative">
           <button
             onClick={() => setShowOriginFilter(!showOriginFilter)}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-xs text-zinc-300 transition-colors"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs text-zinc-300 transition-colors"
           >
             <div className="flex items-center gap-1.5">
               <Filter className="w-3 h-3" />
@@ -574,17 +609,20 @@ const handleAddToTimeline = async (asset: Asset) => {
           </div>
         )}
       </div>
-      {/* Asset List - Single Column Tiles */}
+      {/* Asset List - Updated with drag handlers */}
       <div className="flex-1 overflow-y-auto p-3 pb-12">
         <div className="space-y-2">
           {filteredAssets.map((asset) => (
             <div
               key={asset._id}
-              className={`relative bg-zinc-900 rounded-lg overflow-hidden cursor-pointer group hover:bg-zinc-800 transition-all duration-200`}
+              draggable={true}
+              onDragStart={(e) => handleDragStart(e, asset)}
+              onDragEnd={handleDragEnd}
+              className="relative bg-gradient-top bg-zinc-800 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group hover:bg-zinc-800 transition-all duration-200"
             >
-              <div className="flex items-center p-2.5 gap-2.5">
+              <div className="flex items-center p-1 gap-2.5">
                 {/* Thumbnail/Icon */}
-                <div className="flex-shrink-0 w-12 h-12 bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
+                <div className="flex-shrink-0 aspect-video h-16 bg-zinc-800 rounded-md flex items-center justify-center relative overflow-hidden">
                   {asset.type === AssetType.VIDEO && asset.thumbnail ? (
                     <img
                       src={asset.thumbnail}
@@ -607,17 +645,15 @@ const handleAddToTimeline = async (asset: Asset) => {
                     </div>
                   )}
                 </div>
+
                 {/* Asset Info */}
                 <div className="flex-1 min-w-0 overflow-hidden">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="text-xs font-medium text-white truncate pr-1 leading-tight">
                       {asset.name}
                     </h3>
-                    <div className="text-zinc-400 flex-shrink-0 ml-1">
-                      {getOriginIcon(asset.origin)}
-                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-0.5">
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-400 mb-0.5">
                     <span className="uppercase font-medium tracking-wide">
                       {asset.type}
                     </span>
@@ -636,9 +672,13 @@ const handleAddToTimeline = async (asset: Asset) => {
                           e.stopPropagation();
                           handleAddToTimeline(asset);
                         }}
-                        className="w-6 h-6 bg-green-600 hover:bg-green-700 rounded-full flex items-center justify-center transition-colors"
+                        className="p-1 bg-green-800 text-black rounded-xl flex items-center justify-center transition-colors"
                       >
-                        <Plus className="w-3 h-3 text-white" />
+                        {isAddingToTimeline ? (
+                          <Plus className="w-3 h-3 text-white" />
+                        ) : (
+                          <Plus className="w-3 h-3 text-white" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -647,19 +687,6 @@ const handleAddToTimeline = async (asset: Asset) => {
             </div>
           ))}
         </div>
-        {filteredAssets.length === 0 && (
-          <div className="text-center text-zinc-500 mt-6">
-            <div className="text-2xl mb-2">📁</div>
-            <p className="text-xs">
-              No {filter === "all" ? "" : filter} assets found
-            </p>
-            {originFilter !== "all" && (
-              <p className="text-[10px] mt-1">
-                for {getOriginLabel(originFilter as AssetOrigin)}
-              </p>
-            )}
-          </div>
-        )}
       </div>
       {/* Footer Stats */}
       <div className="p-3 border-t border-zinc-800 bg-zinc-950">

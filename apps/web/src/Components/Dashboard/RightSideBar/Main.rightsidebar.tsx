@@ -2,13 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { AISidebarHeader, ConfirmationDialog } from './Header.rightsidebar';
 import GenerateComponent from './Generate.rightsidebar';
 import EditComponent from './Edit.rightsidebar';
-import type { Project, User } from '@/State/Types';
+import type { Project, User, Asset } from '@/State/Types';
 import api from '@/api';
 
 interface Props {
   currentProject?: Project,
   user?: User
-}
+  onAssetDrop?: (asset: any) => void; 
+  droppedItems?: Asset[];
+  onRemoveItem?: (id: string) => void;
+
+} 
 
 export type VideoGenerationRequest = {
   id: string;
@@ -27,33 +31,33 @@ interface IAssistant {
   llmResponse: string;
 }
 
-interface AssetMetadata {
-  public_id: string;
-  cloudinary_metadata: {
-    url: string;
-    thumbnail: string;
-    duration: number;
-    width: number;
-    height: number;
-    bytes: number;
-    public_id: string;
-  };
-}
+// interface AssetMetadata {
+//   public_id: string;
+//   cloudinary_metadata: {
+//     url: string;
+//     thumbnail: string;
+//     duration: number;
+//     width: number;
+//     height: number;
+//     bytes: number;
+//     public_id: string;
+//   };
+// }
 
-interface Asset {
-  _id: string;
-  name: string;
-  type: string;
-  origin: string;
-  url: string;
-  thumbnail: string;
-  duration: number;
-  width: number;
-  height: number;
-  bytes: number;
-  metadata: AssetMetadata;
-  isOnTimeline: boolean;
-}
+// interface Asset {
+//   _id: string;
+//   name: string;
+//   type: string;
+//   origin: string;
+//   url: string;
+//   thumbnail: string;
+//   duration: number;
+//   width: number;
+//   height: number;
+//   bytes: number;
+//   metadata: AssetMetadata;
+//   isOnTimeline: boolean;
+// }
 
 interface Scene {
   sceneName: string;
@@ -105,7 +109,7 @@ export const messageActions = {
   }),
 };
 
-const AISidebar = ({ currentProject, user }: Props) => {
+const AISidebar = ({ currentProject, user, onAssetDrop, droppedItems, onRemoveItem}: Props) => {
   const [mode, setMode] = useState<'generate' | 'edit'>('generate');
   
   const [generateMessages, setGenerateMessages] = useState<Message[]>([]);
@@ -268,6 +272,9 @@ const AISidebar = ({ currentProject, user }: Props) => {
               currentChatId={currentGenerateChatId}
               setCurrentChatId={setCurrentGenerateChatId}
               user={user}
+              onAssetDrop={onAssetDrop}
+              droppedItems={droppedItems}
+              onRemoveItem={onRemoveItem}
             />
             : 
             <EditComponent/>

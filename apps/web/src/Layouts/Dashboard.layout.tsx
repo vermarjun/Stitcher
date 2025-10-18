@@ -16,7 +16,7 @@ import {
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
 
-import type { Project, User } from "@/State/Types";
+import type { Project, User, Asset } from "@/State/Types";
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -24,6 +24,19 @@ const DashboardLayout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState<Project>();
   const [user, setUser] = useState<User>();
+
+  const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
+  const handleAssetDrop = (asset: Asset) => {
+    // Check if asset already exists to avoid duplicates
+    if (!droppedAssets.find(item => item._id === asset._id)) {
+      setDroppedAssets(prev => [...prev, asset]);
+      toast.success(`Added ${asset.name} to message`);
+    }
+  };
+
+  const handleRemoveAsset = (assetId: string) => {
+    setDroppedAssets(prev => prev.filter(asset => asset._id !== assetId));
+  };
 
   async function fetchData() {
     try {
@@ -89,7 +102,9 @@ const DashboardLayout = () => {
                     <VideoEditor currentProject={project} />
                   </main>
 
-                  <RightSideBar currentProject={project} user={user}/>
+                  <RightSideBar onAssetDrop={handleAssetDrop}
+  droppedItems={droppedAssets}
+  onRemoveItem={handleRemoveAsset} currentProject={project} user={user} />
                 </div>
 
                 {/* <Footer /> */}
