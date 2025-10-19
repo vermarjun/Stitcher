@@ -24,6 +24,8 @@ export interface IUser extends Document {
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
   projects?: Types.ObjectId[];
+  communityPosts?: Types.ObjectId[];
+  likedPosts?: Types.ObjectId[];
 }
 
 const UserSchema = new Schema<IUser>({
@@ -78,6 +80,18 @@ const UserSchema = new Schema<IUser>({
     type: Schema.Types.ObjectId,
     ref: 'Project',
   }],
+  communityPosts: [{ 
+    type: Schema.Types.ObjectId, 
+    required: true,
+    default: [],
+    ref: 'CommunityPost' 
+  }],
+  likedPosts: [{ 
+    type: Schema.Types.ObjectId, 
+    required: true,
+    default: [],
+    ref: 'CommunityPost' 
+  }]
 },{ timestamps: true });
 
 // Create the User model

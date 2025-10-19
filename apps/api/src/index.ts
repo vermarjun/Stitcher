@@ -17,6 +17,7 @@ import generateChatRoutes from "./router/generateChat.router"
 import timelineRoutes from "./router/timeline.router"
 import userApiKeyRoutes from "./router/userapikeys.router"
 import projectScriptRoutes from './router/script.router';
+import communityPostRoutes from "./router/communityPost.router"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -53,6 +54,7 @@ app.use(`${API_PREFIX}/generatechat`, generateChatRoutes);
 app.use(`${API_PREFIX}/timeline`, timelineRoutes);
 app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
+app.use(`${API_PREFIX}/community`, communityPostRoutes)
 
 // Start the server
 httpServer.listen(PORT, async () => {
