@@ -18,6 +18,7 @@ import timelineRoutes from "./router/timeline.router"
 import userApiKeyRoutes from "./router/userapikeys.router"
 import projectScriptRoutes from './router/script.router';
 import communityPostRoutes from "./router/communityPost.router"
+import backpackRoutes from "./router/backpack.router"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -55,6 +56,7 @@ app.use(`${API_PREFIX}/timeline`, timelineRoutes);
 app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
 app.use(`${API_PREFIX}/community`, communityPostRoutes)
+app.use(`${API_PREFIX}/backpack`, backpackRoutes)
 
 // Start the server
 httpServer.listen(PORT, async () => {
