@@ -123,7 +123,7 @@ class ChatUpdater:
             for scene in scenes:
                 if scene.get("sceneName") == scene_name:
                     scene["code"] = new_code
-                    scene["summary"] = scene_description
+                    scene["prompt"] = scene_description
                     scene_updated = True
                     break
             
