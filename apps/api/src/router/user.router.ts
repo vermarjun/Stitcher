@@ -8,7 +8,8 @@ import {
   uploadProfilePhoto,
   deleteUser, 
   requestPasswordReset, 
-  resetPassword 
+  resetPassword,
+  getUserProfile
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
@@ -29,5 +30,7 @@ router.delete('/me', auth, deleteUser);
 // Get Update Delete user's profile:
 router.put('/change-password', auth, changePassword);
 router.post('/profile-photo', auth, upload.single('profilePhoto') ,uploadProfilePhoto);
+router.get('/:userId/profile', getUserProfile); // Can be username or user ID
+
 
 export default router;

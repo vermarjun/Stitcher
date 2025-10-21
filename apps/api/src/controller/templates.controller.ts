@@ -28,8 +28,10 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
     
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { title: { $regex: search, $options: 'i' } },
+        { post_description: { $regex: search, $options: 'i' } },
+        { scene_name: { $regex: search, $options: 'i' } },
+        { scene_description: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -336,7 +338,7 @@ const addTemplateToProject = async (req: Request, res: Response) => {
 
     // Create new asset from template
     const newAsset = new Asset({
-      name: customName || template.name,
+      name: customName || template.title, // Changed from template.name to template.title
       type: assetTypeMapping[template.type],
       origin: AssetOrigin.TEMPLATE,
       url: template.url,
@@ -348,7 +350,10 @@ const addTemplateToProject = async (req: Request, res: Response) => {
       metadata: {
         ...template.metadata,
         isFromTemplate: true,
-        originalTemplateName: template.name
+        originalTemplateName: template.title, // Changed from template.name to template.title
+        sceneName: template.scene_name,
+        sceneDescription: template.scene_description,
+        code: template.code
       }
     });
 
@@ -462,26 +467,28 @@ const toggleTemplateLike = async (req: Request, res: Response) => {
   }
 };
 
-
 // POST /templates - Create new template (Admin only)
 const createNewTemplate = async (req: Request, res: Response) => {
   try {
     const {
-      name,
-      description,
+      title, // Changed from name to title
+      post_description, // Changed from description to post_description
       type,
       thumbnail,
       url,
       duration,
       bytes,
-      metadata = {}
+      metadata = {},
+      scene_name, // New field
+      scene_description, // New field
+      code // New field
     } = req.body;
     
     // Validation
-    if (!name || !type || !thumbnail || !url) {
+    if (!title || !type || !thumbnail || !url) { // Changed from name to title
       return res.status(400).json({
         success: false,
-        message: 'Name, type, thumbnail, and URL are required'
+        message: 'Title, type, thumbnail, and URL are required' // Changed from Name to Title
       });
     }
 
@@ -492,24 +499,27 @@ const createNewTemplate = async (req: Request, res: Response) => {
       });
     }
 
-    // Check for duplicate template names
-    const existingTemplate = await Template.findOne({ name });
+    // Check for duplicate template titles (was names)
+    const existingTemplate = await Template.findOne({ title }); // Changed from name to title
     if (existingTemplate) {
       return res.status(409).json({
         success: false,
-        message: 'Template with this name already exists'
+        message: 'Template with this title already exists' // Changed from name to title
       });
     }
 
     const newTemplate = new Template({
-      name,
-      description,
+      title, // Changed from name to title
+      post_description, // Changed from description to post_description
       type,
       thumbnail,
       url,
       duration,
       bytes: bytes || 0,
-      metadata
+      metadata,
+      scene_name: scene_name || "", // New field
+      scene_description: scene_description || "", // New field
+      code: code || "" // New field
     });
 
     await newTemplate.save();

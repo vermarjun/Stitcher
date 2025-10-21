@@ -18,8 +18,9 @@ router.get('/:id', auth, getTemplateById);
 router.post('/:id/add-to-project', auth, addTemplateToProject)
 router.post('/:id/like', auth, toggleTemplateLike)
 
-// Admmin only functionality add karni hai
+// Admin only functionality
 router.post('/', createNewTemplate);
 router.put('/:id', updateTemplate);
 router.delete('/:id', deleteTemplate);
+
 export default router;

@@ -30,7 +30,7 @@ export const getUserApiKeys = async (req: AuthenticatedRequest, res: Response) =
     apiKeys.forEach(key => {
       if (key.isActive) {
         // Mask the API key for security - show first 4 chars, ****, last 2 chars
-        const maskedKey = key.keyValue.length > 6 
+        const maskedKey = key.keyValue.length > 10 
           ? `${key.keyValue.substring(0, 5)}*********************************${key.keyValue.substring(key.keyValue.length - 5)}`
           : '****'; // Fallback for very short keys
         

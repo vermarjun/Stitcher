@@ -6,7 +6,6 @@ import { Types } from 'mongoose';
 
 // Get backpack by user ID
 export const getBackpackByUserId = async (req: Request, res: Response) => {
-    console.log("user/userId: HIT")
     try {
         const userId = req.userId;
 
@@ -17,7 +16,7 @@ export const getBackpackByUserId = async (req: Request, res: Response) => {
         let backpack = await Backpack.findOne({ userId })
             .populate({
                 path: 'items.itemId',
-                select: 'name url thumbnail duration type bytes metadata'
+                select: 'name url thumbnail duration type bytes metadata summary prompt'
             })
             .exec();
 
@@ -26,7 +25,10 @@ export const getBackpackByUserId = async (req: Request, res: Response) => {
             backpack = await Backpack.create({ userId, items: [] });
         }
 
-        res.status(200).json(backpack);
+        res.status(200).json({
+            "success": true,
+            "backpack": backpack
+        });
     } catch (error) {
         console.error('Error fetching backpack:', error);
         res.status(500).json({ error: 'Internal server error' });

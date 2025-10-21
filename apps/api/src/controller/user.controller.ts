@@ -103,6 +103,37 @@ export const getUser = async (req: IUserRequest, res: IUserResponse): Promise<Re
   }
 };
 
+export const getUserProfile = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User userId is required.' });
+    }
+
+    const user = await User.findById(userId)
+      .select('username fullName avatar bio profilePhoto createdAt')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Transform the data to match the IUser interface you want
+    const userProfile = {
+      _id: user._id.toString(),
+      username: user.username,
+      avatar: user.profilePhoto || 'https://www.gravatar.com/avatar/?d=mp',
+      bio: user.bio || '',
+      createdAt: user.createdAt
+    };
+
+    return res.status(200).json(userProfile);
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 export const updateUser = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
     const updates = req.body;

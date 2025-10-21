@@ -70,6 +70,18 @@ const BackpackItemSchema = new Schema({
     required: true
   },
   
+  tags: {
+    type: [String],
+    required: true,
+    default: []
+  },
+
+  notes: {
+    type: String,
+    required: true,
+    default: ""
+  },
+
   addedAt: {
     type: Date,
     default: Date.now
