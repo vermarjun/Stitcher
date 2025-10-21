@@ -195,6 +195,7 @@ export const removeItemFromBackpack = async (req: Request, res: Response) => {
 export const toggleFavourite = async (req: Request, res: Response) => {
     try {
         const userId = req.userId;
+        console.log(userId)
         const { itemId } = req.params;
 
         if (!userId || !Types.ObjectId.isValid(userId)) {

@@ -78,7 +78,6 @@ const BackpackItemSchema = new Schema({
 
   notes: {
     type: String,
-    required: true,
     default: ""
   },
 
