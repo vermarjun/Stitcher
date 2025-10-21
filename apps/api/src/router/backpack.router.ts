@@ -22,7 +22,7 @@ router.post('/items', auth, addItemToBackpack);      // POST /api/backpack/backp
 router.delete('/items/:itemId', auth, removeItemFromBackpack); // DELETE /api/backpack/items/:itemId
 
 // ============= ITEM ACTIONS =============
-router.patch('/items/:itemId/favourite', auth, toggleFavourite); // PATCH /api/backpack/items/:itemId/favourite
+router.patch('/items/:itemId/favorite', auth, toggleFavourite); // PATCH /api/backpack/items/:itemId/favourite
 router.patch('/items/:itemId/notes', auth, updateItemNotes);     // PATCH /api/backpack/items/:itemId/notes
 
 export default router;

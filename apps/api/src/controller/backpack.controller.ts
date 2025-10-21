@@ -131,7 +131,8 @@ export const addItemToBackpack = async (req: Request, res: Response) => {
 // Remove item from backpack
 export const removeItemFromBackpack = async (req: Request, res: Response) => {
     try {
-        const { userId, itemId } = req.params;
+        const userId = req.userId;
+        const { itemId } = req.params;
 
         if (!userId || !Types.ObjectId.isValid(userId)) {
             return res.status(400).json({ error: 'Valid User ID is required' });
@@ -193,7 +194,8 @@ export const removeItemFromBackpack = async (req: Request, res: Response) => {
 // Toggle favourite status
 export const toggleFavourite = async (req: Request, res: Response) => {
     try {
-        const { userId, itemId } = req.params;
+        const userId = req.userId;
+        const { itemId } = req.params;
 
         if (!userId || !Types.ObjectId.isValid(userId)) {
             return res.status(400).json({ error: 'Valid User ID is required' });
@@ -238,7 +240,8 @@ export const toggleFavourite = async (req: Request, res: Response) => {
 // Update item notes
 export const updateItemNotes = async (req: Request, res: Response) => {
     try {
-        const { userId, itemId } = req.params;
+        const userId = req.userId;
+        const { itemId } = req.params;
         const { notes } = req.body;
 
         if (!userId || !Types.ObjectId.isValid(userId)) {
