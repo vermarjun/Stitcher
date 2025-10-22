@@ -63,18 +63,15 @@ const TemplateSchema = new Schema<ITemplate>({
     },
     scene_name: {
         type: Schema.Types.String,
-        default: "",
-        required: true
+        default: ""
     },
     scene_description: {
         type: Schema.Types.String,
-        default: "",
-        required: true
+        default: ""
     },
     code: {
         type: Schema.Types.String,
-        default: "",
-        required: true
+        default: ""
     }
 }, { 
     timestamps: true,

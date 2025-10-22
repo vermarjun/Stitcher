@@ -26,6 +26,7 @@ export interface IUser extends Document {
   projects?: Types.ObjectId[];
   communityPosts?: Types.ObjectId[];
   likedPosts?: Types.ObjectId[];
+  aura: number; 
 }
 
 const UserSchema = new Schema<IUser>({
@@ -91,7 +92,12 @@ const UserSchema = new Schema<IUser>({
     required: true,
     default: [],
     ref: 'CommunityPost' 
-  }]
+  }],
+  aura: {
+    type: Number,
+    default: 0,
+    index: true // Index for efficient leaderboard queries
+  }
 },{ timestamps: true });
 
 // Create the User model

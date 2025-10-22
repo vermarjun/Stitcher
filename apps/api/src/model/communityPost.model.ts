@@ -1,4 +1,5 @@
 import { Schema, Document, Types, Model, model } from "mongoose";
+import { incrementUserAura, AURA_POINTS } from '../util/auraupdate.util';
 
 // Interface for likes
 export interface ILike {
@@ -26,10 +27,10 @@ export interface IPostAnalytics {
 }
 
 export interface ICommunityPostMethods {
-  addLike(userId: Types.ObjectId): void;
-  removeLike(userId: Types.ObjectId): void;
-  addComment(userId: Types.ObjectId, content: string, parentCommentId?: Types.ObjectId): Types.ObjectId;
-  incrementView(isUnique?: boolean): void;
+  addLike(userId: Types.ObjectId): Promise<void>; // Make async
+  removeLike(userId: Types.ObjectId): Promise<void>; // Make async
+  addComment(userId: Types.ObjectId, content: string, parentCommentId?: Types.ObjectId): Promise<Types.ObjectId>; // Make async
+  incrementView(isUnique?: boolean): Promise<void>; // Make async
 }
 
 // Main CommunityPost interface
@@ -164,7 +165,7 @@ CommunityPostSchema.pre('save', function(next) {
 });
 
 // Instance methods for engagement
-CommunityPostSchema.methods.addLike = function(userId: Types.ObjectId) {
+CommunityPostSchema.methods.addLike = async function(userId: Types.ObjectId) {
   const existingLike = this.likes.find(
     (like: ILike) => like.userId.toString() === userId.toString()
   );
@@ -173,18 +174,29 @@ CommunityPostSchema.methods.addLike = function(userId: Types.ObjectId) {
     this.likes.push({ userId, createdAt: new Date() });
     this.likesCount = this.likes.length;
     this.lastActivityAt = new Date();
+    
+    // Increment author's aura
+    await incrementUserAura(this.authorId, AURA_POINTS.LIKE);
   }
 };
 
-CommunityPostSchema.methods.removeLike = function(userId: Types.ObjectId) {
+CommunityPostSchema.methods.removeLike = async function(userId: Types.ObjectId) {
+  const previousLength = this.likes.length;
   this.likes = this.likes.filter(
     (like: ILike) => like.userId.toString() !== userId.toString()
   );
-  this.likesCount = this.likes.length;
-  this.lastActivityAt = new Date();
+  
+  // Only decrement aura if a like was actually removed
+  if (this.likes.length < previousLength) {
+    this.likesCount = this.likes.length;
+    this.lastActivityAt = new Date();
+    
+    // Decrement author's aura
+    await incrementUserAura(this.authorId, -AURA_POINTS.LIKE);
+  }
 };
 
-CommunityPostSchema.methods.addComment = function(
+CommunityPostSchema.methods.addComment = async function(
   userId: Types.ObjectId, 
   content: string,
   parentCommentId?: Types.ObjectId
@@ -204,14 +216,18 @@ CommunityPostSchema.methods.addComment = function(
   this.commentsCount = this.comments.length;
   this.lastActivityAt = new Date();
   
+  // Increment author's aura
+  await incrementUserAura(this.authorId, AURA_POINTS.COMMENT);
+  
   return comment._id;
 };
 
-CommunityPostSchema.methods.incrementView = function(isUnique: boolean = false) {
+CommunityPostSchema.methods.incrementView = async function(isUnique: boolean = false) {
   this.analytics.views += 1;
   if (isUnique) {
     this.analytics.uniqueViews += 1;
   }
+  await incrementUserAura(this.authorId, AURA_POINTS.VIEW);
 };
 
 const CommunityPost: CommunityPostModel = model<ICommunityPost, CommunityPostModel>(

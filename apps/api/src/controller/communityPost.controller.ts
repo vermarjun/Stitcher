@@ -168,7 +168,7 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
 
         // Track view
         const hasViewed = req.cookies?.[`viewed_${postId}`];
-        post.incrementView(!hasViewed);
+        await post.incrementView(!hasViewed);
         await post.save();
 
         // Set cookie to track unique view (expires in 24 hours)
@@ -381,14 +381,14 @@ export async function toggleLike(req: Request, res: Response): Promise<void> {
 
         if (hasLiked) {
             // Unlike
-            post.removeLike(userIdObjectId);
+            await post.removeLike(userIdObjectId);
             await User.findByIdAndUpdate(
                 userId,
                 { $pull: { likedPosts: postId } }
             );
         } else {
             // Like
-            post.addLike(userIdObjectId);
+            await post.addLike(userIdObjectId);
             await User.findByIdAndUpdate(
                 userId,
                 { $addToSet: { likedPosts: postId } }

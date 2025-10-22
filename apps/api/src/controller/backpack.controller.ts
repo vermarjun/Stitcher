@@ -16,7 +16,7 @@ export const getBackpackByUserId = async (req: Request, res: Response) => {
         let backpack = await Backpack.findOne({ userId })
             .populate({
                 path: 'items.itemId',
-                select: 'name url thumbnail duration type bytes metadata summary prompt'
+                select: 'name url thumbnail duration type bytes metadata scene_name scene_description'
             })
             .exec();
 

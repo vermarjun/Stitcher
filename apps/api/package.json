@@ -5,7 +5,8 @@
   "scripts": {
     "build": "npx tsc -b",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "migrate:aura": "ts-node src/scripts/aura.migration.ts"
   },
   "keywords": [],
   "author": "",
