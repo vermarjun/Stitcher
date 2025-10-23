@@ -125,11 +125,11 @@ async def edit_existing_main(req: RequestSchema, api_config: dict):
                     asset = await assets_collection.find_one({"_id": ObjectId(asset_id_str)})
                     if asset:
                         assets.append(asset)
-                        print(f"✓ Fetched asset: {asset.get('name', 'Unknown')}")
+                        print(f"Fetched asset: {asset.get('name', 'Unknown')}")
                     else:
-                        print(f"✗ Asset not found: {asset_id_str}")
+                        print(f"Asset not found: {asset_id_str}")
                 except Exception as e:
-                    print(f"✗ Error fetching asset {asset_id_str}: {e}")
+                    print(f"Error fetching asset {asset_id_str}: {e}")
             
             if not assets:
                 raise Exception("No valid assets found to edit")

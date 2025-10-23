@@ -45,7 +45,6 @@ OUTPUT FORMAT:
 )
 
 async def coder_agent_wrapper(assets: List[Dict[str, Any]], prompt: str) -> List[Dict[str, str]]:
-
     try:
         if not assets:
             raise ValueError("No assets provided for editing")
