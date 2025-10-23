@@ -12,6 +12,7 @@ import {
   Pause,
   Volume2,
   Backpack,
+  Check,
 } from "lucide-react";
 import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
@@ -45,6 +46,7 @@ interface ITemplate {
   isLikedByUser?: boolean;
   isInProject?: boolean;
   projectAssetId?: string;
+  isAddedToBackpack?: Boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -97,6 +99,7 @@ const TemplateGallery: React.FC = () => {
         limit: pagination.limit,
         sortBy,
         sortOrder,
+        isAddedToBackpackAttach: true,
       };
       if (searchQuery) params.search = searchQuery;
       if (selectedType !== "all") params.type = selectedType;
@@ -229,13 +232,13 @@ const TemplateGallery: React.FC = () => {
         tags: [],
         notes: "",
       });
-      if (response.data.success == true){
+      if (response.data.success == true) {
         toast.success("Successfully added template to backpack");
       } else {
-        throw Error("Error came in saving template item to backpack")
+        throw Error("Error came in saving template item to backpack");
       }
-    } catch (e:any) {
-      toast.error(e.message || "Error saving tempalte to backpack")
+    } catch (e: any) {
+      toast.error(e.message || "Error saving tempalte to backpack");
     }
   };
 
@@ -657,15 +660,29 @@ const TemplateGallery: React.FC = () => {
                       />
                       {formatCount(template.likesCount || 0)} Likes
                     </button>
-                    <div
-                      onClick={() => {
-                        handleSaveToBackPack(template);
-                      }}
-                      className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center"
-                    >
-                      Save to backpack
-                      <Backpack className="h-4 w-4" />
-                    </div>
+                    {!template.isAddedToBackpack ? (
+                      <div>
+                        <div
+                          onClick={() => {
+                            handleSaveToBackPack(template);
+                          }}
+                          className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center"
+                        >
+                          Save to backpack
+                          <Backpack className="h-4 w-4" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                          onClick={() => {
+                            handleSaveToBackPack(template);
+                          }}
+                          className="bg-green-900/50 border border-green-800 hover:scale-100 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-green-100 flex justify-center items-center"
+                        >
+                          Added to backpack
+                          <Check className="h-4 w-4" />
+                        </div>
+                    )}
                   </div>
 
                   <div className="px-3">
