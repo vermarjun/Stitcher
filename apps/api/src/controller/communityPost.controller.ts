@@ -169,39 +169,283 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
     try {
         const { postId } = req.params;
         const userId = req.userId;
-
-        const post = await CommunityPost.findById(postId)
-            .populate('authorId', 'username profilePhoto bio')
-            .populate('assetId')
-            .populate('comments.userId', 'username profilePhoto');
-
-        if (!post) {
+        const { isAddedToBackpackAttach } = req.query;
+        
+        // Build aggregation pipeline for consistent data structure
+        const aggregationPipeline: any[] = [
+            { $match: { _id: new Types.ObjectId(postId) } }
+        ];
+        
+        // Check if asset is in backpack
+        let backpackId = "";
+        if (isAddedToBackpackAttach && userId) {
+            const backpack = await Backpack.findOne({ userId });
+            if (backpack != null) {
+                backpackId = backpack._id as string;
+            }
+        }
+        
+        if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
+            aggregationPipeline.push(
+                {
+                    $lookup: {
+                        from: 'backpacks',
+                        let: { assetId: '$assetId' },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $eq: ['$_id', new Types.ObjectId(backpackId as string)]
+                                    }
+                                }
+                            },
+                            {
+                                $project: {
+                                    items: {
+                                        $filter: {
+                                            input: '$items',
+                                            as: 'item',
+                                            cond: {
+                                                $and: [
+                                                    { $eq: ['$$item.itemType', 'Asset'] },
+                                                    { $eq: ['$$item.itemId', '$$assetId'] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        ],
+                        as: 'backpackItems'
+                    }
+                },
+                {
+                    $addFields: {
+                        isAddedToBackpack: {
+                            $gt: [
+                                {
+                                    $size: {
+                                        $ifNull: [
+                                            { $arrayElemAt: ['$backpackItems.items', 0] },
+                                            []
+                                        ]
+                                    }
+                                },
+                                0
+                            ]
+                        }
+                    }
+                }
+            );
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    isAddedToBackpack: false
+                }
+            });
+        }
+        
+        // Add isLiked field for post
+        if (userId && Types.ObjectId.isValid(userId)) {
+            aggregationPipeline.push({
+                $addFields: {
+                    isLiked: {
+                        $in: [new Types.ObjectId(userId), '$likes.userId']
+                    }
+                }
+            });
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    isLiked: false
+                }
+            });
+        }
+        
+        // Add isLiked field for each comment
+        if (userId && Types.ObjectId.isValid(userId)) {
+            aggregationPipeline.push({
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        isLiked: {
+                                            $in: [new Types.ObjectId(userId), '$$comment.likes']
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        isLiked: false
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Remove the backpackItems array as we only need the computed field
+        aggregationPipeline.push({
+            $project: {
+                backpackItems: 0
+            }
+        });
+        
+        // Add population of referenced fields
+        aggregationPipeline.push(
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'authorId',
+                    foreignField: '_id',
+                    as: 'authorId',
+                    pipeline: [
+                        {
+                            $project: {
+                                username: 1,
+                                profilePhoto: 1,
+                                bio: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unwind: {
+                    path: '$authorId',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $lookup: {
+                    from: 'assets',
+                    localField: 'assetId',
+                    foreignField: '_id',
+                    as: 'assetId'
+                }
+            },
+            {
+                $unwind: {
+                    path: '$assetId',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'comments.userId',
+                    foreignField: '_id',
+                    as: 'commentUsers'
+                }
+            },
+            {
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        userId: {
+                                            $arrayElemAt: [
+                                                {
+                                                    $filter: {
+                                                        input: '$commentUsers',
+                                                        as: 'user',
+                                                        cond: {
+                                                            $eq: ['$$user._id', '$$comment.userId']
+                                                        }
+                                                    }
+                                                },
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        userId: {
+                                            _id: '$$comment.userId._id',
+                                            username: '$$comment.userId.username',
+                                            profilePhoto: '$$comment.userId.profilePhoto'
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    commentUsers: 0
+                }
+            }
+        );
+        
+        // Execute aggregation
+        const posts = await CommunityPost.aggregate(aggregationPipeline);
+        
+        if (!posts || posts.length === 0) {
             res.status(404).json({ error: 'Post not found' });
             return;
         }
-
-        // Track view (this already updates cached stats via post.incrementView())
-        const hasViewed = req.cookies?.[`viewed_${postId}`];
-        await post.incrementView(!hasViewed);
-        await post.save();
-
-        // Set cookie to track unique view (expires in 24 hours)
-        res.cookie(`viewed_${postId}`, 'true', {
-            maxAge: 24 * 60 * 60 * 1000,
-            httpOnly: true
-        });
-
-        // Check if current user has liked the post
-        const hasLiked = userId
-            ? post.likes.some(like => like.userId.toString() === userId.toString())
-            : false;
-
+        
+        const post = posts[0];
+        
+        // Track view (need to get the actual document for the method call)
+        const postDoc = await CommunityPost.findById(postId);
+        if (postDoc) {
+            const hasViewed = req.cookies?.[`viewed_${postId}`];
+            await postDoc.incrementView(!hasViewed);
+            await postDoc.save();
+            
+            // Set cookie to track unique view (expires in 24 hours)
+            res.cookie(`viewed_${postId}`, 'true', {
+                maxAge: 24 * 60 * 60 * 1000,
+                httpOnly: true
+            });
+        }
+        
         res.json({
             success: true,
-            data: {
-                ...post.toObject(),
-                hasLiked
-            }
+            data: post
         });
     } catch (error) {
         console.error('Error fetching post:', error);
