@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import CommunityPost from '../model/communityPost.model';
 import Asset from '../model/asset.model';
 import User from '../model/user.model';
+import Backpack from '../model/backpack.model';
 import { 
     incrementUserPostCount, 
     decrementUserPostStats,
@@ -214,12 +215,15 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
  */
 export async function getPosts(req: Request, res: Response): Promise<void> {
     try {
+        const userId = req.userId;
+
         const {
             page = 1,
             limit = 20,
             sortBy = 'trending',
             tags,
-            search
+            search,
+            isAddedToBackpackAttach 
         } = req.query;
 
         const pageNum = parseInt(page as string);
@@ -251,14 +255,147 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 break;
         }
 
+        // Build aggregation pipeline
+        const aggregationPipeline: any[] = [
+            { $match: query }
+        ];
+
+        // If backpack check is requested and userId is available, check if assets are in backpack
+        let backpackId = "";
+        if (isAddedToBackpackAttach && userId) {
+            const backpack = await Backpack.findOne({ userId });
+            if (backpack != null) {
+                backpackId = backpack._id as string;
+            }
+        }
+
+        if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
+            aggregationPipeline.push(
+                {
+                    $lookup: {
+                        from: 'backpacks',
+                        let: { assetId: '$assetId' },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $eq: ['$_id', new Types.ObjectId(backpackId as string)]
+                                    }
+                                }
+                            },
+                            {
+                                $project: {
+                                    items: {
+                                        $filter: {
+                                            input: '$items',
+                                            as: 'item',
+                                            cond: {
+                                                $and: [
+                                                    { $eq: ['$$item.itemType', 'Asset'] },
+                                                    { $eq: ['$$item.itemId', '$$assetId'] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        ],
+                        as: 'backpackItems'
+                    }
+                },
+                {
+                    $addFields: {
+                        isAddedToBackpack: {
+                            $gt: [
+                                {
+                                    $size: {
+                                        $ifNull: [
+                                            { $arrayElemAt: ['$backpackItems.items', 0] },
+                                            []
+                                        ]
+                                    }
+                                },
+                                0
+                            ]
+                        }
+                    }
+                }
+            );
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    isAddedToBackpack: false
+                }
+            });
+        }
+
+        // Remove the backpackItems array as we only need the computed field
+        aggregationPipeline.push({
+            $project: {
+                backpackItems: 0
+            }
+        });
+
+        // Add sorting and pagination
+        aggregationPipeline.push(
+            { $sort: sort },
+            { $skip: skip },
+            { $limit: limitNum }
+        );
+
+        // Add population of referenced fields
+        aggregationPipeline.push(
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'authorId',
+                    foreignField: '_id',
+                    as: 'authorId',
+                    pipeline: [
+                        {
+                            $project: {
+                                username: 1,
+                                profilePhoto: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unwind: {
+                    path: '$authorId',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $lookup: {
+                    from: 'assets',
+                    localField: 'assetId',
+                    foreignField: '_id',
+                    as: 'assetId',
+                    pipeline: [
+                        {
+                            $project: {
+                                url: 1,
+                                thumbnail: 1,
+                                duration: 1,
+                                type: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unwind: {
+                    path: '$assetId',
+                    preserveNullAndEmptyArrays: true
+                }
+            }
+        );
+
+        // Execute aggregation and count query
         const [posts, total] = await Promise.all([
-            CommunityPost.find(query)
-                .sort(sort)
-                .skip(skip)
-                .limit(limitNum)
-                .populate('authorId', 'username profilePhoto')
-                .populate('assetId', 'url thumbnail duration type')
-                .lean(),
+            CommunityPost.aggregate(aggregationPipeline),
             CommunityPost.countDocuments(query)
         ]);
 
