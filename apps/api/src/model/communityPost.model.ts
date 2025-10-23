@@ -1,5 +1,11 @@
 import { Schema, Document, Types, Model, model } from "mongoose";
-import { incrementUserAura, AURA_POINTS } from '../util/auraupdate.util';
+import { 
+  incrementUserLikeCount, 
+  decrementUserLikeCount,
+  incrementUserCommentCount,
+  decrementUserCommentCount,
+  incrementUserViewCount
+} from '../util/auraupdate.util';
 
 // Interface for likes
 export interface ILike {
@@ -15,8 +21,8 @@ export interface IComment {
   createdAt: Date;
   updatedAt: Date;
   isEdited: boolean;
-  likes: Types.ObjectId[]; // User IDs who liked the comment
-  parentCommentId?: Types.ObjectId; // For nested replies
+  likes: Types.ObjectId[];
+  parentCommentId?: Types.ObjectId;
 }
 
 // Interface for community post analytics
@@ -27,33 +33,24 @@ export interface IPostAnalytics {
 }
 
 export interface ICommunityPostMethods {
-  addLike(userId: Types.ObjectId): Promise<void>; // Make async
-  removeLike(userId: Types.ObjectId): Promise<void>; // Make async
-  addComment(userId: Types.ObjectId, content: string, parentCommentId?: Types.ObjectId): Promise<Types.ObjectId>; // Make async
-  incrementView(isUnique?: boolean): Promise<void>; // Make async
+  addLike(userId: Types.ObjectId): Promise<void>;
+  removeLike(userId: Types.ObjectId): Promise<void>;
+  addComment(userId: Types.ObjectId, content: string, parentCommentId?: Types.ObjectId): Promise<Types.ObjectId>;
+  incrementView(isUnique?: boolean): Promise<void>;
 }
 
 // Main CommunityPost interface
 export interface ICommunityPost extends Document {
-  // Core references
-  assetId: Types.ObjectId; //In future I will make this an array
+  assetId: Types.ObjectId;
   authorId: Types.ObjectId;
-  
-  // Post content
   title: string;
   description?: string;
   tags: string[];
-  
-  // Engagement metrics
   likes: ILike[];
   likesCount: number;
   comments: IComment[];
   commentsCount: number;
-  
-  // Analytics
   analytics: IPostAnalytics;
-  
-  // Timestamps
   publishedAt: Date;
   lastActivityAt: Date;
   createdAt: Date;
@@ -82,7 +79,6 @@ const PostAnalyticsSchema = new Schema<IPostAnalytics>({
 export type CommunityPostModel = Model<ICommunityPost, {}, ICommunityPostMethods>;
 
 const CommunityPostSchema = new Schema<ICommunityPost, CommunityPostModel, ICommunityPostMethods>({
-  // Core references
   assetId: { 
     type: Schema.Types.ObjectId, 
     ref: 'Asset', 
@@ -95,8 +91,6 @@ const CommunityPostSchema = new Schema<ICommunityPost, CommunityPostModel, IComm
     required: true,
     index: true 
   },
-  
-  // Post content
   title: { 
     type: String, 
     required: true,
@@ -114,31 +108,22 @@ const CommunityPostSchema = new Schema<ICommunityPost, CommunityPostModel, IComm
     trim: true,
     maxlength: 50 
   }],
-
-  // Engagement metrics
   likes: [LikeSchema],
   likesCount: { type: Number, default: 0, index: true },
   comments: [CommentSchema],
   commentsCount: { type: Number, default: 0 },
-  
-  // Analytics
   analytics: { 
     type: PostAnalyticsSchema, 
     default: () => ({
       views: 0,
       uniqueViews: 0,
-      shares: 0,
-      downloads: 0,
-      clickThroughs: 0
+      saves: 0
     })
   },
-  
-  // Activity tracking
   publishedAt: { type: Date, default: Date.now, index: true },
   lastActivityAt: { type: Date, default: Date.now, index: true }
 }, { 
   timestamps: true,
-  // Enable optimistic concurrency control for high-traffic updates
   optimisticConcurrency: true 
 });
 
@@ -147,10 +132,8 @@ CommunityPostSchema.index({ status: 1, visibility: 1, publishedAt: -1 });
 CommunityPostSchema.index({ authorId: 1, status: 1, publishedAt: -1 });
 CommunityPostSchema.index({ tags: 1, status: 1, likesCount: -1 });
 CommunityPostSchema.index({ isFeatured: 1, publishedAt: -1 });
-CommunityPostSchema.index({ likesCount: -1, publishedAt: -1 }); // For trending posts
-CommunityPostSchema.index({ 'analytics.views': -1, publishedAt: -1 }); // For popular posts
-
-// Text index for search
+CommunityPostSchema.index({ likesCount: -1, publishedAt: -1 });
+CommunityPostSchema.index({ 'analytics.views': -1, publishedAt: -1 });
 CommunityPostSchema.index({ title: 'text', description: 'text', tags: 'text' });
 
 // Pre-save middleware to update counts
@@ -164,7 +147,7 @@ CommunityPostSchema.pre('save', function(next) {
   next();
 });
 
-// Instance methods for engagement
+// UPDATED: Add like and update user's cached stats
 CommunityPostSchema.methods.addLike = async function(userId: Types.ObjectId) {
   const existingLike = this.likes.find(
     (like: ILike) => like.userId.toString() === userId.toString()
@@ -175,27 +158,28 @@ CommunityPostSchema.methods.addLike = async function(userId: Types.ObjectId) {
     this.likesCount = this.likes.length;
     this.lastActivityAt = new Date();
     
-    // Increment author's aura
-    await incrementUserAura(this.authorId, AURA_POINTS.LIKE);
+    // Increment author's aura AND cached stats
+    await incrementUserLikeCount(this.authorId);
   }
 };
 
+// UPDATED: Remove like and update user's cached stats
 CommunityPostSchema.methods.removeLike = async function(userId: Types.ObjectId) {
   const previousLength = this.likes.length;
   this.likes = this.likes.filter(
     (like: ILike) => like.userId.toString() !== userId.toString()
   );
   
-  // Only decrement aura if a like was actually removed
   if (this.likes.length < previousLength) {
     this.likesCount = this.likes.length;
     this.lastActivityAt = new Date();
     
-    // Decrement author's aura
-    await incrementUserAura(this.authorId, -AURA_POINTS.LIKE);
+    // Decrement author's aura AND cached stats
+    await decrementUserLikeCount(this.authorId);
   }
 };
 
+// UPDATED: Add comment and update user's cached stats
 CommunityPostSchema.methods.addComment = async function(
   userId: Types.ObjectId, 
   content: string,
@@ -216,18 +200,21 @@ CommunityPostSchema.methods.addComment = async function(
   this.commentsCount = this.comments.length;
   this.lastActivityAt = new Date();
   
-  // Increment author's aura
-  await incrementUserAura(this.authorId, AURA_POINTS.COMMENT);
+  // Increment author's aura AND cached stats
+  await incrementUserCommentCount(this.authorId);
   
   return comment._id;
 };
 
+// UPDATED: Increment view and update user's cached stats
 CommunityPostSchema.methods.incrementView = async function(isUnique: boolean = false) {
   this.analytics.views += 1;
   if (isUnique) {
     this.analytics.uniqueViews += 1;
   }
-  await incrementUserAura(this.authorId, AURA_POINTS.VIEW);
+  
+  // Increment author's aura AND cached stats
+  await incrementUserViewCount(this.authorId);
 };
 
 const CommunityPost: CommunityPostModel = model<ICommunityPost, CommunityPostModel>(

@@ -1,15 +1,20 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import CommunityPost, { ICommunityPost, IComment } from '../model/communityPost.model';
+import CommunityPost from '../model/communityPost.model';
 import Asset from '../model/asset.model';
 import User from '../model/user.model';
+import { 
+    incrementUserPostCount, 
+    decrementUserPostStats,
+    decrementUserCommentCount 
+} from '../util/auraupdate.util';
 
 /**
  * Create a new community post
  * POST /api/community/posts
+ * UPDATED: Now increments user's cached post count
  */
 export async function createPost(req: Request, res: Response): Promise<void> {
-    console.log("HIT")
     try {
         const { assetId, title, description, tags } = req.body;
         const authorId = req.userId;
@@ -44,6 +49,9 @@ export async function createPost(req: Request, res: Response): Promise<void> {
 
         await post.save();
 
+        // UPDATED: Increment user's cached post count
+        await incrementUserPostCount(authorId);
+
         // Add post reference to user's communityPosts
         await User.findByIdAndUpdate(
             authorId,
@@ -71,7 +79,6 @@ export async function updatePost(req: Request, res: Response): Promise<void> {
         const userId = req.userId;
 
         const post = await CommunityPost.findById(postId);
-
         if (!post) {
             res.status(404).json({ error: 'Post not found' });
             return;
@@ -103,6 +110,7 @@ export async function updatePost(req: Request, res: Response): Promise<void> {
 /**
  * Delete a post
  * DELETE /api/community/posts/:postId
+ * UPDATED: Now decrements all cached stats based on post engagement
  */
 export async function deletePost(req: Request, res: Response): Promise<void> {
     try {
@@ -110,7 +118,6 @@ export async function deletePost(req: Request, res: Response): Promise<void> {
         const userId = req.userId;
 
         const post = await CommunityPost.findById(postId);
-
         if (!post) {
             res.status(404).json({ error: 'Post not found' });
             return;
@@ -121,6 +128,13 @@ export async function deletePost(req: Request, res: Response): Promise<void> {
             res.status(403).json({ error: 'Not authorized to delete this post' });
             return;
         }
+
+        // UPDATED: Decrement user's cached stats based on post's engagement
+        await decrementUserPostStats(post.authorId, {
+            likesCount: post.likesCount,
+            commentsCount: post.commentsCount,
+            analytics: { views: post.analytics.views }
+        });
 
         await CommunityPost.findByIdAndDelete(postId);
 
@@ -146,7 +160,6 @@ export async function deletePost(req: Request, res: Response): Promise<void> {
 }
 
 // ============= POST RETRIEVAL =============
-
 /**
  * Get a single post by ID with populated data
  * GET /api/community/posts/:postId
@@ -166,7 +179,7 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        // Track view
+        // Track view (this already updates cached stats via post.incrementView())
         const hasViewed = req.cookies?.[`viewed_${postId}`];
         await post.incrementView(!hasViewed);
         await post.save();
@@ -204,7 +217,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
         const {
             page = 1,
             limit = 20,
-            sortBy = 'recent', // recent, popular, trending
+            sortBy = 'trending',
             tags,
             search
         } = req.query;
@@ -213,21 +226,17 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
         const limitNum = parseInt(limit as string);
         const skip = (pageNum - 1) * limitNum;
 
-        // Build query
         const query: any = {};
 
-        // Tag filter
         if (tags) {
             const tagArray = (tags as string).split(',');
             query.tags = { $in: tagArray };
         }
 
-        // Search filter
         if (search) {
             query.$text = { $search: search as string };
         }
 
-        // Build sort
         let sort: any = {};
         switch (sortBy) {
             case 'popular':
@@ -321,7 +330,6 @@ export async function getUserLikedPosts(req: Request, res: Response): Promise<vo
         const limitNum = parseInt(limit as string);
         const skip = (pageNum - 1) * limitNum;
 
-        // Find posts where user has liked
         const [posts, total] = await Promise.all([
             CommunityPost.find({ 'likes.userId': userId })
                 .sort({ 'likes.createdAt': -1 })
@@ -350,10 +358,10 @@ export async function getUserLikedPosts(req: Request, res: Response): Promise<vo
 }
 
 // ============= LIKE MANAGEMENT =============
-
 /**
  * Toggle like on a post
  * POST /api/community/posts/:postId/like
+ * NO CHANGES NEEDED - Like tracking happens in post.addLike()/removeLike() methods
  */
 export async function toggleLike(req: Request, res: Response): Promise<void> {
     try {
@@ -365,9 +373,7 @@ export async function toggleLike(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        // Convert string userId to ObjectId
         const userIdObjectId = new Types.ObjectId(userId);
-
         const post = await CommunityPost.findById(postId);
 
         if (!post) {
@@ -380,14 +386,14 @@ export async function toggleLike(req: Request, res: Response): Promise<void> {
         );
 
         if (hasLiked) {
-            // Unlike
+            // Unlike (stats updated in post.removeLike())
             await post.removeLike(userIdObjectId);
             await User.findByIdAndUpdate(
                 userId,
                 { $pull: { likedPosts: postId } }
             );
         } else {
-            // Like
+            // Like (stats updated in post.addLike())
             await post.addLike(userIdObjectId);
             await User.findByIdAndUpdate(
                 userId,
@@ -413,6 +419,7 @@ export async function toggleLike(req: Request, res: Response): Promise<void> {
 /**
  * Get users who liked a post
  * GET /api/community/posts/:postId/likes
+ * NO CHANGES NEEDED
  */
 export async function getPostLikes(req: Request, res: Response): Promise<void> {
     try {
@@ -453,10 +460,10 @@ export async function getPostLikes(req: Request, res: Response): Promise<void> {
 }
 
 // ============= COMMENT MANAGEMENT =============
-
 /**
  * Add a comment to a post
  * POST /api/community/posts/:postId/comments
+ * NO CHANGES NEEDED - Comment tracking happens in post.addComment() method
  */
 export async function addComment(req: Request, res: Response): Promise<void> {
     try {
@@ -469,7 +476,6 @@ export async function addComment(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        // Convert string userId to ObjectId
         const userIdObjectId = new Types.ObjectId(userId);
 
         if (!content || content.trim().length === 0) {
@@ -478,13 +484,11 @@ export async function addComment(req: Request, res: Response): Promise<void> {
         }
 
         const post = await CommunityPost.findById(postId);
-
         if (!post) {
             res.status(404).json({ error: 'Post not found' });
             return;
         }
 
-        // Validate parent comment exists if provided
         if (parentCommentId) {
             const parentExists = post.comments.some(
                 c => c._id.toString() === parentCommentId
@@ -495,7 +499,8 @@ export async function addComment(req: Request, res: Response): Promise<void> {
             }
         }
 
-        const commentId = post.addComment(
+        // Stats updated in post.addComment()
+        const commentId = await post.addComment(
             userIdObjectId,
             content.trim(),
             parentCommentId ? new Types.ObjectId(parentCommentId) : undefined
@@ -503,7 +508,6 @@ export async function addComment(req: Request, res: Response): Promise<void> {
 
         await post.save();
 
-        // Get the created comment with user info
         const updatedPost = await CommunityPost.findById(postId)
             .populate('comments.userId', 'username profilePhoto');
 
@@ -524,6 +528,7 @@ export async function addComment(req: Request, res: Response): Promise<void> {
 /**
  * Update a comment
  * PATCH /api/community/posts/:postId/comments/:commentId
+ * NO CHANGES NEEDED - Editing doesn't change stats
  */
 export async function updateComment(req: Request, res: Response): Promise<void> {
     try {
@@ -537,7 +542,6 @@ export async function updateComment(req: Request, res: Response): Promise<void> 
         }
 
         const post = await CommunityPost.findById(postId);
-
         if (!post) {
             res.status(404).json({ error: 'Post not found' });
             return;
@@ -552,7 +556,6 @@ export async function updateComment(req: Request, res: Response): Promise<void> 
             return;
         }
 
-        // Check authorization
         if (comment.userId.toString() !== userId.toString()) {
             res.status(403).json({ error: 'Not authorized to edit this comment' });
             return;
@@ -577,6 +580,7 @@ export async function updateComment(req: Request, res: Response): Promise<void> 
 /**
  * Delete a comment
  * DELETE /api/community/posts/:postId/comments/:commentId
+ * UPDATED: Now decrements cached comment count for post author
  */
 export async function deleteComment(req: Request, res: Response): Promise<void> {
     try {
@@ -589,7 +593,6 @@ export async function deleteComment(req: Request, res: Response): Promise<void> 
         }
 
         const post = await CommunityPost.findById(postId);
-
         if (!post) {
             res.status(404).json({ error: 'Post not found' });
             return;
@@ -604,7 +607,6 @@ export async function deleteComment(req: Request, res: Response): Promise<void> 
             return;
         }
 
-        // Check authorization (user owns comment or owns post)
         const isAuthor = comment.userId.toString() === userId.toString();
         const isPostOwner = post.authorId.toString() === userId.toString();
 
@@ -612,6 +614,13 @@ export async function deleteComment(req: Request, res: Response): Promise<void> 
             res.status(403).json({ error: 'Not authorized to delete this comment' });
             return;
         }
+
+        // Count how many comments will be deleted (including replies)
+        const commentsToDelete = post.comments.filter(
+            c => c._id.toString() === commentId || 
+                 c.parentCommentId?.toString() === commentId
+        );
+        const deleteCount = commentsToDelete.length;
 
         // Remove comment and all its replies
         post.comments = post.comments.filter(
@@ -621,6 +630,11 @@ export async function deleteComment(req: Request, res: Response): Promise<void> 
         post.commentsCount = post.comments.length;
 
         await post.save();
+
+        // UPDATED: Decrement cached comment count for each deleted comment
+        for (let i = 0; i < deleteCount; i++) {
+            await decrementUserCommentCount(post.authorId);
+        }
 
         res.json({
             success: true,
@@ -635,6 +649,7 @@ export async function deleteComment(req: Request, res: Response): Promise<void> 
 /**
  * Toggle like on a comment
  * POST /api/community/posts/:postId/comments/:commentId/like
+ * NO CHANGES NEEDED - Comment likes don't affect user stats (only post author stats)
  */
 export async function toggleCommentLike(req: Request, res: Response): Promise<void> {
     try {
@@ -646,9 +661,7 @@ export async function toggleCommentLike(req: Request, res: Response): Promise<vo
             return;
         }
 
-        // Convert string userId to ObjectId
         const userIdObjectId = new Types.ObjectId(userId);
-
         const post = await CommunityPost.findById(postId);
 
         if (!post) {
@@ -695,6 +708,7 @@ export async function toggleCommentLike(req: Request, res: Response): Promise<vo
 /**
  * Get comments for a post with pagination
  * GET /api/community/posts/:postId/comments
+ * NO CHANGES NEEDED
  */
 export async function getComments(req: Request, res: Response): Promise<void> {
     try {
@@ -712,21 +726,17 @@ export async function getComments(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        // Filter comments by parentCommentId
         let comments = post.comments;
         if (parentCommentId) {
             comments = comments.filter(
                 c => c.parentCommentId?.toString() === parentCommentId
             );
         } else {
-            // Only top-level comments (no parent)
             comments = comments.filter(c => !c.parentCommentId);
         }
 
-        // Sort by creation date (newest first)
         comments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-        // Paginate
         const total = comments.length;
         const paginatedComments = comments.slice(
             (pageNum - 1) * limitNum,
@@ -748,12 +758,10 @@ export async function getComments(req: Request, res: Response): Promise<void> {
         res.status(500).json({ error: 'Failed to fetch comments' });
     }
 }
-// ============= SEARCH & DISCOVERY =============
 
-/**
- * Search posts by text
- * GET /api/community/search
- */
+// ============= SEARCH & DISCOVERY =============
+// NO CHANGES NEEDED FOR ANY OF THESE
+
 export async function searchPosts(req: Request, res: Response): Promise<void> {
     try {
         const { q, page = 1, limit = 20 } = req.query;
@@ -797,10 +805,6 @@ export async function searchPosts(req: Request, res: Response): Promise<void> {
     }
 }
 
-/**
- * Get trending posts (high engagement in recent time)
- * GET /api/community/trending
- */
 export async function getTrendingPosts(req: Request, res: Response): Promise<void> {
     try {
         const { limit = 10, days = 7 } = req.query;
@@ -829,11 +833,6 @@ export async function getTrendingPosts(req: Request, res: Response): Promise<voi
     }
 }
 
-
-/**
- * Get posts by specific tags
- * GET /api/community/tags/:tag/posts
- */
 export async function getPostsByTag(req: Request, res: Response): Promise<void> {
     try {
         const { tag } = req.params;
@@ -881,10 +880,6 @@ export async function getPostsByTag(req: Request, res: Response): Promise<void> 
     }
 }
 
-/**
- * Get multiple posts by IDs
- * POST /api/community/posts/batch
- */
 export async function getPostsByIds(req: Request, res: Response): Promise<void> {
     try {
         const { postIds } = req.body;

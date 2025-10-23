@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { getTopUsersByAura } from '../util/auraupdate.util';
+import { getTopUsersByAuraWithStats } from '../util/auraupdate.util';
 import User from '../model/user.model';
 
 /**
- * Get top users by aura for leaderboard
+ * Get top users by aura for leaderboard with stats
  * GET /api/leaderboard/top
+ * Returns users with their cached stats (super fast!)
  */
 export async function getLeaderboard(req: Request, res: Response): Promise<void> {
   try {
@@ -17,7 +18,8 @@ export async function getLeaderboard(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const topUsers = await getTopUsersByAura(limitNum);
+    // Fetch users with cached stats (no aggregation needed!)
+    const topUsers = await getTopUsersByAuraWithStats(limitNum);
 
     res.json({
       success: true,
@@ -30,14 +32,13 @@ export async function getLeaderboard(req: Request, res: Response): Promise<void>
 }
 
 /**
- * Get user's rank and aura
+ * Get user's rank and aura with stats
  * GET /api/leaderboard/user/:userId/rank
  */
 export async function getUserRank(req: Request, res: Response): Promise<void> {
   try {
     const { userId } = req.params;
-
-    const user = await User.findById(userId).select('username profilePhoto aura bio');
+    const user = await User.findById(userId).select('username profilePhoto aura bio stats');
     
     if (!user) {
       res.status(404).json({ error: 'User not found' });
@@ -61,7 +62,8 @@ export async function getUserRank(req: Request, res: Response): Promise<void> {
           username: user.username,
           profilePhoto: user.profilePhoto,
           bio: user.bio,
-          aura: user.aura
+          aura: user.aura,
+          stats: user.stats
         },
         rank,
         totalUsers,
@@ -75,19 +77,18 @@ export async function getUserRank(req: Request, res: Response): Promise<void> {
 }
 
 /**
- * Get current user's rank and aura (authenticated)
+ * Get current user's rank and aura (authenticated) with stats
  * GET /api/leaderboard/my-rank
  */
 export async function getMyRank(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.userId;
-
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
-    const user = await User.findById(userId).select('username profilePhoto aura bio');
+    const user = await User.findById(userId).select('username profilePhoto aura bio stats');
     
     if (!user) {
       res.status(404).json({ error: 'User not found' });
@@ -103,14 +104,14 @@ export async function getMyRank(req: Request, res: Response): Promise<void> {
     // Get total active users count
     const totalUsers = await User.countDocuments({ isActive: true });
 
-    // Get users around current user (2 above, 2 below)
+    // Get users around current user (2 above, 2 below) with stats
     const usersAbove = await User.find({
       isActive: true,
       aura: { $gt: user.aura }
     })
       .sort({ aura: 1 })
       .limit(2)
-      .select('username profilePhoto aura bio')
+      .select('username profilePhoto aura bio stats')
       .lean();
 
     const usersBelow = await User.find({
@@ -119,7 +120,7 @@ export async function getMyRank(req: Request, res: Response): Promise<void> {
     })
       .sort({ aura: -1 })
       .limit(2)
-      .select('username profilePhoto aura bio')
+      .select('username profilePhoto aura bio stats')
       .lean();
 
     res.json({
@@ -130,7 +131,8 @@ export async function getMyRank(req: Request, res: Response): Promise<void> {
           username: user.username,
           profilePhoto: user.profilePhoto,
           bio: user.bio,
-          aura: user.aura
+          aura: user.aura,
+          stats: user.stats
         },
         rank,
         totalUsers,
@@ -161,7 +163,7 @@ export async function getLeaderboardStats(req: Request, res: Response): Promise<
       ]),
       User.findOne({ isActive: true })
         .sort({ aura: -1 })
-        .select('username profilePhoto aura')
+        .select('username profilePhoto aura stats')
         .lean()
     ]);
 
@@ -185,7 +187,7 @@ export async function getLeaderboardStats(req: Request, res: Response): Promise<
 }
 
 /**
- * Get leaderboard with pagination
+ * Get leaderboard with pagination and stats
  * GET /api/leaderboard/paginated
  */
 export async function getPaginatedLeaderboard(req: Request, res: Response): Promise<void> {
@@ -207,7 +209,7 @@ export async function getPaginatedLeaderboard(req: Request, res: Response): Prom
         .sort({ aura: -1 })
         .skip(skip)
         .limit(limitNum)
-        .select('username profilePhoto aura bio')
+        .select('username profilePhoto aura bio stats')
         .lean(),
       User.countDocuments({ isActive: true })
     ]);

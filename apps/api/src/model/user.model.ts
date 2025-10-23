@@ -8,6 +8,15 @@ interface IOAuthCredentials {
   refreshToken?: string;
 }
 
+// Interface for user stats
+export interface IUserStats {
+  totalPosts: number;
+  totalLikes: number;
+  totalComments: number;
+  totalViews: number;
+  lastUpdated: Date;
+}
+
 // Interface representing a User document in MongoDB
 export interface IUser extends Document {
   username: string;
@@ -26,8 +35,17 @@ export interface IUser extends Document {
   projects?: Types.ObjectId[];
   communityPosts?: Types.ObjectId[];
   likedPosts?: Types.ObjectId[];
-  aura: number; 
+  aura: number;
+  stats: IUserStats; // NEW: Cached stats
 }
+
+const UserStatsSchema = new Schema<IUserStats>({
+  totalPosts: { type: Number, default: 0, min: 0 },
+  totalLikes: { type: Number, default: 0, min: 0 },
+  totalComments: { type: Number, default: 0, min: 0 },
+  totalViews: { type: Number, default: 0, min: 0 },
+  lastUpdated: { type: Date, default: Date.now }
+}, { _id: false });
 
 const UserSchema = new Schema<IUser>({
   username: {
@@ -96,11 +114,26 @@ const UserSchema = new Schema<IUser>({
   aura: {
     type: Number,
     default: 0,
-    index: true // Index for efficient leaderboard queries
+    index: true
+  },
+  stats: {
+    type: UserStatsSchema,
+    default: () => ({
+      totalPosts: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalViews: 0,
+      lastUpdated: new Date()
+    })
   }
-},{ timestamps: true });
+}, { timestamps: true });
 
-// Create the User model
+// Indexes for efficient leaderboard queries
+UserSchema.index({ aura: -1, isActive: 1 });
+UserSchema.index({ 'stats.totalPosts': -1 });
+UserSchema.index({ 'stats.totalLikes': -1 });
+UserSchema.index({ 'stats.totalViews': -1 });
+
 const User: Model<IUser> = model<IUser>('User', UserSchema);
 
 export default User;
