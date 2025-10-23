@@ -45,7 +45,7 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
-      return res.status(409).json({ message: 'User already exists.' });
+      return res.status(409).json({ message: 'This username or email is taken, please try again with a different username or email' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
