@@ -216,7 +216,6 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
 export async function getPosts(req: Request, res: Response): Promise<void> {
     try {
         const userId = req.userId;
-
         const {
             page = 1,
             limit = 20,
@@ -225,22 +224,17 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
             search,
             isAddedToBackpackAttach 
         } = req.query;
-
         const pageNum = parseInt(page as string);
         const limitNum = parseInt(limit as string);
         const skip = (pageNum - 1) * limitNum;
-
         const query: any = {};
-
         if (tags) {
             const tagArray = (tags as string).split(',');
             query.tags = { $in: tagArray };
         }
-
         if (search) {
             query.$text = { $search: search as string };
         }
-
         let sort: any = {};
         switch (sortBy) {
             case 'popular':
@@ -254,13 +248,12 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 sort = { publishedAt: -1 };
                 break;
         }
-
         // Build aggregation pipeline
         const aggregationPipeline: any[] = [
             { $match: query }
         ];
-
-        // If backpack check is requested and userId is available, check if assets are in backpack
+        
+        // Check if assets are in backpack
         let backpackId = "";
         if (isAddedToBackpackAttach && userId) {
             const backpack = await Backpack.findOne({ userId });
@@ -268,7 +261,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 backpackId = backpack._id as string;
             }
         }
-
+        
         if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
             aggregationPipeline.push(
                 {
@@ -328,21 +321,81 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-
+        
+        // Add isLiked field for posts
+        if (userId && Types.ObjectId.isValid(userId)) {
+            aggregationPipeline.push({
+                $addFields: {
+                    isLiked: {
+                        $in: [new Types.ObjectId(userId), '$likes.userId']
+                    }
+                }
+            });
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    isLiked: false
+                }
+            });
+        }
+        
+        // Add isLiked field for each comment
+        if (userId && Types.ObjectId.isValid(userId)) {
+            aggregationPipeline.push({
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        isLiked: {
+                                            $in: [new Types.ObjectId(userId), '$$comment.likes']
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        isLiked: false
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
         // Remove the backpackItems array as we only need the computed field
         aggregationPipeline.push({
             $project: {
                 backpackItems: 0
             }
         });
-
+        
         // Add sorting and pagination
         aggregationPipeline.push(
             { $sort: sort },
             { $skip: skip },
             { $limit: limitNum }
         );
-
+        
         // Add population of referenced fields
         aggregationPipeline.push(
             {
@@ -392,13 +445,13 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 }
             }
         );
-
+        
         // Execute aggregation and count query
         const [posts, total] = await Promise.all([
             CommunityPost.aggregate(aggregationPipeline),
             CommunityPost.countDocuments(query)
         ]);
-
+        
         res.json({
             success: true,
             data: posts,
