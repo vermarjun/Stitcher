@@ -3,6 +3,7 @@ import Template, { TemplateType } from '../model/template.model';
 import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
 import { TemplateLike } from '../model/templateLike.model';
 import { Types } from 'mongoose';
+import Backpack from '../model/backpack.model';
 
 // GET /templates - Fetch all templates with optional filtering, likes, and project status
 const fetchAllTemplates = async (req: Request, res: Response) => {
@@ -15,10 +16,10 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
       sortBy = 'createdAt',
       sortOrder = 'desc',
       projectId, // To check if templates are already in project
+      isAddedToBackpackAttach, // To tell backend to attach isAddedToBackpack field to templates that are already in backpack
     } = req.query;
-
     const userId = req.userId;
-
+    
     // Build filter object
     const filter: any = {};
     
@@ -34,16 +35,16 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
         { scene_description: { $regex: search, $options: 'i' } }
       ];
     }
-
+    
     // Pagination
     const pageNum = Math.max(1, parseInt(page as string));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string)));
     const skip = (pageNum - 1) * limitNum;
-
+    
     // Sort options
     const sortOptions: any = {};
     sortOptions[sortBy as string] = sortOrder === 'asc' ? 1 : -1;
-
+    
     // Aggregation pipeline to get templates with likes count and user interaction data
     const aggregationPipeline: any[] = [
       { $match: filter },
@@ -63,7 +64,7 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
         }
       }
     ];
-
+    
     // If userId provided, check if user has liked each template
     if (userId && Types.ObjectId.isValid(userId as string)) {
       aggregationPipeline.push({
@@ -80,7 +81,7 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
         }
       });
     }
-
+    
     // If projectId provided, check if templates are already in project
     if (projectId && Types.ObjectId.isValid(projectId as string)) {
       aggregationPipeline.push(
@@ -119,28 +120,94 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
         }
       });
     }
-
-    // Remove the likes array as we only need the count and isLikedByUser
+    
+    // If backpackId provided, check if templates are already in backpack
+    let backpackId = "";
+    if (isAddedToBackpackAttach){
+      const backpack = await Backpack.findOne({ userId });
+      if (backpack != null){
+        backpackId = backpack._id as string;
+      }
+    }
+    if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
+      aggregationPipeline.push(
+        {
+          $lookup: {
+            from: 'backpacks',
+            let: { templateId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: ['$_id', new Types.ObjectId(backpackId as string)]
+                  }
+                }
+              },
+              {
+                $project: {
+                  items: {
+                    $filter: {
+                      input: '$items',
+                      as: 'item',
+                      cond: {
+                        $and: [
+                          { $eq: ['$$item.itemType', 'Template'] },
+                          { $eq: ['$$item.itemId', '$$templateId'] }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            as: 'backpackItems'
+          }
+        },
+        {
+          $addFields: {
+            isAddedToBackpack: {
+              $gt: [
+                { 
+                  $size: { 
+                    $arrayElemAt: ['$backpackItems.items', 0] 
+                  } 
+                },
+                0
+              ]
+            }
+          }
+        }
+      );
+    } else {
+      aggregationPipeline.push({
+        $addFields: {
+          isAddedToBackpack: false
+        }
+      });
+    }
+    
+    // Remove the likes array and backpackItems as we only need the computed fields
     aggregationPipeline.push({
       $project: {
         likes: 0,
-        projectAssets: 0
+        projectAssets: 0,
+        backpackItems: 0
       }
     });
-
+    
     // Add sorting and pagination
     aggregationPipeline.push(
       { $sort: sortOptions },
       { $skip: skip },
       { $limit: limitNum }
     );
-
+    
     // Execute aggregation and count query
     const [templates, total] = await Promise.all([
       Template.aggregate(aggregationPipeline),
       Template.countDocuments(filter)
     ]);
-
+    
     res.status(201).json({
       success: true,
       data: {
