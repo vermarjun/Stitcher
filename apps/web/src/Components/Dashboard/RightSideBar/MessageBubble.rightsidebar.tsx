@@ -157,8 +157,8 @@ const MessageBubble = ({
 
   if (message.role === "user") {
     return (
-      <div className="flex justify-end mb-4 group">
-        <div className="max-w-[85%] bg-zinc-700 rounded-lg px-3 py-2">
+      <div className="flex justify-end mb-4 group max-w-70">
+        <div className="w-[85%] bg-zinc-700 rounded-lg px-3 py-2">
           <div className="text-sm text-neutral-200 leading-relaxed break-words">
             {typeof message.content === "string" ? message.content : ""}
           </div>

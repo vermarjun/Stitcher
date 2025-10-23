@@ -239,7 +239,7 @@ export default function ApiKeyManager() {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="flex items-center justify-between h-16 border-b border-zinc-800 px-4">
+      <div className="flex items-center justify-between h-14 border-b border-zinc-800 px-4">
           <h1 className="text-xl font-semibold text-white">
             API Key Configuration
           </h1>

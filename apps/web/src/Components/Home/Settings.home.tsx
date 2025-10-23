@@ -237,7 +237,7 @@ const Settings: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="mb-6 p-6 border-b border-zinc-800 h-16 flex items-center w-full justify-between">
+      <div className="mb-6 p-6 border-b border-zinc-800 h-14 flex items-center w-full justify-between">
         <div className="flex items-center justify-between w-full">
           <div>
             <h1 className="text-2xl font-bold text-white">Account Settings</h1>

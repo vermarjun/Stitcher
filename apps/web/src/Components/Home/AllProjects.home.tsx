@@ -124,7 +124,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-12 px-4">
       <div className="relative mb-6">
-        <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mb-3">
+        <div className="w-16 h-14 rounded-full bg-zinc-900 flex items-center justify-center mb-3">
           <FolderOpen className="w-6 h-6 text-zinc-600" />
         </div>
         <div className="absolute -top-1 -right-1">
@@ -150,7 +150,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
   return (
     <div className="min-h-screen bg-black text-white">
         {/* Header */}
-        <div className="mb-3 h-16 border-b border-zinc-800 p-3">
+        <div className="mb-3 h-14 border-b border-zinc-800 p-3">
           <div className="flex items-center justify-between h-full">
             <div>
               <h1 className="text-xl font-semibold text-white mb-1">All Projects</h1>

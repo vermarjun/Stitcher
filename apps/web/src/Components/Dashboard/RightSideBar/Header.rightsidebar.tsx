@@ -142,7 +142,7 @@ const ChatHistoryComponent = ({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-medium text-zinc-200 truncate">
+                      <h4 className="text-xs font-medium text-zinc-200">
                         {chat.title || 'Untitled Chat'}
                       </h4>
                       {/* Removed message count since it's not available in the list response */}

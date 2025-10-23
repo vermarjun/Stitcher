@@ -36,8 +36,8 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
   // Filter templates based on search, type, and liked status
   const filteredTemplates = templates.filter((template) => {
     const matchesSearch =
-      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.post_description?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType =
       selectedType === "all" || template.type === selectedType;
     return matchesSearch && matchesType;
@@ -155,7 +155,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
         `/template/${template._id}/add-to-project`,
         {
           projectId: currentProject?._id,
-          customName: template.name,
+          customName: template.title,
         }
       );
 
@@ -179,7 +179,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
 
       // Success toast with custom styling
       toast.success("Template imported successfully!", {
-        description: `${template.name} has been added to your project`,
+        description: `${template.title} has been added to your project`,
         duration: 3000,
       });
 
@@ -228,7 +228,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
             {template.thumbnail ? (
               <img
                 src={template.thumbnail}
-                alt={template.name}
+                alt={template.title}
                 className="aspect-video object-cover"
               />
             ) : (
@@ -253,7 +253,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
           <div className="flex-1 px-2.5 min-w-0 overflow-hidden">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-xs font-semibold text-white truncate pr-1 leading-tight">
-                {template.name}
+                {template.title}
               </h3>
               {/* <div className="text-zinc-400 flex-shrink-0 ml-1">
                 {template.type === TemplateType.VIDEO ? (

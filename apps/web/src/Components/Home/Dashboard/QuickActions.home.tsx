@@ -14,7 +14,8 @@ import { Textarea } from "@/Components/ui/textarea";
 import {
   Plus,
   Upload,
-  LayoutTemplate,
+  // LayoutTemplate,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type NavigateFunction } from "react-router-dom";
@@ -208,6 +209,25 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
             <CardContent className="p-2.5">
               <div className="flex flex-col items-center text-center space-y-2">
                 <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200">
+                  <Share2 className="w-4 h-4 text-zinc-300 group-hover:text-white transition-colors duration-200" />
+                </div>
+                <div className="space-y-0.5">
+                  <h3 className="font-medium text-white text-xs group-hover:text-white transition-colors duration-200">
+                    Share new post
+                  </h3>
+                  <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200">
+                    Share a new post with community
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card 
+            onClick={()=>{onNavigate("api-keys")}}
+            className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800">
+            <CardContent className="p-2.5">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200">
                   <Upload className="w-4 h-4 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                 </div>
                 <div className="space-y-0.5">
@@ -222,7 +242,7 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
             </CardContent>
           </Card>
 
-          <Card 
+          {/* <Card 
             onClick={() => onNavigate("templates")}
             className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800">
             <CardContent className="p-2.5">
@@ -240,7 +260,7 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
       </div>
     </>

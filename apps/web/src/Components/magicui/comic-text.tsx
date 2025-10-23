@@ -1,7 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import { CSSProperties } from "react";
+import { type CSSProperties } from "react";
 
 type ComicTextProps = {
   children: string;

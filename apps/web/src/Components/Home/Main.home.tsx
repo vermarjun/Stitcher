@@ -14,6 +14,8 @@ import Assets from "./Assets.home";
 import SettingsPage from "./Settings.home";
 
 import ThreeDotLoader from "../LoadingScreens/ThreeDotLoader";
+import AnimationCommunity from "./CommunityPage/main.communitypage";
+import Backpack from "./Backpack/main.backpack";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -70,8 +72,10 @@ const Main = () => {
         return <AllProjects user={user}/>;
       case "teams":
         return <Teams />;
-      // case "pricing":
-        // return <Pricing />;
+      case "community":
+        return <AnimationCommunity/>
+      case "backpack":
+        return <Backpack/>
       case "api-keys":
         return <ApiKeys />;
       case "templates":

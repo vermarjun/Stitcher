@@ -50,8 +50,8 @@ export enum TemplateType {
 
 export type Template = {
   _id: string;
-  name: string;
-  description?: string;
+  title: string;
+  post_description?: string;
   type: TemplateType;
   thumbnail?: string;
   url: string;
@@ -64,7 +64,7 @@ export type Template = {
   projectAssetId?: string;
   createdAt?: string;
   updatedAt?: string;
-};
+}
 
 export enum AssetType {
   VIDEO = "video",

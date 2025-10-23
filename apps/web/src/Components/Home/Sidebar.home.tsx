@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Home, FolderOpen, Key, Settings, ChevronLeft, ChevronRight, LogOut, LayoutTemplate } from 'lucide-react';
+import { Search, Home, FolderOpen, Key, Settings, ChevronLeft, ChevronRight, LogOut, LayoutTemplate, Users, Backpack } from 'lucide-react';
 import type { User } from '@/State/Types';
 import type { NavigateFunction } from 'react-router-dom';
 import { AuroraText } from '../magicui/aurora-text';
@@ -43,14 +43,15 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
     create: [
       { icon: Home, label: 'Home', key: 'home' },
       { icon: FolderOpen, label: 'All Projects', key: 'projects' },
-      // { icon: Users, label: 'Teams', key: 'teams' }
+      { icon: Users, label: 'Community', key: 'community' },
+      { icon: Backpack, label: 'Backpack', key: 'backpack' }
     ],
     api_keys: [
       // { icon: CreditCard, label: 'Pricing', key: 'pricing' },
       { icon: Key, label: 'API Keys', key: 'api-keys' }
     ],
     browse: [
-      { icon: LayoutTemplate, label: 'Templates', key: 'templates' },
+      { icon: LayoutTemplate, label: 'Templates', key: 'templates' }
       // { icon: CloudUpload, label: 'Assets', key: 'assets' }
     ]
   };
@@ -75,7 +76,7 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
         ${collapsed ? 'w-14 lg:translate-x-0 ' : 'w-72 translate-x-0 fixed left-0 top-0 z-30 '}
       `}>
         {/* Header */}
-        <div className="flex h-16 items-center justify-between p-3 border-b border-zinc-800">
+        <div className="flex h-14 items-center justify-between p-3 border-b border-zinc-800">
           {!collapsed && (
             <div className="flex items-center gap-3">
               <AuroraText className="text-2xl" padding="" colors={["#19E5A1", "#02684D"]}>
@@ -124,7 +125,7 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
                     flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium
                     transition-all duration-200 hover:bg-zinc-800 hover:text-white
                     ${activeItem === item.key
-                      ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
+                      ? 'bg-green-600/10 text-green-400 border border-green-600/20' 
                       : 'text-zinc-300'
                     }
                     ${collapsed ? 'justify-center px-2.5' : ''}
@@ -151,7 +152,7 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
                     flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium
                     transition-all duration-200 hover:bg-zinc-800 hover:text-white
                     ${activeItem === item.key
-                      ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
+                      ? 'bg-green-600/10 text-green-400 border border-green-600/20' 
                       : 'text-zinc-300'
                     }
                     ${collapsed ? 'justify-center px-2.5' : ''}
@@ -178,7 +179,7 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
                     flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium
                     transition-all duration-200 hover:bg-zinc-800 hover:text-white
                     ${activeItem === item.key
-                      ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
+                      ? 'bg-green-600/10 text-green-400 border border-green-600/20' 
                       : 'text-zinc-300'
                     }
                     ${collapsed ? 'justify-center px-2.5' : ''}
@@ -198,7 +199,7 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
                   flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium
                   transition-all duration-200 hover:bg-zinc-800 hover:text-white
                   ${activeItem === 'settings'
-                    ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
+                    ? 'bg-green-600/10 text-green-400 border border-blue-600/20' 
                     : 'text-zinc-300'
                   }
                   ${collapsed ? 'justify-center px-2.5' : ''}

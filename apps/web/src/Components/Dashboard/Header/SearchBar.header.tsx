@@ -110,7 +110,7 @@ function SearchSection({ searchQuery, setSearchQuery, projectId }: SearchSection
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={handleInputFocus}
-          className="h-9 w-full rounded-lg border-zinc-800/50 bg-zinc-900/50 pl-10 pr-12 text-sm text-white placeholder-zinc-500 focus-visible:ring focus-visible:border-neutral-400 transition-all duration-200"
+          className="h-9 w-full rounded-lg border-zinc-700 bg-zinc-800 pl-10 pr-12 text-sm text-white placeholder-zinc-500 focus-visible:ring focus-visible:border-zinc-600 transition-all duration-200"
         />
         
         {/* Command Key Hint */}

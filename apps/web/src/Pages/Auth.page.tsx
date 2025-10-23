@@ -120,7 +120,7 @@ const AuthPage: React.FC = () => {
   setLoading(true);
   try {
     if (isLogin) {
-      // console.log('Form submitted: login', formData);
+      console.log('Form submitted: login', formData);
       
       // Login request
       const response = await api.post<AuthResponse>('/users/login', {
@@ -128,6 +128,8 @@ const AuthPage: React.FC = () => {
         password: formData.password
       });
       
+      console.log(response.data)
+
       const { token, user } = response.data;
 
       localStorage.setItem('token', token);
@@ -157,13 +159,14 @@ const AuthPage: React.FC = () => {
       navigate('/home'); 
     }
   } catch (error: any) {
-    console.error('Authentication error:', error.response?.data || error.message);
+    console.error('Authentication error:', error.response?.data.message || error.message);
     
     // Handle specific error cases
     if (error.response?.status === 401) {
-      toast.error('Invalid credentials. Please try again.');
+      toast.error( error.response?.data.message || 'Invalid credentials. Please try again.');
     } else if (error.response?.status === 409) {
-      toast.error('Invalid credentials. Please try again.');
+      console.log(error)
+      toast.error(error.response.data.message || 'Invalid credentials. Please try again.');
     } else if (error.response?.status === 400) {
       toast.error('Please fill in all required fields.');
     } else {

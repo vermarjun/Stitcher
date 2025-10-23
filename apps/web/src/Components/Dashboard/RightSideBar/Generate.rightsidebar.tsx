@@ -381,7 +381,7 @@ const GenerateComponent = ({
       };
 
       return (
-        <div className="flex gap-3 text-sm break-words">
+        <div className="flex gap-3 text-sm break-words max-w-70">
           <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
             <AlertCircle className="w-4 h-4 text-red-400" />
           </div>

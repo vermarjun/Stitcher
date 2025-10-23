@@ -11,6 +11,7 @@ import {
   X,
   Pause,
   Volume2,
+  Backpack,
 } from "lucide-react";
 import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
@@ -23,6 +24,7 @@ import {
 } from "@/Components/ui/select";
 import { Skeleton } from "@/Components/ui/skeleton";
 import api from "@/api";
+import { toast } from "sonner";
 
 enum TemplateType {
   VIDEO = "video",
@@ -31,8 +33,8 @@ enum TemplateType {
 
 interface ITemplate {
   _id: string;
-  name: string;
-  description?: string;
+  title: string;
+  post_description?: string;
   type: TemplateType;
   thumbnail?: string;
   url: string;
@@ -60,7 +62,7 @@ const TemplateGallery: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<TemplateType | "all">("all");
   const [sortBy, setSortBy] = useState<"createdAt" | "likesCount" | "name">(
-    "createdAt"
+    "likesCount"
   );
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [pagination, setPagination] = useState<PaginationInfo>({
@@ -81,7 +83,6 @@ const TemplateGallery: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoPlayerRef = useRef<HTMLDivElement>(null);
@@ -99,9 +100,7 @@ const TemplateGallery: React.FC = () => {
       };
       if (searchQuery) params.search = searchQuery;
       if (selectedType !== "all") params.type = selectedType;
-
       const response = await api.get("/template", { params });
-
       if (response.data.success) {
         setTemplates(response.data.data.templates);
         setPagination(response.data.data.pagination);
@@ -128,10 +127,8 @@ const TemplateGallery: React.FC = () => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   }, [searchQuery, selectedType, sortBy, sortOrder]);
 
-  // Intersection Observer to pause video when not visible
   useEffect(() => {
     if (!videoPlayerRef.current || !videoRef.current) return;
-
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry.isIntersecting && videoRef.current) {
@@ -140,28 +137,22 @@ const TemplateGallery: React.FC = () => {
       },
       { threshold: 0.1 }
     );
-
     observer.observe(videoPlayerRef.current);
-
     return () => observer.disconnect();
   }, [playingVideo]);
 
-  // Audio player effects
   useEffect(() => {
     const audioElement = audioRef.current;
     if (!audioElement) return;
-
     const updateTime = () => setCurrentTime(audioElement.currentTime);
     const updateDuration = () => setDuration(audioElement.duration);
     const handleEnd = () => {
       setIsPlaying(false);
       setCurrentTime(0);
     };
-
     audioElement.addEventListener("timeupdate", updateTime);
     audioElement.addEventListener("loadedmetadata", updateDuration);
     audioElement.addEventListener("ended", handleEnd);
-
     return () => {
       audioElement.removeEventListener("timeupdate", updateTime);
       audioElement.removeEventListener("loadedmetadata", updateDuration);
@@ -222,9 +213,29 @@ const TemplateGallery: React.FC = () => {
         e.clientX - progressBar.getBoundingClientRect().left;
       const progressBarWidth = progressBar.offsetWidth;
       const newTime = (clickPosition / progressBarWidth) * duration;
-
       audioRef.current.currentTime = newTime;
       setCurrentTime(newTime);
+    }
+  };
+
+  const handleSaveToBackPack = async (template: ITemplate) => {
+    try {
+      const response = await api.post("/backpack/items", {
+        itemType: "Template",
+        itemId: template._id,
+        source: "template_library",
+        sourceId: template._id,
+        favourite: false,
+        tags: [],
+        notes: "",
+      });
+      if (response.data.success == true){
+        toast.success("Successfully added template to backpack");
+      } else {
+        throw Error("Error came in saving template item to backpack")
+      }
+    } catch (e:any) {
+      toast.error(e.message || "Error saving tempalte to backpack")
     }
   };
 
@@ -232,9 +243,7 @@ const TemplateGallery: React.FC = () => {
     try {
       const template = templates.find((t) => t._id === templateId);
       if (!template) return;
-
       await api.post(`/template/${templateId}/like`);
-
       setTemplates((prev) =>
         prev.map((t) =>
           t._id === templateId
@@ -268,6 +277,12 @@ const TemplateGallery: React.FC = () => {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  const formatCount = (count: number) => {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
+  };
+
   const handleImageError = (templateId: string) => {
     setImageLoadErrors((prev) => new Set([...prev, templateId]));
   };
@@ -275,11 +290,11 @@ const TemplateGallery: React.FC = () => {
   const renderSkeleton = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
       {[...Array(10)].map((_, i) => (
-        <div key={i} className="bg-transparent overflow-hidden">
-          <Skeleton className="w-full aspect-video bg-zinc-800 rounded-lg mb-3" />
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-3/4 bg-zinc-800 rounded-full" />
-            <Skeleton className="h-3 w-1/2 bg-zinc-800 rounded-full" />
+        <div key={i} className="bg-zinc-800 rounded-xl overflow-hidden">
+          <Skeleton className="w-full aspect-video bg-zinc-700 rounded-t-xl" />
+          <div className="p-4 space-y-3">
+            <Skeleton className="h-4 w-3/4 bg-zinc-700 rounded-full" />
+            <Skeleton className="h-3 w-1/2 bg-zinc-700 rounded-full" />
           </div>
         </div>
       ))}
@@ -293,7 +308,6 @@ const TemplateGallery: React.FC = () => {
         <div className="fixed px-4 left-1/2 transform -translate-x-1/2 w-full bottom-4 flex justify-center items-center z-50">
           <div className="relative bg-zinc-900 w-full max-w-4xl rounded-lg shadow-2xl border border-zinc-800">
             <div className="p-4">
-              {/* Close button */}
               <Button
                 onClick={closeAudioPlayer}
                 className="absolute top-2 right-2 z-10 bg-zinc-800/80 hover:bg-zinc-700/90 text-white rounded-full p-1 backdrop-blur-md transition-all duration-200 hover:scale-105"
@@ -302,19 +316,17 @@ const TemplateGallery: React.FC = () => {
               >
                 <X className="h-4 w-4" />
               </Button>
-
-              {/* Audio info */}
               <div className="flex items-center mb-4">
                 <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-zinc-800 to-zinc-700 rounded-md flex items-center justify-center mr-3">
                   <FileAudio className="h-6 w-6 text-zinc-400" />
                 </div>
                 <div className="flex-grow overflow-hidden">
                   <h3 className="text-sm font-medium text-white truncate">
-                    {playingAudio.name}
+                    {playingAudio.title}
                   </h3>
-                  {playingAudio.description && (
+                  {playingAudio.post_description && (
                     <p className="text-xs text-zinc-400 truncate">
-                      {playingAudio.description}
+                      {playingAudio.post_description}
                     </p>
                   )}
                   <div className="flex items-center text-xs text-zinc-500 mt-1">
@@ -330,8 +342,6 @@ const TemplateGallery: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Audio controls */}
               <div className="flex items-center justify-between">
                 <Button
                   onClick={togglePlayPause}
@@ -345,9 +355,7 @@ const TemplateGallery: React.FC = () => {
                     <Play className="h-4 w-4 fill-current ml-0.5" />
                   )}
                 </Button>
-
                 <div className="flex-grow mx-4">
-                  {/* Progress bar */}
                   <div
                     ref={progressBarRef}
                     className="h-1.5 bg-zinc-800 rounded-full cursor-pointer"
@@ -360,15 +368,11 @@ const TemplateGallery: React.FC = () => {
                       <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-white rounded-full"></div>
                     </div>
                   </div>
-
-                  {/* Time display */}
                   <div className="flex justify-between text-xs text-zinc-500 mt-1">
                     <span>{formatDuration(currentTime)}</span>
                     <span>{formatDuration(duration)}</span>
                   </div>
                 </div>
-
-                {/* Volume control */}
                 <div className="flex items-center">
                   <Volume2 className="h-4 w-4 text-zinc-400 mr-2" />
                   <input
@@ -383,8 +387,6 @@ const TemplateGallery: React.FC = () => {
                 </div>
               </div>
             </div>
-
-            {/* Hidden audio element */}
             <audio ref={audioRef} src={playingAudio.url} autoPlay={isPlaying} />
           </div>
         </div>
@@ -392,28 +394,22 @@ const TemplateGallery: React.FC = () => {
 
       {/* Video Player Overlay */}
       {isVideoPlayerVisible && playingVideo && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             ref={videoPlayerRef}
             className="relative w-full max-w-4xl mx-auto"
           >
             <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-2xl border border-zinc-800">
-              {/* Video container with gradient overlay */}
               <div className="relative">
                 <video
                   ref={videoRef}
                   src={playingVideo.url}
                   controls
                   autoPlay
-                  className="aspect-video object-contain"
+                  className="w-full object-cover"
                   onError={() => console.error("Video failed to load")}
                 />
-
-                {/* Gradient overlay at bottom of video */}
-                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-zinc-900 to-transparent pointer-events-none"></div>
               </div>
-
-              {/* Close button */}
               <Button
                 onClick={closeVideoPlayer}
                 className="absolute top-2 right-2 z-10 bg-zinc-800/80 hover:bg-zinc-700/90 text-white rounded-full p-1.5 backdrop-blur-md transition-all duration-200 hover:scale-105"
@@ -422,15 +418,13 @@ const TemplateGallery: React.FC = () => {
               >
                 <X className="h-4 w-4" />
               </Button>
-
-              {/* Video info */}
               <div className="p-4">
                 <h3 className="text-sm font-medium text-white mb-2 line-clamp-1">
-                  {playingVideo.name}
+                  {playingVideo.title}
                 </h3>
-                {playingVideo.description && (
+                {playingVideo.post_description && (
                   <p className="text-xs text-zinc-300 mb-3 leading-relaxed">
-                    {playingVideo.description}
+                    {playingVideo.post_description}
                   </p>
                 )}
                 <div className="flex items-center justify-between text-xs">
@@ -566,20 +560,27 @@ const TemplateGallery: React.FC = () => {
             {templates.map((template) => (
               <div
                 key={template._id}
-                className="bg-zinc-900 rounded-lg overflow-hidden group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 border border-zinc-800"
+                className="bg-zinc-800 rounded-xl overflow-hidden group transition-all duration-200 hover:-translate-y-0.5"
                 onMouseEnter={() => setHoveredCard(template._id)}
                 onMouseLeave={() => setHoveredCard(null)}
               >
-                <div className="relative aspect-video bg-zinc-900 overflow-hidden">
+                {/* Video Thumbnail */}
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePlayVideo(template);
+                  }}
+                  className="relative cursor-pointer aspect-video bg-zinc-700 border border-zinc-800 rounded-t-xl overflow-hidden"
+                >
                   {!imageLoadErrors.has(template._id) && template.thumbnail ? (
                     <img
                       src={template.thumbnail}
-                      alt={template.name}
+                      alt={template.title}
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       onError={() => handleImageError(template._id)}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-800">
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700">
                       {template.type === TemplateType.VIDEO ? (
                         <FileVideo className="h-8 w-8 text-zinc-600" />
                       ) : (
@@ -588,68 +589,95 @@ const TemplateGallery: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Gradient Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+                  {/* Play Button Overlay */}
                   <div
-                    className={`absolute inset-0 bg-black/60 transition-opacity duration-200 ${
+                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
                       hoveredCard === template._id ? "opacity-100" : "opacity-0"
-                    } flex items-center justify-center`}
+                    } bg-black/40`}
                   >
-                    <Button
-                      size="icon"
-                      className="bg-white hover:bg-zinc-200 text-black rounded-full h-10 w-10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayVideo(template);
-                      }}
-                    >
-                      <Play className="h-4 w-4 fill-current" />
-                    </Button>
+                    <div className="bg-white rounded-full p-4">
+                      <Play className="h-6 w-6 text-black fill-current" />
+                    </div>
                   </div>
 
+                  {/* Duration Badge */}
                   {template.duration && (
-                    <div className="absolute bottom-1.5 right-1.5 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded">
+                    <div className="absolute bottom-2 right-2 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
                       {formatDuration(template.duration)}
                     </div>
                   )}
 
-                  <div className="absolute top-1.5 left-1.5 flex gap-1.5">
-                    <div className="bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center">
+                  {/* Type Badge */}
+                  <div className="absolute bottom-2 left-2">
+                    <div className=" text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
                       {template.type === TemplateType.VIDEO ? (
-                        <FileVideo className="h-2.5 w-2.5 mr-0.5" />
+                        <FileVideo className="h-3 w-3" />
                       ) : (
-                        <FileAudio className="h-2.5 w-2.5 mr-0.5" />
+                        <FileAudio className="h-3 w-3" />
                       )}
                       {template.type}
                     </div>
                   </div>
+
+                  {/* Stats Overlay */}
+                  {/* <div className="absolute bottom-2 left-2">
+                    <div className="bg-zinc-700 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                      <Heart
+                        className={`h-3 w-3 ${
+                          template.isLikedByUser ? "fill-white" : ""
+                        }`}
+                      />
+                      {formatCount(template.likesCount || 0)}
+                      <span className="text-[10px]">Likes</span>
+                    </div>
+                  </div> */}
                 </div>
 
-                <div className="p-2.5">
-                  <h3 className="font-medium text-white mb-1 line-clamp-2 text-xs group-hover:text-white transition-colors">
-                    {template.name}
-                  </h3>
-                  {template.description && (
-                    <p className="text-xs text-zinc-400 mb-2 line-clamp-2">
-                      {template.description}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span>{formatBytes(template.bytes)}</span>
+                {/* Post Info */}
+                <div className="pb-4">
+                  {/* File Size Info */}
+                  <div className="px-3 flex justify-between items-center border-b border-zinc-600 mb-4 py-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleLikeToggle(template._id);
                       }}
-                      className="flex items-center gap-1 transition-colors hover:text-white"
+                      className="flex hover:scale-105 cursor-pointer items-center justify-center gap-1.5 text-xs text-zinc-200 hover:text-white transition-colors"
                     >
                       <Heart
-                        className={`h-3.5 w-3.5 transition-all ${
+                        className={`h-5 w-5 transition-all ${
                           template.isLikedByUser
-                            ? "fill-white text-white"
+                            ? "fill-red-500 text-red-500"
                             : ""
                         }`}
                       />
-                      {template.likesCount || 0}
+                      {formatCount(template.likesCount || 0)} Likes
                     </button>
+                    <div
+                      onClick={() => {
+                        handleSaveToBackPack(template);
+                      }}
+                      className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center"
+                    >
+                      Save to backpack
+                      <Backpack className="h-4 w-4" />
+                    </div>
+                  </div>
+
+                  <div className="px-3">
+                    {/* Title */}
+                    <h3 className="text-sm font-medium text-white mb-2 line-clamp-2 group-hover:text-zinc-300 transition-colors">
+                      {template.title}
+                    </h3>
+                    {template.post_description && (
+                      <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
+                        {template.post_description}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -657,6 +685,7 @@ const TemplateGallery: React.FC = () => {
           </div>
         )}
 
+        {/* Pagination */}
         {pagination.pages > 1 && (
           <div className="mt-8 flex items-center justify-center gap-2">
             <Button
@@ -723,7 +752,6 @@ const TemplateGallery: React.FC = () => {
             </Button>
           </div>
         )}
-
         <div className="mt-3 text-center text-xs text-zinc-500">
           Showing {(pagination.page - 1) * pagination.limit + 1} -{" "}
           {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
