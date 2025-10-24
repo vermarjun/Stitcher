@@ -1142,34 +1142,160 @@ export async function toggleCommentLike(req: Request, res: Response): Promise<vo
 /**
  * Get comments for a post with pagination
  * GET /api/community/posts/:postId/comments
- * NO CHANGES NEEDED
  */
 export async function getComments(req: Request, res: Response): Promise<void> {
     try {
         const { postId } = req.params;
+        const userId = req.userId;
         const { page = 1, limit = 20, parentCommentId } = req.query;
 
         const pageNum = parseInt(page as string);
         const limitNum = parseInt(limit as string);
 
-        const post = await CommunityPost.findById(postId)
-            .populate('comments.userId', 'username profilePhoto');
+        // Build aggregation pipeline for consistent data structure
+        const aggregationPipeline: any[] = [
+            { $match: { _id: new Types.ObjectId(postId) } }
+        ];
 
-        if (!post) {
+        // Add isLiked field for each comment
+        if (userId && Types.ObjectId.isValid(userId)) {
+            aggregationPipeline.push({
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        isLiked: {
+                                            $in: [new Types.ObjectId(userId), '$$comment.likes']
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        isLiked: false
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Populate comment user data
+        aggregationPipeline.push(
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'comments.userId',
+                    foreignField: '_id',
+                    as: 'commentUsers'
+                }
+            },
+            {
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        userId: {
+                                            $arrayElemAt: [
+                                                {
+                                                    $filter: {
+                                                        input: '$commentUsers',
+                                                        as: 'user',
+                                                        cond: {
+                                                            $eq: ['$$user._id', '$$comment.userId']
+                                                        }
+                                                    }
+                                                },
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    comments: {
+                        $map: {
+                            input: '$comments',
+                            as: 'comment',
+                            in: {
+                                $mergeObjects: [
+                                    '$$comment',
+                                    {
+                                        userId: {
+                                            _id: '$$comment.userId._id',
+                                            username: '$$comment.userId.username',
+                                            profilePhoto: '$$comment.userId.profilePhoto'
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    comments: 1
+                }
+            }
+        );
+
+        // Execute aggregation
+        const posts = await CommunityPost.aggregate(aggregationPipeline);
+
+        if (!posts || posts.length === 0) {
             res.status(404).json({ error: 'Post not found' });
             return;
         }
 
+        const post = posts[0];
         let comments = post.comments;
+
+        // Filter by parentCommentId if provided
         if (parentCommentId) {
             comments = comments.filter(
-                c => c.parentCommentId?.toString() === parentCommentId
+                (c: any) => c.parentCommentId?.toString() === parentCommentId
             );
         } else {
-            comments = comments.filter(c => !c.parentCommentId);
+            comments = comments.filter((c: any) => !c.parentCommentId);
         }
 
-        comments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        // Sort by creation date (newest first)
+        comments.sort((a: any, b: any) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateB - dateA;
+        });
 
         const total = comments.length;
         const paginatedComments = comments.slice(
@@ -1236,34 +1362,6 @@ export async function searchPosts(req: Request, res: Response): Promise<void> {
     } catch (error) {
         console.error('Error searching posts:', error);
         res.status(500).json({ error: 'Failed to search posts' });
-    }
-}
-
-export async function getTrendingPosts(req: Request, res: Response): Promise<void> {
-    try {
-        const { limit = 10, days = 7 } = req.query;
-        const limitNum = parseInt(limit as string);
-        const daysNum = parseInt(days as string);
-
-        const dateThreshold = new Date();
-        dateThreshold.setDate(dateThreshold.getDate() - daysNum);
-
-        const posts = await CommunityPost.find({
-            publishedAt: { $gte: dateThreshold }
-        })
-            .sort({ likesCount: -1, 'analytics.views': -1 })
-            .limit(limitNum)
-            .populate('authorId', 'username profilePhoto')
-            .populate('assetId', 'url thumbnail duration type')
-            .lean();
-
-        res.json({
-            success: true,
-            data: posts
-        });
-    } catch (error) {
-        console.error('Error fetching trending posts:', error);
-        res.status(500).json({ error: 'Failed to fetch trending posts' });
     }
 }
 

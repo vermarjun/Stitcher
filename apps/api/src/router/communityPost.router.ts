@@ -15,7 +15,6 @@ import {
   toggleCommentLike,
   getComments,
   searchPosts,
-  getTrendingPosts,
   getPostsByTag,
   getPostsByIds
 } from '../controller/communityPost.controller';
@@ -49,8 +48,7 @@ router.delete('/posts/:postId/comments/:commentId', auth, deleteComment); // DEL
 router.post('/posts/:postId/comments/:commentId/like', auth, toggleCommentLike); // POST /api/community/posts/:postId/comments/:commentId/like
 
 // ============= SEARCH & DISCOVERY =============
-router.get('/search',auth, searchPosts);                   // GET /api/community/search
-router.get('/trending', auth, getTrendingPosts);            // GET /api/community/trending
+router.get('/search',auth, searchPosts);                   // GET /api/community/search          // GET /api/community/trending
 router.get('/tags/:tag/posts',auth, getPostsByTag);        // GET /api/community/tags/:tag/posts
 
 export default router;
