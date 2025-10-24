@@ -1,58 +1,18 @@
-import { Heart, Clock, Play, Eye, MessageCircle, Backpack } from "lucide-react";
+import {
+  Heart,
+  Clock,
+  Play,
+  Eye,
+  MessageCircle,
+  Backpack,
+  Check,
+  Loader2,
+} from "lucide-react";
 import { useState } from "react";
 import api from "@/api";
 import { Avatar } from "./VideoModal.communitypage";
-
-interface IUser {
-  _id: string;
-  username: string;
-  profilePhoto?: string;
-  bio?: string;
-  createdAt: string;
-}
-
-interface IAsset {
-  _id: string;
-  name: string;
-  url: string;
-  thumbnail: string;
-  duration?: number;
-  width?: number;
-  height?: number;
-  bytes: number;
-}
-
-interface IComment {
-  _id: string;
-  userId: IUser;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  isEdited: boolean;
-  likes: string[];
-  parentCommentId?: string;
-}
-
-interface ICommunityPost {
-  _id: string;
-  assetId: IAsset;
-  authorId: IUser;
-  title: string;
-  description?: string;
-  tags: string[];
-  likes: { userId: string; createdAt: string }[];
-  likesCount: number;
-  comments: IComment[];
-  commentsCount: number;
-  analytics: {
-    views: number;
-    uniqueViews: number;
-    saves: number;
-  };
-  publishedAt: string;
-  isLikedByUser?: boolean;
-  isSavedByUser?: boolean;
-}
+import { toast } from "sonner";
+import type {ICommunityPost, IUser} from "./main.communitypage"
 
 interface Props {
   post: ICommunityPost;
@@ -76,6 +36,35 @@ export const PostCard = ({
   const [hoveredUser, setHoveredUser] = useState<string | null>(null);
   const [userProfileData, setUserProfileData] = useState<IUser | null>(null);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [loadingStates, setLoadingStates] = useState<{ [postId: string]: boolean }>({});
+
+  const handleSaveToBackPack = async (post: ICommunityPost) => {
+    // Set loading state for this specific post
+    setLoadingStates(prev => ({ ...prev, [post._id]: true }));
+    
+    try {
+      const response = await api.post("/backpack/items", {
+        itemType: "Asset",
+        itemId: post.assetId._id,
+        source: "community_post",
+        sourceId: post._id,
+        favourite: false,
+        tags: [],
+        notes: "",
+      });
+      if (response.data.success == true) {
+        toast.success("Successfully added template to backpack");
+        post.isAddedToBackpack = true;
+      } else {
+        throw Error("Error came in saving template item to backpack");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Error saving tempalte to backpack");
+    } finally {
+      // Clear loading state regardless of success or failure
+      setLoadingStates(prev => ({ ...prev, [post._id]: false }));
+    }
+  };
 
   const handleUserHover = async (userId: string) => {
     if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -120,6 +109,8 @@ export const PostCard = ({
     }
   };
 
+  const isPostLoading = loadingStates[post._id];
+
   return (
     <div
       key={post._id}
@@ -159,7 +150,7 @@ export const PostCard = ({
         <div className="absolute bottom-2 left-2 flex gap-2">
           {[
             {
-              icon: <Heart className="h-3 w-3" />,
+              icon: <Heart className={`h-3 w-3 ${(post.isLiked)?"fill-red-600 text-red-500":""}`} />,
               count: post.likesCount,
               label: "Likes",
             },
@@ -236,10 +227,36 @@ export const PostCard = ({
             )}
           </div>
           {/* Button */}
-          <button className="px-4 cursor-pointer flex items-center justify-center gap-2 py-1 text-xs font-medium text-white bg-zinc-700 rounded-full hover:bg-zinc-600 transition-colors">
-            Save to Backpack
-            <Backpack className="w-4 h-4" />
-          </button>
+          {!post.isAddedToBackpack ? (
+            <div>
+              <button
+                onClick={() => {
+                  handleSaveToBackPack(post);
+                }}
+                disabled={isPostLoading}
+                className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
+              >
+                {isPostLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Save to Backpack
+                    <Backpack className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <button className="bg-green-900/50 cursor-default border border-green-800 hover:scale-100 px-2 py-1 rounded-full gap-2 text-xs text-green-100 flex justify-center items-center">
+                Saved to Backpack
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Title + Description */}

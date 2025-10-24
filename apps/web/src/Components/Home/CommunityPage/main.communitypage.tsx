@@ -16,7 +16,7 @@ import api from "@/api";
 import { PostCard } from "./PostCard.communitypage";
 import { VideoModal } from "./VideoModal.communitypage";
 
-interface IUser {
+export interface IUser {
   _id: string;
   username: string;
   profilePhoto?: string;
@@ -24,7 +24,7 @@ interface IUser {
   createdAt: string;
 }
 
-interface IAsset {
+export interface IAsset {
   _id: string;
   name: string;
   url: string;
@@ -35,7 +35,7 @@ interface IAsset {
   bytes: number;
 }
 
-interface IComment {
+export interface IComment {
   _id: string;
   userId: IUser;
   content: string;
@@ -43,10 +43,11 @@ interface IComment {
   updatedAt: string;
   isEdited: boolean;
   likes: string[];
+  isLiked?: boolean;
   parentCommentId?: string;
 }
 
-interface ICommunityPost {
+export interface ICommunityPost {
   _id: string;
   assetId: IAsset;
   authorId: IUser;
@@ -63,11 +64,12 @@ interface ICommunityPost {
     saves: number;
   };
   publishedAt: string;
-  isLikedByUser?: boolean;
+  isLiked?: boolean;
   isSavedByUser?: boolean;
+  isAddedToBackpack?: boolean;
 }
 
-interface PaginationInfo {
+export interface PaginationInfo {
   page: number;
   limit: number;
   total: number;
@@ -103,6 +105,7 @@ const CommunityPage: React.FC = () => {
         const params: any = {
           page: append ? pagination.page + 1 : 1,
           limit: pagination.limit,
+          isAddedToBackpackAttach : true
         };
 
         // Map sortBy to backend expected values
@@ -160,7 +163,7 @@ const CommunityPage: React.FC = () => {
   };
 
   const renderSkeleton = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {[...Array(12)].map((_, i) => (
         <div key={i} className="bg-transparent">
           <Skeleton className="w-full aspect-video bg-zinc-800 rounded-xl mb-3" />
@@ -186,8 +189,6 @@ const CommunityPage: React.FC = () => {
             <div className="flex items-center gap-4">
               <h1 className="text-xl flex items-center justify-center gap-1 font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
                 Community
-                <span className="flex items-center text-[10px] mt-2 font-light text-zinc-400">(Posts are created from backpack)</span>
-            
               </h1>
             </div>
               <div className="relative flex-1 max-w-md">
@@ -244,7 +245,7 @@ const CommunityPage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {posts.map((post, index) => (
                 <PostCard posts={posts} post={post} index={index} formatCount={formatCount} setIsModalOpen={setIsModalOpen} setSelectedPost={setSelectedPost} lastPostRef={lastPostRef}/>
               ))}

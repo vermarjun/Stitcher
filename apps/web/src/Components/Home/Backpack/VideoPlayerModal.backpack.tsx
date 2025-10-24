@@ -25,13 +25,13 @@ const VideoPlayerModal: React.FC<VideoPlayerProps> = ({
         className="relative w-full max-w-4xl mx-auto"
       >
         <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-2xl border border-zinc-800">
-          <div className="relative">
+          <div className="relative aspect-video">
             <video
               ref={videoRef}
               src={mediaUrl}
               controls
               autoPlay
-              className="w-full object-cover"
+              className="w-full min-h-full object-cover"
               onError={() => console.error("Video failed to load")}
             />
           </div>

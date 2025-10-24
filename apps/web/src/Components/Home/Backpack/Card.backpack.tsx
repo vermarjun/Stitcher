@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Heart, Trash2, MoreVertical, Play, Share2 } from "lucide-react";
+import { Heart, Trash2, MoreVertical, Play, Share2, X, Loader2 } from "lucide-react";
 import AudioPlayerModal from "./AudioPlayerModal.backpack";
 import VideoPlayerModal from "./VideoPlayerModal.backpack";
 
@@ -36,7 +36,7 @@ export interface AudioPlayerProps extends MediaPlayerCommonProps {
 // Video Player specific interfaces
 export interface VideoPlayerProps extends MediaPlayerCommonProps {
   videoRef: React.RefObject<HTMLVideoElement>;
-  videoPlayerRef: React.RefObject<HTMLDivElement>; 
+  videoPlayerRef: React.RefObject<HTMLDivElement>;
 }
 
 // Item Data interface (common properties used by both players)
@@ -132,11 +132,25 @@ const BackpackItemCard = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [isFavouriteLoading, setIsFavouriteLoading] = useState(false); // Added loading state
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const videoPlayerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFavouriteLoading(true);
+
+    try {
+      await onToggleFavorite(item._id);
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+    } finally {
+      setIsFavouriteLoading(false);
+    }
+  };
 
   const getItemData = () => {
     if (item.itemType === "Asset") {
@@ -265,7 +279,7 @@ const BackpackItemCard = ({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
-  return (
+   return (
     <>
       {/* Audio Player Modal */}
       {isAudioPlayerVisible && (
@@ -388,42 +402,50 @@ const BackpackItemCard = ({
         <div className="w-full">
           <div className="px-4 py-3 w-full flex justify-between items-center border-b border-zinc-700">
             <div
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(item._id);
-              }}
-              className="cursor-pointer w-fit flex justify-center items-center gap-2"
+              onClick={handleToggleFavorite} // Updated to use the new handler
+              className="cursor-pointer w-fit flex justify-center items-center gap-1"
             >
-              <button className="flex items-center justify-center rounded-full p-2 hover:bg-zinc-700 transition-colors text-zinc-200 gap-2">
-                <Heart
-                  className={`h-5 w-5 ${
-                    item.favourite
-                      ? "fill-red-500 text-red-500"
-                      : "text-zinc-200 hover:text-red-400"
-                  }`}
-                />
-              </button>
-              {item.favourite ? (
-                <p className="text-xs text-red-400">Favourite</p>
+              {isFavouriteLoading ? (
+                // Loading state
+                <div className="flex items-center gap-1">
+                  <Loader2 className="h-5 w-5 text-zinc-400 animate-spin" />
+                  <p className="text-xs text-zinc-400">Adding...</p>
+                </div>
               ) : (
-                <p className="text-xs text-zinc-400">Mark Favourite</p>
+                // Normal state
+                <>
+                  <Heart
+                    className={`h-5 w-5 ${
+                      item.favourite
+                        ? "fill-red-500 text-red-500"
+                        : "text-zinc-200 hover:text-red-400"
+                    }`}
+                  />
+                  {item.favourite ? (
+                    <p className="text-xs text-red-400">Favourite</p>
+                  ) : (
+                    <p className="text-xs text-zinc-400">Add to Favourites</p>
+                  )}
+                </>
               )}
             </div>
             <div className="flex items-center w-fit gap-2">
+              {!(item.itemType === "Template") && (
+                <div className="flex justify-center items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreatePost(item);
+                      setShowMenu(false);
+                    }}
+                    className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-3 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
+                  >
+                    <p className="text-xs">Community</p>
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               <div className="flex justify-center items-center gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCreatePost(item);
-                    setShowMenu(false);
-                  }}
-                  className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-3 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
-                >
-                  <p className="text-xs">Community</p>
-                  <Share2 className="h-4 w-4" />
-                </button>
-              </div>
-              {/* <div className="flex justify-center items-center gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -435,7 +457,7 @@ const BackpackItemCard = ({
                   <p className="text-xs">Remove</p>
                   <X className="h-4 w-4" />
                 </button>
-              </div> */}
+              </div>
             </div>
           </div>
           <div className="p-4">

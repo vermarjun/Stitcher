@@ -376,7 +376,7 @@ const Settings: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="border-zinc-600 bg-zinc-800 text-white hover:bg-zinc-700 text-xs"
+                            className="border-zinc-600 bg-zinc-700 text-white hover:bg-zinc-600 hover:text-white text-xs"
                             onClick={() =>
                               document.getElementById("photo-upload")?.click()
                             }

@@ -3,8 +3,6 @@ import {
   X,
   Send,
   MoreVertical,
-  Bookmark,
-  Share2,
   MessageCircle,
   User
 } from "lucide-react";
@@ -12,57 +10,7 @@ import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
 import { useRef, useState } from "react";
 import api from "@/api";
-
-interface IUser {
-  _id: string;
-  username: string;
-  profilePhoto?: string;
-  bio?: string;
-  createdAt: string;
-}
-
-interface IAsset {
-  _id: string;
-  name: string;
-  url: string;
-  thumbnail: string;
-  duration?: number;
-  width?: number;
-  height?: number;
-  bytes: number;
-}
-
-interface IComment {
-  _id: string;
-  userId: IUser;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  isEdited: boolean;
-  likes: string[];
-  parentCommentId?: string;
-}
-
-interface ICommunityPost {
-  _id: string;
-  assetId: IAsset;
-  authorId: IUser;
-  title: string;
-  description?: string;
-  tags: string[];
-  likes: { userId: string; createdAt: string }[];
-  likesCount: number;
-  comments: IComment[];
-  commentsCount: number;
-  analytics: {
-    views: number;
-    uniqueViews: number;
-    saves: number;
-  };
-  publishedAt: string;
-  isLikedByUser?: boolean;
-  isSavedByUser?: boolean;
-}
+import type { ICommunityPost } from "./main.communitypage";
 
 
 interface Props {
@@ -96,6 +44,7 @@ export const Avatar = ({
 export const VideoModal = ({selectedPost, setSelectedPost, setPosts, formatCount, setIsModalOpen}:Props)=>{
     const videoRef = useRef<HTMLVideoElement>(null);
     const [commentText, setCommentText] = useState("");
+    console.log(selectedPost)
 
   const handleLikeToggle = async (postId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -107,7 +56,7 @@ export const VideoModal = ({selectedPost, setSelectedPost, setPosts, formatCount
             p._id === postId
               ? {
                   ...p,
-                  isLikedByUser: !p.isLikedByUser,
+                  isLiked: !p.isLiked,
                   likesCount: response.data.data.likesCount,
                 }
               : p
@@ -116,7 +65,7 @@ export const VideoModal = ({selectedPost, setSelectedPost, setPosts, formatCount
         if (selectedPost && selectedPost._id === postId) {
           setSelectedPost({
             ...selectedPost,
-            isLikedByUser: !selectedPost.isLikedByUser,
+            isLiked: !selectedPost.isLiked,
             likesCount: response.data.data.likesCount,
           });
         }
@@ -268,7 +217,7 @@ export const VideoModal = ({selectedPost, setSelectedPost, setPosts, formatCount
                   >
                     <Heart
                       className={`h-5 w-5 ${
-                        selectedPost.isLikedByUser
+                        selectedPost.isLiked
                           ? "fill-red-500 text-red-500"
                           : "text-white hover:text-zinc-300"
                       }`}
@@ -278,12 +227,6 @@ export const VideoModal = ({selectedPost, setSelectedPost, setPosts, formatCount
                   <button className="flex items-center gap-2 text-sm font-medium text-white hover:text-zinc-300 transition-colors">
                     <MessageCircle className="h-5 w-5" />
                     {formatCount(selectedPost.commentsCount)}
-                  </button>
-                  <button className="flex items-center gap-2 text-sm font-medium text-white hover:text-zinc-300 transition-colors ml-auto">
-                    <Bookmark className="h-5 w-5" />
-                  </button>
-                  <button className="flex items-center gap-2 text-sm font-medium text-white hover:text-zinc-300 transition-colors">
-                    <Share2 className="h-5 w-5" />
                   </button>
                 </div>
               </div>
@@ -316,8 +259,9 @@ export const VideoModal = ({selectedPost, setSelectedPost, setPosts, formatCount
                         <div className="flex items-center gap-4 mt-1 ml-1">
                           <button
                             onClick={() => handleCommentLike(comment._id)}
-                            className="text-xs text-zinc-500 hover:text-white transition-colors"
+                            className="flex justify-center items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors"
                           >
+                            <Heart className={`w-4 h-4 ${comment.isLiked?"fill-red-500 text-red-500":""}`}/>
                             {comment.likes.length > 0
                               ? `${comment.likes.length} likes`
                               : "Like"}

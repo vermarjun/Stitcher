@@ -13,6 +13,7 @@ import {
   Volume2,
   Backpack,
   Check,
+  Loader2,
 } from "lucide-react";
 import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
@@ -85,6 +86,7 @@ const TemplateGallery: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [loadingStates, setLoadingStates] = useState<{ [templateId: string]: boolean }>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoPlayerRef = useRef<HTMLDivElement>(null);
@@ -222,6 +224,9 @@ const TemplateGallery: React.FC = () => {
   };
 
   const handleSaveToBackPack = async (template: ITemplate) => {
+    // Set loading state for this specific template
+    setLoadingStates(prev => ({ ...prev, [template._id]: true }));
+    
     try {
       const response = await api.post("/backpack/items", {
         itemType: "Template",
@@ -234,11 +239,22 @@ const TemplateGallery: React.FC = () => {
       });
       if (response.data.success == true) {
         toast.success("Successfully added template to backpack");
+        // Update the template to show it's added to backpack
+        setTemplates(prev => 
+          prev.map(t => 
+            t._id === template._id 
+              ? { ...t, isAddedToBackpack: true }
+              : t
+          )
+        );
       } else {
         throw Error("Error came in saving template item to backpack");
       }
     } catch (e: any) {
-      toast.error(e.message || "Error saving tempalte to backpack");
+      toast.error(e.message || "Error saving template to backpack");
+    } finally {
+      // Clear loading state regardless of success or failure
+      setLoadingStates(prev => ({ ...prev, [template._id]: false }));
     }
   };
 
@@ -560,145 +576,156 @@ const TemplateGallery: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 auto-rows-max">
-            {templates.map((template) => (
-              <div
-                key={template._id}
-                className="bg-zinc-800 rounded-xl overflow-hidden group transition-all duration-200 hover:-translate-y-0.5"
-                onMouseEnter={() => setHoveredCard(template._id)}
-                onMouseLeave={() => setHoveredCard(null)}
-              >
-                {/* Video Thumbnail */}
+            {templates.map((template) => {
+              const isTemplateLoading = loadingStates[template._id];
+              
+              return (
                 <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePlayVideo(template);
-                  }}
-                  className="relative cursor-pointer aspect-video bg-zinc-700 border border-zinc-800 rounded-t-xl overflow-hidden"
+                  key={template._id}
+                  className="bg-zinc-800 rounded-xl overflow-hidden group transition-all duration-200 hover:-translate-y-0.5"
+                  onMouseEnter={() => setHoveredCard(template._id)}
+                  onMouseLeave={() => setHoveredCard(null)}
                 >
-                  {!imageLoadErrors.has(template._id) && template.thumbnail ? (
-                    <img
-                      src={template.thumbnail}
-                      alt={template.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={() => handleImageError(template._id)}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700">
-                      {template.type === TemplateType.VIDEO ? (
-                        <FileVideo className="h-8 w-8 text-zinc-600" />
-                      ) : (
-                        <FileAudio className="h-8 w-8 text-zinc-600" />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-                  {/* Play Button Overlay */}
+                  {/* Video Thumbnail */}
                   <div
-                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-                      hoveredCard === template._id ? "opacity-100" : "opacity-0"
-                    } bg-black/40`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePlayVideo(template);
+                    }}
+                    className="relative cursor-pointer aspect-video bg-zinc-700 border border-zinc-800 rounded-t-xl overflow-hidden"
                   >
-                    <div className="bg-white rounded-full p-4">
-                      <Play className="h-6 w-6 text-black fill-current" />
-                    </div>
-                  </div>
-
-                  {/* Duration Badge */}
-                  {template.duration && (
-                    <div className="absolute bottom-2 right-2 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {formatDuration(template.duration)}
-                    </div>
-                  )}
-
-                  {/* Type Badge */}
-                  <div className="absolute bottom-2 left-2">
-                    <div className=" text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
-                      {template.type === TemplateType.VIDEO ? (
-                        <FileVideo className="h-3 w-3" />
-                      ) : (
-                        <FileAudio className="h-3 w-3" />
-                      )}
-                      {template.type}
-                    </div>
-                  </div>
-
-                  {/* Stats Overlay */}
-                  {/* <div className="absolute bottom-2 left-2">
-                    <div className="bg-zinc-700 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
-                      <Heart
-                        className={`h-3 w-3 ${
-                          template.isLikedByUser ? "fill-white" : ""
-                        }`}
+                    {!imageLoadErrors.has(template._id) && template.thumbnail ? (
+                      <img
+                        src={template.thumbnail}
+                        alt={template.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={() => handleImageError(template._id)}
                       />
-                      {formatCount(template.likesCount || 0)}
-                      <span className="text-[10px]">Likes</span>
-                    </div>
-                  </div> */}
-                </div>
-
-                {/* Post Info */}
-                <div className="pb-4">
-                  {/* File Size Info */}
-                  <div className="px-3 flex justify-between items-center border-b border-zinc-600 mb-4 py-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLikeToggle(template._id);
-                      }}
-                      className="flex hover:scale-105 cursor-pointer items-center justify-center gap-1.5 text-xs text-zinc-200 hover:text-white transition-colors"
-                    >
-                      <Heart
-                        className={`h-5 w-5 transition-all ${
-                          template.isLikedByUser
-                            ? "fill-red-500 text-red-500"
-                            : ""
-                        }`}
-                      />
-                      {formatCount(template.likesCount || 0)} Likes
-                    </button>
-                    {!template.isAddedToBackpack ? (
-                      <div>
-                        <div
-                          onClick={() => {
-                            handleSaveToBackPack(template);
-                          }}
-                          className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center"
-                        >
-                          Save to backpack
-                          <Backpack className="h-4 w-4" />
-                        </div>
-                      </div>
                     ) : (
-                      <div
-                          onClick={() => {
-                            handleSaveToBackPack(template);
-                          }}
-                          className="bg-green-900/50 border border-green-800 hover:scale-100 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-green-100 flex justify-center items-center"
-                        >
-                          Added to backpack
-                          <Check className="h-4 w-4" />
-                        </div>
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700">
+                        {template.type === TemplateType.VIDEO ? (
+                          <FileVideo className="h-8 w-8 text-zinc-600" />
+                        ) : (
+                          <FileAudio className="h-8 w-8 text-zinc-600" />
+                        )}
+                      </div>
                     )}
+
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+                    {/* Play Button Overlay */}
+                    <div
+                      className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+                        hoveredCard === template._id ? "opacity-100" : "opacity-0"
+                      } bg-black/40`}
+                    >
+                      <div className="bg-white rounded-full p-4">
+                        <Play className="h-6 w-6 text-black fill-current" />
+                      </div>
+                    </div>
+
+                    {/* Duration Badge */}
+                    {template.duration && (
+                      <div className="absolute bottom-2 right-2 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDuration(template.duration)}
+                      </div>
+                    )}
+
+                    {/* Type Badge */}
+                    <div className="absolute bottom-2 left-2">
+                      <div className=" text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                        {template.type === TemplateType.VIDEO ? (
+                          <FileVideo className="h-3 w-3" />
+                        ) : (
+                          <FileAudio className="h-3 w-3" />
+                        )}
+                        {template.type}
+                      </div>
+                    </div>
+
+                    {/* Stats Overlay */}
+                    {/* <div className="absolute bottom-2 left-2">
+                      <div className="bg-zinc-700 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                        <Heart
+                          className={`h-3 w-3 ${
+                            template.isLikedByUser ? "fill-white" : ""
+                          }`}
+                        />
+                        {formatCount(template.likesCount || 0)}
+                        <span className="text-[10px]">Likes</span>
+                      </div>
+                    </div> */}
                   </div>
 
-                  <div className="px-3">
-                    {/* Title */}
-                    <h3 className="text-sm font-medium text-white mb-2 line-clamp-2 group-hover:text-zinc-300 transition-colors">
-                      {template.title}
-                    </h3>
-                    {template.post_description && (
-                      <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
-                        {template.post_description}
-                      </p>
-                    )}
+                  {/* Post Info */}
+                  <div className="pb-4">
+                    {/* File Size Info */}
+                    <div className="px-3 flex justify-between items-center border-b border-zinc-600 mb-4 py-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLikeToggle(template._id);
+                        }}
+                        className="flex hover:scale-105 cursor-pointer items-center justify-center gap-1.5 text-xs text-zinc-200 hover:text-white transition-colors"
+                      >
+                        <Heart
+                          className={`h-5 w-5 transition-all ${
+                            template.isLikedByUser
+                              ? "fill-red-500 text-red-500"
+                              : ""
+                          }`}
+                        />
+                        {formatCount(template.likesCount || 0)} Likes
+                      </button>
+                      {!template.isAddedToBackpack ? (
+                        <div>
+                          <button
+                            onClick={() => {
+                              handleSaveToBackPack(template);
+                            }}
+                            disabled={isTemplateLoading}
+                            className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
+                          >
+                            {isTemplateLoading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                Save to backpack
+                                <Backpack className="h-4 w-4" />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                            className="bg-green-900/50 border border-green-800 hover:scale-100 cursor-default px-2 py-1 rounded-full gap-2 text-xs text-green-100 flex justify-center items-center"
+                          >
+                            Added to backpack
+                            <Check className="h-4 w-4" />
+                          </div>
+                      )}
+                    </div>
+
+                    <div className="px-3">
+                      {/* Title */}
+                      <h3 className="text-sm font-medium text-white mb-2 line-clamp-2 group-hover:text-zinc-300 transition-colors">
+                        {template.title}
+                      </h3>
+                      {template.post_description && (
+                        <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
+                          {template.post_description}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
