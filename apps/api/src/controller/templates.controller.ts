@@ -418,10 +418,10 @@ const addTemplateToProject = async (req: Request, res: Response) => {
         ...template.metadata,
         isFromTemplate: true,
         originalTemplateName: template.title, // Changed from template.name to template.title
-        sceneName: template.scene_name,
-        sceneDescription: template.scene_description,
-        code: template.code
-      }
+      },
+      scene_name: template.scene_name,
+      scene_description: template.scene_description,
+      code: template.code
     });
 
     await newAsset.save();

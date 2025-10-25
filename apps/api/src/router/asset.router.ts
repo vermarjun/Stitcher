@@ -12,28 +12,29 @@ import {
   saveAssetMetadata,
   deleteAsset
 } from "../controller/asset.controller";
+import auth from '../middleware/auth.middleware';
 
 const router = Router();
 
-router.post('/', createAsset);                    // POST /api/assets
-router.get('/', getAssets);                       // GET /api/assets
-router.get('/stats', getAssetsStats);             // GET /api/assets/stats
-router.get('/:id', getAssetById);                 // GET /api/assets/:id
-router.put('/:id', updateAsset);                  // PUT /api/assets/:id
+router.post('/', auth, createAsset);                    // POST /api/assets
+router.get('/', auth, getAssets);                       // GET /api/assets
+router.get('/stats', auth, getAssetsStats);             // GET /api/assets/stats
+router.get('/:id', auth, getAssetById);                 // GET /api/assets/:id
+router.put('/:id', auth, updateAsset);                  // PUT /api/assets/:id
 
 // Filtering routes
-router.get('/project/:projectId', getAssetsByProject);  // GET /api/assets/project/:projectId
-router.get('/type/:type', getAssetsByType);             // GET /api/assets/type/:type
-router.get('/origin/:origin', getAssetsByOrigin);       // GET /api/assets/origin/:origin
+router.get('/project/:projectId', auth, getAssetsByProject);  // GET /api/assets/project/:projectId
+router.get('/type/:type', auth, getAssetsByType);             // GET /api/assets/type/:type
+router.get('/origin/:origin', auth, getAssetsByOrigin);       // GET /api/assets/origin/:origin
 
 
 // POST /api/asset/upload-signature
-router.post('/upload-signature', generateUploadSignature);
+router.post('/upload-signature', auth, generateUploadSignature);
 
 // POST /api/asset/save-metadata
-router.post('/save-metadata', saveAssetMetadata);
+router.post('/save-metadata', auth, saveAssetMetadata);
 
 // DELETE /api/asset/:assetId
-router.delete('/:assetId', deleteAsset);
+router.delete('/:assetId', auth, deleteAsset);
 
 export default router;

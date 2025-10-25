@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
+import Backpack from '../model/backpack.model';
 import { Types } from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
 
@@ -276,6 +277,8 @@ export const getAssetsByProject = async (req: Request, res: Response): Promise<v
     const { projectId } = req.params;
     const { type, origin } = req.query;
 
+    const userId = req.userId;
+
     if (!Types.ObjectId.isValid(projectId)) {
       res.status(400).json({
         success: false,
@@ -294,9 +297,107 @@ export const getAssetsByProject = async (req: Request, res: Response): Promise<v
       filter.origin = origin;
     }
 
-    const assets = await Asset.find(filter)
-      .populate('originalTemplateId', 'name')
-      .sort({ createdAt: -1 });
+    // Aggregation pipeline for assets with backpack check
+    const aggregationPipeline: any[] = [
+      { $match: filter }
+    ];
+
+    // If userId exists, check if assets are already in backpack
+    let backpackId = "";
+    const backpack = await Backpack.findOne({ userId });
+    if (backpack != null) {
+      backpackId = backpack._id as string;
+    }
+
+    if (Types.ObjectId.isValid(backpackId as string)) {
+      aggregationPipeline.push(
+        {
+          $lookup: {
+            from: 'backpacks',
+            let: { assetId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: ['$_id', new Types.ObjectId(backpackId as string)]
+                  }
+                }
+              },
+              { $unwind: '$items' },
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$items.itemType', 'Asset'] },
+                      { $eq: ['$items.itemId', '$$assetId'] }
+                    ]
+                  }
+                }
+              },
+              {
+                $project: {
+                  _id: 1
+                }
+              }
+            ],
+            as: 'backpackMatch'
+          }
+        },
+        {
+          $addFields: {
+            isAddedToBackpack: {
+              $gt: [{ $size: '$backpackMatch' }, 0]
+            }
+          }
+        }
+      );
+    } else {
+      aggregationPipeline.push({
+        $addFields: {
+          isAddedToBackpack: false
+        }
+      });
+    }
+
+    // Populate originalTemplateId
+    aggregationPipeline.push(
+      {
+        $lookup: {
+          from: 'templates',
+          localField: 'originalTemplateId',
+          foreignField: '_id',
+          as: 'originalTemplate'
+        }
+      },
+      {
+        $addFields: {
+          originalTemplateId: {
+            $cond: {
+              if: { $gt: [{ $size: '$originalTemplate' }, 0] },
+              then: {
+                _id: { $arrayElemAt: ['$originalTemplate._id', 0] },
+                name: { $arrayElemAt: ['$originalTemplate.name', 0] }
+              },
+              else: null
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          originalTemplate: 0,
+          backpackMatch: 0
+        }
+      }
+    );
+
+    // Add sorting
+    aggregationPipeline.push(
+      { $sort: { createdAt: -1 } }
+    );
+
+    // Execute aggregation
+    const assets = await Asset.aggregate(aggregationPipeline);
 
     res.status(200).json({
       success: true,
