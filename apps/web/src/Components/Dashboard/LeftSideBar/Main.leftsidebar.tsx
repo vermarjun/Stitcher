@@ -8,13 +8,14 @@ import {
   Backpack,
   Edit,
 } from "lucide-react";
-import AssetStash from "./AssetStash.leftsidebar";
+import AssetStash from "./AssetStash/main.assetstash";
 import TemplatesComponent from "./Template.leftsidebar";
 import ProjectDescriptionComponent from "./Script.leftsidebar";
 import CollaboratorsComponent from "./Collaborators.leftsidebar";
 import TimelineTracksSidebar from "./Tracks.leftsidebar";
 import type { Project, User } from "@/State/Types";
-import BackpackComponent from "@/Components/Dashboard/LeftSideBar/Backpack.leftsidebar";
+// import BackpackComponent from "@/Components/Dashboard/LeftSideBar/Backpack.leftsidebar";
+import BackpackComponent from "./BackPack/main.backpack";
 
 interface Props {
   currentProject?: Project;
@@ -30,8 +31,8 @@ const MainSidebar = ({ currentProject }: Props) => {
     { id: "tracks", icon: Scissors, label: "Tracks" },
     { id: "backpack", icon: Backpack, label: "Add Collaborators" },
     { id: "templates", icon: Layout, label: "Templates" },
-    { id: "collaborators", icon: Users, label: "Add Collaborators" },
     { id: "description", icon: Edit, label: "Project Script" },
+    { id: "collaborators", icon: Users, label: "Add Collaborators" },
   ];
 
   const renderActiveComponent = () => {
@@ -47,7 +48,7 @@ const MainSidebar = ({ currentProject }: Props) => {
       case "collaborators":
         return <CollaboratorsComponent />;
       case "backpack":
-        return <BackpackComponent />;
+        return <BackpackComponent currentProject={currentProject}/>;
       default:
         return <AssetStash currentProject={currentProject} />;
     }

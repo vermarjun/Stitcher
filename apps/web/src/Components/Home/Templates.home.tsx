@@ -307,10 +307,10 @@ const TemplateGallery: React.FC = () => {
   };
 
   const renderSkeleton = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       {[...Array(10)].map((_, i) => (
         <div key={i} className="bg-zinc-800 rounded-xl overflow-hidden">
-          <Skeleton className="w-full aspect-video bg-zinc-700 rounded-t-xl" />
+          <Skeleton className="w-full aspect-video bg-zinc-900 rounded-t-xl" />
           <div className="p-4 space-y-3">
             <Skeleton className="h-4 w-3/4 bg-zinc-700 rounded-full" />
             <Skeleton className="h-3 w-1/2 bg-zinc-700 rounded-full" />
@@ -419,13 +419,13 @@ const TemplateGallery: React.FC = () => {
             className="relative w-full max-w-4xl mx-auto"
           >
             <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-2xl border border-zinc-800">
-              <div className="relative">
+              <div className="relative aspect-video">
                 <video
                   ref={videoRef}
                   src={playingVideo.url}
                   controls
                   autoPlay
-                  className="w-full object-cover"
+                  className="w-full h-full object-cover"
                   onError={() => console.error("Video failed to load")}
                 />
               </div>
@@ -575,7 +575,7 @@ const TemplateGallery: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 auto-rows-max">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
             {templates.map((template) => {
               const isTemplateLoading = loadingStates[template._id];
               
@@ -673,7 +673,7 @@ const TemplateGallery: React.FC = () => {
                         <Heart
                           className={`h-5 w-5 transition-all ${
                             template.isLikedByUser
-                              ? "fill-red-500 text-red-500"
+                              ? "fill-red-400 text-red-500"
                               : ""
                           }`}
                         />

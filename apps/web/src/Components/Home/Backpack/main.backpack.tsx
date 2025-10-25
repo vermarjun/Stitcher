@@ -58,6 +58,7 @@ export interface IBackpackItem {
   tags: string[];
   notes?: string;
   addedAt: string;
+  isAddedToProject?: boolean;
 }
 
 export interface IBackpack {
@@ -92,8 +93,7 @@ const BackpackPage: React.FC = () => {
   const fetchBackpack = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get("/backpack");
-      console.log(response.data);
+      const response = await api.get(`/backpack`);
       if (response.data.success) {
         setBackpack(response.data.backpack);
       }
@@ -330,11 +330,9 @@ const BackpackPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* Stats */}
               {backpack && (
                 <div className="text-sm text-zinc-400 mr-4">
-                  {formatCount(backpack.totalItems)} items •{" "}
-                  {(backpack.totalBytes / (1024 * 1024 * 1024)).toFixed(1)} GB
+                  {formatCount(backpack.totalItems)} items
                 </div>
               )}
             </div>

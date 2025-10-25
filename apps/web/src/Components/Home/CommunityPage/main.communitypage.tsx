@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search,
   TrendingUp,
@@ -15,6 +15,7 @@ import { Skeleton } from "@/Components/ui/skeleton";
 import api from "@/api";
 import { PostCard } from "./PostCard.communitypage";
 import { VideoModal } from "./VideoModal.communitypage";
+import type { User } from "@/State/Types";
 
 export interface IUser {
   _id: string;
@@ -76,8 +77,11 @@ export interface PaginationInfo {
   pages: number;
 }
 
+interface Props {
+  currentUser?: User
+}
 
-const CommunityPage: React.FC = () => {
+const CommunityPage = ({currentUser}:Props) => {
   const [posts, setPosts] = useState<ICommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -247,7 +251,7 @@ const CommunityPage: React.FC = () => {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {posts.map((post, index) => (
-                <PostCard posts={posts} post={post} index={index} formatCount={formatCount} setIsModalOpen={setIsModalOpen} setSelectedPost={setSelectedPost} lastPostRef={lastPostRef}/>
+                <PostCard currentUser={currentUser} posts={posts} post={post} index={index} formatCount={formatCount} setIsModalOpen={setIsModalOpen} setSelectedPost={setSelectedPost} lastPostRef={lastPostRef}/>
               ))}
             </div>
 
@@ -273,7 +277,7 @@ const CommunityPage: React.FC = () => {
 
       {/* Post Detail Modal (Instagram-style) */}
       {isModalOpen && selectedPost && (
-          <VideoModal selectedPost={selectedPost} setIsModalOpen={setIsModalOpen} setPosts={setPosts} setSelectedPost={setSelectedPost} formatCount={formatCount}/>
+          <VideoModal currentUser={currentUser} selectedPost={selectedPost} setIsModalOpen={setIsModalOpen} setPosts={setPosts} setSelectedPost={setSelectedPost} formatCount={formatCount}/>
       )}
     </div>
   );

@@ -24,7 +24,7 @@ const VideoPlayerModal: React.FC<VideoPlayerProps> = ({
         ref={videoPlayerRef}
         className="relative w-full max-w-4xl mx-auto"
       >
-        <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-2xl border border-zinc-800">
+        <div className="bg-zinc-800 rounded-lg overflow-hidden shadow-2xl border border-zinc-600">
           <div className="relative aspect-video">
             <video
               ref={videoRef}

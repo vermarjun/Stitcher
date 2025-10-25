@@ -14,7 +14,6 @@ import { Textarea } from "@/Components/ui/textarea";
 import {
   Plus,
   Upload,
-  // LayoutTemplate,
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -204,7 +203,7 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
           </Dialog>
 
           <Card 
-            onClick={()=>{onNavigate("api-keys")}}
+            onClick={()=>{onNavigate("backpack")}}
             className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800">
             <CardContent className="p-2.5">
               <div className="flex flex-col items-center text-center space-y-2">

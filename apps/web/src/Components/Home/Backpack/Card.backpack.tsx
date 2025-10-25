@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Heart, Trash2, MoreVertical, Play, Share2, X, Loader2 } from "lucide-react";
+import { Heart, Play, Share2, X, Loader2 } from "lucide-react";
 import AudioPlayerModal from "./AudioPlayerModal.backpack";
 import VideoPlayerModal from "./VideoPlayerModal.backpack";
 
@@ -125,7 +125,6 @@ const BackpackItemCard = ({
   onCreatePost,
   formatDuration,
 }: BackpackItemCardProps) => {
-  const [showMenu, setShowMenu] = useState(false);
   const [isVideoPlayerVisible, setIsVideoPlayerVisible] = useState(false);
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -223,10 +222,8 @@ const BackpackItemCard = ({
 
   const handleCardClick = () => {
     if (itemData.type === "video") {
-      setShowMenu(false);
       setIsVideoPlayerVisible(true);
     } else if (itemData.type === "audio") {
-      setShowMenu(false);
       setIsAudioPlayerVisible(true);
       setIsPlaying(true);
     }
@@ -331,7 +328,7 @@ const BackpackItemCard = ({
           <img
             src={itemData.thumbnail}
             alt={itemData._id}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full rounded-t-2xl object-cover transition-transform duration-300 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -355,47 +352,6 @@ const BackpackItemCard = ({
               <span>{(itemData.bytes / (1024 * 1024)).toFixed(2)} MB</span>
             </div>
           )}
-
-          {/* Menu Button */}
-          <div className="absolute top-3 right-3">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMenu(!showMenu);
-              }}
-              className="bg-black/60 hover:bg-black/80 rounded-full p-2 transition-all duration-200 backdrop-blur-sm"
-            >
-              <MoreVertical className="h-4 w-4 text-white" />
-            </button>
-
-            {/* Dropdown Menu */}
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-10 overflow-hidden">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCreatePost(item);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-4 py-3 text-left text-sm text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-3"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Create Community Post
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(item._id);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-zinc-800 transition-colors flex items-center gap-3"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete from Backpack
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Item Info */}
@@ -417,7 +373,7 @@ const BackpackItemCard = ({
                   <Heart
                     className={`h-5 w-5 ${
                       item.favourite
-                        ? "fill-red-500 text-red-500"
+                        ? "fill-red-400 text-red-500"
                         : "text-zinc-200 hover:text-red-400"
                     }`}
                   />
@@ -436,12 +392,11 @@ const BackpackItemCard = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       onCreatePost(item);
-                      setShowMenu(false);
                     }}
-                    className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-3 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
+                    className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-2 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
                   >
                     <p className="text-xs">Community</p>
-                    <Share2 className="h-4 w-4" />
+                    <Share2 className="h-3 w-3" />
                   </button>
                 </div>
               )}
@@ -450,12 +405,11 @@ const BackpackItemCard = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     onDelete(item._id);
-                    setShowMenu(false);
                   }}
-                  className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-3 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
+                  className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-2 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
                 >
                   <p className="text-xs">Remove</p>
-                  <X className="h-4 w-4" />
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             </div>

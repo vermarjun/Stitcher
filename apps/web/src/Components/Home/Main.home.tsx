@@ -73,7 +73,7 @@ const Main = () => {
       case "teams":
         return <Teams />;
       case "community":
-        return <AnimationCommunity/>
+        return <AnimationCommunity currentUser={user}/>
       case "backpack":
         return <Backpack/>
       case "api-keys":

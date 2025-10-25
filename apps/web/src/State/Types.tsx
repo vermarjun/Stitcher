@@ -108,6 +108,7 @@ export interface Asset {
   createdAt: string;
   updatedAt: string;
   isOnTimeline?: boolean;
+  isAddedToBackpack?: boolean;
 }
 
 export interface ITimelineItemBase {
