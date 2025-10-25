@@ -253,7 +253,6 @@ export const getBackpackByUserIdDashboard = async (req: Request, res: Response) 
 
         // If projectId is provided, check which items are already in the project
         if (projectId && backpack.items.length > 0) {
-            // Separate template IDs and asset URLs for efficient querying
             const templateIds: Types.ObjectId[] = [];
             const assetUrls: string[] = [];
             const assetNames: string[] = [];
@@ -268,16 +267,13 @@ export const getBackpackByUserIdDashboard = async (req: Request, res: Response) 
                 }
             });
 
-            // Query assets in the project that match backpack items
             const existingAssets = await Asset.find({
                 projectId: new Types.ObjectId(projectId),
                 $or: [
-                    // Check for templates added to project
                     {
                         origin: AssetOrigin.TEMPLATE,
                         originalTemplateId: { $in: templateIds }
                     },
-                    // Check for assets added to project (match by URL and name)
                     {
                         url: { $in: assetUrls },
                         name: { $in: assetNames }
@@ -285,7 +281,6 @@ export const getBackpackByUserIdDashboard = async (req: Request, res: Response) 
                 ]
             }).select('originalTemplateId url name');
 
-            // Create lookup maps for O(1) checking
             const templateInProjectMap = new Set(
                 existingAssets
                     .filter(asset => asset.originalTemplateId)
@@ -298,11 +293,14 @@ export const getBackpackByUserIdDashboard = async (req: Request, res: Response) 
                     .map(asset => `${asset.url}:${asset.name}`)
             );
 
-            // Add isAddedToProject field to each item
+            // ✅ FIX: Mark items as added if their sourceId == projectId
             const itemsWithProjectStatus = backpack.items.map(item => {
                 let isAddedToProject = false;
 
-                if (item.itemType === BackpackItemType.TEMPLATE) {
+                // Automatically true if this item came from this same project
+                if (item.sourceId?.toString() === projectId) {
+                    isAddedToProject = true;
+                } else if (item.itemType === BackpackItemType.TEMPLATE) {
                     const itemIdStr = (item.itemId as Types.ObjectId).toString();
                     isAddedToProject = templateInProjectMap.has(itemIdStr);
                 } else if (item.itemType === BackpackItemType.ASSET) {
@@ -332,7 +330,7 @@ export const getBackpackByUserIdDashboard = async (req: Request, res: Response) 
         // If no projectId provided, return backpack as-is
         res.status(200).json({
             success: true,
-            backpack: backpack
+            backpack
         });
     } catch (error) {
         console.error('Error fetching backpack:', error);
