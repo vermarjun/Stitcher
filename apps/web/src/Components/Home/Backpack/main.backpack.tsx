@@ -134,11 +134,6 @@ const BackpackPage: React.FC = () => {
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    if (
-      !confirm("Are you sure you want to remove this item from your backpack?")
-    )
-      return;
-
     try {
       const response = await api.delete(`/backpack/items/${itemId}`);
       if (response.data.success) {

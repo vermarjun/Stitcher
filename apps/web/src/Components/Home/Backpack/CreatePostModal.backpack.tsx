@@ -110,7 +110,7 @@ const CreatePostModal = ({ isOpen, onClose, selectedItem, onCreatePost }: Create
             <h2 className="text-xl font-bold text-white">Create Community Post</h2>
             <Button
               onClick={onClose}
-              className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-full"
+              className="bg-zinc-800 cursor-pointer hover:bg-zinc-700 text-white rounded-full"
               size="icon"
             >
               <X className="h-5 w-5" />
@@ -191,14 +191,14 @@ const CreatePostModal = ({ isOpen, onClose, selectedItem, onCreatePost }: Create
                     type="button"
                     onClick={onClose}
                     variant="outline"
-                    className="flex-1 bg-transparent border-zinc-700 text-white hover:bg-zinc-800"
+                    className="flex-1 bg-zinc-500 cursor-pointer border-zinc-700 hover:text-white text-white hover:bg-zinc-600"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={loading || !title.trim()}
-                    className="flex-1 bg-white text-black hover:bg-zinc-200 disabled:opacity-50"
+                    className="flex-1 bg-white cursor-pointer text-black hover:bg-zinc-300 disabled:opacity-50"
                   >
                     {loading ? "Creating..." : "Create Post"}
                   </Button>

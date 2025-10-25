@@ -196,37 +196,37 @@ const CommunityPage = ({currentUser}:Props) => {
               </h1>
             </div>
               <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-4 text-zinc-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-200" />
                 <Input
                   type="text"
                   placeholder="Search posts, creators..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 focus:border-zinc-600 rounded-full h-8"
+                  className="pl-10 bg-zinc-800  text-zinc-200 placeholder:text-white placeholder:font-extralight focus:border-none border-none rounded-full h-8"
                 />
               </div>
 
             <div className="flex items-center gap-2">
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                <SelectTrigger className="w-32 bg-zinc-900 border-zinc-800 text-white h-8 rounded-full">
+                <SelectTrigger className="w-32 bg-zinc-800 border-zinc-700 text-white h-8 rounded-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800">
+                <SelectContent className="bg-zinc-800 border-zinc-700">
                   <SelectItem
                     value="publishedAt"
-                    className="text-white hover:bg-zinc-800"
+                    className="text-white hover:bg-zinc-700"
                   >
                     Latest
                   </SelectItem>
                   <SelectItem
                     value="likesCount"
-                    className="text-white hover:bg-zinc-800"
+                    className="text-white hover:bg-zinc-700"
                   >
                     Most Liked
                   </SelectItem>
                   <SelectItem
                     value="views"
-                    className="text-white hover:bg-zinc-800"
+                    className="text-white hover:bg-zinc-700"
                   >
                     Trending
                   </SelectItem>

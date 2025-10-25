@@ -131,7 +131,9 @@ const BackpackItemCard = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isFavouriteLoading, setIsFavouriteLoading] = useState(false); // Added loading state
+  const [isFavouriteLoading, setIsFavouriteLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -173,6 +175,28 @@ const BackpackItemCard = ({
   };
 
   const itemData = getItemData();
+
+  // Delete confirmation handlers
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteModal(true);
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onDelete(item._id);
+      setShowDeleteModal(false);
+    } catch (error) {
+      console.error("Failed to delete item:", error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Audio player effects
   useEffect(() => {
@@ -276,8 +300,46 @@ const BackpackItemCard = ({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
-   return (
+  return (
     <>
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-xl max-w-md w-full border border-zinc-800">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-white mb-2">
+                Remove Item?
+              </h2>
+              <p className="text-zinc-400 text-sm">
+                Are you sure you want to remove this item from your backpack? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 p-4 border-t border-zinc-800">
+              <button
+                onClick={handleCancelDelete}
+                className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-zinc-300 hover:bg-red-200 border border-zinc-400 hover:border-red-500 cursor-pointer text-red-600 font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  "Remove"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Audio Player Modal */}
       {isAudioPlayerVisible && (
         <AudioPlayerModal
@@ -358,7 +420,7 @@ const BackpackItemCard = ({
         <div className="w-full">
           <div className="px-4 py-3 w-full flex justify-between items-center border-b border-zinc-700">
             <div
-              onClick={handleToggleFavorite} // Updated to use the new handler
+              onClick={handleToggleFavorite}
               className="cursor-pointer w-fit flex justify-center items-center gap-1"
             >
               {isFavouriteLoading ? (
@@ -402,10 +464,7 @@ const BackpackItemCard = ({
               )}
               <div className="flex justify-center items-center gap-2">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(item._id);
-                  }}
+                  onClick={handleDeleteClick}
                   className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-2 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
                 >
                   <p className="text-xs">Remove</p>

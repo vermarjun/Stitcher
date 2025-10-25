@@ -394,13 +394,13 @@ export const PostCard = ({
 
       {/* Edit Post Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl max-w-lg w-full border border-zinc-800">
             <div className="flex items-center justify-between p-4 border-b border-zinc-800">
               <h2 className="text-lg font-semibold text-white">Edit Post</h2>
               <button
                 onClick={() => setShowEditModal(false)}
-                className="text-zinc-400 hover:text-white transition-colors"
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -446,14 +446,14 @@ export const PostCard = ({
             <div className="flex gap-3 p-4 border-t border-zinc-800">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdatePost}
                 disabled={isUpdating || !editTitle.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-green-700 hover:bg-green-800 cursor-pointer text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isUpdating ? (
                   <>
@@ -471,12 +471,9 @@ export const PostCard = ({
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl max-w-md w-full border border-zinc-800">
             <div className="p-6">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/20 mb-4">
-                <Trash2 className="h-6 w-6 text-red-500" />
-              </div>
               <h2 className="text-xl font-semibold text-white mb-2">
                 Delete Post?
               </h2>
@@ -487,14 +484,14 @@ export const PostCard = ({
             <div className="flex gap-3 p-4 border-t border-zinc-800">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeletePost}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-zinc-300 hover:bg-red-200 border border-zinc-400 hover:border-red-500 cursor-pointer text-red-600 font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isDeleting ? (
                   <>
