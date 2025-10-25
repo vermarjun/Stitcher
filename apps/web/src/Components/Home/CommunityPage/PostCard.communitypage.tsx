@@ -180,7 +180,7 @@ export const PostCard = ({
     <>
       <div
         key={post._id}
-        className="group bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700"
+        className="group bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 w-9/12"
       >
         {/* Thumbnail */}
         <div

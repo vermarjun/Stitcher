@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Home, FolderOpen, Key, Settings, ChevronLeft, ChevronRight, LogOut, LayoutTemplate, Users, Backpack } from 'lucide-react';
+import { Search, Home, FolderOpen, Key, Settings, CreditCard, ChevronLeft, ChevronRight, LogOut, LayoutTemplate, Users, Backpack, BellIcon } from 'lucide-react';
 import type { User } from '@/State/Types';
 import type { NavigateFunction } from 'react-router-dom';
 import { AuroraText } from '../magicui/aurora-text';
@@ -44,15 +44,15 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
       { icon: Home, label: 'Home', key: 'home' },
       { icon: FolderOpen, label: 'All Projects', key: 'projects' },
       { icon: Users, label: 'Community', key: 'community' },
-      { icon: Backpack, label: 'Backpack', key: 'backpack' }
+      { icon: Backpack, label: 'Backpack', key: 'backpack' },
+      { icon: BellIcon, label: 'Notifications', key: 'notifications' }
     ],
     api_keys: [
-      // { icon: CreditCard, label: 'Pricing', key: 'pricing' },
+      { icon: CreditCard, label: 'Pricing', key: 'pricing' },
       { icon: Key, label: 'API Keys', key: 'api-keys' }
     ],
     browse: [
       { icon: LayoutTemplate, label: 'Templates', key: 'templates' }
-      // { icon: CloudUpload, label: 'Assets', key: 'assets' }
     ]
   };
 

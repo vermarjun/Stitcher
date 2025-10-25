@@ -16,6 +16,8 @@ import SettingsPage from "./Settings.home";
 import ThreeDotLoader from "../LoadingScreens/ThreeDotLoader";
 import AnimationCommunity from "./CommunityPage/main.communitypage";
 import Backpack from "./Backpack/main.backpack";
+import NotificationsComponent from "./Dashboard/Notifications.home";
+import PricingPage from "./Pricing.home";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -84,6 +86,11 @@ const Main = () => {
         return <Assets />;
       case "settings":
         return <SettingsPage />;
+      case "notifications":
+        return <NotificationsComponent />;
+      case "pricing":
+        return <PricingPage />;
+
       default:
         return (
           <Dashboard

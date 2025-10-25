@@ -1,7 +1,22 @@
 import { useState, useRef, useEffect } from "react";
-import { Heart, Play, Share2, X, Loader2 } from "lucide-react";
+import { Heart, Play, Share2, X, Loader2, MoreVertical } from "lucide-react";
 import AudioPlayerModal from "./AudioPlayerModal.backpack";
 import VideoPlayerModal from "./VideoPlayerModal.backpack";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/Components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/Components/ui/dialog";
+import { Button } from "@/Components/ui/button";
 
 export interface MediaPlayerCommonProps {
   isOpen: boolean;
@@ -176,12 +191,6 @@ const BackpackItemCard = ({
 
   const itemData = getItemData();
 
-  // Delete confirmation handlers
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteModal(true);
-  };
-
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
   };
@@ -196,6 +205,18 @@ const BackpackItemCard = ({
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  // Handle share with community from dropdown
+  const handleShareWithCommunity = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCreatePost(item);
+  };
+
+  // Handle remove from backpack from dropdown
+  const handleRemoveFromBackpack = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteModal(true);
   };
 
   // Audio player effects
@@ -303,42 +324,50 @@ const BackpackItemCard = ({
   return (
     <>
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 rounded-xl max-w-md w-full border border-zinc-800">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-white mb-2">
-                Remove Item?
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Are you sure you want to remove this item from your backpack? This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex gap-3 p-4 border-t border-zinc-800">
-              <button
-                onClick={handleCancelDelete}
-                className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-zinc-300 hover:bg-red-200 border border-zinc-400 hover:border-red-500 cursor-pointer text-red-600 font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Removing...
-                  </>
-                ) : (
-                  "Remove"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog
+        open={showDeleteModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelDelete();
+          }
+        }}
+      >
+        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl">
+              Remove Item?
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm pt-2">
+              Are you sure you want to remove this item from your backpack? This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={handleCancelDelete}
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Removing...
+                </>
+              ) : (
+                "Remove"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Audio Player Modal */}
       {isAudioPlayerVisible && (
@@ -390,12 +419,41 @@ const BackpackItemCard = ({
           <img
             src={itemData.thumbnail}
             alt={itemData._id}
-            className="w-full h-full rounded-t-2xl object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full rounded-t-2xl object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+          {/* Three Dot Menu Button - Top Right */}
+          <div className="absolute top-3 right-3 z-10 text-white">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-zinc-800 hover:bg-zinc-700 cursor-pointer text-white p-1.5 rounded-full"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-zinc-900 border border-zinc-700 rounded-lg w-60 absolute right-0 text-white">
+                <DropdownMenuItem
+                  onClick={handleShareWithCommunity}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 hover:text-white cursor-pointer"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share with community
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleRemoveFromBackpack}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-zinc-800 hover:text-red-300 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                  Remove from backpack
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {/* Play Button Overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+          <div className="absolute inset-0 flex rounded-xl items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
             <div className="bg-white rounded-full p-3 shadow-lg">
               <Play className="h-5 w-5 text-black fill-current" />
             </div>
@@ -408,107 +466,44 @@ const BackpackItemCard = ({
             </div>
           )}
 
-          {/* File Size Badge */}
-          {itemData.bytes && (
-            <div className="absolute bottom-3 left-3 bg-black/80 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm">
-              <span>{(itemData.bytes / (1024 * 1024)).toFixed(2)} MB</span>
-            </div>
-          )}
+          {/* Add to Favorites Button - Bottom Left Overlay */}
+          <div className="absolute bottom-3 left-3">
+            <button
+              onClick={handleToggleFavorite}
+              className="bg-white/20 hover:bg-black/80 text-white p-1.5 rounded-full backdrop-blur-sm transition-colors"
+            >
+              {isFavouriteLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Heart
+                  className={`h-5 w-5 ${
+                    item.favourite
+                      ? "fill-red-400 text-red-500"
+                      : "text-zinc-200 hover:text-red-400"
+                  }`}
+                />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Item Info */}
-        <div className="w-full">
-          <div className="px-4 py-3 w-full flex justify-between items-center border-b border-zinc-700">
-            <div
-              onClick={handleToggleFavorite}
-              className="cursor-pointer w-fit flex justify-center items-center gap-1"
-            >
-              {isFavouriteLoading ? (
-                // Loading state
-                <div className="flex items-center gap-1">
-                  <Loader2 className="h-5 w-5 text-zinc-400 animate-spin" />
-                  <p className="text-xs text-zinc-400">Adding...</p>
-                </div>
-              ) : (
-                // Normal state
-                <>
-                  <Heart
-                    className={`h-5 w-5 ${
-                      item.favourite
-                        ? "fill-red-400 text-red-500"
-                        : "text-zinc-200 hover:text-red-400"
-                    }`}
-                  />
-                  {item.favourite ? (
-                    <p className="text-xs text-red-400">Favourite</p>
-                  ) : (
-                    <p className="text-xs text-zinc-400">Add to Favourites</p>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="flex items-center w-fit gap-2">
-              {!(item.itemType === "Template") && (
-                <div className="flex justify-center items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCreatePost(item);
-                    }}
-                    className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-2 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
-                  >
-                    <p className="text-xs">Community</p>
-                    <Share2 className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
-              <div className="flex justify-center items-center gap-2">
-                <button
-                  onClick={handleDeleteClick}
-                  className="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-2 py-1 rounded-lg gap-2 justify-center w-fit text-left text-xs text-zinc-200 transition-colors flex items-center"
-                >
-                  <p className="text-xs">Remove</p>
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="p-4">
-            {/* Title */}
-            <h3 className="text-sm font-medium text-white mb-2 line-clamp-2 group-hover:text-zinc-300 transition-colors">
+        <div className="w-full p-3">
+          {/* Title and Bytes in flex container */}
+          <div className="w-full flex justify-between items-center">
+            <h3 className="text-sm font-medium text-white line-clamp-2 group-hover:text-zinc-300 transition-colors flex-1 pr-2">
               {getDisplayName()}
             </h3>
-            <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed mb-3">
+            <div className="bg-black/20 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm whitespace-nowrap">
+              <span>{(itemData.bytes / (1024 * 1024)).toFixed(2)} MB</span>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="">
+            <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed mt-2">
               {getDisplayDescription()}
             </p>
-
-            {/* Tags */}
-            {item.tags?.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {item.tags.slice(0, 3).map((tag, index) => (
-                  <span
-                    key={index}
-                    className="inline-block bg-blue-500/20 text-blue-300 text-xs px-3 py-1 rounded-full border border-blue-500/30"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-                {item.tags.length > 3 && (
-                  <span className="inline-block bg-zinc-700/50 text-zinc-400 text-xs px-3 py-1 rounded-full">
-                    +{item.tags.length - 3}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Notes */}
-            {item.notes && (
-              <div className="bg-zinc-700/30 rounded-lg p-3">
-                <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">
-                  {item.notes}
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
