@@ -819,6 +819,356 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * Get trending posts from users that the current user follows
+ * GET /api/community/posts/following
+ */
+export async function getFollowingPosts(req: Request, res: Response): Promise<void> {
+    try {
+        const userId = req.userId;
+        
+        // Must be authenticated to see following feed
+        if (!userId || !Types.ObjectId.isValid(userId)) {
+            res.status(401).json({ 
+                success: false,
+                error: 'Authentication required to view following feed' 
+            });
+            return;
+        }
+
+        const {
+            page = 1,
+            limit = 20,
+            sortBy = 'trending',
+            tags,
+            search,
+            isAddedToBackpackAttach
+        } = req.query;
+
+        const pageNum = parseInt(page as string);
+        const limitNum = parseInt(limit as string);
+        const skip = (pageNum - 1) * limitNum;
+
+        // Get the list of users the current user is following
+        const currentUser = await User.findById(userId).select('following');
+        
+        if (!currentUser || !currentUser.following || currentUser.following.length === 0) {
+            // User is not following anyone, return empty results
+            res.json({
+                success: true,
+                data: [],
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total: 0,
+                    pages: 0
+                },
+                message: 'You are not following any users yet'
+            });
+            return;
+        }
+
+        // Build query with following filter
+        const query: any = {
+            authorId: { $in: currentUser.following } // Only posts from followed users
+        };
+
+        if (tags) {
+            const tagArray = (tags as string).split(',');
+            query.tags = { $in: tagArray };
+        }
+
+        if (search) {
+            query.$text = { $search: search as string };
+        }
+
+        let sort: any = {};
+        switch (sortBy) {
+            case 'popular':
+                sort = { 'analytics.views': -1, publishedAt: -1 };
+                break;
+            case 'trending':
+                sort = { likesCount: -1, 'analytics.views': -1, publishedAt: -1 };
+                break;
+            case 'recent':
+            default:
+                sort = { publishedAt: -1 };
+                break;
+        }
+
+        // Build aggregation pipeline
+        const aggregationPipeline: any[] = [
+            { $match: query }
+        ];
+
+        // Check if assets are in backpack
+        let backpackId = "";
+        if (isAddedToBackpackAttach) {
+            const backpack = await Backpack.findOne({ userId });
+            if (backpack != null) {
+                backpackId = backpack._id as string;
+            }
+        }
+
+        if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
+            aggregationPipeline.push(
+                {
+                    $lookup: {
+                        from: 'backpacks',
+                        let: { assetId: '$assetId' },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $eq: ['$_id', new Types.ObjectId(backpackId as string)]
+                                    }
+                                }
+                            },
+                            {
+                                $project: {
+                                    items: {
+                                        $filter: {
+                                            input: '$items',
+                                            as: 'item',
+                                            cond: {
+                                                $and: [
+                                                    { $eq: ['$$item.itemType', 'Asset'] },
+                                                    { $eq: ['$$item.itemId', '$$assetId'] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        ],
+                        as: 'backpackItems'
+                    }
+                },
+                {
+                    $addFields: {
+                        isAddedToBackpack: {
+                            $gt: [
+                                {
+                                    $size: {
+                                        $ifNull: [
+                                            { $arrayElemAt: ['$backpackItems.items', 0] },
+                                            []
+                                        ]
+                                    }
+                                },
+                                0
+                            ]
+                        }
+                    }
+                }
+            );
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    isAddedToBackpack: false
+                }
+            });
+        }
+
+        // Add isLiked field for posts
+        aggregationPipeline.push({
+            $addFields: {
+                isLiked: {
+                    $in: [new Types.ObjectId(userId), '$likes.userId']
+                }
+            }
+        });
+
+        // Add isLiked field for each comment
+        aggregationPipeline.push({
+            $addFields: {
+                comments: {
+                    $map: {
+                        input: '$comments',
+                        as: 'comment',
+                        in: {
+                            $mergeObjects: [
+                                '$$comment',
+                                {
+                                    isLiked: {
+                                        $in: [new Types.ObjectId(userId), '$$comment.likes']
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        });
+
+        // Add population for comment user details
+        aggregationPipeline.push({
+            $lookup: {
+                from: 'users',
+                localField: 'comments.userId',
+                foreignField: '_id',
+                as: 'commentUsers',
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            profilePhoto: 1,
+                            plan: 1,
+                            bio: 1
+                        }
+                    }
+                ]
+            }
+        });
+
+        // Map the populated user data to each comment
+        aggregationPipeline.push({
+            $addFields: {
+                comments: {
+                    $map: {
+                        input: '$comments',
+                        as: 'comment',
+                        in: {
+                            $mergeObjects: [
+                                '$$comment',
+                                {
+                                    userId: {
+                                        $arrayElemAt: [
+                                            {
+                                                $filter: {
+                                                    input: '$commentUsers',
+                                                    as: 'user',
+                                                    cond: { $eq: ['$$user._id', '$$comment.userId'] }
+                                                }
+                                            },
+                                            0
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        });
+
+        // Remove the temporary commentUsers array
+        aggregationPipeline.push({
+            $project: {
+                commentUsers: 0
+            }
+        });
+
+        // Remove the backpackItems array as we only need the computed field
+        aggregationPipeline.push({
+            $project: {
+                backpackItems: 0
+            }
+        });
+
+        // Add sorting and pagination
+        aggregationPipeline.push(
+            { $sort: sort },
+            { $skip: skip },
+            { $limit: limitNum }
+        );
+
+        // Add population of referenced fields
+        aggregationPipeline.push(
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'authorId',
+                    foreignField: '_id',
+                    as: 'authorId',
+                    pipeline: [
+                        {
+                            $project: {
+                                username: 1,
+                                profilePhoto: 1,
+                                followers: 1,
+                                plan: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unwind: {
+                    path: '$authorId',
+                    preserveNullAndEmptyArrays: true
+                }
+            }
+        );
+
+        // Add isFollowing field - will always be true for following feed
+        // but keeping the same structure for consistency
+        aggregationPipeline.push({
+            $addFields: {
+                isFollowing: true, // Always true since we're filtering by followed users
+                // Clean up authorId by removing followers array from response
+                authorId: {
+                    _id: '$authorId._id',
+                    username: '$authorId.username',
+                    profilePhoto: '$authorId.profilePhoto',
+                    plan: '$authorId.plan',
+                }
+            }
+        });
+
+        // Continue with asset lookup
+        aggregationPipeline.push(
+            {
+                $lookup: {
+                    from: 'assets',
+                    localField: 'assetId',
+                    foreignField: '_id',
+                    as: 'assetId',
+                    pipeline: [
+                        {
+                            $project: {
+                                url: 1,
+                                thumbnail: 1,
+                                duration: 1,
+                                type: 1
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unwind: {
+                    path: '$assetId',
+                    preserveNullAndEmptyArrays: true
+                }
+            }
+        );
+
+        // Execute aggregation and count query
+        const [posts, total] = await Promise.all([
+            CommunityPost.aggregate(aggregationPipeline),
+            CommunityPost.countDocuments(query)
+        ]);
+
+        res.json({
+            success: true,
+            data: posts,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching following posts:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch following posts' 
+        });
+    }
+}
+
+/**
  * Get posts by a specific user
  * GET /api/community/users/:userId/posts
  */

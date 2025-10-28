@@ -272,80 +272,66 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
 // ============================================
 // NEW: FOLLOW SYSTEM FUNCTIONALITY
 // ============================================
-
-/**
- * Follow a user
- * POST /api/users/:userId/follow
- */
 export const followUser = async (req: IUserRequest, res: Response): Promise<Response> => {
   const session = await mongoose.startSession();
-  session.startTransaction();
-  
+
   try {
-    const currentUserId = req.userId; // User who is following
-    const targetUserId = req.params.userId; // User to be followed
-    
-    // Validation
-    if (!currentUserId || !targetUserId) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: 'User IDs are required.' });
-    }
-    
-    if (currentUserId === targetUserId) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: 'You cannot follow yourself.' });
-    }
-    
-    // Check if both users exist
-    const [currentUser, targetUser] = await Promise.all([
-      User.findById(currentUserId).session(session),
-      User.findById(targetUserId).session(session)
-    ]);
-    
-    if (!currentUser || !targetUser) {
-      await session.abortTransaction();
-      return res.status(404).json({ message: 'User not found.' });
-    }
-    
-    // Check if already following
-    if (currentUser.following.includes(targetUserId as any)) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: 'You are already following this user.' });
-    }
-    
-    // Add to following/followers arrays and update counts
-    await Promise.all([
-      User.findByIdAndUpdate(
+    await session.withTransaction(async () => {
+      const currentUserId = req.userId;
+      const targetUserId = req.params.userId;
+
+      if (!currentUserId || !targetUserId) {
+        throw new Error("User IDs are required.");
+      }
+
+      if (currentUserId === targetUserId) {
+        throw new Error("You cannot follow yourself.");
+      }
+
+      const [currentUser, targetUser] = await Promise.all([
+        User.findById(currentUserId).session(session),
+        User.findById(targetUserId).session(session),
+      ]);
+
+      if (!currentUser || !targetUser) {
+        throw new Error("User not found.");
+      }
+
+      if (currentUser.following.includes(targetUserId as any)) {
+        throw new Error("You are already following this user.");
+      }
+
+      // ✅ run sequentially to avoid race conditions
+      await User.findByIdAndUpdate(
         currentUserId,
         { 
           $addToSet: { following: targetUserId },
-          $inc: { 'stats.followingCount': 1 }
+          $inc: { 'stats.followingCount': 1 },
         },
         { session }
-      ),
-      User.findByIdAndUpdate(
+      );
+
+      await User.findByIdAndUpdate(
         targetUserId,
         { 
           $addToSet: { followers: currentUserId },
-          $inc: { 'stats.followersCount': 1 }
+          $inc: { 'stats.followersCount': 1 },
         },
         { session }
-      )
-    ]);
-    
-    await session.commitTransaction();
-    
-    return res.status(200).json({ 
-      message: 'Successfully followed user.',
-      following: true
+      );
+    });
+
+    return res.status(200).json({
+      message: "Successfully followed user.",
+      following: true,
     });
   } catch (err: any) {
-    await session.abortTransaction();
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ message: "Server error", error: err.message });
   } finally {
     session.endSession();
   }
 };
+
 
 /**
  * Unfollow a user

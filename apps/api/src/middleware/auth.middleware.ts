@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { JWT_CONFIG } from '../config';
 
-// Extend the Request interface to include the userId property
 declare global {
   namespace Express {
     interface Request {

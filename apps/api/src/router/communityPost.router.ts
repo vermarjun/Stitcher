@@ -17,7 +17,8 @@ import {
   searchPosts,
   getPostsByTag,
   getPostsByIds,
-  getUserComments
+  getUserComments,
+  getFollowingPosts
 } from '../controller/communityPost.controller';
 import auth from '../middleware/auth.middleware';
 import multer from 'multer';
@@ -47,6 +48,7 @@ router.delete('/posts/:postId', auth, deletePost);          // DELETE /api/commu
 // ============= POST RETRIEVAL =============
 router.get('/posts', auth ,getPosts);                       // GET /api/community/posts
 router.get('/posts/:postId', auth, getPostById);            // GET /api/community/posts/:postId
+router.get('/following/posts', auth, getFollowingPosts);    // GET /api/community/posts/:postId
 router.post('/posts/batch', auth, getPostsByIds);           // POST /api/community/posts/batch
 
 // ============= USER-SPECIFIC POSTS =============
