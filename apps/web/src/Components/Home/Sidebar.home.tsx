@@ -73,7 +73,7 @@ const Sidebar = ({ collapsed, onToggle, user, activeItem, onNavigate, navigate }
         h-full bg-black border-r border-zinc-800 
         transition-all duration-300 ease-in-out flex flex-col
         lg:relative lg:translate-x-0
-        ${collapsed ? 'w-14 lg:translate-x-0 ' : 'w-72 translate-x-0 fixed left-0 top-0 z-50 '}
+        ${collapsed ? 'w-14 lg:translate-x-0 ' : 'md:w-72 xl:w-80 translate-x-0 fixed left-0 top-0 z-50 '}
       `}>
         {/* Header */}
         <div className="flex h-14 items-center justify-between p-3 border-b border-zinc-800">

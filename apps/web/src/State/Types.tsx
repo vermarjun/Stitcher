@@ -33,6 +33,7 @@ export type Project = {
   timeline: Timeline;
 };
 
+// This is what is stored in local storage
 export type User = {
   id: string;
   username: string;

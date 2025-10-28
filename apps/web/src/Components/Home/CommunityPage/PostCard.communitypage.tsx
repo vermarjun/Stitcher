@@ -1,63 +1,76 @@
 import {
   Heart,
-  Clock,
   Play,
-  Eye,
+  Clock,
   MessageCircle,
-  Backpack,
   Check,
   Loader2,
-  MoreVertical,
+  Backpack,
+  MoreHorizontal,
+  UserPlus,
+  UserCheck,
   Edit,
-  Trash2,
   X,
+  Trash2,
+  ChartColumn,
 } from "lucide-react";
 import { useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/Components/ui/dropdown-menu";
 import api from "@/api";
-import { Avatar } from "./VideoModal.communitypage";
-import { toast } from "sonner";
-import type { ICommunityPost, IUser } from "./main.communitypage";
 import type { User } from "@/State/Types";
+import type { ICommunityPost, IAuthor } from "./main.communitypage";
+import { toast } from "sonner";
 
 interface Props {
-  currentUser?: User;
   post: ICommunityPost;
   index: number;
-  formatCount: (count: number) => string;
   posts: ICommunityPost[];
-  setIsModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setSelectedPost: React.Dispatch<React.SetStateAction<ICommunityPost | null>>;
-  lastPostRef: React.Ref<HTMLDivElement | null>;
+  lastPostRef?: React.RefObject<HTMLDivElement> | null;
+  formatCount: (count: number) => string;
+  currentUser?: User;
+  onPostClick: (post: ICommunityPost) => void;
+  onProfileClick: (user: IAuthor) => void;
 }
 
-export const PostCard = ({
-  currentUser,
+const PostCard = ({
   post,
   index,
+  onPostClick,
   posts,
-  formatCount,
-  setSelectedPost,
-  setIsModalOpen,
   lastPostRef,
+  onProfileClick,
+  formatCount,
+  currentUser,
 }: Props) => {
-  const [hoveredUser, setHoveredUser] = useState<string | null>(null);
-  const [userProfileData, setUserProfileData] = useState<IUser | null>(null);
-  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [loadingStates, setLoadingStates] = useState<{ [postId: string]: boolean }>({});
-  const [showPostMenu, setShowPostMenu] = useState(false);
+  const [loadingStates, setLoadingStates] = useState<{
+    [postId: string]: boolean;
+  }>({});
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isLiked, setIsLiked] = useState(post.isLiked);
+  const [likesCount, setLikesCount] = useState(post.likesCount);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   const [editTitle, setEditTitle] = useState(post.title);
-  const [editDescription, setEditDescription] = useState(post.description || "");
+  const [editDescription, setEditDescription] = useState(
+    post.description || ""
+  );
   const [editTags, setEditTags] = useState(post.tags.join(", "));
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const isPostLoading = loadingStates[post._id];
+
   const isOwner = currentUser?.id === post.authorId._id;
 
   const handleSaveToBackPack = async (post: ICommunityPost) => {
-    setLoadingStates(prev => ({ ...prev, [post._id]: true }));
-    
+    setLoadingStates((prev) => ({ ...prev, [post._id]: true }));
+
     try {
       const response = await api.post("/backpack/items", {
         itemType: "Asset",
@@ -69,15 +82,14 @@ export const PostCard = ({
         notes: "",
       });
       if (response.data.success == true) {
-        toast.success("Successfully added template to backpack");
         post.isAddedToBackpack = true;
       } else {
         throw Error("Error came in saving template item to backpack");
       }
     } catch (e: any) {
-      toast.error(e.message || "Error saving template to backpack");
+      console.error(e);
     } finally {
-      setLoadingStates(prev => ({ ...prev, [post._id]: false }));
+      setLoadingStates((prev) => ({ ...prev, [post._id]: false }));
     }
   };
 
@@ -86,8 +98,8 @@ export const PostCard = ({
     try {
       const tagsArray = editTags
         .split(",")
-        .map(tag => tag.trim())
-        .filter(tag => tag.length > 0);
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
 
       const response = await api.patch(`/community/posts/${post._id}`, {
         title: editTitle,
@@ -102,7 +114,6 @@ export const PostCard = ({
         post.description = editDescription;
         post.tags = tagsArray;
         setShowEditModal(false);
-        setShowPostMenu(false);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to update post");
@@ -119,12 +130,11 @@ export const PostCard = ({
       if (response.data.success) {
         toast.success("Post deleted successfully");
         // Remove the post from the posts array
-        const postIndex = posts.findIndex(p => p._id === post._id);
+        const postIndex = posts.findIndex((p) => p._id === post._id);
         if (postIndex > -1) {
           posts.splice(postIndex, 1);
         }
         setShowDeleteModal(false);
-        setShowPostMenu(false);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to delete post");
@@ -133,26 +143,63 @@ export const PostCard = ({
     }
   };
 
-  const handleUserHover = async (userId: string) => {
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    const timeout = setTimeout(async () => {
-      setHoveredUser(userId);
-      try {
-        const response = await api.get(`/users/${userId}/profile`);
-        if (response.data.success) {
-          setUserProfileData(response.data.data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch user profile:", error);
+  const handleLike = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Optimistic update
+    const previousIsLiked = isLiked;
+    const previousLikesCount = likesCount;
+
+    try {
+      const response = await api.post(`/community/posts/${post._id}/like`);
+      if (response.data.success) {
+        // Update with actual data from server
+        setIsLiked(!isLiked);
+        setLikesCount((prev) => (previousIsLiked ? prev - 1 : prev + 1));
       }
-    }, 500);
-    setHoverTimeout(timeout);
+    } catch (error) {
+      // Revert optimistic update on error
+      setIsLiked(previousIsLiked);
+      setLikesCount(previousLikesCount);
+      console.error("Failed to toggle like:", error);
+    }
   };
 
-  const handleUserLeave = () => {
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    setHoveredUser(null);
-    setUserProfileData(null);
+  const onFollowClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Optimistic update
+    const previousIsFollowing = isFollowing;
+    setIsFollowing(!isFollowing);
+
+    try {
+      if (isFollowing) {
+        // Unfollow
+        const response = await api.delete(
+          `/users/${post.authorId._id}/unfollow`
+        );
+        if (response.data.following === false) {
+          setIsFollowing(false);
+        } else {
+          throw new Error("Failed to unfollow");
+        }
+      } else {
+        // Follow
+        const response = await api.post(`/users/${post.authorId._id}/follow`);
+        if (response.data.following === true) {
+          setIsFollowing(true);
+        } else {
+          throw new Error("Failed to follow");
+        }
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      setIsFollowing(previousIsFollowing);
+      console.error(
+        `Failed to ${isFollowing ? "unfollow" : "follow"} user:`,
+        error
+      );
+    }
   };
 
   const formatDuration = (seconds?: number) => {
@@ -162,236 +209,293 @@ export const PostCard = ({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handlePostClick = async (post: ICommunityPost) => {
-    try {
-      const response = await api.get(`/community/posts/${post._id}`);
-      if (response.data.success) {
-        setSelectedPost(response.data.data);
-        setIsModalOpen(true);
-      }
-    } catch (error) {
-      console.error("Failed to fetch post details:", error);
-    }
+  function timeAgo(date: Date) {
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return `${weeks}w`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo`;
+    const years = Math.floor(days / 365);
+    return `${years}y`;
+  }
+
+  const getPlanBadge = (plan?: string) => {
+    if (!plan || plan === "free") return null;
+
+    const badgeConfig = {
+      pro: {
+        color: "text-blue-500",
+        bgColor: "bg-blue-500",
+      },
+      legend: {
+        color: "text-yellow-500",
+        bgColor: "bg-yellow-500",
+      },
+    };
+
+    const config = badgeConfig[plan as keyof typeof badgeConfig];
+    if (!config) return null;
+
+    return (
+      <svg
+        className={`w-[18px] h-[18px] ${config.color} fill-current flex-shrink-0`}
+        viewBox="0 0 22 22"
+      >
+        <path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" />
+      </svg>
+    );
   };
 
-  const isPostLoading = loadingStates[post._id];
-
   return (
-    <>
-      <div
-        key={post._id}
-        className="group bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 w-9/12"
-      >
-        {/* Thumbnail */}
-        <div
-          ref={index === posts.length - 1 ? lastPostRef : null}
-          onClick={() => handlePostClick(post)}
-          className="relative aspect-video bg-zinc-700 cursor-pointer"
-        >
+    <div
+      key={post._id}
+      ref={index === posts.length - 1 ? lastPostRef : null}
+      className="border-b border-zinc-800 hover:bg-zinc-900/30 transition-colors cursor-pointer"
+    >
+      <div className="flex gap-3 px-4 py-3">
+        {/* Profile Picture */}
+        <div className="flex-shrink-0">
           <img
-            src={post.assetId.thumbnail}
-            alt={post.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            src={post.authorId.profilePhoto || "https://i.pravatar.cc/150"}
+            alt={post.authorId.username}
+            className="h-10 w-10 rounded-full cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              onProfileClick(post.authorId);
+            }}
           />
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-          
-          {/* Owner Menu - Top Right */}
-          {isOwner && (
-            <div className="absolute top-2 right-2 z-10">
-              <button
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 min-w-0 relative">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-1">
+            <div className="flex items-center gap-1 flex-wrap min-w-0">
+              <span
+                className="font-bold text-[15px] hover:underline cursor-pointer truncate"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowPostMenu(!showPostMenu);
+                  onProfileClick(post.authorId);
                 }}
-                className="bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-full transition-colors"
               >
-                <MoreVertical className="h-6 w-6" />
-              </button>
-              
-              {showPostMenu && (
-                <div className="absolute top-full right-0 mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden">
-                  <button
+                {post.authorId.username}
+              </span>
+              {getPlanBadge(post.authorId.plan)}
+              <span className="text-zinc-500 text-[15px] truncate">
+                @{post.authorId.username}
+              </span>
+              <span className="text-zinc-500 text-[15px]">·</span>
+              <span className="text-zinc-500 text-[15px] hover:underline">
+                {timeAgo(new Date(post.publishedAt))}
+              </span>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="text-zinc-400 hover:text-zinc-300 p-1 hover:bg-zinc-800 rounded-full transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="bg-zinc-800 border-zinc-600 absolute right-0 w-48 z-50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {!isOwner && (
+                  <DropdownMenuItem
+                    onClick={onFollowClick}
+                    className="cursor-pointer focus:bg-zinc-200 text-white"
+                  >
+                    {isFollowing ? (
+                      <>
+                        <UserCheck className="w-4 h-4 mr-2" />
+                        Following
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Follow @{post.authorId.username}
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                )}
+                {/* Edit post button */}
+                {isOwner && (
+                  <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowEditModal(true);
-                      setShowPostMenu(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-zinc-800 transition-colors"
+                    className="cursor-pointer focus:bg-zinc-200 text-white"
                   >
-                    <Edit className="h-4 w-4" />
+                    <Edit className="h-4 w-4 mr-2" />
                     Edit Post
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteModal(true);
-                      setShowPostMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-zinc-800 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Post
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Play Icon */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-            <div className="bg-white rounded-full p-3">
-              <Play className="h-5 w-5 text-black" />
-            </div>
-          </div>
-          {/* Duration */}
-          {post.assetId.duration && (
-            <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/60 text-white text-xs px-2 py-1 rounded-md">
-              <Clock className="h-3 w-3" />
-              {formatDuration(post.assetId.duration)}
-            </div>
-          )}
-          {/* Stats */}
-          <div className="absolute bottom-2 left-2 flex gap-0">
-            {[
-              {
-                icon: <Heart className={`h-4 w-4 ${post.isLiked ? "fill-red-400 text-red-500" : ""}`} />,
-                count: post.likesCount,
-                label: "",
-              },
-              {
-                icon: <MessageCircle className="h-3.5 w-3.5" />,
-                count: post.commentsCount,
-                label: "",
-              },
-              {
-                icon: <Eye className="h-4 w-4" />,
-                count: post.analytics.views,
-                label: "",
-              },
-            ].map((stat, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1 bg-black/50 text-white text-xs px-2 py-1 rounded-md"
-              >
-                {stat.icon}
-                <span>{formatCount(stat.count)}</span>
-                <span className="text-[10px] opacity-80">{stat.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Info Section */}
-        <div className="p-4 space-y-3">
-          {/* Author + Tags */}
-          <div className="flex justify-between items-center border-b border-zinc-700 pb-3">
-            <div
-              className="flex items-center gap-2 relative"
-              onMouseEnter={() => handleUserHover(post.authorId._id)}
-              onMouseLeave={handleUserLeave}
-            >
-              <Avatar
-                src={post.authorId.profilePhoto}
-                alt={post.authorId.username}
-                className="h-8 w-8 border border-zinc-600"
-              />
-              <div>
-                <p className="text-sm font-medium text-white truncate">
-                  {post.authorId.username}
-                </p>
-                <p className="text-xs text-zinc-400 truncate">
-                  @{post.authorId.username}
-                </p>
-              </div>
-              {/* Hover Card */}
-              {hoveredUser === post.authorId._id && userProfileData && (
-                <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-2xl z-50">
-                  <div className="flex items-start gap-3 mb-3">
-                    <Avatar
-                      src={userProfileData.profilePhoto}
-                      alt={userProfileData.username}
-                      className="h-12 w-12 border-2 border-zinc-700"
-                    />
-                    <div>
-                      <p className="font-semibold text-white truncate">
-                        {userProfileData.username}
-                      </p>
-                      <p className="text-sm text-zinc-400 truncate">
-                        @{userProfileData.username}
-                      </p>
-                    </div>
-                  </div>
-                  {userProfileData.bio && (
-                    <p className="text-sm text-zinc-300 line-clamp-2">
-                      {userProfileData.bio}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* Button */}
-            {!post.isAddedToBackpack ? (
-              <div>
-                <button
-                  onClick={() => {
-                    handleSaveToBackPack(post);
+                  </DropdownMenuItem>
+                )}
+                {/* Delete post button */}
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteModal(true);
                   }}
-                  disabled={isPostLoading}
-                  className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
+                  className="cursor-pointer focus:bg-zinc-200 text-red-100"
                 >
-                  {isPostLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      Save to Backpack
-                      <Backpack className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <button className="bg-green-900/50 cursor-default border border-green-800 hover:scale-100 px-2 py-1 rounded-full gap-2 text-xs text-green-100 flex justify-center items-center">
-                  Saved to Backpack
-                  <Check className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+                  <Trash2 className="h-4 w-4 text-red-500 mr-2" />
+                  Delete Post
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          {/* Title + Description */}
-          <div>
-            <h3 className="text-sm font-medium text-white mb-1 line-clamp-2 group-hover:text-zinc-300 transition-colors">
-              {post.title}
-            </h3>
-            {post.description && (
-              <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
-                {post.description}
-              </p>
-            )}
-          </div>
-          {post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {post.tags.slice(0, 3).map((tag, i) => (
-                <span
-                  key={i}
-                  className="bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs px-2 py-0.5 rounded-full"
-                >
-                  #{tag}
-                </span>
-              ))}
-              {post.tags.length > 3 && (
-                <span className="bg-zinc-700/50 text-zinc-400 text-xs px-2 py-0.5 rounded-full">
-                  +{post.tags.length - 3}
-                </span>
+
+          {/* Text Content */}
+          <div className="mb-3" onClick={() => onPostClick(post)}>
+            <p className="text-[15px] leading-5 whitespace-pre-wrap break-words">
+              <span className="font-semibold">{post.title}</span>
+              {post.description && (
+                <>
+                  {" "}
+                  <span className="text-zinc-300">{post.description}</span>
+                </>
               )}
+            </p>
+          </div>
+
+          {/* Media */}
+          <div
+            className="relative border border-zinc-700 rounded-2xl overflow-hidden mb-3 group"
+            onClick={() => onPostClick(post)}
+          >
+            <img
+              src={post.assetId.thumbnail}
+              alt={post.title}
+              className="w-full aspect-video object-cover"
+            />
+
+            {/* Play Button Overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+              <div className="bg-white rounded-full p-3">
+                <Play className="h-6 w-6 text-black fill-black" />
+              </div>
             </div>
-          )}
+
+            {/* Duration Badge */}
+            {post.assetId.duration && (
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/75 text-white text-xs px-2 py-1 rounded">
+                <Clock className="h-3 w-3" />
+                {formatDuration(post.assetId.duration)}
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-between items-center -ml-2">
+            <div className="flex gap-3">
+              {/* Like */}
+              <button
+                className="flex items-center gap-2 group p-2 hover:bg-pink-500/10 rounded-full transition-colors"
+                onClick={handleLike}
+              >
+                <Heart
+                  className={`w-[18px] h-[18px] transition-colors ${
+                    isLiked
+                      ? "fill-pink-500 text-red-500"
+                      : "text-zinc-500 group-hover:text-pink-500"
+                  }`}
+                />
+                <span
+                  className={`text-[13px] transition-colors ${
+                    isLiked
+                      ? "text-pink-500"
+                      : "text-zinc-500 group-hover:text-pink-500"
+                  }`}
+                >
+                  {formatCount(likesCount)}
+                </span>
+                <span
+                  className={`text-[13px] transition-colors hidden sm:inline ${
+                    isLiked
+                      ? "text-pink-500"
+                      : "text-zinc-500 group-hover:text-pink-500"
+                  }`}
+                >
+                  Likes
+                </span>
+              </button>
+
+              <button
+                className="flex items-center gap-2 group cursor-pointer p-2 hover:bg-blue-500/10 rounded-full transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPostClick(post); // This will open the detailed post view for comments
+                }}
+              >
+                <MessageCircle className="w-[18px] h-[18px] text-zinc-400 group-hover:text-blue-500 transition-colors" />
+                <span className="text-[13px] text-zinc-400 group-hover:text-blue-500 transition-colors">
+                  {formatCount(post.commentsCount)}
+                </span>
+                <span className="text-[13px] text-zinc-400 group-hover:text-blue-500 transition-colors hidden sm:inline">
+                  Comments
+                </span>
+              </button>
+
+              {/* Views Badge */}
+              <div className="flex items-center gap-1 bg-black/75 text-zinc-400 text-xs px-2 py-1 rounded">
+                <ChartColumn className="w-[18px] h-[18px]" />
+                {formatCount(post.analytics.views)}
+                <span>Views</span>
+              </div>
+            </div>
+
+            {/* Backpack/Save */}
+            <button
+              className="flex items-center gap-2 group p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!post.isAddedToBackpack) {
+                  handleSaveToBackPack(post);
+                }
+              }}
+              disabled={isPostLoading}
+            >
+              {isPostLoading ? (
+                <>
+                  <Loader2 className="w-[18px] h-[18px] text-zinc-500 animate-spin" />
+                  <span className="text-[13px] text-zinc-500 hidden sm:inline">
+                    Saving...
+                  </span>
+                </>
+              ) : post.isAddedToBackpack ? (
+                <>
+                  <Check className="w-[18px] h-[18px] text-green-500" />
+                  <span className="text-[13px] text-green-500 hidden sm:inline">
+                    Saved
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Backpack className="w-[18px] h-[18px] text-zinc-500 group-hover:text-blue-500 transition-colors" />
+                  <span className="text-[13px] text-zinc-500 group-hover:text-blue-500 transition-colors hidden sm:inline">
+                    Save to Backpack
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-
       {/* Edit Post Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -478,7 +582,8 @@ export const PostCard = ({
                 Delete Post?
               </h2>
               <p className="text-zinc-400 text-sm">
-                Are you sure you want to delete this post? This action cannot be undone and will remove all comments and engagement data.
+                Are you sure you want to delete this post? This action cannot be
+                undone and will remove all comments and engagement data.
               </p>
             </div>
             <div className="flex gap-3 p-4 border-t border-zinc-800">
@@ -506,6 +611,8 @@ export const PostCard = ({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
+
+export default PostCard;

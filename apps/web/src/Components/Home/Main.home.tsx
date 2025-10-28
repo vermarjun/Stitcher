@@ -26,7 +26,6 @@ const Main = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
-  // Mock user data
   const user = JSON.parse(localStorage.getItem("user") || "");
   if (user.profilePhoto == "") {
     user.profilePhoto =

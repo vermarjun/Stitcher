@@ -311,7 +311,7 @@ const Leaderboard: React.FC = () => {
       </div>
       {/* THE CURRENT USER */}
 
-      {currentUser && currentUserRank && currentUserRank > 5 ? (
+      {currentUser && currentUserRank && currentUserRank > 10 ? (
         <div>
           <div className="flex items-center gap-4 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-green-500/40 transition-all hover:scale-[1.02] backdrop-blur-md shadow-[0_0_15px_rgba(34,197,94,0.1)]">
             <div className="w-fit h-fit bg-zinc-800 flex items-center justify-center font-bold text-white">
