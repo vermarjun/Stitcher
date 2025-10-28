@@ -17,7 +17,8 @@ import {
   getFollowing,
   checkFollowStatus,
   getSuggestedUsers,
-  removeFollower
+  removeFollower,
+  searchUsers
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
@@ -51,5 +52,13 @@ router.get('/suggestions/users', auth, getSuggestedUsers); // Get suggested user
 
 // Public profile route (should be last to avoid conflicts)
 router.get('/:userId/profile', getUserProfile); // Can be username or user ID
+
+/**
+ * @route   GET /api/users/search
+ * @desc    Search users by username (contains query)
+ * @query   q - Search query string
+ * @example /api/users/search?q=john
+ */
+router.get('/search', auth, searchUsers);
 
 export default router;

@@ -642,3 +642,65 @@ export const getSuggestedUsers = async (req: IUserRequest, res: Response): Promi
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+
+interface UserSearchResult {
+  _id: string;
+  username: string;
+  profilePhoto?: string;
+  plan?: string;
+}
+
+export const searchUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string') {
+      res.status(400).json({
+        success: false,
+        message: 'Search query is required'
+      });
+      return;
+    }
+
+    const searchQuery = q.trim();
+    
+    if (searchQuery.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Search query cannot be empty'
+      });
+      return;
+    }
+
+    // Search for users with username containing the query (case-insensitive)
+    const users = await User.find({
+      username: { $regex: searchQuery, $options: 'i' },
+      isActive: true
+    })
+      .select('_id username profilePhoto plan')
+      .limit(5)
+      .lean()
+      .exec();
+
+    const searchResults: UserSearchResult[] = users.map(user => ({
+      _id: user._id.toString(),
+      username: user.username,
+      profilePhoto: user.profilePhoto,
+      plan: user.plan
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: searchResults.length,
+      data: searchResults
+    });
+
+  } catch (error) {
+    console.error('Error searching users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while searching users',
+      error: process.env.NODE_ENV === 'development' ? error : undefined
+    });
+  }
+};
