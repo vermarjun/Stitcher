@@ -94,16 +94,16 @@ interface Props {
 const CommunityPage = ({ currentUser }: Props) => {
   // State
   const [posts, setPosts] = useState<ICommunityPost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"publishedAt" | "likesCount" | "views">("likesCount");
-  const [sortOrder] = useState<"asc" | "desc">("desc");
+  // const [sortOrder] = useState<"asc" | "desc">("desc");
   const [feedType, setFeedType] = useState<"trending" | "following">("trending");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
-    limit: 20,
+    limit: 10,
     total: 0,
     pages: 0,
   });
@@ -118,48 +118,55 @@ const CommunityPage = ({ currentUser }: Props) => {
   
   const observer = useRef<IntersectionObserver>(null);
   const lastPostRef = useRef<HTMLDivElement>(null);
-
-  const fetchPosts = useCallback(
-    async (append = false) => {
-      try {
-        setLoading(!append);
-        const params: any = {
-          page: append ? pagination.page + 1 : 1,
-          limit: pagination.limit,
-          isAddedToBackpackAttach: true,
-        };
-
-        // Map sortBy to backend expected values
-        if (sortBy === "publishedAt") params.sortBy = "recent";
-        else if (sortBy === "likesCount") params.sortBy = "popular";
-        else if (sortBy === "views") params.sortBy = "trending";
-
-        if (searchQuery) params.search = searchQuery;
-        
-        // Add feed type filter (you'll need to implement this in your backend)
-        if (feedType === "following") {
-          params.followingOnly = true;
-        }
-
-        const response = await api.get("/community/posts", { params });
-        if (response.data.success) {
-          const newPosts = response.data.data;
-          setPosts(append ? [...posts, ...newPosts] : newPosts);
-          setPagination(response.data.pagination);
-          setHasMore(response.data.pagination.page < response.data.pagination.pages);
-        }
-      } catch (error) {
-        console.error("Failed to fetch posts:", error);
-      } finally {
-        setLoading(false);
+const fetchPosts = useCallback(
+  async (append = false) => {
+    try {
+      setLoading(true);
+      setPosts([]);
+      
+      const params: any = {
+        page: append ? pagination.page + 1 : 1,
+        limit: pagination.limit,
+        isAddedToBackpackAttach: true,
+      };
+      
+      // Map sortBy to backend expected values
+      if (sortBy === "publishedAt") params.sortBy = "recent";
+      else if (sortBy === "likesCount") params.sortBy = "popular";
+      else if (sortBy === "views") params.sortBy = "trending";
+      
+      if (searchQuery) params.search = searchQuery;
+      
+      // Determine the endpoint based on feedType
+      const endpoint = feedType === "following" 
+        ? "/community/following/posts" 
+        : "/community/posts";
+      
+      const response = await api.get(endpoint, { params });
+      
+      if (response.data.success) {
+        const newPosts = response.data.data;
+        setPosts(append ? [...posts, ...newPosts] : newPosts);
+        setPagination(response.data.pagination);
+        setHasMore(response.data.pagination.page < response.data.pagination.pages);
       }
-    },
-    [pagination.page, pagination.limit, searchQuery, sortBy, sortOrder, posts, feedType]
-  );
+    } catch (error:any) {
+      console.error("Failed to fetch posts:", error);
+      // Optional: Show user-friendly error message
+      if (error.response?.status === 401 && feedType === "following") {
+        console.error("Authentication required for following feed");
+        // You might want to redirect to login or show a message
+      }
+    } finally {
+      setLoading(false);
+    }
+  },
+  [pagination.page, pagination.limit, searchQuery, sortBy, posts, feedType]
+);
 
-  useEffect(() => {
-    fetchPosts();
-  }, [searchQuery, sortBy, sortOrder, feedType]);
+useEffect(() => {
+  fetchPosts();
+}, [searchQuery, sortBy, feedType]); // Removed sortOrder since it's not used
 
   useEffect(() => {
     if (loading) return;

@@ -127,11 +127,60 @@ export default function ProfilePage({
   const [user, setUser] = useState<IUser>(profile);
   const [loading, setLoading] = useState<boolean>(!profile);
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
-  const [followLoading, ] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"posts" | "likes" | "comments" | "about">("posts");
   const [rank, setRank] = useState<number | null>(null);
 
   const userId = profile._id;
+
+  const toggleFollow = useCallback(async () => {
+    if (!currentUser || !user) return;
+    
+    setFollowLoading(true);
+    const originalFollowing = isFollowing;
+    setIsFollowing(!originalFollowing);
+
+    try {
+      if (originalFollowing) {
+        // FIXED: Changed from GET to DELETE to match backend
+        await api.delete(`/users/${user._id}/unfollow`);
+        setUser((u) =>
+          u
+            ? ({
+                ...u,
+                stats: {
+                  ...(u.stats ?? ({} as IUserStats)),
+                  followersCount:
+                    (u.stats?.followersCount ?? u.followers?.length ?? 1) - 1,
+                },
+                followers: u.followers?.filter((f) => f !== currentUser.id),
+              } as IUser)
+            : u
+        );
+      } else {
+        // FIXED: Changed from GET to POST to match backend
+        await api.post(`/users/${user._id}/follow`);
+        setUser((u) =>
+          u
+            ? ({
+                ...u,
+                stats: {
+                  ...(u.stats ?? ({} as IUserStats)),
+                  followersCount:
+                    (u.stats?.followersCount ?? u.followers?.length ?? 0) + 1,
+                },
+                followers: [...(u.followers ?? []), currentUser.id],
+              } as IUser)
+            : u
+        );
+      }
+    } catch (err) {
+      console.error("follow toggle failed", err);
+      setIsFollowing(originalFollowing);
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [currentUser, user, isFollowing]);
 
   const fetchProfile = async () => {
     if (!userId) return;
@@ -199,7 +248,7 @@ export default function ProfilePage({
         followLoading={followLoading}
         rank={rank}
         formattedJoinDate={formattedJoinDate}
-        onFollowToggle={() => {}}
+        onFollowToggle={toggleFollow}
       />
 
       {/* Tabs */}
