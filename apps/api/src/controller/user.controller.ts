@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import sendMail from '../util/mailer.util';
 import { JWT_CONFIG, PASSWORD_RESET_CONFIG } from '../config';
 import cloudinary from '../util/cloudinary.util';
+import mongoose from 'mongoose';
 
 interface IUserRequest extends Request {
   userId?: string;
@@ -42,16 +43,13 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
     if (!username || !email || !password) {
       return res.status(400).json({ message: 'All fields are required.' });
     }
-
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
       return res.status(409).json({ message: 'This username or email is taken, please try again with a different username or email' });
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ username, email, password: hashedPassword });
     await user.save();
-
     return res.status(201).json({ message: 'User created successfully.' });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -64,17 +62,14 @@ export const login = async (req: IUserRequest, res: IUserResponse): Promise<Resp
     if (!email || !password) {
       return res.status(400).json({ message: 'All fields are required.' });
     }
-
     const user: IUser | null = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ message: 'User Not Found!' });
     }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
-
     const token = jwt.sign({ userId: user._id.toString() }, JWT_CONFIG.secret, { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions);
     return res.status(200).json({ 
       token, 
@@ -106,28 +101,30 @@ export const getUser = async (req: IUserRequest, res: IUserResponse): Promise<Re
 export const getUserProfile = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { userId } = req.params;
-
     if (!userId) {
       return res.status(400).json({ message: 'User userId is required.' });
     }
-
     const user = await User.findById(userId)
-      .select('username fullName avatar bio profilePhoto createdAt')
+      .select('username bio profilePhoto createdAt stats aura plan role likedPosts communityPosts followers following')
       .lean();
-
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
-
-    // Transform the data to match the IUser interface you want
     const userProfile = {
       _id: user._id.toString(),
       username: user.username,
-      avatar: user.profilePhoto || 'https://www.gravatar.com/avatar/?d=mp',
+      profilePhoto: user.profilePhoto || 'https://www.gravatar.com/avatar/?d=mp',
       bio: user.bio || '',
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      stats: user.stats,
+      plan: user.plan,
+      role: user.role,
+      communityPosts: user.communityPosts,
+      likedPosts: user.likedPosts,
+      aura: user.aura,
+      followers: user.followers,
+      following: user.following
     };
-
     return res.status(200).json(userProfile);
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -138,13 +135,11 @@ export const updateUser = async (req: IUserRequest, res: IUserResponse): Promise
   try {
     const updates = req.body;
     if (updates.password) delete updates.password; // Prevent password update here
-
     const user: IUser | null = await User.findByIdAndUpdate(
       req.userId, 
       updates, 
       { new: true }
     ).select('-password');
-
     if (!user) return res.status(404).json({ message: 'User not found.' });
     return res.status(200).json(user);
   } catch (err: any) {
@@ -182,9 +177,7 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
   try {
     const user: IUser | null = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
-
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
-
     // Upload buffer to cloudinary
     const uploadResult = await cloudinary.uploader.upload_stream(
       { folder: 'profile_photos', public_id: user._id.toString(), overwrite: true },
@@ -192,23 +185,19 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
         if (error || !result) {
           return res.status(500).json({ message: 'Cloudinary upload failed.', error });
         }
-
         user.profilePhoto = result.secure_url;
         await user.save();
-
         return res.status(200).json({
           message: 'Profile photo uploaded successfully.',
           profilePhoto: result.secure_url,
         });
       }
     );
-
     // Pipe file buffer into Cloudinary upload_stream
     if (req.file && req.file.buffer) {
       const stream = uploadResult;
       stream.end(req.file.buffer);
     }
-
     return res; // prevents TS warnings
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -275,6 +264,394 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
     await user.save();
     
     return res.status(200).json({ message: 'Password reset successful.' });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ============================================
+// NEW: FOLLOW SYSTEM FUNCTIONALITY
+// ============================================
+
+/**
+ * Follow a user
+ * POST /api/users/:userId/follow
+ */
+export const followUser = async (req: IUserRequest, res: Response): Promise<Response> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const currentUserId = req.userId; // User who is following
+    const targetUserId = req.params.userId; // User to be followed
+    
+    // Validation
+    if (!currentUserId || !targetUserId) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'User IDs are required.' });
+    }
+    
+    if (currentUserId === targetUserId) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'You cannot follow yourself.' });
+    }
+    
+    // Check if both users exist
+    const [currentUser, targetUser] = await Promise.all([
+      User.findById(currentUserId).session(session),
+      User.findById(targetUserId).session(session)
+    ]);
+    
+    if (!currentUser || !targetUser) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    // Check if already following
+    if (currentUser.following.includes(targetUserId as any)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'You are already following this user.' });
+    }
+    
+    // Add to following/followers arrays and update counts
+    await Promise.all([
+      User.findByIdAndUpdate(
+        currentUserId,
+        { 
+          $addToSet: { following: targetUserId },
+          $inc: { 'stats.followingCount': 1 }
+        },
+        { session }
+      ),
+      User.findByIdAndUpdate(
+        targetUserId,
+        { 
+          $addToSet: { followers: currentUserId },
+          $inc: { 'stats.followersCount': 1 }
+        },
+        { session }
+      )
+    ]);
+    
+    await session.commitTransaction();
+    
+    return res.status(200).json({ 
+      message: 'Successfully followed user.',
+      following: true
+    });
+  } catch (err: any) {
+    await session.abortTransaction();
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/**
+ * Unfollow a user
+ * DELETE /api/users/:userId/unfollow
+ */
+export const unfollowUser = async (req: IUserRequest, res: Response): Promise<Response> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const currentUserId = req.userId;
+    const targetUserId = req.params.userId;
+    
+    if (!currentUserId || !targetUserId) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'User IDs are required.' });
+    }
+    
+    if (currentUserId === targetUserId) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'Invalid operation.' });
+    }
+    
+    const [currentUser, targetUser] = await Promise.all([
+      User.findById(currentUserId).session(session),
+      User.findById(targetUserId).session(session)
+    ]);
+    
+    if (!currentUser || !targetUser) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    // Check if actually following
+    if (!currentUser.following.includes(targetUserId as any)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'You are not following this user.' });
+    }
+    
+    // Remove from following/followers arrays and update counts
+    await Promise.all([
+      User.findByIdAndUpdate(
+        currentUserId,
+        { 
+          $pull: { following: targetUserId },
+          $inc: { 'stats.followingCount': -1 }
+        },
+        { session }
+      ),
+      User.findByIdAndUpdate(
+        targetUserId,
+        { 
+          $pull: { followers: currentUserId },
+          $inc: { 'stats.followersCount': -1 }
+        },
+        { session }
+      )
+    ]);
+    
+    await session.commitTransaction();
+    
+    return res.status(200).json({ 
+      message: 'Successfully unfollowed user.',
+      following: false
+    });
+  } catch (err: any) {
+    await session.abortTransaction();
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/**
+ * Remove a follower from your followers list
+ * DELETE /api/users/:userId/remove-follower
+ */
+export const removeFollower = async (req: IUserRequest, res: Response): Promise<Response> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const currentUserId = req.userId; // User removing the follower
+    const followerUserId = req.params.userId; // Follower to be removed
+    
+    if (!currentUserId || !followerUserId) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'User IDs are required.' });
+    }
+    
+    if (currentUserId === followerUserId) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'Invalid operation.' });
+    }
+    
+    const [currentUser, followerUser] = await Promise.all([
+      User.findById(currentUserId).session(session),
+      User.findById(followerUserId).session(session)
+    ]);
+    
+    if (!currentUser || !followerUser) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    // Check if this user is actually a follower
+    if (!currentUser.followers.includes(followerUserId as any)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'This user is not following you.' });
+    }
+    
+    // Remove from followers/following arrays and update counts
+    await Promise.all([
+      User.findByIdAndUpdate(
+        currentUserId,
+        { 
+          $pull: { followers: followerUserId },
+          $inc: { 'stats.followersCount': -1 }
+        },
+        { session }
+      ),
+      User.findByIdAndUpdate(
+        followerUserId,
+        { 
+          $pull: { following: currentUserId },
+          $inc: { 'stats.followingCount': -1 }
+        },
+        { session }
+      )
+    ]);
+    
+    await session.commitTransaction();
+    
+    return res.status(200).json({ 
+      message: 'Successfully removed follower.'
+    });
+  } catch (err: any) {
+    await session.abortTransaction();
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/**
+ * Get list of followers for a user
+ * GET /api/users/:userId/followers
+ */
+export const getFollowers = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { userId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required.' });
+    }
+    
+    const user = await User.findById(userId)
+      .populate({
+        path: 'followers',
+        select: 'username profilePhoto bio stats.followersCount stats.followingCount',
+        options: { skip, limit }
+      });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    const totalFollowers = user.stats.followersCount || 0;
+    const totalPages = Math.ceil(totalFollowers / limit);
+    
+    return res.status(200).json({
+      followers: user.followers,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount: totalFollowers,
+        hasMore: page < totalPages
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+/**
+ * Get list of users that a user is following
+ * GET /api/users/:userId/following
+ */
+export const getFollowing = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { userId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required.' });
+    }
+    
+    const user = await User.findById(userId)
+      .populate({
+        path: 'following',
+        select: 'username profilePhoto bio stats.followersCount stats.followingCount',
+        options: { skip, limit }
+      });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    const totalFollowing = user.stats.followingCount || 0;
+    const totalPages = Math.ceil(totalFollowing / limit);
+    
+    return res.status(200).json({
+      following: user.following,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount: totalFollowing,
+        hasMore: page < totalPages
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+/**
+ * Check if current user follows a specific user
+ * GET /api/users/:userId/follow-status
+ */
+export const checkFollowStatus = async (req: IUserRequest, res: Response): Promise<Response> => {
+  try {
+    const currentUserId = req.userId;
+    const targetUserId = req.params.userId;
+    
+    if (!currentUserId || !targetUserId) {
+      return res.status(400).json({ message: 'User IDs are required.' });
+    }
+    
+    if (currentUserId === targetUserId) {
+      return res.status(200).json({ 
+        isFollowing: false,
+        isOwnProfile: true
+      });
+    }
+    
+    const currentUser = await User.findById(currentUserId).select('following');
+    
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    const isFollowing = currentUser.following.includes(targetUserId as any);
+    
+    return res.status(200).json({ 
+      isFollowing,
+      isOwnProfile: false
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+/**
+ * Get suggested users to follow
+ * GET /api/users/suggestions/users
+ */
+export const getSuggestedUsers = async (req: IUserRequest, res: Response): Promise<Response> => {
+  try {
+    const currentUserId = req.userId;
+    const limit = parseInt(req.query.limit as string) || 10;
+    
+    if (!currentUserId) {
+      return res.status(401).json({ message: 'Unauthorized.' });
+    }
+    
+    const currentUser = await User.findById(currentUserId).select('following');
+    
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    
+    // Find users that:
+    // 1. Current user is not following
+    // 2. Are not the current user
+    // 3. Are active
+    // Sort by followers count (most popular first)
+    const suggestedUsers = await User.find({
+      _id: { 
+        $ne: currentUserId,
+        $nin: currentUser.following 
+      },
+      isActive: true
+    })
+    .select('username profilePhoto bio stats.followersCount stats.followingCount')
+    .sort({ 'stats.followersCount': -1, createdAt: -1 })
+    .limit(limit)
+    .lean();
+    
+    return res.status(200).json({
+      suggestions: suggestedUsers
+    });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }

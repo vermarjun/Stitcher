@@ -1,14 +1,16 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import CommunityPost from '../model/communityPost.model';
+import CommunityPost, { ICommentMedia } from '../model/communityPost.model';
 import Asset from '../model/asset.model';
 import User from '../model/user.model';
 import Backpack from '../model/backpack.model';
-import { 
-    incrementUserPostCount, 
+import {
+    incrementUserPostCount,
     decrementUserPostStats,
-    decrementUserCommentCount 
+    decrementUserCommentCount
 } from '../util/auraupdate.util';
+import cloudinary from '../util/cloudinary.util';
+import mongoose from 'mongoose';
 
 /**
  * Create a new community post
@@ -170,12 +172,12 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
         const { postId } = req.params;
         const userId = req.userId;
         const { isAddedToBackpackAttach } = req.query;
-        
+
         // Build aggregation pipeline for consistent data structure
         const aggregationPipeline: any[] = [
             { $match: { _id: new Types.ObjectId(postId) } }
         ];
-        
+
         // Check if asset is in backpack
         let backpackId = "";
         if (isAddedToBackpackAttach && userId) {
@@ -184,7 +186,7 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
                 backpackId = backpack._id as string;
             }
         }
-        
+
         if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
             aggregationPipeline.push(
                 {
@@ -244,7 +246,7 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-        
+
         // Add isLiked field for post
         if (userId && Types.ObjectId.isValid(userId)) {
             aggregationPipeline.push({
@@ -261,7 +263,7 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-        
+
         // Add isLiked field for each comment
         if (userId && Types.ObjectId.isValid(userId)) {
             aggregationPipeline.push({
@@ -304,14 +306,14 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-        
+
         // Remove the backpackItems array as we only need the computed field
         aggregationPipeline.push({
             $project: {
                 backpackItems: 0
             }
         });
-        
+
         // Add population of referenced fields
         aggregationPipeline.push(
             {
@@ -413,36 +415,43 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
                 }
             },
             {
+                $addFields: {
+                    comments: {
+                        $reverseArray: '$comments'
+                    }
+                }
+            },
+            {
                 $project: {
                     commentUsers: 0
                 }
             }
         );
-        
+
         // Execute aggregation
         const posts = await CommunityPost.aggregate(aggregationPipeline);
-        
+
         if (!posts || posts.length === 0) {
             res.status(404).json({ error: 'Post not found' });
             return;
         }
-        
+
         const post = posts[0];
-        
+
         // Track view (need to get the actual document for the method call)
         const postDoc = await CommunityPost.findById(postId);
         if (postDoc) {
             const hasViewed = req.cookies?.[`viewed_${postId}`];
             await postDoc.incrementView(!hasViewed);
             await postDoc.save();
-            
+
             // Set cookie to track unique view (expires in 24 hours)
             res.cookie(`viewed_${postId}`, 'true', {
                 maxAge: 24 * 60 * 60 * 1000,
                 httpOnly: true
             });
         }
-        
+
         res.json({
             success: true,
             data: post
@@ -452,7 +461,6 @@ export async function getPostById(req: Request, res: Response): Promise<void> {
         res.status(500).json({ error: 'Failed to fetch post' });
     }
 }
-
 /**
  * Get all posts with pagination, filtering, and sorting
  * GET /api/community/posts
@@ -466,7 +474,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
             sortBy = 'trending',
             tags,
             search,
-            isAddedToBackpackAttach 
+            isAddedToBackpackAttach
         } = req.query;
         const pageNum = parseInt(page as string);
         const limitNum = parseInt(limit as string);
@@ -496,7 +504,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
         const aggregationPipeline: any[] = [
             { $match: query }
         ];
-        
+
         // Check if assets are in backpack
         let backpackId = "";
         if (isAddedToBackpackAttach && userId) {
@@ -505,7 +513,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 backpackId = backpack._id as string;
             }
         }
-        
+
         if (isAddedToBackpackAttach && Types.ObjectId.isValid(backpackId as string)) {
             aggregationPipeline.push(
                 {
@@ -565,7 +573,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-        
+
         // Add isLiked field for posts
         if (userId && Types.ObjectId.isValid(userId)) {
             aggregationPipeline.push({
@@ -582,7 +590,7 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-        
+
         // Add isLiked field for each comment
         if (userId && Types.ObjectId.isValid(userId)) {
             aggregationPipeline.push({
@@ -625,21 +633,79 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 }
             });
         }
-        
+
+        // Add population for comment user details
+        aggregationPipeline.push({
+            $lookup: {
+                from: 'users',
+                localField: 'comments.userId',
+                foreignField: '_id',
+                as: 'commentUsers',
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            profilePhoto: 1,
+                            plan: 1,
+                            bio: 1
+                        }
+                    }
+                ]
+            }
+        });
+
+        // Map the populated user data to each comment
+        aggregationPipeline.push({
+            $addFields: {
+                comments: {
+                    $map: {
+                        input: '$comments',
+                        as: 'comment',
+                        in: {
+                            $mergeObjects: [
+                                '$$comment',
+                                {
+                                    userId: {
+                                        $arrayElemAt: [
+                                            {
+                                                $filter: {
+                                                    input: '$commentUsers',
+                                                    as: 'user',
+                                                    cond: { $eq: ['$$user._id', '$$comment.userId'] }
+                                                }
+                                            },
+                                            0
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        });
+
+        // Remove the temporary commentUsers array
+        aggregationPipeline.push({
+            $project: {
+                commentUsers: 0
+            }
+        });
+
         // Remove the backpackItems array as we only need the computed field
         aggregationPipeline.push({
             $project: {
                 backpackItems: 0
             }
         });
-        
+
         // Add sorting and pagination
         aggregationPipeline.push(
             { $sort: sort },
             { $skip: skip },
             { $limit: limitNum }
         );
-        
+
         // Add population of referenced fields
         aggregationPipeline.push(
             {
@@ -652,7 +718,9 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                         {
                             $project: {
                                 username: 1,
-                                profilePhoto: 1
+                                profilePhoto: 1,
+                                followers: 1,
+                                plan: 1
                             }
                         }
                     ]
@@ -663,7 +731,45 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                     path: '$authorId',
                     preserveNullAndEmptyArrays: true
                 }
-            },
+            }
+        );
+
+        // Add isFollowing field - check if current user is in author's followers array
+        if (userId && Types.ObjectId.isValid(userId)) {
+            aggregationPipeline.push({
+                $addFields: {
+                    isFollowing: {
+                        $in: [
+                            new Types.ObjectId(userId),
+                            { $ifNull: ['$authorId.followers', []] }
+                        ]
+                    },
+                    // Clean up authorId by removing followers array from response
+                    authorId: {
+                        _id: '$authorId._id',
+                        username: '$authorId.username',
+                        profilePhoto: '$authorId.profilePhoto',
+                        plan: '$authorId.plan',
+                    }
+                }
+            });
+        } else {
+            aggregationPipeline.push({
+                $addFields: {
+                    isFollowing: false,
+                    // Clean up authorId by removing followers array from response
+                    authorId: {
+                        _id: '$authorId._id',
+                        username: '$authorId.username',
+                        profilePhoto: '$authorId.profilePhoto',
+                        plan: '$authorId.plan',
+                    }
+                }
+            });
+        }
+
+        // Continue with asset lookup
+        aggregationPipeline.push(
             {
                 $lookup: {
                     from: 'assets',
@@ -689,13 +795,13 @@ export async function getPosts(req: Request, res: Response): Promise<void> {
                 }
             }
         );
-        
+
         // Execute aggregation and count query
         const [posts, total] = await Promise.all([
             CommunityPost.aggregate(aggregationPipeline),
             CommunityPost.countDocuments(query)
         ]);
-        
+
         res.json({
             success: true,
             data: posts,
@@ -731,6 +837,7 @@ export async function getUserPosts(req: Request, res: Response): Promise<void> {
                 .skip(skip)
                 .limit(limitNum)
                 .populate('assetId', 'url thumbnail duration type')
+                .populate('authorId', 'username bio profilePhoto plan')
                 .lean(),
             CommunityPost.countDocuments({ authorId: userId })
         ]);
@@ -790,6 +897,42 @@ export async function getUserLikedPosts(req: Request, res: Response): Promise<vo
         res.status(500).json({ error: 'Failed to fetch liked posts' });
     }
 }
+
+export const getUserComments = async (req: Request, res: Response) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.params.userId);
+
+    const userComments = await CommunityPost.aggregate([
+      { $unwind: "$comments" }, // Flatten comments array
+      { $match: { "comments.userId": userId } }, // Filter comments made by this user
+      {
+        $project: {
+          _id: 0,
+          postId: "$_id",
+          postTitle: "$title",
+          commentId: "$comments._id",
+          content: "$comments.content",
+          media: "$comments.media",
+          likesCount: { $size: "$comments.likes" },
+          createdAt: "$comments.createdAt",
+          updatedAt: "$comments.updatedAt",
+          isEdited: "$comments.isEdited",
+        },
+      },
+      { $sort: { createdAt: -1 } }, // Recent first
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: userComments.length,
+      comments: userComments,
+    });
+  } catch (error) {
+    console.error("Error fetching user comments:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 
 // ============= LIKE MANAGEMENT =============
 /**
@@ -892,70 +1035,103 @@ export async function getPostLikes(req: Request, res: Response): Promise<void> {
         res.status(500).json({ error: 'Failed to fetch likes' });
     }
 }
-
 // ============= COMMENT MANAGEMENT =============
+
 /**
- * Add a comment to a post
+ * Add a comment to a post (with optional media)
  * POST /api/community/posts/:postId/comments
- * NO CHANGES NEEDED - Comment tracking happens in post.addComment() method
  */
-export async function addComment(req: Request, res: Response): Promise<void> {
+export async function addComment(req: any, res: Response): Promise<void> {
     try {
         const { postId } = req.params;
         const { content, parentCommentId } = req.body;
         const userId = req.userId;
 
         if (!userId) {
-            res.status(401).json({ error: 'Unauthorized' });
+            res.status(401).json({ error: "Unauthorized" });
             return;
         }
 
-        const userIdObjectId = new Types.ObjectId(userId);
-
-        if (!content || content.trim().length === 0) {
-            res.status(400).json({ error: 'Comment content is required' });
+        if ((!content || content.trim().length === 0) && !req.file) {
+            res.status(400).json({ error: "Comment must have text or media" });
             return;
         }
 
         const post = await CommunityPost.findById(postId);
         if (!post) {
-            res.status(404).json({ error: 'Post not found' });
+            res.status(404).json({ error: "Post not found" });
             return;
         }
 
+        // Optional parent comment validation
         if (parentCommentId) {
             const parentExists = post.comments.some(
-                c => c._id.toString() === parentCommentId
+                (c) => c._id.toString() === parentCommentId
             );
             if (!parentExists) {
-                res.status(404).json({ error: 'Parent comment not found' });
+                res.status(404).json({ error: "Parent comment not found" });
                 return;
             }
         }
 
-        // Stats updated in post.addComment()
+        // ---- Handle Cloudinary uploads (if any files) ----
+        const uploadedMedia: ICommentMedia[] = [];
+
+        // Upload to Cloudinary and WAIT for it to complete
+        if (req.file && req.file.buffer) {
+            await new Promise<void>((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    {
+                        folder: "comments_media",
+                        resource_type: "auto"
+                    },
+                    (error, result) => {
+                        if (error || !result) {
+                            reject(error || new Error('Upload failed'));
+                            return;
+                        }
+
+                        uploadedMedia.push({
+                            mediaType: "image",
+                            thumbnailUrl: result.secure_url,
+                            order: 0,
+                        });
+
+                        resolve();
+                    }
+                );
+
+                uploadStream.end(req.file.buffer);
+            });
+        }
+
+        // ---- Add comment to post ----
+        const userIdObjectId = new Types.ObjectId(userId);
         const commentId = await post.addComment(
             userIdObjectId,
-            content.trim(),
+            content?.trim() || "",
+            uploadedMedia.length ? uploadedMedia : undefined,
             parentCommentId ? new Types.ObjectId(parentCommentId) : undefined
         );
 
         await post.save();
 
-        const updatedPost = await CommunityPost.findById(postId)
-            .populate('comments.userId', 'username profilePhoto');
+        const updatedPost = await CommunityPost.findById(postId).populate(
+            "comments.userId",
+            "username profilePhoto"
+        );
 
         const newComment = updatedPost?.comments.find(
-            c => c._id.toString() === commentId.toString()
+            (c) => c._id.toString() === commentId.toString()
         );
 
         res.status(201).json({
             success: true,
-            data: newComment
+            data: newComment,
         });
     } catch (error) {
-        console.error('Error adding comment:', error);
-        res.status(500).json({ error: 'Failed to add comment' });
+        console.error("Error adding comment:", error);
+        res.status(500).json({ error: "Failed to add comment" });
     }
 }
 
@@ -1051,8 +1227,8 @@ export async function deleteComment(req: Request, res: Response): Promise<void> 
 
         // Count how many comments will be deleted (including replies)
         const commentsToDelete = post.comments.filter(
-            c => c._id.toString() === commentId || 
-                 c.parentCommentId?.toString() === commentId
+            c => c._id.toString() === commentId ||
+                c.parentCommentId?.toString() === commentId
         );
         const deleteCount = commentsToDelete.length;
 

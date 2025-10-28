@@ -16,9 +16,26 @@ import {
   getComments,
   searchPosts,
   getPostsByTag,
-  getPostsByIds
+  getPostsByIds,
+  getUserComments
 } from '../controller/communityPost.controller';
 import auth from '../middleware/auth.middleware';
+import multer from 'multer';
+
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
 
 const router = Router();
 
@@ -35,13 +52,14 @@ router.post('/posts/batch', auth, getPostsByIds);           // POST /api/communi
 // ============= USER-SPECIFIC POSTS =============
 router.get('/users/:userId/posts', auth, getUserPosts);     // GET /api/community/users/:userId/posts
 router.get('/users/:userId/liked', auth, getUserLikedPosts); // GET /api/community/users/:userId/liked
+router.get('/users/:userId/comments', auth, getUserComments);
 
 // ============= LIKE MANAGEMENT =============
 router.post('/posts/:postId/like', auth, toggleLike);       // POST /api/community/posts/:postId/like
 router.get('/posts/:postId/likes', auth, getPostLikes);     // GET /api/community/posts/:postId/likes
 
 // ============= COMMENT MANAGEMENT =============
-router.post('/posts/:postId/comments', auth, addComment);   // POST /api/community/posts/:postId/comments
+router.post('/posts/:postId/comments', auth, upload.single('image'), addComment);
 router.get('/posts/:postId/comments', auth, getComments);   // GET /api/community/posts/:postId/comments
 router.patch('/posts/:postId/comments/:commentId', auth, updateComment); // PATCH /api/community/posts/:postId/comments/:commentId
 router.delete('/posts/:postId/comments/:commentId', auth, deleteComment); // DELETE /api/community/posts/:postId/comments/:commentId

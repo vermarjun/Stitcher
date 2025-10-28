@@ -13,11 +13,19 @@ export interface ILike {
   createdAt: Date;
 }
 
-// Interface for comments
+// NEW: Interface for comment media
+export interface ICommentMedia {
+  mediaType: 'image' | 'video' | 'gif' | 'audio';
+  thumbnailUrl?: string;
+  order: number;
+}
+
+// UPDATED: Interface for comments with media support
 export interface IComment {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
   content: string;
+  media: ICommentMedia[];  // NEW: Media attachments
   createdAt: Date;
   updatedAt: Date;
   isEdited: boolean;
@@ -35,7 +43,7 @@ export interface IPostAnalytics {
 export interface ICommunityPostMethods {
   addLike(userId: Types.ObjectId): Promise<void>;
   removeLike(userId: Types.ObjectId): Promise<void>;
-  addComment(userId: Types.ObjectId, content: string, parentCommentId?: Types.ObjectId): Promise<Types.ObjectId>;
+  addComment(userId: Types.ObjectId, content: string, media?: ICommentMedia[], parentCommentId?: Types.ObjectId): Promise<Types.ObjectId>;
   incrementView(isUnique?: boolean): Promise<void>;
 }
 
@@ -62,9 +70,22 @@ const LikeSchema = new Schema<ILike>({
   createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
+// NEW: Schema for comment media
+const CommentMediaSchema = new Schema<ICommentMedia>({
+  mediaType: { 
+    type: String, 
+    enum: ['image', 'video', 'gif', 'audio'], 
+    required: true 
+  },
+  thumbnailUrl: { type: String },
+  order: { type: Number, default: 0 }
+}, { _id: false });
+
+// UPDATED: Comment schema with media support
 const CommentSchema = new Schema<IComment>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true, maxlength: 2000 },
+  media: [CommentMediaSchema],  // NEW: Array of media attachments
   isEdited: { type: Boolean, default: false },
   likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   parentCommentId: { type: Schema.Types.ObjectId, ref: 'Comment' }
@@ -147,7 +168,7 @@ CommunityPostSchema.pre('save', function(next) {
   next();
 });
 
-// UPDATED: Add like and update user's cached stats
+// Add like and update user's cached stats
 CommunityPostSchema.methods.addLike = async function(userId: Types.ObjectId) {
   const existingLike = this.likes.find(
     (like: ILike) => like.userId.toString() === userId.toString()
@@ -158,12 +179,11 @@ CommunityPostSchema.methods.addLike = async function(userId: Types.ObjectId) {
     this.likesCount = this.likes.length;
     this.lastActivityAt = new Date();
     
-    // Increment author's aura AND cached stats
     await incrementUserLikeCount(this.authorId);
   }
 };
 
-// UPDATED: Remove like and update user's cached stats
+// Remove like and update user's cached stats
 CommunityPostSchema.methods.removeLike = async function(userId: Types.ObjectId) {
   const previousLength = this.likes.length;
   this.likes = this.likes.filter(
@@ -174,21 +194,22 @@ CommunityPostSchema.methods.removeLike = async function(userId: Types.ObjectId) 
     this.likesCount = this.likes.length;
     this.lastActivityAt = new Date();
     
-    // Decrement author's aura AND cached stats
     await decrementUserLikeCount(this.authorId);
   }
 };
 
-// UPDATED: Add comment and update user's cached stats
+// UPDATED: Add comment with optional media support
 CommunityPostSchema.methods.addComment = async function(
   userId: Types.ObjectId, 
   content: string,
+  media?: ICommentMedia[],  // NEW: Optional media parameter
   parentCommentId?: Types.ObjectId
 ) {
   const comment: IComment = {
     _id: new Types.ObjectId(),
     userId,
     content,
+    media: media || [],  // NEW: Include media or empty array
     createdAt: new Date(),
     updatedAt: new Date(),
     isEdited: false,
@@ -200,20 +221,18 @@ CommunityPostSchema.methods.addComment = async function(
   this.commentsCount = this.comments.length;
   this.lastActivityAt = new Date();
   
-  // Increment author's aura AND cached stats
   await incrementUserCommentCount(this.authorId);
   
   return comment._id;
 };
 
-// UPDATED: Increment view and update user's cached stats
+// Increment view and update user's cached stats
 CommunityPostSchema.methods.incrementView = async function(isUnique: boolean = false) {
   this.analytics.views += 1;
   if (isUnique) {
     this.analytics.uniqueViews += 1;
   }
   
-  // Increment author's aura AND cached stats
   await incrementUserViewCount(this.authorId);
 };
 

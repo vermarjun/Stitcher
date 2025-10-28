@@ -14,6 +14,8 @@ export interface IUserStats {
   totalLikes: number;
   totalComments: number;
   totalViews: number;
+  followersCount: number; // NEW
+  followingCount: number; // NEW
   lastUpdated: Date;
 }
 
@@ -36,7 +38,9 @@ export interface IUser extends Document {
   communityPosts?: Types.ObjectId[];
   likedPosts?: Types.ObjectId[];
   aura: number;
-  stats: IUserStats; // NEW: Cached stats
+  stats: IUserStats;
+  followers: Types.ObjectId[]; // NEW: Array of user IDs who follow this user
+  following: Types.ObjectId[]; // NEW: Array of user IDs this user follows
 }
 
 const UserStatsSchema = new Schema<IUserStats>({
@@ -44,6 +48,8 @@ const UserStatsSchema = new Schema<IUserStats>({
   totalLikes: { type: Number, default: 0, min: 0 },
   totalComments: { type: Number, default: 0, min: 0 },
   totalViews: { type: Number, default: 0, min: 0 },
+  followersCount: { type: Number, default: 0, min: 0 }, // NEW
+  followingCount: { type: Number, default: 0, min: 0 }, // NEW
   lastUpdated: { type: Date, default: Date.now }
 }, { _id: false });
 
@@ -123,9 +129,22 @@ const UserSchema = new Schema<IUser>({
       totalLikes: 0,
       totalComments: 0,
       totalViews: 0,
+      followersCount: 0,
+      followingCount: 0,
       lastUpdated: new Date()
     })
-  }
+  },
+  // NEW: Follow system fields
+  followers: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: []
+  }],
+  following: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: []
+  }]
 }, { timestamps: true });
 
 // Indexes for efficient leaderboard queries
@@ -133,6 +152,12 @@ UserSchema.index({ aura: -1, isActive: 1 });
 UserSchema.index({ 'stats.totalPosts': -1 });
 UserSchema.index({ 'stats.totalLikes': -1 });
 UserSchema.index({ 'stats.totalViews': -1 });
+
+// NEW: Indexes for follow system
+UserSchema.index({ followers: 1 });
+UserSchema.index({ following: 1 });
+UserSchema.index({ 'stats.followersCount': -1 });
+UserSchema.index({ 'stats.followingCount': -1 });
 
 const User: Model<IUser> = model<IUser>('User', UserSchema);
 
