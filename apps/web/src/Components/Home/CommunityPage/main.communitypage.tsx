@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  ArrowLeft,
-} from "lucide-react";
-import RightSidebar from "./RightSideBar.communitypage";
+import RightSidebar from "./RightSideBar/main.rightsidebar";
 import Header from "./Header.communitypage";
 import Feed from "./PostFeed.communitypage";
 import Profile from "./ProfilePage/main.profilepage";
@@ -43,7 +40,7 @@ export interface IComment {
 }
 
 export interface ICommentMedia {
-  mediaType: 'image' | 'video' | 'gif' | 'audio';
+  mediaType: "image" | "video" | "gif" | "audio";
   thumbnailUrl?: string;
   order: number;
 }
@@ -79,7 +76,7 @@ export interface PaginationInfo {
 }
 
 // Navigation types
-type ViewType = 'feed' | 'post' | 'profile' | 'myPosts' | 'likedPosts';
+type ViewType = "feed" | "post" | "profile" | "myPosts" | "likedPosts";
 
 interface NavigationState {
   view: ViewType;
@@ -96,9 +93,13 @@ const CommunityPage = ({ currentUser }: Props) => {
   const [posts, setPosts] = useState<ICommunityPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"publishedAt" | "likesCount" | "views">("likesCount");
+  const [sortBy, setSortBy] = useState<"publishedAt" | "likesCount" | "views">(
+    "likesCount"
+  );
   // const [sortOrder] = useState<"asc" | "desc">("desc");
-  const [feedType, setFeedType] = useState<"trending" | "following">("trending");
+  const [feedType, setFeedType] = useState<"trending" | "following">(
+    "trending"
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [pagination, setPagination] = useState<PaginationInfo>({
@@ -108,65 +109,68 @@ const CommunityPage = ({ currentUser }: Props) => {
     pages: 0,
   });
   const [hasMore, setHasMore] = useState(true);
-  
+
   // Navigation state
   const [navigationStack, setNavigationStack] = useState<NavigationState[]>([
-    { view: 'feed' }
+    { view: "feed" },
   ]);
-  
+
   const currentView = navigationStack[navigationStack.length - 1];
-  
+
   const observer = useRef<IntersectionObserver>(null);
   const lastPostRef = useRef<HTMLDivElement>(null);
-const fetchPosts = useCallback(
-  async (append = false) => {
-    try {
-      setLoading(true);
-      setPosts([]);
-      
-      const params: any = {
-        page: append ? pagination.page + 1 : 1,
-        limit: pagination.limit,
-        isAddedToBackpackAttach: true,
-      };
-      
-      // Map sortBy to backend expected values
-      if (sortBy === "publishedAt") params.sortBy = "recent";
-      else if (sortBy === "likesCount") params.sortBy = "popular";
-      else if (sortBy === "views") params.sortBy = "trending";
-      
-      if (searchQuery) params.search = searchQuery;
-      
-      // Determine the endpoint based on feedType
-      const endpoint = feedType === "following" 
-        ? "/community/following/posts" 
-        : "/community/posts";
-      
-      const response = await api.get(endpoint, { params });
-      
-      if (response.data.success) {
-        const newPosts = response.data.data;
-        setPosts(append ? [...posts, ...newPosts] : newPosts);
-        setPagination(response.data.pagination);
-        setHasMore(response.data.pagination.page < response.data.pagination.pages);
-      }
-    } catch (error:any) {
-      console.error("Failed to fetch posts:", error);
-      // Optional: Show user-friendly error message
-      if (error.response?.status === 401 && feedType === "following") {
-        console.error("Authentication required for following feed");
-        // You might want to redirect to login or show a message
-      }
-    } finally {
-      setLoading(false);
-    }
-  },
-  [pagination.page, pagination.limit, searchQuery, sortBy, posts, feedType]
-);
+  const fetchPosts = useCallback(
+    async (append = false) => {
+      try {
+        setLoading(true);
+        setPosts([]);
 
-useEffect(() => {
-  fetchPosts();
-}, [searchQuery, sortBy, feedType]); // Removed sortOrder since it's not used
+        const params: any = {
+          page: append ? pagination.page + 1 : 1,
+          limit: pagination.limit,
+          isAddedToBackpackAttach: true,
+        };
+
+        // Map sortBy to backend expected values
+        if (sortBy === "publishedAt") params.sortBy = "recent";
+        else if (sortBy === "likesCount") params.sortBy = "popular";
+        else if (sortBy === "views") params.sortBy = "trending";
+
+        if (searchQuery) params.search = searchQuery;
+
+        // Determine the endpoint based on feedType
+        const endpoint =
+          feedType === "following"
+            ? "/community/following/posts"
+            : "/community/posts";
+
+        const response = await api.get(endpoint, { params });
+
+        if (response.data.success) {
+          const newPosts = response.data.data;
+          setPosts(append ? [...posts, ...newPosts] : newPosts);
+          setPagination(response.data.pagination);
+          setHasMore(
+            response.data.pagination.page < response.data.pagination.pages
+          );
+        }
+      } catch (error: any) {
+        console.error("Failed to fetch posts:", error);
+        // Optional: Show user-friendly error message
+        if (error.response?.status === 401 && feedType === "following") {
+          console.error("Authentication required for following feed");
+          // You might want to redirect to login or show a message
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pagination.page, pagination.limit, searchQuery, sortBy, posts, feedType]
+  );
+
+  useEffect(() => {
+    fetchPosts();
+  }, [searchQuery, sortBy, feedType]); // Removed sortOrder since it's not used
 
   useEffect(() => {
     if (loading) return;
@@ -205,25 +209,24 @@ useEffect(() => {
   };
 
   const handlePostClick = (post: ICommunityPost) => {
-    navigateTo('post', post);
+    navigateTo("post", post);
   };
 
   const handleProfileClick = (user: IAuthor) => {
-    navigateTo('profile', user);
-  };
-
-  const handleMyPostsClick = () => {
-    navigateTo('myPosts');
-  };
-
-  const handleLikedPostsClick = () => {
-    navigateTo('likedPosts');
+    if (currentView.view === "profile") {
+      // Replace the existing profile view with the new one
+      const updatedStack = [...navigationStack];
+      updatedStack[updatedStack.length - 1] = { view: "profile", data: user };
+      setNavigationStack(updatedStack);
+    } else {
+      navigateTo("profile", user);
+    }
   };
 
   // Render current view
   const renderMainStage = () => {
     switch (currentView.view) {
-      case 'feed':
+      case "feed":
         return (
           <Feed
             posts={posts}
@@ -238,8 +241,8 @@ useEffect(() => {
             onProfileClick={handleProfileClick}
           />
         );
-      
-      case 'post':
+
+      case "post":
         return (
           <PostDetail
             post={currentView.data}
@@ -249,79 +252,49 @@ useEffect(() => {
             onProfileClick={handleProfileClick}
           />
         );
-      
-      case 'profile':
+
+      case "profile":
         return (
-          <Profile onPostClick={handlePostClick} onBack={navigateBack} currentUser={currentUser} profile={currentView.data}/>
+          <Profile
+            onPostClick={handlePostClick}
+            onBack={navigateBack}
+            currentUser={currentUser}
+            profile={currentView.data}
+          />
         );
-      
-      case 'myPosts':
-        return (
-          <div className="flex-1 min-w-0">
-            <button
-              onClick={navigateBack}
-              className="flex items-center gap-2 mb-4 text-zinc-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              <span>Back</span>
-            </button>
-            <h2 className="text-2xl font-bold mb-6">My Posts</h2>
-            <p className="text-zinc-500">Your posts will appear here</p>
-          </div>
-        );
-      
-      case 'likedPosts':
-        return (
-          <div className="flex-1 min-w-0">
-            <button
-              onClick={navigateBack}
-              className="flex items-center gap-2 mb-4 text-zinc-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              <span>Back</span>
-            </button>
-            <h2 className="text-2xl font-bold mb-6">Liked Posts</h2>
-            <p className="text-zinc-500">Posts you've liked will appear here</p>
-          </div>
-        );
-      
       default:
         return null;
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-black text-white">
-      {/* Header */}
-      <Header
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        onMenuClick={() => setMobileSidebarOpen(true)}
-      />
-
+    <div className="flex justify-between min-h-screen w-full bg-black text-white">
       {/* Main Content with Sidebar */}
-      <div className="flex justify-between">
+      <div className="w-full">
+        {/* Header */}
+        <Header
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          onMenuClick={() => setMobileSidebarOpen(true)}
+        />
         {/* Main Stage */}
         <div className="min-w-0 w-full flex justify-center">
-            {renderMainStage()}
+          {renderMainStage()}
         </div>
-
-        {/* Right Sidebar */}
-        <RightSidebar
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          formatCount={formatCount}
-          pagination={pagination}
-          onMyPostsClick={handleMyPostsClick}
-          onLikedPostsClick={handleLikedPostsClick}
-          isMobileOpen={mobileSidebarOpen}
-          onMobileClose={() => setMobileSidebarOpen(false)}
-        />
       </div>
+      {/* Right Sidebar */}
+      <RightSidebar
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        formatCount={formatCount}
+        pagination={pagination}
+        isMobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+        onProfileClick={handleProfileClick}
+        onBack={navigateBack}
+      />
     </div>
   );
 };

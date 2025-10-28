@@ -1,10 +1,6 @@
 import {
-  Search,
-  Bell,
-  Bookmark,
   Menu,
 } from "lucide-react";
-import { Input } from "@/Components/ui/input";
 import {
   Select,
   SelectContent,
@@ -75,16 +71,14 @@ export interface PaginationInfo {
 }
 
 interface HeaderProps {
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
   sortBy: "publishedAt" | "likesCount" | "views";
   setSortBy: (sortBy: "publishedAt" | "likesCount" | "views") => void;
   onMenuClick: () => void;
 }
 
-const Header = ({ searchQuery, setSearchQuery, sortBy, setSortBy, onMenuClick }: HeaderProps) => {
+const Header = ({ sortBy, setSortBy, onMenuClick }: HeaderProps) => {
   return (
-    <div className="h-14 sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-zinc-800">
+    <div className="h-14 top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-zinc-800">
       <div className="h-full px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -92,23 +86,7 @@ const Header = ({ searchQuery, setSearchQuery, sortBy, setSortBy, onMenuClick }:
               Community
             </h1>
           </div>
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-200" />
-            <Input
-              type="text"
-              placeholder="Search posts, creators..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-zinc-800 text-zinc-200 placeholder:text-white placeholder:font-extralight focus:border-none border-none rounded-full h-8"
-            />
-          </div>
           <div className="flex items-center gap-3">
-            <button className="p-2 hover:bg-zinc-800 rounded-full transition-colors">
-              <Bell className="h-5 w-5 text-zinc-400" />
-            </button>
-            <button className="p-2 hover:bg-zinc-800 rounded-full transition-colors">
-              <Bookmark className="h-5 w-5 text-zinc-400" />
-            </button>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
               <SelectTrigger className="w-32 bg-zinc-800 border-zinc-700 text-white h-8 rounded-full">
                 <SelectValue />
