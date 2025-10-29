@@ -18,7 +18,8 @@ import {
   getPostsByTag,
   getPostsByIds,
   getUserComments,
-  getFollowingPosts
+  getFollowingPosts,
+  getTrendingTopics
 } from '../controller/communityPost.controller';
 import auth from '../middleware/auth.middleware';
 import multer from 'multer';
@@ -70,5 +71,7 @@ router.post('/posts/:postId/comments/:commentId/like', auth, toggleCommentLike);
 // ============= SEARCH & DISCOVERY =============
 router.get('/search',auth, searchPosts);                   // GET /api/community/search          // GET /api/community/trending
 router.get('/tags/:tag/posts',auth, getPostsByTag);        // GET /api/community/tags/:tag/posts
+
+router.get("/trending/tags", getTrendingTopics);
 
 export default router;

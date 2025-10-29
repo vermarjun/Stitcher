@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Types } from 'mongoose';
+import { ObjectId, Types } from 'mongoose';
 import CommunityPost, { ICommentMedia } from '../model/communityPost.model';
 import Asset from '../model/asset.model';
 import User from '../model/user.model';
@@ -11,6 +11,7 @@ import {
 } from '../util/auraupdate.util';
 import cloudinary from '../util/cloudinary.util';
 import mongoose from 'mongoose';
+import { NotificationService } from '../util/notificationservice.util';
 
 /**
  * Create a new community post
@@ -1326,6 +1327,13 @@ export async function toggleLike(req: Request, res: Response): Promise<void> {
                 userId,
                 { $addToSet: { likedPosts: postId } }
             );
+
+            await NotificationService.notifyPostLike(
+                userIdObjectId,
+                post.authorId,
+                post._id as Types.ObjectId,
+                post.title
+            );
         }
 
         await post.save();
@@ -1413,7 +1421,6 @@ export async function addComment(req: any, res: Response): Promise<void> {
             return;
         }
 
-        // Optional parent comment validation
         if (parentCommentId) {
             const parentExists = post.comments.some(
                 (c) => c._id.toString() === parentCommentId
@@ -1465,6 +1472,33 @@ export async function addComment(req: any, res: Response): Promise<void> {
         );
 
         await post.save();
+
+        if (!parentCommentId) {
+            // Top-level comment - notify post author
+            await NotificationService.notifyPostComment(
+                userIdObjectId,
+                post.authorId,
+                post._id as Types.ObjectId,
+                post.title,
+                commentId,
+                content?.trim() || "[Media]"
+            );
+        } else {
+            // Reply to comment - notify parent comment author
+            const parentComment = post.comments.find(
+                c => c._id.toString() === parentCommentId
+            );
+            
+            if (parentComment) {
+                await NotificationService.notifyCommentReply(
+                    userIdObjectId,
+                    parentComment.userId,
+                    post._id as Types.ObjectId,
+                    commentId,
+                    content?.trim() || "[Media]"
+                );
+            }
+        }
 
         const updatedPost = await CommunityPost.findById(postId).populate(
             "comments.userId",
@@ -1648,6 +1682,14 @@ export async function toggleCommentLike(req: Request, res: Response): Promise<vo
             );
         } else {
             comment.likes.push(userIdObjectId);
+
+            await NotificationService.notifyCommentLike(
+                userIdObjectId,
+                comment.userId,
+                post._id as Types.ObjectId,
+                comment._id,
+                comment.content
+            );
         }
 
         await post.save();
@@ -1963,3 +2005,69 @@ export async function getPostsByIds(req: Request, res: Response): Promise<void> 
         res.status(500).json({ error: 'Failed to fetch posts' });
     }
 }
+
+/**
+ * @desc Get trending topics (hashtags) based on engagement
+ * @route GET /api/community/trending
+ * @access Public
+ */
+export const getTrendingTopics = async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    // Aggregate trending tags
+    const trendingTags = await CommunityPost.aggregate([
+      { $unwind: "$tags" },
+      {
+        $group: {
+          _id: "$tags",
+          totalPosts: { $sum: 1 },
+          totalLikes: { $sum: "$likesCount" },
+          totalComments: { $sum: "$commentsCount" },
+          totalViews: { $sum: "$analytics.views" },
+          lastUsedAt: { $max: "$lastActivityAt" },
+        },
+      },
+      {
+        $addFields: {
+          // Weighted score: You can tweak these weights to adjust impact
+          trendingScore: {
+            $add: [
+              { $multiply: ["$totalLikes", 2] },
+              { $multiply: ["$totalComments", 1.5] },
+              { $multiply: ["$totalViews", 0.5] },
+              { $multiply: ["$totalPosts", 1] },
+            ],
+          },
+        },
+      },
+      { $sort: { trendingScore: -1, lastUsedAt: -1 } },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 0,
+          tag: "$_id",
+          totalPosts: 1,
+          totalLikes: 1,
+          totalComments: 1,
+          totalViews: 1,
+          trendingScore: 1,
+          lastUsedAt: 1,
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: trendingTags.length,
+      data: trendingTags,
+    });
+  } catch (error) {
+    console.error("Error fetching trending topics:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error fetching trending topics",
+      error: (error as Error).message,
+    });
+  }
+};

@@ -20,6 +20,7 @@ import projectScriptRoutes from './router/script.router';
 import communityPostRoutes from "./router/communityPost.router"
 import backpackRoutes from "./router/backpack.router"
 import leaderboardRoutes from "./router/leaderboard.router"
+import notificationRoutes from "./router/notification.router"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -59,6 +60,7 @@ app.use(`${API_PREFIX}/script`, projectScriptRoutes);
 app.use(`${API_PREFIX}/community`, communityPostRoutes);
 app.use(`${API_PREFIX}/backpack`, backpackRoutes);
 app.use(`${API_PREFIX}/leaderboard`, leaderboardRoutes);
+app.use(`${API_PREFIX}/notification`, notificationRoutes);
 
 // Start the server
 httpServer.listen(PORT, async () => {

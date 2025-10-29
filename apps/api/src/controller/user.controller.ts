@@ -7,6 +7,8 @@ import sendMail from '../util/mailer.util';
 import { JWT_CONFIG, PASSWORD_RESET_CONFIG } from '../config';
 import cloudinary from '../util/cloudinary.util';
 import mongoose from 'mongoose';
+import { Types } from 'mongoose';
+import { NotificationService } from '../util/notificationservice.util';
 
 interface IUserRequest extends Request {
   userId?: string;
@@ -178,32 +180,64 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
     const user: IUser | null = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
-    // Upload buffer to cloudinary
-    const uploadResult = await cloudinary.uploader.upload_stream(
-      { folder: 'profile_photos', public_id: user._id.toString(), overwrite: true },
-      async (error, result) => {
-        if (error || !result) {
-          return res.status(500).json({ message: 'Cloudinary upload failed.', error });
+    
+    // Use Promise wrapper for better async handling
+    return new Promise((resolve) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { 
+          folder: 'profile_photos', 
+          public_id: user._id.toString(), 
+          overwrite: true 
+        },
+        async (error, result) => {
+          if (error || !result) {
+            return resolve(
+              res.status(500).json({ 
+                message: 'Cloudinary upload failed.', 
+                error 
+              })
+            );
+          }
+          
+          // Update user profile photo
+          user.profilePhoto = result.secure_url;
+          await user.save();
+          
+          // ✅ Send notification to user about profile photo update
+          try {
+            await NotificationService.notifyProfileUpdate(
+              new Types.ObjectId(user._id),
+              'photo',
+              'Your profile photo has been updated successfully! 📸',
+              { 
+                profilePhoto: result.secure_url,
+                updatedAt: new Date()
+              }
+            );
+          } catch (notifError) {
+            // Log but don't fail the request if notification fails
+            console.error('Failed to send profile update notification:', notifError);
+          }
+          
+          return resolve(
+            res.status(200).json({
+              message: 'Profile photo uploaded successfully.',
+              profilePhoto: result.secure_url,
+            })
+          );
         }
-        user.profilePhoto = result.secure_url;
-        await user.save();
-        return res.status(200).json({
-          message: 'Profile photo uploaded successfully.',
-          profilePhoto: result.secure_url,
-        });
-      }
-    );
-    // Pipe file buffer into Cloudinary upload_stream
-    if (req.file && req.file.buffer) {
-      const stream = uploadResult;
-      stream.end(req.file.buffer);
-    }
-    return res; // prevents TS warnings
+      );
+      
+      // Pipe file buffer into Cloudinary upload_stream
+      uploadStream.end(req.file.buffer);
+    });
   } catch (err: any) {
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ 
+      message: 'Server error', 
+      error: err.message 
+    });
   }
 };
-
 export const deleteUser = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
     const user: IUser | null = await User.findByIdAndDelete(req.userId);
@@ -269,9 +303,6 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
   }
 };
 
-// ============================================
-// NEW: FOLLOW SYSTEM FUNCTIONALITY
-// ============================================
 export const followUser = async (req: IUserRequest, res: Response): Promise<Response> => {
   const session = await mongoose.startSession();
 
@@ -311,7 +342,7 @@ export const followUser = async (req: IUserRequest, res: Response): Promise<Resp
         { session }
       );
 
-      await User.findByIdAndUpdate(
+      const updatedTargetUser = await User.findByIdAndUpdate(
         targetUserId,
         { 
           $addToSet: { followers: currentUserId },
@@ -319,6 +350,27 @@ export const followUser = async (req: IUserRequest, res: Response): Promise<Resp
         },
         { session }
       );
+
+      if (updatedTargetUser) {
+        // Store follower count for milestone check
+        session.commitTransaction();
+        
+        // Send follow notification
+        await NotificationService.notifyFollow(
+          new Types.ObjectId(currentUserId),
+          new Types.ObjectId(targetUserId)
+        );
+        
+        // Check for milestone (10, 50, 100, 500, 1000, 5000, 10000 followers)
+        const milestones = [10, 50, 100, 500, 1000, 5000, 10000];
+        if (milestones.includes(updatedTargetUser.stats.followersCount)) {
+          await NotificationService.notifyMilestone(
+            new Types.ObjectId(targetUserId),
+            'followers',
+            updatedTargetUser.stats.followersCount
+          );
+        }
+      }
     });
 
     return res.status(200).json({
@@ -606,37 +658,47 @@ export const checkFollowStatus = async (req: IUserRequest, res: Response): Promi
 export const getSuggestedUsers = async (req: IUserRequest, res: Response): Promise<Response> => {
   try {
     const currentUserId = req.userId;
-    const limit = parseInt(req.query.limit as string) || 10;
-    
+    const limit = parseInt(req.query.limit as string) || 5;
+
     if (!currentUserId) {
       return res.status(401).json({ message: 'Unauthorized.' });
     }
-    
-    const currentUser = await User.findById(currentUserId).select('following');
-    
+
+    const currentUser = await User.findById(currentUserId).select('following').lean();
+
     if (!currentUser) {
       return res.status(404).json({ message: 'User not found.' });
     }
-    
-    // Find users that:
-    // 1. Current user is not following
-    // 2. Are not the current user
-    // 3. Are active
-    // Sort by followers count (most popular first)
+
+    // Combine the current user ID and the following list to exclude
+    const excludedIds = [...(currentUser.following || []), currentUserId];
+
+    // Option 1: Simple deterministic sorting
     const suggestedUsers = await User.find({
-      _id: { 
-        $ne: currentUserId,
-        $nin: currentUser.following 
-      },
-      isActive: true
+      _id: { $nin: excludedIds },
+      isActive: true,
     })
-    .select('username profilePhoto bio stats.followersCount stats.followingCount')
-    .sort({ 'stats.followersCount': -1, createdAt: -1 })
-    .limit(limit)
-    .lean();
-    
+      .select('username profilePhoto bio plan stats.followersCount stats.followingCount')
+      .sort({ 'stats.followersCount': -1, createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Option 2 (optional): Add random fallback if too few suggestions
+    if (suggestedUsers.length < limit) {
+      const remaining = limit - suggestedUsers.length;
+      const randomUsers = await User.aggregate([
+        { $match: { _id: { $nin: excludedIds }, isActive: true } },
+        { $sample: { size: remaining } },
+        { $project: { username: 1, profilePhoto: 1, bio: 1, plan: 1, 'stats.followersCount': 1, 'stats.followingCount': 1 } }
+      ]);
+
+      suggestedUsers.push(...randomUsers);
+    }
+
     return res.status(200).json({
-      suggestions: suggestedUsers
+      success: true,
+      count: suggestedUsers.length,
+      suggestions: suggestedUsers,
     });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });

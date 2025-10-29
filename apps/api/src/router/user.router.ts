@@ -48,7 +48,7 @@ router.delete('/:userId/remove-follower', auth, removeFollower); // Remove a fol
 router.get('/:userId/followers', getFollowers); // Get list of followers (public)
 router.get('/:userId/following', getFollowing); // Get list of following (public)
 router.get('/:userId/follow-status', auth, checkFollowStatus); // Check if current user follows this user
-router.get('/suggestions/users', auth, getSuggestedUsers); // Get suggested users to follow
+router.get('/suggestions', auth, getSuggestedUsers); // Get suggested users to follow
 
 // Public profile route (should be last to avoid conflicts)
 router.get('/:userId/profile', getUserProfile); // Can be username or user ID
