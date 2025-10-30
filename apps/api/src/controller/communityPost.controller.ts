@@ -1175,7 +1175,7 @@ export async function getFollowingPosts(req: Request, res: Response): Promise<vo
  */
 export async function getUserPosts(req: Request, res: Response): Promise<void> {
     try {
-        const { userId } = req.params;
+        const userId = req.userId;
         const { page = 1, limit = 20 } = req.query;
 
         const pageNum = parseInt(page as string);
@@ -1215,7 +1215,7 @@ export async function getUserPosts(req: Request, res: Response): Promise<void> {
  */
 export async function getUserLikedPosts(req: Request, res: Response): Promise<void> {
     try {
-        const { userId } = req.params;
+        const userId = req.userId;
         const { page = 1, limit = 20 } = req.query;
 
         const pageNum = parseInt(page as string);
@@ -1251,7 +1251,7 @@ export async function getUserLikedPosts(req: Request, res: Response): Promise<vo
 
 export const getUserComments = async (req: Request, res: Response) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.params.userId);
+    const userId = new mongoose.Types.ObjectId(req.userId);
 
     const userComments = await CommunityPost.aggregate([
       { $unwind: "$comments" }, // Flatten comments array
