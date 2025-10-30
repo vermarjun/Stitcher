@@ -15,7 +15,6 @@ export enum NotificationType {
   SYSTEM = 'system' // NEW: For generic system notifications
 }
 
-// Interface for notification metadata (flexible structure for different notification types)
 export interface INotificationMetadata {
   postId?: Types.ObjectId;
   postTitle?: string;

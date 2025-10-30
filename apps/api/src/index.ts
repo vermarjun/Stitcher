@@ -60,7 +60,7 @@ app.use(`${API_PREFIX}/script`, projectScriptRoutes);
 app.use(`${API_PREFIX}/community`, communityPostRoutes);
 app.use(`${API_PREFIX}/backpack`, backpackRoutes);
 app.use(`${API_PREFIX}/leaderboard`, leaderboardRoutes);
-app.use(`${API_PREFIX}/notification`, notificationRoutes);
+app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 
 // Start the server
 httpServer.listen(PORT, async () => {
