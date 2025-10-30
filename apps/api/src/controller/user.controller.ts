@@ -238,6 +238,73 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
     });
   }
 };
+
+/**
+ * Upload or update user profile banner
+ */
+export const uploadProfileBanner = async (req: any, res: Response): Promise<Response> => {
+  try {
+    const user: IUser | null = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+    
+    return new Promise((resolve) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { 
+          folder: 'profile_banners', 
+          public_id: `banner_${user._id.toString()}`, 
+          overwrite: true,
+          transformation: [
+            { width: 1500, height: 500, crop: 'fill' },
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        async (error, result) => {
+          if (error || !result) {
+            return resolve(
+              res.status(500).json({ 
+                message: 'Cloudinary upload failed.', 
+                error 
+              })
+            );
+          }
+          
+          user.profileBanner = result.secure_url;
+          await user.save();
+          
+          try {
+            await NotificationService.notifyProfileUpdate(
+              new Types.ObjectId(user._id),
+              'photo',
+              'Your profile banner has been updated successfully! 🎨',
+              { 
+                profileBanner: result.secure_url,
+                updatedAt: new Date()
+              }
+            );
+          } catch (notifError) {
+            console.error('Failed to send profile update notification:', notifError);
+          }
+          
+          return resolve(
+            res.status(200).json({
+              message: 'Profile banner uploaded successfully.',
+              profileBanner: result.secure_url,
+            })
+          );
+        }
+      );
+      
+      uploadStream.end(req.file.buffer);
+    });
+  } catch (err: any) {
+    return res.status(500).json({ 
+      message: 'Server error', 
+      error: err.message 
+    });
+  }
+};
+
 export const deleteUser = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
     const user: IUser | null = await User.findByIdAndDelete(req.userId);

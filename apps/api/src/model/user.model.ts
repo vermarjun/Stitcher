@@ -14,8 +14,8 @@ export interface IUserStats {
   totalLikes: number;
   totalComments: number;
   totalViews: number;
-  followersCount: number; // NEW
-  followingCount: number; // NEW
+  followersCount: number;
+  followingCount: number;
   lastUpdated: Date;
 }
 
@@ -26,6 +26,7 @@ export interface IUser extends Document {
   password: string;
   oAuthCredentials?: IOAuthCredentials[];
   profilePhoto: string;
+  profileBanner: string; 
   lastActive: Date;
   createdAt: Date;
   isActive: boolean;
@@ -39,8 +40,8 @@ export interface IUser extends Document {
   likedPosts?: Types.ObjectId[];
   aura: number;
   stats: IUserStats;
-  followers: Types.ObjectId[]; // NEW: Array of user IDs who follow this user
-  following: Types.ObjectId[]; // NEW: Array of user IDs this user follows
+  followers: Types.ObjectId[];
+  following: Types.ObjectId[];
 }
 
 const UserStatsSchema = new Schema<IUserStats>({
@@ -48,8 +49,8 @@ const UserStatsSchema = new Schema<IUserStats>({
   totalLikes: { type: Number, default: 0, min: 0 },
   totalComments: { type: Number, default: 0, min: 0 },
   totalViews: { type: Number, default: 0, min: 0 },
-  followersCount: { type: Number, default: 0, min: 0 }, // NEW
-  followingCount: { type: Number, default: 0, min: 0 }, // NEW
+  followersCount: { type: Number, default: 0, min: 0 },
+  followingCount: { type: Number, default: 0, min: 0 },
   lastUpdated: { type: Date, default: Date.now }
 }, { _id: false });
 
@@ -78,6 +79,10 @@ const UserSchema = new Schema<IUser>({
   profilePhoto: {
     type: String,
     default: 'https://www.gravatar.com/avatar/?d=mp',
+  },
+  profileBanner: {
+    type: String,
+    default: '', 
   },
   lastActive: {
     type: Date,
@@ -134,7 +139,6 @@ const UserSchema = new Schema<IUser>({
       lastUpdated: new Date()
     })
   },
-  // NEW: Follow system fields
   followers: [{
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -153,12 +157,11 @@ UserSchema.index({ 'stats.totalPosts': -1 });
 UserSchema.index({ 'stats.totalLikes': -1 });
 UserSchema.index({ 'stats.totalViews': -1 });
 
-// NEW: Indexes for follow system
+// Indexes for follow system
 UserSchema.index({ followers: 1 });
 UserSchema.index({ following: 1 });
 UserSchema.index({ 'stats.followersCount': -1 });
 UserSchema.index({ 'stats.followingCount': -1 });
 
 const User: Model<IUser> = model<IUser>('User', UserSchema);
-
 export default User;

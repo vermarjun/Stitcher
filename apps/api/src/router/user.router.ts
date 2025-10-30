@@ -18,7 +18,8 @@ import {
   checkFollowStatus,
   getSuggestedUsers,
   removeFollower,
-  searchUsers
+  searchUsers,
+  uploadProfileBanner
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
@@ -40,6 +41,7 @@ router.delete('/me', auth, deleteUser);
 // Password and profile photo:
 router.put('/change-password', auth, changePassword);
 router.post('/profile-photo', auth, upload.single('profilePhoto'), uploadProfilePhoto);
+router.post('/profile-banner', auth, upload.single('profileBanner'), uploadProfileBanner);
 
 // NEW: Follow system routes (protected)
 router.post('/:userId/follow', auth, followUser); // Follow a user
