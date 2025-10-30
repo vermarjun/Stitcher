@@ -26,42 +26,9 @@ interface RightSidebarProps {
   onBack: () => void;
 }
 
-const defaultTrendingTopics: TrendingTopic[] = [
-  { tag: "WebDevelopment", posts: 1243, trending: true },
-  { tag: "AI", posts: 987, trending: true },
-  { tag: "React", posts: 856, trending: false },
-  { tag: "Design", posts: 742, trending: true },
-  { tag: "Tutorial", posts: 621, trending: false },
-];
-
-const defaultSuggestedCreators: SuggestedCreator[] = [
-  {
-    username: "tech_guru",
-    followers: "12.5K",
-    avatar: "https://i.pravatar.cc/150?img=6",
-    verified: true,
-  },
-  {
-    username: "design_wizard",
-    followers: "8.2K",
-    avatar: "https://i.pravatar.cc/150?img=7",
-    verified: false,
-  },
-  {
-    username: "code_ninja",
-    followers: "15.7K",
-    avatar: "https://i.pravatar.cc/150?img=8",
-    verified: true,
-  },
-];
-
 const RightSidebar = ({
-  formatCount,
-  pagination,
   isMobileOpen,
   onMobileClose,
-  trendingTopics = defaultTrendingTopics,
-  suggestedCreators = defaultSuggestedCreators,
   onBack,
   onProfileClick,
 }: RightSidebarProps) => {
@@ -89,8 +56,8 @@ const RightSidebar = ({
           <SearchSection/>
 
           <Leaderboard onProfileClick={onProfileClick} onBack={onBack}/>
-          <TrendingTopics topics={trendingTopics} formatCount={formatCount} />
-          <SuggestedCreators creators={suggestedCreators} />
+          <TrendingTopics/>
+          <SuggestedCreators/>
         </div>
       </div>
 
@@ -109,11 +76,8 @@ const RightSidebar = ({
                 <SearchSection/>
 
                 <Leaderboard onProfileClick={onProfileClick} onBack={onBack} />
-                <TrendingTopics
-                  topics={trendingTopics}
-                  formatCount={formatCount}
-                />
-                <SuggestedCreators creators={suggestedCreators} />
+                <TrendingTopics/>
+                <SuggestedCreators/>
               </div>
             </div>
           </div>

@@ -11,7 +11,7 @@ import Teams from "./Teams.home";
 import ApiKeys from "./ApiKeys.home";
 import Templates from "./Templates.home";
 import Assets from "./Assets.home";
-import SettingsPage from "./Settings.home";
+import SettingsPage from "./Settings/main.settings";
 
 import ThreeDotLoader from "../LoadingScreens/ThreeDotLoader";
 import AnimationCommunity from "./CommunityPage/main.communitypage";
