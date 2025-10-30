@@ -1,266 +1,394 @@
-import React, { useState } from 'react';
-import { Bell, Heart, MessageCircle, UserPlus, X, Sparkles, Ghost } from 'lucide-react';
+// src/Components/Home/Dashboard/Notifications.home.tsx
+import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Check, Trash, Loader2, Settings } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import api from "@/api";
+import { toast } from "sonner";
 
-interface Notification {
-  id: string;
-  type: 'like' | 'comment' | 'reply' | 'follow';
-  message: string;
-  user: string;
-  timestamp: Date;
+type ObjectId = string;
+
+export type NotificationType =
+  | "follow"
+  | "post_like"
+  | "post_comment"
+  | "comment_like"
+  | "comment_reply"
+  | "new_post_from_following"
+  | "mention"
+  | "post_featured"
+  | "milestone"
+  | "profile_update"
+  | "system";
+
+export interface NotificationMetadata {
+  postId?: ObjectId;
+  postTitle?: string;
+  commentId?: ObjectId;
+  commentContent?: string;
+  [key: string]: any;
 }
 
+export interface Notification {
+  _id: string;
+  recipientId: string;
+  // NOTE: senderId may be an object, a string (id), or null
+  senderId:
+    | { _id?: string; username?: string; profilePhoto?: string }
+    | string
+    | null;
+  type: NotificationType;
+  message: string;
+  metadata?: NotificationMetadata;
+  isRead: boolean;
+  isActionable?: boolean;
+  actionUrl?: string;
+  createdAt: string;
+  readAt?: string;
+}
+
+interface ApiResponsePaginated {
+  notifications?: Notification[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages?: number;
+  };
+  [key: string]: any;
+}
+
+const PAGE_LIMIT = 20;
+
 const NotificationsComponent: React.FC = () => {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      type: 'like',
-      message: 'liked your post "Building React Components"',
-      user: 'Sarah Chen',
-      timestamp: new Date(Date.now() - 5 * 60000)
-    },
-    {
-      id: '2',
-      type: 'comment',
-      message: 'commented on your post',
-      user: 'Alex Kumar',
-      timestamp: new Date(Date.now() - 60 * 60000)
-    },
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [page, setPage] = useState<number>(1);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [filter, setFilter] = useState<"all" | "unread" | "mentions">("all");
+  const navigate = useNavigate();
 
-  function timeAgo(date: Date) {
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return `${seconds} sec${seconds !== 1 ? 's' : ''} ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} min${minutes !== 1 ? 's' : ''} ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
-    const weeks = Math.floor(days / 7);
-    if (weeks < 4) return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
-    const years = Math.floor(days / 365);
-    return `${years} year${years !== 1 ? 's' : ''} ago`;
-  }
-
-  const handleDismiss = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const buildQuery = (pageNum = 1) => {
+    const params = new URLSearchParams();
+    params.set("page", String(pageNum));
+    params.set("limit", String(PAGE_LIMIT));
+    if (filter === "unread") params.set("unreadOnly", "true");
+    if (filter === "mentions") params.set("type", "mention");
+    return params.toString();
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'like':
-        return <Heart className="w-4 h-4 text-red-400" />;
-      case 'comment':
-        return <MessageCircle className="w-4 h-4 text-blue-400" />;
-      case 'reply':
-        return <MessageCircle className="w-4 h-4 text-green-400" />;
-      case 'follow':
-        return <UserPlus className="w-4 h-4 text-purple-400" />;
-      default:
-        return <Bell className="w-4 h-4 text-zinc-400" />;
+  const fetchNotifications = useCallback(
+    async (pageToLoad = 1, append = false) => {
+      try {
+        if (append) setLoadingMore(true);
+        else setLoading(true);
+
+        const q = buildQuery(pageToLoad);
+        // you mentioned api instance already prefixes /api, so request the route directly
+        const res = await api.get<ApiResponsePaginated>(`/notifications?${q}`);
+
+        // backend returns: { success: true, data: { notifications: [...], pagination: {...} } }
+        const payload = res.data?.data ?? res.data ?? {};
+        const items: Notification[] = payload.notifications ?? [];
+        const pagination = payload.pagination;
+
+        setNotifications((prev) => (append ? [...prev, ...items] : items));
+
+        if (pagination) {
+          setHasMore(pagination.page * PAGE_LIMIT < pagination.total);
+        } else {
+          setHasMore(items.length === PAGE_LIMIT);
+        }
+        setPage(pageToLoad);
+      } catch (err: any) {
+        console.error("Failed to fetch notifications:", err);
+        toast.error(err?.message || "Failed to load notifications");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [filter]
+  );
+
+  useEffect(() => {
+    fetchNotifications(1, false);
+  }, [fetchNotifications, filter]);
+
+  useEffect(() => {
+    const handler = () => fetchNotifications(1, false);
+    window.addEventListener("notifications-updated", handler as EventListener);
+    return () =>
+      window.removeEventListener(
+        "notifications-updated",
+        handler as EventListener
+      );
+  }, [fetchNotifications]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      const res = await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n._id === id
+            ? {
+                ...n,
+                isRead: true,
+                readAt: res.data?.data?.readAt ?? new Date().toISOString(),
+              }
+            : n
+        )
+      );
+      window.dispatchEvent(new CustomEvent("notifications-updated"));
+    } catch (err: any) {
+      console.error("markAsRead error", err);
+      toast.error(err?.message || "Could not mark as read");
     }
   };
 
-  const GhostPlaceholder = () => (
-    <>
-      {[1, 2, 3].map((index) => (
-        <tr
-          key={index}
-          className="border-b border-zinc-800 last:border-b-0 animate-pulse relative"
-        >
-          <td className="py-4 px-6">
-            <div className="flex items-center space-x-3">
-              <Ghost className="w-4 h-4 text-zinc-700 animate-float flex-shrink-0" />
-              <div
-                className="h-3 bg-gradient-to-r from-zinc-800 to-zinc-700 rounded blur-[0.5px] opacity-50"
-                style={{ width: `${120 + index * 30}px` }}
-              ></div>
-            </div>
-          </td>
-          <td className="py-4 px-6">
-            <div
-              className="h-3 bg-gradient-to-r from-zinc-800 to-zinc-700 rounded blur-[0.5px] opacity-50"
-              style={{ width: `${70 + index * 12}px` }}
-            ></div>
-          </td>
-          <td className="py-4 px-6">
-            <div className="h-8 w-8 bg-gradient-to-r from-red-900/30 to-red-800/30 rounded blur-[0.5px] opacity-40"></div>
-          </td>
-        </tr>
-      ))}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-3 left-16 animate-bounce delay-300">
-          <Sparkles className="w-2 h-2 text-zinc-600 opacity-30" />
-        </div>
-        <div className="absolute top-10 right-28 animate-bounce delay-700">
-          <Sparkles className="w-1.5 h-1.5 text-zinc-600 opacity-25" />
-        </div>
-        <div className="absolute bottom-5 left-32 animate-bounce delay-1000">
-          <Sparkles className="w-1.5 h-1.5 text-zinc-600 opacity-35" />
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-transparent">
-          <div className="bg-black/5 backdrop-blur-md border border-white/10 rounded-2xl px-8 py-4 mt-10 shadow-2xl text-center">
-            <div className="bg-white/10 border border-white/20 rounded-full p-2 flex items-center justify-center mx-auto mb-4">
-              <Bell className="w-8 h-8 text-white/90" />
-            </div>
-            <p className="text-zinc-400 text-sm font-light max-w-[240px] mx-auto">
-              No new notifications for now. If someone likes your posts, comments or replies to your comments they will appear here.
-            </p>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+  const markAllAsRead = async () => {
+    try {
+      await api.patch("/notifications/read-all");
+      setNotifications((prev) =>
+        prev.map((n) => ({
+          ...n,
+          isRead: true,
+          readAt: new Date().toISOString(),
+        }))
+      );
+      window.dispatchEvent(new CustomEvent("notifications-updated"));
+      toast.success("Marked all as read");
+    } catch (err: any) {
+      console.error("markAllAsRead", err);
+      toast.error("Failed to mark all as read");
+    }
+  };
 
-  if (notifications.length === 0) {
-    return (
-      <div className="space-y-6 animate-in fade-in duration-700">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h2 className="text-xl font-semibold text-white">Notifications</h2>
-            <p className="text-zinc-400 text-sm">Loading your notifications...</p>
-          </div>
-        </div>
-        <div className="bg-black border border-zinc-800 rounded-lg shadow-2xl relative">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
-                    Activity
-                  </th>
-                  <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
-                    Time
-                  </th>
-                  <th className="text-center py-3 px-6 text-zinc-300 text-xs font-medium">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <GhostPlaceholder />
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const deleteNotification = async (id: string) => {
+    try {
+      await api.delete(`/notifications/${id}`);
+      setNotifications((prev) => prev.filter((n) => n._id !== id));
+      toast.success("Notification deleted");
+      window.dispatchEvent(new CustomEvent("notifications-updated"));
+    } catch (err: any) {
+      console.error("deleteNotification", err);
+      toast.error("Failed to delete notification");
+    }
+  };
+
+  const onNotificationClick = (n: Notification) => {
+    if (!n.isRead) markAsRead(n._id);
+    if (n.actionUrl) {
+      if (n.actionUrl.startsWith("/")) navigate(n.actionUrl);
+      else window.location.href = n.actionUrl;
+    } else if (n.metadata?.postId) {
+      navigate(`/posts/${n.metadata.postId}`);
+    }
+  };
+
+  const loadMore = () => {
+    if (!hasMore) return;
+    fetchNotifications(page + 1, true);
+  };
+
+  // default avatar
+  const DEFAULT_AVATAR =
+    "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-700">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-white">Notifications</h2>
-          <p className="text-zinc-400 text-xs">
-            {notifications.length === 0
-              ? "Your notifications will appear here"
-              : `You have ${notifications.length} new notification${notifications.length !== 1 ? 's' : ''}`}
-          </p>
+    <div className="min-h-full">
+      <div className="max-w-full mx-auto">
+        <div className="p-6 flex items-center justify-between mb-4 h-14 border-b border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                Notifications
+              </h1>
+              {/* <p className="text-sm text-zinc-400">All activity, mentions and updates for you.</p> */}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-zinc-900 rounded-md p-1">
+              <button
+                onClick={() => setFilter("all")}
+                className={`px-3 py-1 rounded-md text-sm ${
+                  filter === "all"
+                    ? "bg-green-600/20 text-green-400"
+                    : "text-zinc-300"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilter("unread")}
+                className={`px-3 py-1 rounded-md text-sm ${
+                  filter === "unread"
+                    ? "bg-green-600/20 text-green-400"
+                    : "text-zinc-300"
+                }`}
+              >
+                Unread
+              </button>
+              <button
+                onClick={() => setFilter("mentions")}
+                className={`px-3 py-1 rounded-md text-sm ${
+                  filter === "mentions"
+                    ? "bg-green-600/20 text-green-400"
+                    : "text-zinc-300"
+                }`}
+              >
+                Mentions
+              </button>
+            </div>
+            <button
+              onClick={markAllAsRead}
+              className="text-sm px-3 py-1 rounded-md bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+            >
+              Mark all read
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="bg-black border border-zinc-800 rounded-lg">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
-                  Activity
-                </th>
-                <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
-                  Time
-                </th>
-                <th className="text-center py-3 px-6 text-zinc-300 text-xs font-medium">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {notifications.map((notification, index) => (
-                <tr
-                  key={notification.id}
-                  className="border-b border-zinc-800 last:border-b-0 hover:bg-zinc-900/50 transition-colors duration-200 animate-in fade-in slide-in-from-left-4"
-                  style={{ animationDelay: `${(index + 1) * 100}ms` }}
-                >
-                  <td className="py-3 px-6">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded bg-zinc-900 flex items-center justify-center flex-shrink-0">
-                        {getIcon(notification.type)}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-white text-sm font-medium">
-                          {notification.user}
-                        </span>
-                        <span className="text-zinc-400 text-xs">
-                          {notification.message}
-                        </span>
+        <div className="px-6">
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 overflow-hidden">
+            {loading && (
+              <div className="p-6">
+                <div className="animate-pulse space-y-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-full bg-zinc-800" />
+                      <div className="flex-1 space-y-2 py-1">
+                        <div className="h-4 w-3/4 bg-zinc-800 rounded" />
+                        <div className="h-3 w-1/4 bg-zinc-800 rounded" />
                       </div>
                     </div>
-                  </td>
-                  <td className="py-3 px-6 text-zinc-400 text-sm">
-                    {timeAgo(notification.timestamp)}
-                  </td>
-                  <td className="py-3 px-6 flex justify-center items-center">
-                    <button
-                      onClick={() => handleDismiss(notification.id)}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 h-8 w-8 rounded-md transition-colors duration-200 flex items-center justify-center"
-                      title="Dismiss notification"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!loading && notifications.length === 0 && (
+              <div className="p-6 text-center text-zinc-400">
+                No notifications yet, You're all caught up ✨
+              </div>
+            )}
+
+            {!loading &&
+              notifications.map((n) => {
+                // Safe sender extraction: account for null, string id or object
+                const sender =
+                  n.senderId != null && typeof n.senderId === "object"
+                    ? (n.senderId as {
+                        username?: string;
+                        profilePhoto?: string;
+                      })
+                    : null;
+
+                return (
+                  <div
+                    key={n._id}
+                    onClick={() => onNotificationClick(n)}
+                    className={`flex items-start gap-4 p-4 hover:bg-zinc-900/60 cursor-pointer transition-colors ${
+                      n.isRead
+                        ? ""
+                        : "bg-zinc-900/10 border-l-4 border-green-600/30"
+                    }`}
+                  >
+                    <div className="flex-shrink-0">
+                      {n.senderId || n.type === "profile_update" ? (
+                        <div className="h-12 w-12 rounded-full bg-zinc-800 overflow-hidden">
+                          <img
+                            src={
+                              sender?.profilePhoto ??
+                              n.metadata?.profilePhoto ??
+                              DEFAULT_AVATAR
+                            }
+                            alt={sender?.username ?? "user"}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <Settings className="h-12 w-12 text-zinc-300" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-sm">
+                            <span className="font-medium text-white">
+                              {sender?.username ??
+                                (typeof n.senderId === "string"
+                                  ? n.senderId
+                                  : "System")}
+                            </span>
+                          </div>
+
+                          <span className="text-xs mt-1 text-zinc-400 truncate break-words">
+                            {n.message}
+                          </span>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-xs text-zinc-400">
+                            {formatDistanceToNow(new Date(n.createdAt), {
+                              addSuffix: true,
+                            })}
+                          </div>
+                          <div className="flex items-center justify-end gap-2 mt-2">
+                            {!n.isRead && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markAsRead(n._id);
+                                }}
+                                title="Mark as read"
+                                className="rounded-md p-1 hover:bg-zinc-800/60"
+                              >
+                                <Check size={16} className="text-white" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteNotification(n._id);
+                              }}
+                              title="Delete"
+                              className="rounded-md p-1 hover:bg-zinc-800/60"
+                            >
+                              <Trash size={16} className="text-white" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            <div className="p-4 flex items-center justify-center">
+              {loadingMore ? (
+                <div className="flex items-center gap-2 text-zinc-400">
+                  <Loader2 className="animate-spin" />
+                  Loading...
+                </div>
+              ) : hasMore ? (
+                <button
+                  onClick={loadMore}
+                  className="px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 text-sm text-white"
+                >
+                  Load more
+                </button>
+              ) : notifications.length > 0 ? (
+                <div className="text-xs text-zinc-500">
+                  You're all caught up
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .animate-in {
-          animation: fadeIn 0.5s ease-out forwards;
-        }
-        
-        @keyframes slideInFromLeft {
-          from { opacity: 0; transform: translateX(-20px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        
-        .slide-in-from-left-4 {
-          animation: slideInFromLeft 0.4s ease-out forwards;
-        }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        
-        .animate-pulse {
-          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        
-        @keyframes float {
-          0%, 100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-3px);
-          }
-        }
-        
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };

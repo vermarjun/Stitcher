@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { User, Lock, Upload, Trash2, Eye, EyeOff, Save, X, Mail } from "lucide-react";
+import {
+  User,
+  Lock,
+  Upload,
+  Trash2,
+  Eye,
+  EyeOff,
+  Save,
+  X,
+  Mail,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -50,10 +60,7 @@ const SkeletonLoader = () => (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="space-y-1.5">
         {[...Array(3)].map((_, i) => (
-          <div
-            key={i}
-            className="h-8 bg-zinc-800 rounded animate-pulse"
-          />
+          <div key={i} className="h-8 bg-zinc-800 rounded animate-pulse" />
         ))}
       </div>
 
@@ -119,7 +126,8 @@ const Settings: React.FC = () => {
     try {
       const response = await api.put("/users/me", formData);
       setUser(response.data);
-      localStorage.setItem('user', response.data);
+      // save after profile update
+      localStorage.setItem("user", JSON.stringify(response.data));
       toast.success("Profile updated successfully");
     } catch (error: any) {
       toast.error(
@@ -171,17 +179,53 @@ const Settings: React.FC = () => {
       const response = await api.post("/users/profile-photo", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      console.log("updateprofilephoto response: ",response.data);
+      console.log("updateprofilephoto response: ", response.data);
+
       if (user) {
         setUser({ ...user, profilePhoto: response.data.profilePhoto });
-        const updated_user = JSON.parse(localStorage.getItem('user') || "");
-        updated_user.profilePhoto = response.data.profilePhoto;
-        localStorage.setItem('user', JSON.stringify(updated_user));
+        try {
+          const raw = localStorage.getItem("user");
+          if (raw) {
+            const updated_user = JSON.parse(raw);
+            // if parse succeeded and is an object, update it
+            if (updated_user && typeof updated_user === "object") {
+              updated_user.profilePhoto = response.data.profilePhoto;
+              localStorage.setItem("user", JSON.stringify(updated_user));
+            } else {
+              // if stored value was not an object (e.g. corrupted), overwrite with current user
+              localStorage.setItem(
+                "user",
+                JSON.stringify({
+                  ...user,
+                  profilePhoto: response.data.profilePhoto,
+                })
+              );
+            }
+          } else {
+            // nothing stored — set it properly
+            localStorage.setItem(
+              "user",
+              JSON.stringify({
+                ...user,
+                profilePhoto: response.data.profilePhoto,
+              })
+            );
+          }
+        } catch (parseErr) {
+          console.warn("Failed to parse stored user, overwriting.", parseErr);
+          localStorage.setItem(
+            "user",
+            JSON.stringify({
+              ...user,
+              profilePhoto: response.data.profilePhoto,
+            })
+          );
+        }
       }
+
       toast.success("Profile photo updated successfully");
     } catch (error: any) {
       toast.error(
-        "error",
         error.response?.data?.message || "Failed to upload profile photo"
       );
     } finally {
@@ -240,7 +284,7 @@ const Settings: React.FC = () => {
       <div className="mb-6 p-6 border-b border-zinc-800 h-14 flex items-center w-full justify-between">
         <div className="flex items-center justify-between w-full">
           <div>
-            <h1 className="text-2xl font-bold text-white">Account Settings</h1>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Account Settings</h1>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -248,7 +292,11 @@ const Settings: React.FC = () => {
               <p className="text-xs text-zinc-400">{user.email}</p>
             </div>
             <Avatar className="h-10 w-10 border border-zinc-700">
-              <AvatarImage src={user.profilePhoto} alt="Profile" className="object-cover"/>
+              <AvatarImage
+                src={user.profilePhoto}
+                alt="Profile"
+                className="object-cover"
+              />
               <AvatarFallback className="bg-zinc-800 text-white">
                 {user.username?.charAt(0).toUpperCase()}
               </AvatarFallback>
@@ -257,7 +305,7 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="px-6 max-w-6xl mx-auto">
         {/* Message Alert */}
         {message && (
           <Alert
@@ -291,7 +339,7 @@ const Settings: React.FC = () => {
           {/* Sidebar Navigation */}
           <div className="lg:col-span-1">
             <Card className="bg-zinc-900 border-zinc-800 sticky top-6">
-              <CardContent className="p-4">
+              <CardContent className="px-4">
                 <nav className="space-y-1">
                   <button
                     onClick={() => setActiveTab("profile")}
@@ -351,7 +399,11 @@ const Settings: React.FC = () => {
                     <div className="flex items-center gap-6 p-4 bg-zinc-800/50 rounded-lg">
                       <div className="relative">
                         <Avatar className="h-20 w-20 border-2 border-zinc-600">
-                          <AvatarImage src={user.profilePhoto} alt="Profile" className="object-cover"/>
+                          <AvatarImage
+                            src={user.profilePhoto}
+                            alt="Profile"
+                            className="object-cover"
+                          />
                           <AvatarFallback className="bg-zinc-700 text-white text-lg">
                             {user.username?.charAt(0).toUpperCase()}
                           </AvatarFallback>
@@ -402,21 +454,30 @@ const Settings: React.FC = () => {
                     <form onSubmit={handleProfileUpdate} className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="username" className="text-sm font-medium text-white">
+                          <Label
+                            htmlFor="username"
+                            className="text-sm font-medium text-white"
+                          >
                             Username
                           </Label>
                           <Input
                             id="username"
                             value={formData.username}
                             onChange={(e) =>
-                              setFormData({ ...formData, username: e.target.value })
+                              setFormData({
+                                ...formData,
+                                username: e.target.value,
+                              })
                             }
                             className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
                             required
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="email" className="text-sm font-medium text-white">
+                          <Label
+                            htmlFor="email"
+                            className="text-sm font-medium text-white"
+                          >
                             Email
                           </Label>
                           <Input
@@ -424,7 +485,10 @@ const Settings: React.FC = () => {
                             type="email"
                             value={formData.email}
                             onChange={(e) =>
-                              setFormData({ ...formData, email: e.target.value })
+                              setFormData({
+                                ...formData,
+                                email: e.target.value,
+                              })
                             }
                             className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
                             required
@@ -432,7 +496,10 @@ const Settings: React.FC = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="bio" className="text-sm font-medium text-white">
+                        <Label
+                          htmlFor="bio"
+                          className="text-sm font-medium text-white"
+                        >
                           Bio
                         </Label>
                         <Textarea
@@ -474,7 +541,10 @@ const Settings: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+                  <form
+                    onSubmit={handlePasswordChange}
+                    className="space-y-4 max-w-md"
+                  >
                     {(["current", "new", "confirm"] as const).map((field) => (
                       <div key={field} className="space-y-2">
                         <Label className="text-sm font-medium text-white">
@@ -560,9 +630,9 @@ const Settings: React.FC = () => {
                       Delete Account
                     </h3>
                     <p className="text-red-300 text-sm leading-relaxed mb-4">
-                      Once you delete your account, there is no going back. Please
-                      be certain. All your data will be permanently removed and
-                      cannot be recovered.
+                      Once you delete your account, there is no going back.
+                      Please be certain. All your data will be permanently
+                      removed and cannot be recovered.
                     </p>
                     <Button
                       onClick={handleDeleteAccount}

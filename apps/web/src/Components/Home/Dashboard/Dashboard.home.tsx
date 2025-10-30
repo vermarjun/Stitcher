@@ -3,7 +3,6 @@ import type { Project } from "@/State/Types";
 import RecentProjects from "./RecentProjects.home";
 import GettingStarted from "./GettingStarted.home";
 import QuickActions from "./QuickActions.home";
-import Leaderboard from "./Leaderboard.home";
 
 interface Props {
   recentProjects: Project[];
@@ -46,8 +45,6 @@ const Dashboard = ({ recentProjects, fecthRecentProjects, onNavigate }: Props) =
           navigate={navigate}
           fecthRecentProjects={fecthRecentProjects}
         />
-        {/* <NotificationsComponent/> */}
-        <Leaderboard/>
         <GettingStarted />
       </div>
     </div>

@@ -1,11 +1,9 @@
-import { Search, X } from "lucide-react";
-import { Input } from "@/Components/ui/input";
-import { Button } from "@/Components/ui/button";
+import { X } from "lucide-react";
 import Leaderboard from "./Leaderboard.rightsidebar";
 import TrendingTopics from "./TrendingTopics.rightsidebar";
 import SuggestedCreators from "./SuggestedCreators.rightsidebar";
-import CommunityStats from "./CommunityStats.rightsidebar";
 import type { IAuthor } from "../main.communitypage";
+import SearchSection from "./Search.rightsidebar";
 
 import type {
   PaginationInfo,
@@ -17,8 +15,6 @@ import type {
 interface RightSidebarProps {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
   formatCount: (count: number) => string;
   pagination: PaginationInfo;
   isMobileOpen: boolean;
@@ -60,8 +56,6 @@ const defaultSuggestedCreators: SuggestedCreator[] = [
 ];
 
 const RightSidebar = ({
-  searchQuery,
-  setSearchQuery,
   formatCount,
   pagination,
   isMobileOpen,
@@ -71,27 +65,6 @@ const RightSidebar = ({
   onBack,
   onProfileClick,
 }: RightSidebarProps) => {
-  const SearchSection = () => (
-    <>
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-200" />
-        <Input
-          type="text"
-          placeholder="Search users.."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 bg-zinc-900 h-10 border border-zinc-600 text-zinc-200 placeholder:text-white placeholder:font-extralight focus:border-none rounded-full"
-        />
-      </div>
-      <Button
-        size="lg"
-        className="bg-white text-black rounded-full w-full hover:bg-zinc-300 cursor-pointer"
-      >
-        Create Post
-      </Button>
-    </>
-  );
-
   const MobileHeader = () => (
     <div className="flex items-center justify-between mb-4">
       <h2 className="font-bold text-lg">Menu</h2>
@@ -113,12 +86,11 @@ const RightSidebar = ({
         <div
           className={`h-screen overflow-y-auto sticky top-0 px-4 py-6 space-y-4 opacity-100 transition-opacity duration-300`}
         >
-          <SearchSection />
+          <SearchSection/>
 
           <Leaderboard onProfileClick={onProfileClick} onBack={onBack}/>
           <TrendingTopics topics={trendingTopics} formatCount={formatCount} />
           <SuggestedCreators creators={suggestedCreators} />
-          <CommunityStats pagination={pagination} formatCount={formatCount} />
         </div>
       </div>
 
@@ -134,7 +106,7 @@ const RightSidebar = ({
               <MobileHeader />
 
               <div className="space-y-4">
-                <SearchSection />
+                <SearchSection/>
 
                 <Leaderboard onProfileClick={onProfileClick} onBack={onBack} />
                 <TrendingTopics

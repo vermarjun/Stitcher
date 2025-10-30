@@ -92,7 +92,6 @@ const CommunityPage = ({ currentUser }: Props) => {
   // State
   const [posts, setPosts] = useState<ICommunityPost[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"publishedAt" | "likesCount" | "views">(
     "likesCount"
   );
@@ -136,8 +135,6 @@ const CommunityPage = ({ currentUser }: Props) => {
         else if (sortBy === "likesCount") params.sortBy = "popular";
         else if (sortBy === "views") params.sortBy = "trending";
 
-        if (searchQuery) params.search = searchQuery;
-
         // Determine the endpoint based on feedType
         const endpoint =
           feedType === "following"
@@ -165,12 +162,12 @@ const CommunityPage = ({ currentUser }: Props) => {
         setLoading(false);
       }
     },
-    [pagination.page, pagination.limit, searchQuery, sortBy, posts, feedType]
+    [pagination.page, pagination.limit, sortBy, posts, feedType]
   );
 
   useEffect(() => {
     fetchPosts();
-  }, [searchQuery, sortBy, feedType]); // Removed sortOrder since it's not used
+  }, [sortBy, feedType]); // Removed sortOrder since it's not used
 
   useEffect(() => {
     if (loading) return;
@@ -286,8 +283,6 @@ const CommunityPage = ({ currentUser }: Props) => {
       <RightSidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
         formatCount={formatCount}
         pagination={pagination}
         isMobileOpen={mobileSidebarOpen}
