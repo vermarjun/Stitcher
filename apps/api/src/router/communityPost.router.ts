@@ -53,9 +53,9 @@ router.get('/following/posts', auth, getFollowingPosts);    // GET /api/communit
 router.post('/posts/batch', auth, getPostsByIds);           // POST /api/community/posts/batch
 
 // ============= USER-SPECIFIC POSTS =============
-router.get('/users/posts', auth, getUserPosts);     // GET /api/community/users/:userId/posts
-router.get('/users/liked', auth, getUserLikedPosts); // GET /api/community/users/:userId/liked
-router.get('/users/comments', auth, getUserComments);
+router.get('/users/:userId/posts', auth, getUserPosts);     // GET /api/community/users/:userId/posts
+router.get('/users/:userId/liked', auth, getUserLikedPosts); // GET /api/community/users/:userId/liked
+router.get('/users/:userId/comments', auth, getUserComments);
 
 // ============= LIKE MANAGEMENT =============
 router.post('/posts/:postId/like', auth, toggleLike);       // POST /api/community/posts/:postId/like

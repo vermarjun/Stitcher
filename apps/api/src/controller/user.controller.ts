@@ -133,7 +133,7 @@ export const getUserProfile = async (req: Request, res: Response): Promise<Respo
       return res.status(400).json({ message: 'User userId is required.' });
     }
     const user = await User.findById(userId)
-      .select('username bio profilePhoto createdAt stats aura plan role likedPosts communityPosts followers following')
+      .select('username bio profilePhoto profileBanner createdAt stats aura plan role likedPosts communityPosts followers following')
       .lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -142,6 +142,7 @@ export const getUserProfile = async (req: Request, res: Response): Promise<Respo
       _id: user._id.toString(),
       username: user.username,
       profilePhoto: user.profilePhoto || 'https://www.gravatar.com/avatar/?d=mp',
+      profileBanner: user.profileBanner,
       bio: user.bio || '',
       createdAt: user.createdAt,
       stats: user.stats,
