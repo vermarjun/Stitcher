@@ -3,7 +3,15 @@ import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import api from "@/api";
-import type {IUser} from "@/State/Types"
+import type { IUser } from "@/State/Types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/Components/ui/dialog";
+import { useNav } from "@/Context/HomeNavigation.context";
 
 interface SearchResponse {
   success: boolean;
@@ -11,7 +19,12 @@ interface SearchResponse {
   data: IUser[];
 }
 
-const SearchSection = () => {
+interface Props {
+  onProfileClick: (user: IUser) => void;
+  onBack: () => void;
+}
+
+const SearchSection = ({ onProfileClick, onBack }: Props) => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<IUser[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -19,7 +32,8 @@ const SearchSection = () => {
   const [error, setError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
+  const [openCreateDialog, setOpenCreateDialog] = useState(false);
+  const { setActiveItem } = useNav();
   // Debounce search to avoid too many API calls
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -57,8 +71,10 @@ const SearchSection = () => {
     setError(null);
 
     try {
-      const response = await api.get<SearchResponse>(`/users/search?q=${encodeURIComponent(query)}`);
-      
+      const response = await api.get<SearchResponse>(
+        `/users/search?q=${encodeURIComponent(query)}`
+      );
+
       if (response.data.success) {
         setSearchResults(response.data.data);
         setShowDropdown(true);
@@ -76,9 +92,11 @@ const SearchSection = () => {
   };
 
   const handleUserClick = (user: IUser): void => {
-    console.log("Selected user:", user);
-    setShowDropdown(false);
-    setSearchQuery("");
+    onBack();
+    onProfileClick(user);
+    // console.log("Selected user:", user);
+    // setShowDropdown(false);
+    // setSearchQuery("");
   };
 
   const clearSearch = (): void => {
@@ -116,13 +134,9 @@ const SearchSection = () => {
             className="absolute top-full mt-2 w-full bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg overflow-hidden z-50"
           >
             {isLoading ? (
-              <div className="p-4 text-center text-zinc-400">
-                Searching...
-              </div>
+              <div className="p-4 text-center text-zinc-400">Searching...</div>
             ) : error ? (
-              <div className="p-4 text-center text-red-400">
-                {error}
-              </div>
+              <div className="p-4 text-center text-red-400">{error}</div>
             ) : searchResults.length > 0 ? (
               <div className="max-h-80 overflow-y-auto">
                 {searchResults.map((user) => (
@@ -159,9 +173,39 @@ const SearchSection = () => {
       <Button
         size="lg"
         className="bg-white text-black rounded-full w-full hover:bg-zinc-300 cursor-pointer"
+        onClick={() => setOpenCreateDialog(true)}
       >
         Create Post
       </Button>
+
+      {/* ✅ Create Post Dialog */}
+      <Dialog open={openCreateDialog} onOpenChange={setOpenCreateDialog}>
+        <DialogContent className="bg-zinc-900 border border-zinc-700 text-white max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-center">
+              Create Post
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="text-center text-zinc-300 leading-relaxed px-4">
+            You can only share in community what you have in your backpack. You
+            can save the videos that you generate in your backpack and then
+            share those videos here in community.
+          </div>
+
+          <DialogFooter className="flex justify-center mt-4">
+            <Button
+              className="bg-white text-black hover:bg-zinc-300 rounded-full px-6"
+              onClick={() => {
+                setActiveItem("backpack")
+                setOpenCreateDialog(false);
+              }}
+            >
+              Go to Backpack
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

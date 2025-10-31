@@ -12,22 +12,23 @@ import ApiKeys from "./ApiKeys.home";
 import Templates from "./Templates.home";
 import Assets from "./Assets.home";
 import SettingsPage from "./Settings/main.settings";
-
 import ThreeDotLoader from "../LoadingScreens/ThreeDotLoader";
 import AnimationCommunity from "./CommunityPage/main.communitypage";
 import Backpack from "./Backpack/main.backpack";
 import NotificationsComponent from "./Dashboard/Notifications.home";
 import PricingPage from "./Pricing.home";
-import type { User } from "@/State/Types";
+import type { IUser } from "@/State/Types";
+import { useNav } from "@/Context/HomeNavigation.context";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeItem, setActiveItem] = useState("home");
+  // const [activeItem, setActiveItem] = useState("home");
+  const { activeItem, setActiveItem } = useNav();
   const [isLoading, setIsLoading] = useState(false);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
-  const user:User = JSON.parse(localStorage.getItem("user") || "");
+  const user:IUser = JSON.parse(localStorage.getItem("user") || "");
   if (user.profilePhoto == "") {
     user.profilePhoto =
       "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";

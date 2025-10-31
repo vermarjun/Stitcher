@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trophy, Crown, Star, Sparkles, MessageCircle, Heart, Eye } from "lucide-react";
+import { Trophy, Crown, Star } from "lucide-react";
 import api  from "@/api";
 import { Skeleton } from "@/Components/ui/skeleton";
 import type { IUser } from "@/State/Types";
@@ -81,7 +81,7 @@ const Leaderboard = ({onProfileClick, onBack}:Props) => {
                   <img
                     src={user.profilePhoto || "https://www.gravatar.com/avatar/?d=mp"}
                     alt={user.username}
-                    className="h-10 w-10 rounded-full object-cover"
+                    className="h-14 w-14 rounded-full object-cover"
                   />
                   {rank <= 3 && (
                     <div className="absolute -top-1 -right-1 bg-zinc-900 rounded-full p-0.5">
@@ -99,23 +99,24 @@ const Leaderboard = ({onProfileClick, onBack}:Props) => {
                     <p className="text-xs text-zinc-500 font-semibold">#{rank}</p>
                   </div>
                   <p className="text-xs text-zinc-500 truncate flex items-center gap-1">
-                    <Sparkles className="h-3 w-3 text-yellow-400" />
-                    {user.aura} Aura
+                    🔥
+                    {/* <Sparkles className="h-3 w-3 text-yellow-400" /> */}
+                    {user.aura}
                   </p>
 
                   {/* User Stats (Posts, Likes, Views) */}
                   <div className="flex gap-3 mt-1 text-xs text-zinc-500">
                     <div className="flex items-center gap-1">
-                      <MessageCircle className="h-3 w-3" />
-                      {user.stats?.totalPosts}
+                      {/* <MessageCircle className="h-3 w-3" /> */}
+                      {user.stats?.totalPosts} Comments
                     </div>
                     <div className="flex items-center gap-1">
-                      <Heart className="h-3 w-3" />
-                      {user.stats?.totalLikes}
+                      {/* <Heart className="h-3 w-3" /> */}
+                      {user.stats?.totalLikes} Likes
                     </div>
                     <div className="flex items-center gap-1">
-                      <Eye className="h-3 w-3" />
-                      {user.stats?.totalViews}
+                      {/* <Eye className="h-3 w-3" /> */}
+                      {user.stats?.totalViews} Views
                     </div>
                   </div>
                 </div>

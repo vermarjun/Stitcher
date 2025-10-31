@@ -264,7 +264,7 @@ const ProfileTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-zinc-900 border-zinc-800 overflow-hidden rounded-2xl shadow-lg">
+      <Card className="bg-zinc-900 p-0 pb-4 border-zinc-800 overflow-hidden rounded-2xl shadow-lg">
         {/* ===== Banner Section ===== */}
         <div className="relative">
           <div
@@ -368,26 +368,30 @@ const ProfileTab: React.FC = () => {
           </div>
 
           {/* ===== Meta Info Section (Followers / Following) ===== */}
-        <div className="text-sm text-zinc-300 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-4 justify-between">
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={() => handleOpenModal("followers")}
-              className="hover:underline cursor-pointer hover:text-white transition"
-            >
-              <span className="font-semibold text-white">{followersCount}</span>{" "}
-              Followers
-            </button>
-            <button
-              onClick={() => handleOpenModal("following")}
-              className="hover:underline cursor-pointer hover:text-white transition"
-            >
-              <span className="font-semibold text-white">{followingCount}</span>{" "}
-              Following
-            </button>
+          <div className="text-sm text-zinc-300 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-4 justify-between">
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => handleOpenModal("followers")}
+                className="hover:underline cursor-pointer hover:text-white transition"
+              >
+                <span className="font-semibold text-white">
+                  {followersCount}
+                </span>{" "}
+                Followers
+              </button>
+              <button
+                onClick={() => handleOpenModal("following")}
+                className="hover:underline cursor-pointer hover:text-white transition"
+              >
+                <span className="font-semibold text-white">
+                  {followingCount}
+                </span>{" "}
+                Following
+              </button>
+            </div>
           </div>
-        </div>
 
-          <div className="flex items-center justify-between w-fit flex-wrap gap-4">
+          <div className="flex items-center justify-between w-full flex-wrap gap-4">
             <div className="flex text-sm text-zinc-400">
               <div className="border-r pr-4">
                 <span className="text-white font-medium">
@@ -421,42 +425,58 @@ const ProfileTab: React.FC = () => {
 
         <CardContent className="space-y-6">
           <form onSubmit={handleProfileUpdate} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="username"
-                  className="text-sm font-medium text-white"
-                >
-                  Username
-                </Label>
-                {formData && (
-                  <Input
-                    id="username"
-                    value={formData.username || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, username: e.target.value })
-                    }
-                    className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
-                    required
-                  />
-                )}
-              </div>
+            <div className="flex justify-center items-end gap-4 h-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="username"
+                    className="text-sm font-medium text-white"
+                  >
+                    Username
+                  </Label>
+                  {formData && (
+                    <Input
+                      id="username"
+                      value={formData.username || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, username: e.target.value })
+                      }
+                      className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
+                      required
+                    />
+                  )}
+                </div>
 
-              <div className="space-y-2">
-                <Label
-                  htmlFor="email"
-                  className="text-sm font-medium text-white"
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="email"
+                    className="text-sm font-medium text-white"
+                  >
+                    Email
+                  </Label>
+                  {formData && (
+                    <Input
+                      id="email"
+                      type="email"
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      required
+                      value={formData.email || ""}
+                      className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="flex w-fit h-full justify-end items-start">
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-white text-black hover:bg-zinc-200 rounded-md h-10 px-6"
                 >
-                  Email
-                </Label>
-                {formData && (
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email || ""}
-                    className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10 opacity-70"
-                  />
-                )}
+                  <Save className="h-4 w-4 mr-2" />
+                  {loading ? "Saving..." : "Save Changes"}
+                </Button>
               </div>
             </div>
 
@@ -475,17 +495,6 @@ const ProfileTab: React.FC = () => {
                   placeholder="Tell us about yourself..."
                 />
               )}
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button
-                type="submit"
-                disabled={loading}
-                className="bg-white text-black hover:bg-zinc-200 transition-colors h-10 px-6"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {loading ? "Saving..." : "Save Changes"}
-              </Button>
             </div>
           </form>
         </CardContent>

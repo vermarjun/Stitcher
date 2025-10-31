@@ -477,7 +477,7 @@ const PostDetail = ({
   return (
     <div className="flex flex-col items-center w-full min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-4 py-3">
+      <div className="sticky h-14 top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-4 py-3">
         <button onClick={onBack} className="hover:bg-zinc-800 rounded-full p-2">
           <ArrowLeft className="h-5 w-5" />
         </button>

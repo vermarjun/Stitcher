@@ -200,15 +200,12 @@ export default function ProfilePage({
   return (
     <div className="min-h-screen w-full bg-black text-white pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-4 py-3">
+      <div className="sticky h-14 top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-4 py-3">
         <button onClick={onBack} className="hover:bg-zinc-800 rounded-full p-2">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="flex flex-col">
+        <div className="flex justify-center items-center gap-3">
           <h2 className="text-lg font-semibold">{user.username}</h2>
-          <span className="text-xs text-neutral-400">
-            {user.stats?.totalPosts ?? 0} posts
-          </span>
         </div>
       </div>
 

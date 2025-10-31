@@ -53,7 +53,7 @@ const RightSidebar = ({
         <div
           className={`h-screen overflow-y-auto sticky top-0 px-4 py-6 space-y-4 opacity-100 transition-opacity duration-300`}
         >
-          <SearchSection/>
+          <SearchSection onProfileClick={onProfileClick} onBack={onBack}/>
 
           <Leaderboard onProfileClick={onProfileClick} onBack={onBack}/>
           <TrendingTopics/>
@@ -73,7 +73,7 @@ const RightSidebar = ({
               <MobileHeader />
 
               <div className="space-y-4">
-                <SearchSection/>
+                <SearchSection onBack={onBack} onProfileClick={onProfileClick}/>
 
                 <Leaderboard onProfileClick={onProfileClick} onBack={onBack} />
                 <TrendingTopics/>

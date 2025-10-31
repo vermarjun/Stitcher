@@ -17,11 +17,7 @@ import Header from "./Header.settings";
 import ProfileTab from "./ProfileTab.settings";
 import PasswordTab from "./PasswordTab.settings";
 import DangerTab from "./DangerTab.settings";
-import type {
-  PasswordData,
-  ShowPasswords,
-  Message,
-} from "./types.settings";
+import type { PasswordData, ShowPasswords, Message } from "./types.settings";
 import api from "@/api";
 import type { IUser } from "@/State/Types";
 
@@ -243,7 +239,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
       case "profile":
         return (
           <Profile
-          profile={currentUser}
+            profile={currentUser}
             currentUser={currentUser}
             onBack={navigateBack}
             onPostClick={handlePostClick}
@@ -267,7 +263,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
       </div>
     );
 
-   return (
+  return (
     <div className="min-h-screen bg-black text-white">
       {/* Header (always visible above content) */}
       <Header user={user} />
@@ -304,7 +300,9 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
 
         {/* GRID: Navigation (col 1) always visible, Main stage (col 2-4) switches */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+          <div className="grid sm:hidden">
+            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+          </div>
 
           <div className="lg:col-span-3 space-y-6">
             {/* MAIN AREA: Switch based on navigationStack top */}
@@ -322,12 +320,15 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
 
             {currentView.view === "profile" && (
               <Profile
-              profile={currentUser}
+                profile={currentUser}
                 currentUser={currentUser}
                 onBack={navigateBack}
                 onPostClick={handlePostClick}
               />
             )}
+          </div>
+          <div className="hidden sm:grid">
+            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
           </div>
         </div>
       </div>

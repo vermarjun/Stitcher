@@ -79,7 +79,7 @@ const Feed = ({
   return (
     <div className="flex-1 justify-center min-w-0 w-full">
       {/* Feed Type Selector */}
-      <div className="sticky top-0 z-50 backdrop-blur-sm bg-black/80 mb-6 border-b border-zinc-800">
+      <div className="sticky top-0 z-50 backdrop-blur-sm bg-black/80 mb-6 border-b border-zinc-800 h-14">
         <div className="flex gap-0">
           <button
             onClick={() => setFeedType("trending")}

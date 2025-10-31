@@ -64,7 +64,7 @@ function LikesTab({ userId, onPostClick}: Props) {
     async function fetchLikes() {
       try {
         setLoading(true);
-        const res = await api.get(`/community/users/liked?limit=20`);
+        const res = await api.get(`/community/users/${userId}/liked?limit=20`);
         if (mounted) setLikes(res.data.data || []);
       } catch (err) {
         console.error("Failed to fetch likes", err);

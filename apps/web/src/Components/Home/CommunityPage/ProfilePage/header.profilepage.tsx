@@ -22,7 +22,17 @@ function ProfileHeader({
     <div className="w-full text-white">
       {/* Cover Photo */}
       <div className="relative">
-        <div className="h-48 w-full bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-b-2xl animate-gradient-x" />
+        <div
+            className="w-full h-44 md:h-52 bg-zinc-800"
+            style={{
+              backgroundImage: user?.profileBanner
+                ? `url(${user.profileBanner})`
+                : undefined,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          />
+        {/* <div className="h-48 w-full bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-b-2xl animate-gradient-x" /> */}
 
         {/* Profile Image */}
         <div className="absolute left-6 -bottom-16">
