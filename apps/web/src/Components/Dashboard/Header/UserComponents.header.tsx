@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
-import type { User } from "@/State/Types";
+import type { IUser } from "@/State/Types";
 
 interface UserSectionProps {
-  user?: User
+  user?: IUser
 }
 
 function UserSection({ 

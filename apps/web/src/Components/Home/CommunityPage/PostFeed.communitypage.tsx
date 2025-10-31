@@ -1,8 +1,8 @@
 import { TrendingUp, Users } from "lucide-react";
 import { Skeleton } from "@/Components/ui/skeleton";
 import PostCard from "./PostCard.communitypage";
-import type { ICommunityPost, IAuthor } from "./main.communitypage";
-import type { User } from "@/State/Types";
+import type { ICommunityPost } from "./main.communitypage";
+import type { IUser } from "@/State/Types";
 
 export interface IAsset {
   _id: string;
@@ -17,7 +17,7 @@ export interface IAsset {
 
 export interface IComment {
   _id: string;
-  userId: IAuthor;
+  userId: IUser;
   content: string;
   createdAt: string;
   updatedAt: string;
@@ -42,9 +42,9 @@ interface FeedProps {
   hasMore: boolean;
   lastPostRef?: React.RefObject<HTMLDivElement> | null;
   formatCount: (count: number) => string;
-  currentUser?: User;
+  currentUser?: IUser;
   onPostClick: (post: ICommunityPost) => void;
-  onProfileClick: (user: IAuthor) => void;
+  onProfileClick: (user: IUser) => void;
 }
 
 const Feed = ({

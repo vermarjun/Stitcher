@@ -33,15 +33,36 @@ export type Project = {
   timeline: Timeline;
 };
 
+export interface IUserStats {
+  totalPosts: number;
+  totalLikes: number;
+  totalComments: number;
+  totalViews: number;
+  followersCount: number;
+  followingCount: number;
+  lastUpdated: Date;
+}
+
 // This is what is stored in local storage
-export type User = {
-  id: string;
+export type IUser = {
+  _id: string;
   username: string;
   email: string;
-  plan: string;
-  role: string;
-  bio: string;
   profilePhoto: string;
+  profileBanner?: string; 
+  lastActive?: Date;
+  createdAt?: string | Date;
+  isActive?: boolean;
+  bio: string;
+  role: 'user' | 'admin';
+  plan: string;
+  projects?: string[];
+  communityPosts?: string[];
+  likedPosts?: string[];
+  aura?: number;
+  stats?: IUserStats;
+  followers?: string[];
+  following?: string[];
 };
 
 export enum TemplateType {

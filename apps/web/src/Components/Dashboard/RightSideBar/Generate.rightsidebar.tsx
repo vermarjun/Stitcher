@@ -8,12 +8,12 @@ import QuickPrompts from "./QuickPrompts.rightsidebar";
 import MessageInput from "./MessageInput.rightsidebar";
 import api from "@/api";
 import { toast } from "sonner";
-import type { Project, User, Asset } from "@/State/Types";
+import type { Project, IUser, Asset } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
 
 interface Props {
   currentProject?: Project;
-  user?: User;
+  user?: IUser;
   ref: any;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -146,7 +146,7 @@ const GenerateComponent = ({
           {
             params: {
               projectId: currentProject?._id,
-              userId: user?.id,
+              userId: user?._id,
             },
           }
         );
@@ -228,7 +228,7 @@ const GenerateComponent = ({
       const requestData = {
         projectId: currentProject?._id,
         prompt: userInput,
-        userId: user?.id,
+        userId: user?._id,
         assetId: assetsAttached,
         ...(currentChatId && { chatId: currentChatId }),
       };

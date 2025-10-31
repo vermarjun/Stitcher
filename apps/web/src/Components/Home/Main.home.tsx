@@ -18,6 +18,7 @@ import AnimationCommunity from "./CommunityPage/main.communitypage";
 import Backpack from "./Backpack/main.backpack";
 import NotificationsComponent from "./Dashboard/Notifications.home";
 import PricingPage from "./Pricing.home";
+import type { User } from "@/State/Types";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -26,7 +27,7 @@ const Main = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
-  const user = JSON.parse(localStorage.getItem("user") || "");
+  const user:User = JSON.parse(localStorage.getItem("user") || "");
   if (user.profilePhoto == "") {
     user.profilePhoto =
       "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";
@@ -34,7 +35,7 @@ const Main = () => {
 
   async function fetchRecentProjects() {
     try {
-      const response = await api.get(`/project/user/${user.id}`);
+      const response = await api.get(`/project/user/${user._id}`);
       setRecentProjects(response.data);
       console.log(response.data)
     } catch (error: any) {
@@ -70,7 +71,7 @@ const Main = () => {
           />
         );
       case "projects":
-        return <AllProjects user={user}/>;
+        return <AllProjects userId={user._id}/>;
       case "teams":
         return <Teams />;
       case "community":
@@ -84,7 +85,7 @@ const Main = () => {
       case "assets":
         return <Assets />;
       case "settings":
-        return <SettingsPage />;
+        return <SettingsPage currentUser={user}/>;
       case "notifications":
         return <NotificationsComponent />;
       case "pricing":

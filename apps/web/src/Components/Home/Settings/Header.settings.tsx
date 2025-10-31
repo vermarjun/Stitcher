@@ -1,9 +1,9 @@
 import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
-import type { UserData } from "./types.settings";
+import type { IUser } from "@/State/Types";
 
 interface HeaderProps {
-  user: UserData;
+  user: IUser;
 }
 
 const Header: React.FC<HeaderProps> = ({ user }) => {

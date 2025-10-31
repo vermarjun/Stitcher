@@ -1,30 +1,16 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { Trophy, Crown, Star, Sparkles, MessageCircle, Heart, Eye } from "lucide-react";
 import api  from "@/api";
 import { Skeleton } from "@/Components/ui/skeleton";
-import type { IAuthor } from "../main.communitypage";
-
-interface LeaderboardUser {
-  _id: string;
-  username: string;
-  profilePhoto: string;
-  aura: number;
-  stats: {
-    totalPosts: number;
-    totalLikes: number;
-    totalViews: number;
-  };
-}
+import type { IUser } from "@/State/Types";
 
 interface Props {
-    onProfileClick: (user: IAuthor) => void;
+    onProfileClick: (user: IUser) => void;
     onBack: () => void;
 }
 
 const Leaderboard = ({onProfileClick, onBack}:Props) => {
-  const [data, setData] = useState<LeaderboardUser[]>([]);
+  const [data, setData] = useState<IUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,7 +30,7 @@ const Leaderboard = ({onProfileClick, onBack}:Props) => {
     fetchLeaderboard();
   }, []);
 
-  const handleViewProfile = (user: IAuthor) => {
+  const handleViewProfile = (user: IUser) => {
     onBack();
     onProfileClick(user);
   }
@@ -121,15 +107,15 @@ const Leaderboard = ({onProfileClick, onBack}:Props) => {
                   <div className="flex gap-3 mt-1 text-xs text-zinc-500">
                     <div className="flex items-center gap-1">
                       <MessageCircle className="h-3 w-3" />
-                      {user.stats.totalPosts}
+                      {user.stats?.totalPosts}
                     </div>
                     <div className="flex items-center gap-1">
                       <Heart className="h-3 w-3" />
-                      {user.stats.totalLikes}
+                      {user.stats?.totalLikes}
                     </div>
                     <div className="flex items-center gap-1">
                       <Eye className="h-3 w-3" />
-                      {user.stats.totalViews}
+                      {user.stats?.totalViews}
                     </div>
                   </div>
                 </div>

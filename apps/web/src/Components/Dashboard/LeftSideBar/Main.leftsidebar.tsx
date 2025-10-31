@@ -13,13 +13,13 @@ import TemplatesComponent from "./Template.leftsidebar";
 import ProjectDescriptionComponent from "./Script.leftsidebar";
 import CollaboratorsComponent from "./Collaborators.leftsidebar";
 import TimelineTracksSidebar from "./Tracks.leftsidebar";
-import type { Project, User } from "@/State/Types";
+import type { Project, IUser } from "@/State/Types";
 // import BackpackComponent from "@/Components/Dashboard/LeftSideBar/Backpack.leftsidebar";
 import BackpackComponent from "./BackPack/main.backpack";
 
 interface Props {
   currentProject?: Project;
-  user?: User;
+  user?: IUser;
 }
 
 const MainSidebar = ({ currentProject }: Props) => {

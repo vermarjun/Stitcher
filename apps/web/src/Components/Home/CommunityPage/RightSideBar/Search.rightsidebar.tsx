@@ -3,23 +3,17 @@ import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import api from "@/api";
-
-interface User {
-  _id: string;
-  username: string;
-  profilePhoto: string;
-  plan: "free" | "premium";
-}
+import type {IUser} from "@/State/Types"
 
 interface SearchResponse {
   success: boolean;
   count: number;
-  data: User[];
+  data: IUser[];
 }
 
 const SearchSection = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searchResults, setSearchResults] = useState<IUser[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +75,7 @@ const SearchSection = () => {
     }
   };
 
-  const handleUserClick = (user: User): void => {
-    // Handle user selection - you can navigate to profile or do other actions
+  const handleUserClick = (user: IUser): void => {
     console.log("Selected user:", user);
     setShowDropdown(false);
     setSearchQuery("");

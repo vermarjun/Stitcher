@@ -2,8 +2,8 @@ import { X } from "lucide-react";
 import Leaderboard from "./Leaderboard.rightsidebar";
 import TrendingTopics from "./TrendingTopics.rightsidebar";
 import SuggestedCreators from "./SuggestedCreators.rightsidebar";
-import type { IAuthor } from "../main.communitypage";
 import SearchSection from "./Search.rightsidebar";
+import type { IUser } from "@/State/Types";
 
 import type {
   PaginationInfo,
@@ -22,7 +22,7 @@ interface RightSidebarProps {
   leaderboardData?: LeaderboardUser[];
   trendingTopics?: TrendingTopic[];
   suggestedCreators?: SuggestedCreator[];
-  onProfileClick: (user: IAuthor) => void;
+  onProfileClick: (user: IUser) => void;
   onBack: () => void;
 }
 

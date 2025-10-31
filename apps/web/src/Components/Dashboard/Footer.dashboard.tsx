@@ -1,4 +1,3 @@
-// src/components/dashboard/footer.dashboard.tsx
 import { cn } from "@/lib/utils"
 import { GitBranch, CircleDot, MessageCircleWarning, FolderSyncIcon, Bell } from "lucide-react"
 import { Button } from "../ui/button"

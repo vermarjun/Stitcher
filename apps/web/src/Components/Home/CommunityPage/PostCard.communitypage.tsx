@@ -22,8 +22,8 @@ import {
   DropdownMenuTrigger,
 } from "@/Components/ui/dropdown-menu";
 import api from "@/api";
-import type { User } from "@/State/Types";
-import type { ICommunityPost, IAuthor } from "./main.communitypage";
+import type { IUser } from "@/State/Types";
+import type { ICommunityPost } from "./main.communitypage";
 import { toast } from "sonner";
 
 interface Props {
@@ -32,9 +32,9 @@ interface Props {
   posts: ICommunityPost[];
   lastPostRef?: React.RefObject<HTMLDivElement> | null;
   formatCount: (count: number) => string;
-  currentUser?: User;
+  currentUser?: IUser;
   onPostClick: (post: ICommunityPost) => void;
-  onProfileClick: (user: IAuthor) => void;
+  onProfileClick: (user: IUser) => void;
 }
 
 const PostCard = ({
@@ -66,7 +66,7 @@ const PostCard = ({
 
   const isPostLoading = loadingStates[post._id];
 
-  const isOwner = currentUser?.id === post.authorId._id;
+  const isOwner = currentUser?._id === post.authorId._id;
 
   const handleSaveToBackPack = async (post: ICommunityPost) => {
     setLoadingStates((prev) => ({ ...prev, [post._id]: true }));

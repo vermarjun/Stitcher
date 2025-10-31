@@ -3,7 +3,7 @@ import {
   searchQueryState, 
 } from "@/State/Dashboard.state";
 
-import type { Project, User } from "@/State/Types";
+import type { Project, IUser } from "@/State/Types";
 
 import LogoSection from "./LogoAppName.header";
 import {FileMenuSection} from "./FileMenu.header";
@@ -12,7 +12,7 @@ import UserSection from "./UserComponents.header";
 
 interface Props {
   currentProject?: Project,
-  user?: User
+  user?: IUser
 }
 
 function Header({currentProject, user}:Props) {

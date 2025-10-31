@@ -20,8 +20,8 @@ import { useEffect, useState } from "react";
 import { useRef } from "react";
 import api from "@/api";
 import { toast } from "sonner";
-import type { IAuthor, ICommunityPost } from "./main.communitypage";
-import type { User as IUser } from "@/State/Types";
+import type { ICommunityPost } from "./main.communitypage";
+import type { IUser } from "@/State/Types";
 
 export const Avatar = ({
   src,
@@ -160,7 +160,7 @@ const PostDetail = ({
   formatCount: (count: number) => string;
   currentUser?: IUser;
   onBack: () => void;
-  onProfileClick: (user: IAuthor) => void;
+  onProfileClick: (user: IUser) => void;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -612,7 +612,7 @@ const PostDetail = ({
         handleCommentSubmit={(commentText, attachedImage) =>
           handleCommentSubmit(
             post._id,
-            currentUser?.id || "",
+            currentUser?._id || "",
             commentText,
             attachedImage
           )
@@ -623,7 +623,7 @@ const PostDetail = ({
       {/* Comments */}
       <div className="w-full">
         {selectedPost.comments.filter(isTopLevelComment).map((comment) => {
-          const isOwner = currentUser?.id === comment.userId._id;
+          const isOwner = currentUser?._id === comment.userId._id;
           const isEditing = editingCommentId === comment._id;
           const replies = getRepliesForComment(comment._id);
           const hasReplies = replies.length > 0;
@@ -824,7 +824,7 @@ const PostDetail = ({
               {isExpanded && hasReplies && (
                 <div className="ml-12 border-zinc-700">
                   {replies.map((reply) => {
-                    const isReplyOwner = currentUser?.id === reply.userId._id;
+                    const isReplyOwner = currentUser?._id === reply.userId._id;
                     const isEditingReply = editingCommentId === reply._id;
                     const replyHasMedia = reply.media && reply.media.length > 0;
 

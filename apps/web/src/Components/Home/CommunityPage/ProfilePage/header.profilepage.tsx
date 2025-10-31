@@ -1,6 +1,5 @@
 import { Calendar, Check, Loader2 } from "lucide-react";
-import type { IUser } from "./main.profilepage";
-import type { User as ICurrentUser } from "@/State/Types";
+import type { IUser } from "@/State/Types";
 
 function ProfileHeader({
   user,
@@ -12,7 +11,7 @@ function ProfileHeader({
   onFollowToggle,
 }: {
   user: IUser;
-  currentUser?: ICurrentUser | null;
+  currentUser?: IUser;
   isFollowing: boolean;
   followLoading: boolean;
   rank: number | null;
@@ -38,7 +37,7 @@ function ProfileHeader({
         </div>
 
         {/* Follow Button */}
-        {currentUser?.id !== user._id && (
+        {currentUser?._id !== user._id && (
           <div className="absolute right-6 top-40">
             <button
               onClick={onFollowToggle}

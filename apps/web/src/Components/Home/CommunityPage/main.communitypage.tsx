@@ -5,15 +5,7 @@ import Feed from "./PostFeed.communitypage";
 import Profile from "./ProfilePage/main.profilepage";
 import PostDetail from "./PostDetail.communitypage";
 import api from "@/api";
-import type { User } from "@/State/Types";
-
-// Types
-export interface IAuthor {
-  _id: string;
-  username: string;
-  profilePhoto?: string;
-  plan?: string;
-}
+import type { IUser } from "@/State/Types";
 
 export interface IAsset {
   _id: string;
@@ -28,7 +20,7 @@ export interface IAsset {
 
 export interface IComment {
   _id: string;
-  userId: IAuthor;
+  userId: IUser;
   content: string;
   createdAt: string;
   updatedAt: string;
@@ -48,7 +40,7 @@ export interface ICommentMedia {
 export interface ICommunityPost {
   _id: string;
   assetId: IAsset;
-  authorId: IAuthor;
+  authorId: IUser;
   title: string;
   description?: string;
   tags: string[];
@@ -85,7 +77,7 @@ interface NavigationState {
 
 // ============= MAIN COMMUNITY PAGE COMPONENT =============
 interface Props {
-  currentUser?: User;
+  currentUser?: IUser;
 }
 
 const CommunityPage = ({ currentUser }: Props) => {
@@ -209,7 +201,7 @@ const CommunityPage = ({ currentUser }: Props) => {
     navigateTo("post", post);
   };
 
-  const handleProfileClick = (user: IAuthor) => {
+  const handleProfileClick = (user: IUser) => {
     if (currentView.view === "profile") {
       // Replace the existing profile view with the new one
       const updatedStack = [...navigationStack];

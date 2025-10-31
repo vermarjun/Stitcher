@@ -20,11 +20,11 @@ interface Project {
 }
 
 interface AllProjectsProps {
-  user: { id: string };
+  userId: string
 }
 
 const AllProjects: React.FC<AllProjectsProps> = ({ 
-  user
+  userId
 }) => {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +32,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
 
   // Fetch all projects function
   async function fetchAllProjects() {
-    if (!api || !user?.id) {
+    if (!api || !userId) {
       console.error('API or user not available');
       setIsLoading(false);
       return;
@@ -40,7 +40,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
 
     try {
       setIsLoading(true);
-      const response = await api.get(`/project/user/${user.id}`);
+      const response = await api.get(`/project/user/${userId}`);
       setAllProjects(response.data);
       console.log('All projects fetched:', response.data);
     } catch (error: any) {
@@ -57,7 +57,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
   // Fetch projects on component mount
   useEffect(() => {
     fetchAllProjects();
-  }, [api, user?.id]);
+  }, [api, userId]);
   
   function timeAgo(date: Date | string) {
     const now = new Date();

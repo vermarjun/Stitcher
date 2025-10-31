@@ -16,14 +16,14 @@ import {
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
 
-import type { Project, User, Asset } from "@/State/Types";
+import type { Project, IUser, Asset } from "@/State/Types";
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState<Project>();
-  const [user, setUser] = useState<User>();
+  const [user, setUser] = useState<IUser>();
 
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
   const handleAssetDrop = (asset: Asset) => {

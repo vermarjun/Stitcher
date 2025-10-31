@@ -1,4 +1,3 @@
-// src/Components/Home/Dashboard/Notifications.home.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Trash, Loader2, Settings } from "lucide-react";

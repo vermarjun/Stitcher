@@ -2,43 +2,15 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import ProfileHeader from "./header.profilepage";
 import PostsTab from "./poststab.profilepage";
-import type { User as ICurrentUser } from "@/State/Types";
+import type { IUser, IUserStats } from "@/State/Types";
 import api from "@/api";
 import LikesTab from "./likesTab.profilepage";
 import CommentsTab from "./commentTab.profilepage";
 import type { ICommunityPost } from "../main.communitypage";
 
-type ObjectIdString = string;
-
-export type IUserStats = {
-  totalPosts: number;
-  totalLikes: number;
-  totalComments: number;
-  totalViews: number;
-  followersCount: number;
-  followingCount: number;
-  lastUpdated: string | Date;
-};
-
-export type IUser = {
-  _id: ObjectIdString;
-  username: string;
-  profilePhoto: string;
-  createdAt: Date;
-  bio: string;
-  role: 'user' | 'admin';
-  plan: string;
-  communityPosts?: ObjectIdString[];
-  likedPosts?: ObjectIdString[];
-  aura: number;
-  stats: IUserStats;
-  followers: ObjectIdString[];
-  following: ObjectIdString[]; 
-}
-
 type Props = {
   profile: IUser;
-  currentUser?: ICurrentUser | null;
+  currentUser?: IUser;
   onBack: () => void;
   onPostClick: (post: ICommunityPost) => void;
 };
@@ -153,7 +125,7 @@ export default function ProfilePage({
                   followersCount:
                     (u.stats?.followersCount ?? u.followers?.length ?? 1) - 1,
                 },
-                followers: u.followers?.filter((f) => f !== currentUser.id),
+                followers: u.followers?.filter((f) => f !== currentUser._id),
               } as IUser)
             : u
         );
@@ -169,7 +141,7 @@ export default function ProfilePage({
                   followersCount:
                     (u.stats?.followersCount ?? u.followers?.length ?? 0) + 1,
                 },
-                followers: [...(u.followers ?? []), currentUser.id],
+                followers: [...(u.followers ?? []), currentUser._id],
               } as IUser)
             : u
         );
@@ -192,7 +164,7 @@ export default function ProfilePage({
       setUser(profileData);
       setRank(rankRes?.data?.rank ?? null);
       setIsFollowing(
-        Boolean(currentUser && profileData.followers?.includes(currentUser.id))
+        Boolean(currentUser && profileData.followers?.includes(currentUser._id))
       );
     } catch (err) {
       console.error("Failed to fetch profile", err);

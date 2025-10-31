@@ -16,32 +16,7 @@ import {
 import { toast } from "sonner";
 import api from "@/api";
 import { format } from "date-fns";
-
-export interface IUserStats {
-  totalPosts: number;
-  totalLikes: number;
-  totalComments: number;
-  totalViews: number;
-  followersCount: number;
-  followingCount: number;
-  lastUpdated: Date;
-}
-
-export interface IUser {
-  _id: string;
-  username: string;
-  email: string;
-  profilePhoto: string;
-  profileBanner?: string;
-  createdAt?: string | Date;
-  bio?: string;
-  role?: "user" | "admin" | "test_account";
-  plan?: string;
-  aura?: number;
-  stats?: IUserStats;
-  followers?: string[]; // ids
-  following?: string[]; // ids
-}
+import type { IUser } from "@/State/Types";
 
 const ProfileTab: React.FC = () => {
   const [user, setUser] = useState<IUser | null>(null);
@@ -355,26 +330,19 @@ const ProfileTab: React.FC = () => {
                   variant="outline"
                   className="border-zinc-600 absolute bottom-1 -right-16 bg-black/40 text-white hover:bg-zinc-700/50"
                   onClick={() =>
-                    document.getElementById("banner-upload")?.click()
+                    document.getElementById("profilephoto-upload")?.click()
                   }
                 >
                   <Upload className="h-4 w-4" />
                   Upload
                 </Button>
                 <input
-                  id="banner-upload"
+                  id="profilephoto-upload"
                   type="file"
                   accept="image/*"
                   onChange={handleProfilePhotoUpload}
                   className="hidden"
                 />
-                {/* <div className="absolute -bottom-1 -right-1">
-                  {user?.plan && (
-                    <Badge className="bg-blue-900/60 text-blue-300 border-blue-700 text-xs capitalize">
-                      {user.plan}
-                    </Badge>
-                  )}
-                </div> */}
               </div>
             </div>
           </div>

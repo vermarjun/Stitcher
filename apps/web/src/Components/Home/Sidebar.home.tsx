@@ -15,7 +15,7 @@ import {
   Backpack,
   BellIcon
 } from "lucide-react";
-import type { User } from "@/State/Types";
+import type { IUser } from "@/State/Types";
 import type { NavigateFunction } from "react-router-dom";
 import { AuroraText } from "../magicui/aurora-text";
 import api from "@/api";
@@ -23,7 +23,7 @@ import api from "@/api";
 interface Props {
   collapsed: Boolean;
   onToggle: () => void;
-  user: User;
+  user: IUser;
   activeItem: string;
   onNavigate: (itemKey: string) => void;
   navigate: NavigateFunction;

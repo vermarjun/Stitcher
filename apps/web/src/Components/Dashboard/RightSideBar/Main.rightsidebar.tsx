@@ -2,12 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { AISidebarHeader, ConfirmationDialog } from './Header.rightsidebar';
 import GenerateComponent from './Generate.rightsidebar';
 import EditComponent from './Edit.rightsidebar';
-import type { Project, User, Asset } from '@/State/Types';
+import type { Project, IUser, Asset } from '@/State/Types';
 import api from '@/api';
 
 interface Props {
   currentProject?: Project,
-  user?: User
+  user?: IUser
   onAssetDrop?: (asset: any) => void; 
   droppedItems?: Asset[];
   onRemoveItem?: (id: string) => void;
@@ -30,34 +30,6 @@ interface IAssistant {
   plannerOutput: string;
   llmResponse: string;
 }
-
-// interface AssetMetadata {
-//   public_id: string;
-//   cloudinary_metadata: {
-//     url: string;
-//     thumbnail: string;
-//     duration: number;
-//     width: number;
-//     height: number;
-//     bytes: number;
-//     public_id: string;
-//   };
-// }
-
-// interface Asset {
-//   _id: string;
-//   name: string;
-//   type: string;
-//   origin: string;
-//   url: string;
-//   thumbnail: string;
-//   duration: number;
-//   width: number;
-//   height: number;
-//   bytes: number;
-//   metadata: AssetMetadata;
-//   isOnTimeline: boolean;
-// }
 
 interface Scene {
   sceneName: string;
