@@ -58,35 +58,61 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
   }
 };
 
-export const login = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+export const login = async (req: IUserRequest, res: Response): Promise<Response> => {
   try {
     const { email, password } = req.body;
+
+    // Validate fields
     if (!email || !password) {
-      return res.status(400).json({ message: 'All fields are required.' });
+      return res.status(400).json({ message: "All fields are required." });
     }
+
+    // Find user by email
     const user: IUser | null = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'User Not Found!' });
+      return res.status(401).json({ message: "User not found!" });
     }
+
+    // Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
+      return res.status(401).json({ message: "Invalid credentials." });
     }
-    const token = jwt.sign({ userId: user._id.toString() }, JWT_CONFIG.secret, { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions);
-    return res.status(200).json({ 
-      token, 
-      user: { 
-        id: user._id, 
-        username: user.username, 
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id.toString() },
+      JWT_CONFIG.secret,
+      { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions
+    );
+
+    // Update last active timestamp
+    user.lastActive = new Date();
+    await user.save();
+
+    // Return user data (only public info)
+    return res.status(200).json({
+      token,
+      user: {
+        _id: user._id,
+        username: user.username,
         email: user.email,
         plan: user.plan,
         role: user.role,
         bio: user.bio,
-        profilePhoto: user.profilePhoto
-      } 
+        profilePhoto: user.profilePhoto,
+        profileBanner: user.profileBanner,
+        aura: user.aura,
+        stats: user.stats,
+        followersCount: user.stats?.followersCount || 0,
+        followingCount: user.stats?.followingCount || 0,
+        createdAt: user.createdAt,
+        lastActive: user.lastActive,
+        isActive: user.isActive,
+      },
     });
   } catch (err: any) {
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
