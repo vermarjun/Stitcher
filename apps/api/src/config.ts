@@ -2,6 +2,16 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+if (process.env.GOOGLE_CLIENT_ID == undefined){
+    throw new Error("GOOGLE_CLIENT_ID is not defined in environment variables");
+}
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+
+if (process.env.GOOGLE_CLIENT_SECRET == undefined){
+    throw new Error("GOOGLE_CLIENT_SECRET is not defined in environment variables");
+}
+export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
 if (process.env.PORT == undefined){
     throw new Error("PORT is not defined in environment variables");
 }

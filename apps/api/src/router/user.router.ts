@@ -19,7 +19,8 @@ import {
   getSuggestedUsers,
   removeFollower,
   searchUsers,
-  uploadProfileBanner
+  uploadProfileBanner,
+  authWithGoogle
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
@@ -29,6 +30,7 @@ const router: Router = express.Router();
 // Public routes
 router.post('/signup', signup);
 router.post('/login', login);
+router.get('/google', authWithGoogle);
 router.post('/request-password-reset', requestPasswordReset);
 router.post('/reset-password/:token', resetPassword);
 

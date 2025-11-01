@@ -1,13 +1,5 @@
 import { Document, Schema, Model, model, Types } from 'mongoose';
 
-// Interface for OAuth credentials
-interface IOAuthCredentials {
-  provider: string;
-  providerId: string;
-  accessToken?: string;
-  refreshToken?: string;
-}
-
 // Interface for user stats
 export interface IUserStats {
   totalPosts: number;
@@ -24,7 +16,9 @@ export interface IUser extends Document {
   username: string;
   email: string;
   password: string;
-  oAuthCredentials?: IOAuthCredentials[];
+  // oAuthCredentials?: IOAuthCredentials[]; Removed this field, it is kinda senseless
+  // If user uses password to signup -> they can use both OAuth as well as password to login but if they used OAuth to signup they can't use password to login they must use OAuth only to login
+  usedOAuth?: boolean; //Added this instead, it makes more sense so that if user tries to login with password, I can tell them that no you used OAuth go with that only
   profilePhoto: string;
   profileBanner: string; 
   lastActive: Date;
@@ -34,7 +28,7 @@ export interface IUser extends Document {
   role: 'user' | 'admin';
   plan: string;
   resetPasswordToken?: string;
-  resetPasswordExpires?: Date;
+  resetPasswordExpires?: Date | number;
   projects?: Types.ObjectId[];
   communityPosts?: Types.ObjectId[];
   likedPosts?: Types.ObjectId[];
@@ -68,14 +62,18 @@ const UserSchema = new Schema<IUser>({
   },
   password: {
     type: String,
-    required: true,
+    required: false, // oauth me password nahi hoga
   },
-  oAuthCredentials: [{
-    provider: { type: String, required: true },
-    providerId: { type: String, required: true },
-    accessToken: { type: String },
-    refreshToken: { type: String }
-  }],
+  usedOAuth: {
+    type: Boolean,
+    required: false // old users might not have this field
+  },
+  // oAuthCredentials: [{
+  //   provider: { type: String, required: true },
+  //   providerId: { type: String, required: true },
+  //   accessToken: { type: String },
+  //   refreshToken: { type: String }
+  // }],
   profilePhoto: {
     type: String,
     default: 'https://www.gravatar.com/avatar/?d=mp',

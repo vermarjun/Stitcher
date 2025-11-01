@@ -9,6 +9,9 @@ import cloudinary from '../util/cloudinary.util';
 import mongoose from 'mongoose';
 import { Types } from 'mongoose';
 import { NotificationService } from '../util/notificationservice.util';
+import { oauth2Client } from '../util/googleClient.util';
+import axios from 'axios';
+import { IUser } from '../model/user.model';
 
 interface IUserRequest extends Request {
   userId?: string;
@@ -27,30 +30,116 @@ interface IUserResponse extends Response {
   [key: string]: any;
 }
 
-interface IUser {
-  _id: string;
-  username: string;
-  email: string;
-  password: string;
-  bio?: string;
-  profilePhoto?: string;
-  resetPasswordToken?: string;
-  resetPasswordExpires?: number;
-  [key: string]: any;
-}
+export const authWithGoogle = async (req: Request, res: Response) => {
+  const code = req.query.code;
+
+  if (!code) {
+    return res.json({ error: "no code provided" });
+  }
+
+  try {
+    const googleRes = await oauth2Client.getToken(code as string);
+    oauth2Client.setCredentials(googleRes.tokens);
+
+    const userRes = await axios.get(
+      `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${googleRes.tokens.access_token}`
+    );
+
+    const { email, name, picture } = userRes.data;
+
+    // STEP 1: Clean username (remove all spaces completely)
+    let cleanUsername = name.replace(/\s+/g, "").toLowerCase(); // ex: "Arjun Verma" -> "arjunverma"
+
+    // STEP 2: Ensure username is unique
+    let finalUsername = cleanUsername;
+    let usernameExists = await User.findOne({ username: finalUsername });
+
+    while (usernameExists) {
+      // Generate random 4-digit suffix
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      finalUsername = `${cleanUsername}${randomSuffix}`;
+
+      usernameExists = await User.findOne({ username: finalUsername });
+    }
+
+    // STEP 3: Find user by email
+    let user: IUser | null = await User.findOne({ email });
+
+    // STEP 4: If user is new (signup), use unique username
+    if (!user) {
+      user = new User({
+        username: finalUsername,
+        email,
+        profilePhoto: picture,
+        usedOAuth: true
+      });
+
+      await user.save();
+    }
+
+    // ✅ STEP 5: Generate JWT
+    const token = jwt.sign(
+      { userId: user._id?.toString() },
+      JWT_CONFIG.secret,
+      { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions
+    );
+
+    res.status(200).json({
+      message: "success",
+      token,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        plan: user.plan,
+        role: user.role,
+        bio: user.bio,
+        profilePhoto: user.profilePhoto,
+        profileBanner: user.profileBanner,
+        aura: user.aura,
+        stats: user.stats,
+        followersCount: user.stats?.followersCount || 0,
+        followingCount: user.stats?.followingCount || 0,
+        createdAt: user.createdAt,
+        lastActive: user.lastActive,
+        isActive: user.isActive,
+      }
+    });
+
+  } catch (err) {
+    console.log("OAuth Error:", err);
+    res.status(500).json({
+      message: "I'm sorry, OAuth failed somehow. Please try again."
+    });
+  }
+};
+
 
 export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
-    const { username, email, password } = req.body;
+    let { username, email, password } = req.body;
     if (!username || !email || !password) {
       return res.status(400).json({ message: 'All fields are required.' });
     }
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-    if (existingUser) {
-      return res.status(409).json({ message: 'This username or email is taken, please try again with a different username or email' });
+
+    username = username?.trim();
+    email = email?.trim().toLowerCase();
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'All fields are required.' });
     }
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res.status(409).json({ message: 'Email already exists. Try logging in instead.' });
+    }
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return res.status(409).json({ message: 'Username already taken. Try a different one.' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, email, password: hashedPassword });
+
+    const user = new User({ username, email, password: hashedPassword, usedOAuth: false });
     await user.save();
     return res.status(201).json({ message: 'User created successfully.' });
   } catch (err: any) {
@@ -60,7 +149,9 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
 export const login = async (req: IUserRequest, res: Response): Promise<Response> => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    email = email?.trim().toLowerCase();
 
     // Validate fields
     if (!email || !password) {
@@ -73,6 +164,10 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
       return res.status(401).json({ message: "User not found!" });
     }
 
+    if (user.usedOAuth) {
+      return res.status(401).json({ message: "This account uses Google OAuth. Please login using Google." });
+    }
+
     // Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -81,7 +176,7 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id.toString() },
+      { userId: user._id?.toString() },
       JWT_CONFIG.secret,
       { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions
     );
@@ -163,39 +258,75 @@ export const getUserProfile = async (req: Request, res: Response): Promise<Respo
 export const updateUser = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
     const updates = req.body;
-    if (updates.password) delete updates.password; // Prevent password update here
-    const user: IUser | null = await User.findByIdAndUpdate(
-      req.userId, 
-      updates, 
+    const userId = req.userId;
+
+    // Do NOT allow password update here
+    if (updates.password) delete updates.password;
+
+    // Fetch the current user
+    const currentUser: IUser | null = await User.findById(userId);
+    if (!currentUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Block username/email edits for OAuth-only accounts
+    if (currentUser.usedOAuth) {
+      if (updates.email) {
+        return res.status(403).json({
+          message: "Cannot edit Emails for Google OAuth accounts.",
+        });
+      }
+    }
+
+    // If username is being updated, enforce uniqueness
+    if (updates.username && updates.username !== currentUser.username) {
+      const existingUsername = await User.findOne({
+        username: updates.username,
+        _id: { $ne: userId }, // exclude current user
+      });
+
+      if (existingUsername) {
+        return res.status(409).json({
+          message: "Username already taken. Try a different one.",
+        });
+      }
+    }
+
+    const updatedUser: IUser | null = await User.findByIdAndUpdate(
+      userId,
+      updates,
       { new: true }
-    ).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found.' });
-    return res.status(200).json(user);
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+    return res.status(200).json(updatedUser);
   } catch (err: any) {
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
 export const changePassword = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
     const { currentPassword, newPassword } = req.body;
-    
+
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Current password and new password are required.' });
     }
-    
+
     const user: IUser | null = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
-    
+
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Current password is incorrect.' });
     }
-    
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     await user.save();
-    
+
     return res.status(200).json({ message: 'Password changed successfully.' });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -207,36 +338,36 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
     const user: IUser | null = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
-    
+
     // Use Promise wrapper for better async handling
     return new Promise((resolve) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { 
-          folder: 'profile_photos', 
-          public_id: user._id.toString(), 
-          overwrite: true 
+        {
+          folder: 'profile_photos',
+          public_id: user._id?.toString(),
+          overwrite: true
         },
         async (error, result) => {
           if (error || !result) {
             return resolve(
-              res.status(500).json({ 
-                message: 'Cloudinary upload failed.', 
-                error 
+              res.status(500).json({
+                message: 'Cloudinary upload failed.',
+                error
               })
             );
           }
-          
+
           // Update user profile photo
           user.profilePhoto = result.secure_url;
           await user.save();
-          
+
           // ✅ Send notification to user about profile photo update
           try {
             await NotificationService.notifyProfileUpdate(
-              new Types.ObjectId(user._id),
+              new Types.ObjectId(user._id as string),
               'photo',
               'Your profile photo has been updated successfully! 📸',
-              { 
+              {
                 profilePhoto: result.secure_url,
                 updatedAt: new Date()
               }
@@ -245,7 +376,7 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
             // Log but don't fail the request if notification fails
             console.error('Failed to send profile update notification:', notifError);
           }
-          
+
           return resolve(
             res.status(200).json({
               message: 'Profile photo uploaded successfully.',
@@ -254,14 +385,14 @@ export const uploadProfilePhoto = async (req: any, res: Response): Promise<Respo
           );
         }
       );
-      
+
       // Pipe file buffer into Cloudinary upload_stream
       uploadStream.end(req.file.buffer);
     });
   } catch (err: any) {
-    return res.status(500).json({ 
-      message: 'Server error', 
-      error: err.message 
+    return res.status(500).json({
+      message: 'Server error',
+      error: err.message
     });
   }
 };
@@ -274,12 +405,12 @@ export const uploadProfileBanner = async (req: any, res: Response): Promise<Resp
     const user: IUser | null = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
-    
+
     return new Promise((resolve) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { 
-          folder: 'profile_banners', 
-          public_id: `banner_${user._id.toString()}`, 
+        {
+          folder: 'profile_banners',
+          public_id: `banner_${user._id?.toString()}`,
           overwrite: true,
           transformation: [
             { width: 1500, height: 500, crop: 'fill' },
@@ -289,22 +420,22 @@ export const uploadProfileBanner = async (req: any, res: Response): Promise<Resp
         async (error, result) => {
           if (error || !result) {
             return resolve(
-              res.status(500).json({ 
-                message: 'Cloudinary upload failed.', 
-                error 
+              res.status(500).json({
+                message: 'Cloudinary upload failed.',
+                error
               })
             );
           }
-          
+
           user.profileBanner = result.secure_url;
           await user.save();
-          
+
           try {
             await NotificationService.notifyProfileUpdate(
-              new Types.ObjectId(user._id),
+              new Types.ObjectId(user._id as string),
               'photo',
               'Your profile banner has been updated successfully! 🎨',
-              { 
+              {
                 profileBanner: result.secure_url,
                 updatedAt: new Date()
               }
@@ -312,7 +443,7 @@ export const uploadProfileBanner = async (req: any, res: Response): Promise<Resp
           } catch (notifError) {
             console.error('Failed to send profile update notification:', notifError);
           }
-          
+
           return resolve(
             res.status(200).json({
               message: 'Profile banner uploaded successfully.',
@@ -321,13 +452,13 @@ export const uploadProfileBanner = async (req: any, res: Response): Promise<Resp
           );
         }
       );
-      
+
       uploadStream.end(req.file.buffer);
     });
   } catch (err: any) {
-    return res.status(500).json({ 
-      message: 'Server error', 
-      error: err.message 
+    return res.status(500).json({
+      message: 'Server error',
+      error: err.message
     });
   }
 };
@@ -346,26 +477,26 @@ export const requestPasswordReset = async (req: IUserRequest, res: IUserResponse
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required.' });
-    
+
     const user: IUser | null = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found.' });
-    
+
     const resetToken = crypto.randomBytes(PASSWORD_RESET_CONFIG.tokenLength).toString('hex');
     const resetTokenExpiry = Date.now() + PASSWORD_RESET_CONFIG.tokenExpiry;
-    
+
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = resetTokenExpiry;
     await user.save();
-    
+
     const resetLink = `${req.protocol}://${req.get('host')}/api/users/reset-password/${resetToken}`;
-    
+
     await sendMail({
       to: user.email,
       subject: 'Password Reset Request',
       text: `Reset your password using this link: ${resetLink}`,
       html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Click here to reset your password</a></p><p>If you did not request this, please ignore this email.</p>`,
     });
-    
+
     return res.status(200).json({ message: 'Password reset link sent to your email.' });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -376,21 +507,21 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
   try {
     const { token } = req.params;
     const { password } = req.body;
-    
+
     if (!password) return res.status(400).json({ message: 'Password is required.' });
-    
+
     const user: IUser | null = await User.findOne({
       resetPasswordToken: token,
       resetPasswordExpires: { $gt: Date.now() },
     });
-    
+
     if (!user) return res.status(400).json({ message: 'Invalid or expired token.' });
-    
+
     user.password = await bcrypt.hash(password, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
-    
+
     return res.status(200).json({ message: 'Password reset successful.' });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -429,7 +560,7 @@ export const followUser = async (req: IUserRequest, res: Response): Promise<Resp
       // ✅ run sequentially to avoid race conditions
       await User.findByIdAndUpdate(
         currentUserId,
-        { 
+        {
           $addToSet: { following: targetUserId },
           $inc: { 'stats.followingCount': 1 },
         },
@@ -438,7 +569,7 @@ export const followUser = async (req: IUserRequest, res: Response): Promise<Resp
 
       const updatedTargetUser = await User.findByIdAndUpdate(
         targetUserId,
-        { 
+        {
           $addToSet: { followers: currentUserId },
           $inc: { 'stats.followersCount': 1 },
         },
@@ -448,13 +579,13 @@ export const followUser = async (req: IUserRequest, res: Response): Promise<Resp
       if (updatedTargetUser) {
         // Store follower count for milestone check
         session.commitTransaction();
-        
+
         // Send follow notification
         await NotificationService.notifyFollow(
           new Types.ObjectId(currentUserId),
           new Types.ObjectId(targetUserId)
         );
-        
+
         // Check for milestone (10, 50, 100, 500, 1000, 5000, 10000 followers)
         const milestones = [10, 50, 100, 500, 1000, 5000, 10000];
         if (milestones.includes(updatedTargetUser.stats.followersCount)) {
@@ -486,42 +617,42 @@ export const followUser = async (req: IUserRequest, res: Response): Promise<Resp
 export const unfollowUser = async (req: IUserRequest, res: Response): Promise<Response> => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const currentUserId = req.userId;
     const targetUserId = req.params.userId;
-    
+
     if (!currentUserId || !targetUserId) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'User IDs are required.' });
     }
-    
+
     if (currentUserId === targetUserId) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'Invalid operation.' });
     }
-    
+
     const [currentUser, targetUser] = await Promise.all([
       User.findById(currentUserId).session(session),
       User.findById(targetUserId).session(session)
     ]);
-    
+
     if (!currentUser || !targetUser) {
       await session.abortTransaction();
       return res.status(404).json({ message: 'User not found.' });
     }
-    
+
     // Check if actually following
     if (!currentUser.following.includes(targetUserId as any)) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'You are not following this user.' });
     }
-    
+
     // Remove from following/followers arrays and update counts
     await Promise.all([
       User.findByIdAndUpdate(
         currentUserId,
-        { 
+        {
           $pull: { following: targetUserId },
           $inc: { 'stats.followingCount': -1 }
         },
@@ -529,17 +660,17 @@ export const unfollowUser = async (req: IUserRequest, res: Response): Promise<Re
       ),
       User.findByIdAndUpdate(
         targetUserId,
-        { 
+        {
           $pull: { followers: currentUserId },
           $inc: { 'stats.followersCount': -1 }
         },
         { session }
       )
     ]);
-    
+
     await session.commitTransaction();
-    
-    return res.status(200).json({ 
+
+    return res.status(200).json({
       message: 'Successfully unfollowed user.',
       following: false
     });
@@ -558,42 +689,42 @@ export const unfollowUser = async (req: IUserRequest, res: Response): Promise<Re
 export const removeFollower = async (req: IUserRequest, res: Response): Promise<Response> => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const currentUserId = req.userId; // User removing the follower
     const followerUserId = req.params.userId; // Follower to be removed
-    
+
     if (!currentUserId || !followerUserId) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'User IDs are required.' });
     }
-    
+
     if (currentUserId === followerUserId) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'Invalid operation.' });
     }
-    
+
     const [currentUser, followerUser] = await Promise.all([
       User.findById(currentUserId).session(session),
       User.findById(followerUserId).session(session)
     ]);
-    
+
     if (!currentUser || !followerUser) {
       await session.abortTransaction();
       return res.status(404).json({ message: 'User not found.' });
     }
-    
+
     // Check if this user is actually a follower
     if (!currentUser.followers.includes(followerUserId as any)) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'This user is not following you.' });
     }
-    
+
     // Remove from followers/following arrays and update counts
     await Promise.all([
       User.findByIdAndUpdate(
         currentUserId,
-        { 
+        {
           $pull: { followers: followerUserId },
           $inc: { 'stats.followersCount': -1 }
         },
@@ -601,17 +732,17 @@ export const removeFollower = async (req: IUserRequest, res: Response): Promise<
       ),
       User.findByIdAndUpdate(
         followerUserId,
-        { 
+        {
           $pull: { following: currentUserId },
           $inc: { 'stats.followingCount': -1 }
         },
         { session }
       )
     ]);
-    
+
     await session.commitTransaction();
-    
-    return res.status(200).json({ 
+
+    return res.status(200).json({
       message: 'Successfully removed follower.'
     });
   } catch (err: any) {
@@ -632,25 +763,25 @@ export const getFollowers = async (req: Request, res: Response): Promise<Respons
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
-    
+
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required.' });
     }
-    
+
     const user = await User.findById(userId)
       .populate({
         path: 'followers',
         select: 'username profilePhoto bio stats.followersCount stats.followingCount',
         options: { skip, limit }
       });
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
-    
+
     const totalFollowers = user.stats.followersCount || 0;
     const totalPages = Math.ceil(totalFollowers / limit);
-    
+
     return res.status(200).json({
       followers: user.followers,
       pagination: {
@@ -675,25 +806,25 @@ export const getFollowing = async (req: Request, res: Response): Promise<Respons
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
-    
+
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required.' });
     }
-    
+
     const user = await User.findById(userId)
       .populate({
         path: 'following',
         select: 'username profilePhoto bio stats.followersCount stats.followingCount',
         options: { skip, limit }
       });
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
-    
+
     const totalFollowing = user.stats.followingCount || 0;
     const totalPages = Math.ceil(totalFollowing / limit);
-    
+
     return res.status(200).json({
       following: user.following,
       pagination: {
@@ -716,27 +847,27 @@ export const checkFollowStatus = async (req: IUserRequest, res: Response): Promi
   try {
     const currentUserId = req.userId;
     const targetUserId = req.params.userId;
-    
+
     if (!currentUserId || !targetUserId) {
       return res.status(400).json({ message: 'User IDs are required.' });
     }
-    
+
     if (currentUserId === targetUserId) {
-      return res.status(200).json({ 
+      return res.status(200).json({
         isFollowing: false,
         isOwnProfile: true
       });
     }
-    
+
     const currentUser = await User.findById(currentUserId).select('following');
-    
+
     if (!currentUser) {
       return res.status(404).json({ message: 'User not found.' });
     }
-    
+
     const isFollowing = currentUser.following.includes(targetUserId as any);
-    
-    return res.status(200).json({ 
+
+    return res.status(200).json({
       isFollowing,
       isOwnProfile: false
     });
@@ -819,7 +950,7 @@ export const searchUsers = async (req: Request, res: Response): Promise<void> =>
     }
 
     const searchQuery = q.trim();
-    
+
     if (searchQuery.length === 0) {
       res.status(400).json({
         success: false,
