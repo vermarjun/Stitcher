@@ -3,6 +3,7 @@ import type { Project } from "@/State/Types";
 import RecentProjects from "./RecentProjects.home";
 import GettingStarted from "./GettingStarted.home";
 import QuickActions from "./QuickActions.home";
+import ProfileProgress from "./ProfileCompleteProgressbar.home";
 
 interface Props {
   recentProjects: Project[];
@@ -44,6 +45,11 @@ const Dashboard = ({ recentProjects, fecthRecentProjects, onNavigate }: Props) =
           projectsToDisplay={recentProjects.slice(-2, recentProjects.length)}
           navigate={navigate}
           fecthRecentProjects={fecthRecentProjects}
+        />
+        <ProfileProgress
+          progress={60}
+          missingFields={["Add a profile photo", "Verify your email"]}
+          onContinue={() => navigate("/settings")}
         />
         <GettingStarted />
       </div>

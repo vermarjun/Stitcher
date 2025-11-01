@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
 import api from "@/api";
 
 interface SuggestedUser {
@@ -84,8 +83,7 @@ const SuggestedCreators = () => {
   return (
     <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
       <div className="flex items-center gap-2 mb-4">
-        <Sparkles className="h-5 w-5 text-purple-500" />
-        <h3 className="font-bold text-lg">Suggested for you</h3>
+        <h3 className="font-bold text-lg">✨ Suggested for you</h3>
       </div>
 
       {loading ? (

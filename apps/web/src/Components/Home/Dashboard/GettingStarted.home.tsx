@@ -80,24 +80,24 @@ const GettingStarted = () => {
           Learn the basics with these quick videos
         </p>
       </div>
-      <div className="md:flex gap-4">
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl">
+      <div className="xl:flex gap-4">
+        <div className="w-full h-fit grid grid-cols-1 md:grid-cols-2 gap-3">
           <Card className="py-0 border border-zinc-800 hover:border-zinc-700 transition-colors duration-200 cursor-pointer group overflow-hidden bg-black hover:bg-zinc-900">
             <div className="relative">
-              <div className="aspect-[16/9] bg-zinc-800 transition-colors duration-200">
+              <div className="aspect-video bg-zinc-800 transition-colors duration-200">
                 <iframe
                   width="100%"
                   height="100%"
-                  src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                  src="https://www.youtube.com/embed/u6DUz9Mm-oM?si=LV7Nve1FBhemgG3_"
                   title="YouTube video player"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  className="group-hover:scale-105 transition-all duration-200"
+                  className="border-b border-zinc-600 group-hover:scale-105 transition-all duration-200"
                 ></iframe>
               </div>
             </div>
-            <CardContent className="p-3 text-left">
+            <CardContent className="px-3 pb-5 text-left">
               <h3 className="font-medium text-white text-sm group-hover:text-white transition-colors duration-200 mb-1">
                 What is Stitcher
               </h3>
@@ -108,20 +108,20 @@ const GettingStarted = () => {
           </Card>
           <Card className="py-0 border border-zinc-800 hover:border-zinc-700 transition-colors duration-200 cursor-pointer group overflow-hidden bg-black hover:bg-zinc-900">
             <div className="relative">
-              <div className="aspect-[16/9] bg-zinc-800 transition-colors duration-200">
+              <div className="aspect-video bg-zinc-800 transition-colors duration-200">
                 <iframe
                   width="100%"
                   height="100%"
-                  src="https://www.youtube.com/embed/jNQXAC9IVRw"
+                  src="https://www.youtube.com/embed/u6DUz9Mm-oM?si=LV7Nve1FBhemgG3_"
                   title="YouTube video player"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  className="group-hover:scale-105 transition-all duration-200"
+                  className="border-b border-zinc-600 group-hover:scale-105 transition-all duration-200"
                 ></iframe>
               </div>
             </div>
-            <CardContent className="p-3 text-left">
+            <CardContent className="px-3 text-left">
               <h3 className="font-medium text-white text-sm group-hover:text-white transition-colors duration-200 mb-1">
                 Create Your First Video
               </h3>
@@ -131,7 +131,7 @@ const GettingStarted = () => {
             </CardContent>
           </Card>
         </div>
-        <div className="w-full flex-1 min-w-0">
+        <div className="xl:w-fit w-full min-w-0">
           <ActionButtons/>
         </div>
       </div>

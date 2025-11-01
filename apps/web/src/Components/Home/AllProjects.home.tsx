@@ -8,8 +8,19 @@ import {
   Sparkles,
 } from 'lucide-react';
 import api from '@/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/Components/ui/dialog";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
+import { Textarea } from "@/Components/ui/textarea";
+import { Button } from "@/Components/ui/button";
 
 interface Project {
   _id: string;
@@ -26,8 +37,14 @@ interface AllProjectsProps {
 const AllProjects: React.FC<AllProjectsProps> = ({ 
   userId
 }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    projectName: "",
+    description: "",
+    category: "",
+  });
   const navigate = useNavigate();
 
   // Fetch all projects function
@@ -37,7 +54,6 @@ const AllProjects: React.FC<AllProjectsProps> = ({
       setIsLoading(false);
       return;
     }
-
     try {
       setIsLoading(true);
       const response = await api.get(`/project/user/${userId}`);
@@ -84,7 +100,6 @@ const AllProjects: React.FC<AllProjectsProps> = ({
       console.error('API or toast not available');
       return;
     }
-
     try {
       await api.delete(`/project/${projectId}`);
       if (toast) {
@@ -113,11 +128,92 @@ const AllProjects: React.FC<AllProjectsProps> = ({
     }
   };
 
-  // Loading state component
-  const LoadingState = () => (
-    <div className="flex flex-col items-center justify-center py-12 px-4">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-3"></div>
-      <p className="text-zinc-400 text-xs">Loading your projects...</p>
+  const startNewProject = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.projectName.trim()) {
+      toast.error("Project name is required");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await api.post("/project", {
+        name: formData.projectName,
+        description: formData.description,
+        category: formData.category,
+      });
+      if (response.status == 201) {
+        toast.success("Project created successfully!");
+        setIsModalOpen(false);
+        setFormData({ projectName: "", description: "", category: "" });
+        navigate(`/dashboard/${response.data._id}`);
+      } else {
+        toast.error(response.data.message || "Failed to create project");
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to create project";
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Skeleton Loader Component
+  const SkeletonLoader = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-zinc-800">
+            <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Project Name</th>
+            <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Status</th>
+            <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Last Updated</th>
+            <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <tr 
+              key={index}
+              className="border-b border-zinc-800 last:border-b-0"
+            >
+              <td className="py-3 px-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <div className="w-3 h-3 bg-zinc-700 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-4 bg-zinc-800 rounded animate-pulse w-32"></div>
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="h-5 bg-zinc-800 rounded animate-pulse w-16"></div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="h-4 bg-zinc-800 rounded animate-pulse w-20"></div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex space-x-1.5">
+                  <div className="h-6 bg-zinc-800 rounded animate-pulse w-12"></div>
+                  <div className="h-6 bg-zinc-800 rounded animate-pulse w-12"></div>
+                  <div className="h-6 bg-zinc-800 rounded animate-pulse w-8"></div>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 
@@ -133,13 +229,13 @@ const AllProjects: React.FC<AllProjectsProps> = ({
       </div>
       
       <h3 className="text-base font-semibold text-white mb-1">No Projects Yet</h3>
-      <p className="text-zinc-400 text-center max-w-sm mb-4 text-xs">
+      <p className="text-zinc-400 text-center max-w-sm mb-4 text-sm">
         Start building something amazing. Your projects will appear here once you create them.
       </p>
       
       <button 
-        className="bg-white text-black hover:bg-zinc-200 transition-all duration-200 px-3 py-1.5 rounded-md font-medium flex items-center text-xs"
-        onClick={() => navigate('/create-project')}
+        className="bg-white text-black hover:bg-zinc-200 transition-all duration-200 px-3 py-1.5 rounded-md font-medium flex items-center text-sm"
+        onClick={startNewProject}
       >
         <Plus className="w-3 h-3 mr-1.5" />
         Create Your First Project
@@ -149,26 +245,106 @@ const AllProjects: React.FC<AllProjectsProps> = ({
 
   return (
     <div className="min-h-screen bg-black text-white">
-        {/* Header */}
-        <div className="mb-3 h-14 border-b border-zinc-800 p-3">
-          <div className="flex items-center justify-between h-full">
-            <div>
-              <h1 className="text-xl font-semibold text-white mb-1">All Projects</h1>
-            </div>
-            <button 
-              className="bg-white text-black hover:bg-zinc-200 transition-all duration-200 px-3 py-1.5 rounded-md font-medium flex items-center text-xs"
-              onClick={() => navigate('/create-project')}
-            >
-              <Plus className="w-3 h-3 mr-1.5" />
-              New Project
-            </button>
+      {/* Header */}
+      <div className="mb-3 h-14 border-b border-zinc-800 p-3">
+        <div className="flex items-center justify-between h-full">
+          <div>
+            <h1 className="text-xl font-semibold text-white mb-1">All Projects</h1>
           </div>
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogTrigger asChild>
+              <button 
+                className="bg-white text-black hover:bg-zinc-200 transition-all duration-200 px-3 py-1.5 rounded-md font-medium flex items-center text-sm"
+              >
+                <Plus className="w-3 h-3 mr-1.5" />
+                New Project
+              </button>
+            </DialogTrigger>
+            <DialogContent className="bg-zinc-900 text-white border-zinc-800 max-w-md p-4">
+              <DialogHeader className="pb-2">
+                <DialogTitle className="text-base font-semibold text-white">
+                  Create New Project
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="projectName"
+                    className="text-zinc-300 text-xs"
+                  >
+                    Project Name *
+                  </Label>
+                  <Input
+                    id="projectName"
+                    name="projectName"
+                    value={formData.projectName}
+                    onChange={handleInputChange}
+                    placeholder="Enter project name"
+                    className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-white text-xs h-8"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="description"
+                    className="text-zinc-300 text-xs"
+                  >
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    placeholder="Enter project description (optional)"
+                    className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-white min-h-[70px] text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="category"
+                    className="text-zinc-300 text-xs"
+                  >
+                    Category
+                  </Label>
+                  <Input
+                    id="category"
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    placeholder="Enter project category (optional)"
+                    className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-white text-xs h-8"
+                  />
+                </div>
+                <div className="flex justify-end space-x-2 pt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsModalOpen(false)}
+                    className="border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700 hover:text-white text-xs h-7 px-2"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-white text-black hover:bg-zinc-200 text-xs h-7 px-2"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Creating..." : "Create"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
+      </div>
+
       <div className="max-w-7xl mx-auto px-4">
         {/* Main Content */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg">
+        <div className="bg-transparent rounded-lg">
           {isLoading ? (
-            <LoadingState />
+            <SkeletonLoader />
           ) : allProjects.length === 0 ? (
             <EmptyState />
           ) : (
@@ -176,10 +352,10 @@ const AllProjects: React.FC<AllProjectsProps> = ({
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-zinc-800">
-                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-xs">Project Name</th>
-                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-xs">Status</th>
-                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-xs">Last Updated</th>
-                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-xs">Actions</th>
+                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Project Name</th>
+                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Status</th>
+                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Last Updated</th>
+                    <th className="text-left py-3 px-4 text-zinc-300 font-medium text-md">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,7 +370,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
                           <div className="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center flex-shrink-0">
                             <FolderOpen className="w-3 h-3 text-zinc-400" />
                           </div>
-                          <span className="text-white font-medium text-xs">{project.name}</span>
+                          <span className="text-white font-medium text-sm">{project.name}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -210,28 +386,28 @@ const AllProjects: React.FC<AllProjectsProps> = ({
                           {project.status || 'draft'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-zinc-400 text-xs">
+                      <td className="py-3 px-4 text-zinc-400 text-sm">
                         {timeAgo(project.updatedAt)}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex space-x-1.5">
                           <button
                             onClick={() => handleResumeProject(project._id)}
-                            className="bg-zinc-800 hover:bg-zinc-700 text-white border-0 h-6 px-2 rounded transition-all duration-200 text-xs font-medium flex items-center"
+                            className="bg-zinc-800 hover:bg-zinc-700 text-white border-0 h-6 px-2 rounded transition-all duration-200 text-sm font-medium flex items-center"
                           >
                             <Edit className="w-2.5 h-2.5 mr-1" />
                             Edit
                           </button>
                           <button
                             onClick={handleAddCollaborators}
-                            className="bg-transparent border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-600 h-6 px-2 rounded transition-all duration-200 text-xs font-medium flex items-center"
+                            className="bg-transparent border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-600 h-6 px-2 rounded transition-all duration-200 text-sm font-medium flex items-center"
                           >
                             <UserPlus className="w-2.5 h-2.5 mr-1" />
                             Share
                           </button>
                           <button
                             onClick={() => handleDeleteProject(project.name, project._id)}
-                            className="bg-transparent border border-zinc-700 text-zinc-400 hover:text-red-400 hover:bg-red-900/20 hover:border-red-700 h-6 px-2 rounded transition-all duration-200 text-xs font-medium flex items-center"
+                            className="bg-transparent border border-zinc-700 text-zinc-400 hover:text-red-400 hover:bg-red-900/20 hover:border-red-700 h-6 px-2 rounded transition-all duration-200 text-sm font-medium flex items-center"
                           >
                             <Trash2 className="w-2.5 h-2.5" />
                           </button>

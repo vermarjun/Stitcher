@@ -79,7 +79,7 @@ const Feed = ({
   return (
     <div className="flex-1 justify-center min-w-0 w-full">
       {/* Feed Type Selector */}
-      <div className="sticky top-0 z-50 backdrop-blur-sm bg-black/80 mb-6 border-b border-zinc-800 h-14">
+      <div className="sticky top-0 z-10 backdrop-blur-sm bg-black/80 mb-6 border-b border-zinc-800 h-14">
         <div className="flex gap-0">
           <button
             onClick={() => setFeedType("trending")}
@@ -94,7 +94,7 @@ const Feed = ({
               Trending
             </div>
             {feedType === "trending" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500 rounded-full" />
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[#02684D] rounded-full" />
             )}
           </button>
           <button
@@ -110,7 +110,7 @@ const Feed = ({
               Following
             </div>
             {feedType === "following" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500 rounded-full" />
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[#02684D] rounded-full" />
             )}
           </button>
         </div>

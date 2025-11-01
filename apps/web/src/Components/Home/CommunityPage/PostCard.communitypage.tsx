@@ -266,7 +266,7 @@ const PostCard = ({
           <img
             src={post.authorId.profilePhoto || "https://i.pravatar.cc/150"}
             alt={post.authorId.username}
-            className="h-10 w-10 rounded-full cursor-pointer hover:opacity-90 transition-opacity"
+            className="h-10 w-10 rounded-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
               onProfileClick(post.authorId);
