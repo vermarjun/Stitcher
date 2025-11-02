@@ -155,8 +155,14 @@ const Sidebar: React.FC<Props> = ({
           </button>
         </div>
 
+        <div className="text-white flex justify-center items-center w-full">
+          <p className="text-sm">
+            Free
+          </p>
+        </div>
+
         {/* Search */}
-        {!collapsed && (
+        {/* {!collapsed && (
           <div className="p-3 z-50">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -168,7 +174,7 @@ const Sidebar: React.FC<Props> = ({
               />
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Navigation */}
         <div className="flex-1 overflow-auto p-3 pb-3">

@@ -10,6 +10,7 @@ import api from "@/api";
 import { toast } from "sonner";
 import type { IUser } from "@/State/Types";
 import { FlickeringGrid } from "@/Components/ui/flickering-grid";
+import { useGoogleLogin } from "@react-oauth/google";
 
 // Define types
 interface FormData {
@@ -134,9 +135,6 @@ const AuthPage: React.FC = () => {
           email: formData.email,
           password: formData.password,
         });
-
-        console.log(response.data);
-
         const { token, user } = response.data;
 
         localStorage.setItem("token", token);
@@ -158,8 +156,6 @@ const AuthPage: React.FC = () => {
         });
 
         const data = loginResponse.data.user;
-
-        console.log(data);
 
         // normalize createdAt to string
         const createdAt = data.createdAt
@@ -263,6 +259,55 @@ const AuthPage: React.FC = () => {
     </svg>
   );
 
+  const responseGoogle = async (authResult:any) => {
+    try {
+      setLoading(true)
+			if (authResult["code"]) {
+				const response = await api.get<AuthResponse>(`users/google?code=${authResult.code}`);
+        const { token, user } = response.data;
+
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
+        toast.success(`Welcome ${user.username}! Let's get some Stitching Done.`);
+        navigate("/home", { replace: true });
+			} else {
+				console.log(authResult);
+				throw new Error(authResult);
+			}
+		} catch (error: any) {
+      console.error(
+        "Authentication error:",
+        error.response?.data.message || error.message
+      );
+
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        toast.error(
+          error.response?.data.message ||
+            "Invalid credentials. Please try again."
+        );
+      } else if (error.response?.status === 409) {
+        console.log(error);
+        toast.error(
+          error.response.data.message ||
+            "Invalid credentials. Please try again."
+        );
+      } else if (error.response?.status === 400) {
+        toast.error("Please fill in all required fields.");
+      } else {
+        toast.error("An error occurred. Please try again later.");
+      }
+    } finally {
+      setLoading(false);
+    }
+	};
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: responseGoogle,
+    onError: responseGoogle,
+		flow: "auth-code",
+  })
+
   return (
     <div className="bg-black w-screen h-screen flex justify-center items-center z-10 relative overflow-hidden">
       {/* Background subtle pattern */}
@@ -286,11 +331,11 @@ const AuthPage: React.FC = () => {
           {/* Card */}
           <div className="relative bg-gray-950 border border-gray-800 rounded-2xl p-8 shadow-2xl shadow-black/50 overflow-hidden">
             {/* Header */}
-            <div className="text-center mb-8">
+            <div className="text-center mb-4">
               <h1 className="text-2xl font-semibold text-white mb-1 tracking-tight">
                 {isLogin ? "Welcome back" : "Create your account"}
               </h1>
-              <p className="text-gray-400 text-sm font-light">
+              <p className="text-gray-400 text-xs font-light">
                 {isLogin
                   ? "Sign in to continue to your account"
                   : "Get started with your free account"}
@@ -298,7 +343,7 @@ const AuthPage: React.FC = () => {
             </div>
 
             {/* Auth mode toggle */}
-            <div className="relative mb-8">
+            <div className="relative mb-4">
               <div className="bg-gray-900 rounded-xl p-1 flex relative border border-gray-800">
                 <div
                   className={`absolute top-1 bottom-1 w-1/2 bg-white rounded-lg transition-all duration-300 ease-out ${
@@ -308,7 +353,7 @@ const AuthPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => !isLogin && toggleAuthMode()}
-                  className={`relative z-10 flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-all duration-300 ${
+                  className={`relative z-10 flex-1 py-2 px-4 text-xs font-medium rounded-lg transition-all duration-300 ${
                     isLogin ? "text-black" : "text-gray-400 hover:text-gray-200"
                   }`}
                 >
@@ -317,7 +362,7 @@ const AuthPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => isLogin && toggleAuthMode()}
-                  className={`relative z-10 flex-1 py-2.5 px-4 text-sm font-medium rounded-lg transition-all duration-300 ${
+                  className={`relative z-10 flex-1 py-2 px-4 text-xs font-medium rounded-lg transition-all duration-300 ${
                     !isLogin
                       ? "text-black"
                       : "text-gray-400 hover:text-gray-200"
@@ -331,14 +376,15 @@ const AuthPage: React.FC = () => {
             {/* Google Auth Button */}
             <button
               type="button"
-              className="w-full mb-6 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-white py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-300 hover:border-gray-700 group font-medium"
+              className="w-full text-sm bg-gray-900 hover:bg-gray-800 border border-gray-800 text-white py-2 px-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-300 hover:border-gray-700 group font-medium"
+              onClick={()=>googleLogin()}
             >
               <GoogleIcon />
               <span>Continue with Google</span>
             </button>
 
             {/* Improved divider */}
-            <div className="relative my-6 flex items-center">
+            <div className="relative mt-6 mb-3 flex items-center">
               <div className="flex-grow border-t border-gray-800" />
               <div className="relative flex-shrink-0 px-4">
                 <div className="bg-black px-3 py-1 rounded-full border border-gray-800">
@@ -369,7 +415,7 @@ const AuthPage: React.FC = () => {
                 />
               ))}
 
-              <div ref={formRef} className="space-y-4">
+              <div ref={formRef} className="space-y-3">
                 {/* Name field */}
                 <div
                   className={`transition-all duration-400 ease-in-out overflow-hidden ${
@@ -387,7 +433,7 @@ const AuthPage: React.FC = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
+                      className="w-full pl-11 pr-4 py-2 bg-gray-900 border text-xs placeholder:text-sm border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
                       placeholder="Full name"
                     />
                   </div>
@@ -403,7 +449,7 @@ const AuthPage: React.FC = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
+                    className="w-full pl-11 pr-4 py-2 text-sm placeholder:text-sm bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
                     placeholder="Email address"
                     required
                   />
@@ -419,7 +465,7 @@ const AuthPage: React.FC = () => {
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="w-full pl-11 pr-12 py-3 bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
+                    className="w-full pl-11 pr-12 py-2 text-sm placeholder:text-sm bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
                     placeholder="Password"
                     required
                   />
@@ -453,7 +499,7 @@ const AuthPage: React.FC = () => {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
-                      className="w-full pl-11 pr-12 py-3 bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
+                      className="w-full pl-11 pr-12 py-2 text-sm placeholder:text-sm bg-gray-900 border border-gray-800 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all duration-300 font-light"
                       placeholder="Confirm password"
                     />
                     <button
@@ -478,7 +524,7 @@ const AuthPage: React.FC = () => {
                     !isLogin ? "max-h-0 opacity-0" : "max-h-20 opacity-100"
                   }`}
                 >
-                  <div className="flex items-center justify-between text-sm pt-2">
+                  <div className="flex items-center text-xs justify-between">
                     <label className="flex items-center text-gray-400 cursor-pointer group">
                       <input
                         type="checkbox"
@@ -490,7 +536,7 @@ const AuthPage: React.FC = () => {
                     </label>
                     <button
                       type="button"
-                      className="text-blue-400 hover:text-blue-300 transition-colors duration-300 font-light"
+                      className="text-blue-400 text-xs hover:text-blue-300 transition-colors duration-300 font-light"
                     >
                       Forgot password?
                     </button>
@@ -498,12 +544,12 @@ const AuthPage: React.FC = () => {
                 </div>
 
                 {/* Submit Button */}
-                <div className="pt-6">
+                <div className="">
                   <button
                     type="button"
                     onClick={handleSubmit}
                     disabled={isLoading} // Disable button when loading
-                    className="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-white/20 group disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    className="w-full bg-white hover:bg-gray-100 text-black font-medium py-2 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-white/20 group disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     <span className="flex items-center justify-center gap-2">
                       {isLoading ? (
@@ -525,7 +571,7 @@ const AuthPage: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="mt-8 text-center text-sm text-gray-500">
+            <div className="pt-4 text-center text-xs text-gray-500">
               <span>
                 {isLogin
                   ? "Don't have an account? "
@@ -534,7 +580,7 @@ const AuthPage: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleAuthMode}
-                className="text-white hover:text-gray-300 transition-colors duration-300 font-medium"
+                className="text-white hover:text-gray-300 text-sm transition-colors duration-300 font-medium"
               >
                 {isLogin ? "Sign up" : "Sign in"}
               </button>

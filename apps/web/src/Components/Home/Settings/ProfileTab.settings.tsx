@@ -247,7 +247,7 @@ const ProfileTab: React.FC = () => {
       toast.success("Profile updated successfully");
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.response?.data?.message || "Failed to update profile");
+      toast.error(error?.response?.data?.message || "Failed to update profile, Username already taken");
     } finally {
       setLoading(false);
     }
@@ -458,6 +458,7 @@ const ProfileTab: React.FC = () => {
                     <Input
                       id="email"
                       type="email"
+                      disabled
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
