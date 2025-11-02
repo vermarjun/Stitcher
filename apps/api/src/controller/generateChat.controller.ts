@@ -7,6 +7,7 @@ import ApiKey from '../model/userapikeys.model';
 import { MICROSERVICE_BASE_URL } from '../config';
 import User from '../model/user.model';
 import Asset from '../model/asset.model';
+import mongoose from 'mongoose';
 
 interface GenerateChatRequest {
     projectId: string;
@@ -101,7 +102,7 @@ async function callVideoGenerationMicroservice(
                 timeout: 300000
             }
         );
-        
+
         console.log('Microservice response:', response.data);
         return { status: 'success' };
     } catch (error) {
@@ -157,7 +158,7 @@ async function callVideoEditMicroservice(
                 timeout: 300000
             }
         );
-        
+
         console.log('Microservice response:', response.data);
         return { status: 'success' };
     } catch (error) {
@@ -172,16 +173,10 @@ async function callVideoEditMicroservice(
 }
 
 export const generateChatResponse = async (req: Request, res: Response) => {
-    console.log("HIT")
     try {
         const { projectId, prompt, chatId, assetId }: GenerateChatRequest = req.body;
         const userId = req.userId;
 
-        console.log(projectId)
-        console.log(prompt)
-        console.log(chatId)
-        console.log(assetId)
-        
         // Validation
         if (!projectId || !prompt?.trim()) {
             res.status(400).json({
@@ -190,7 +185,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-        
+
         if (!userId) {
             res.status(401).json({
                 success: false,
@@ -198,9 +193,28 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-        
+
         const user = await User.findById(userId);
-        
+
+        if (assetId && assetId.length > 0) {
+            // means edit request hai
+            // check if user has enough credits available
+            if (!user?.credits.editing || user?.credits.editing <= 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Not Enough credits to complete edit request.'
+                });
+            }
+        } else {
+            // request is to generate a video
+            if (!user?.credits.generation || user?.credits.generation <= 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Not Enough credits to complete generate request.'
+                });
+            }
+        }
+
         // Verify project exists
         const project = await Project.findById(projectId);
         if (!project) {
@@ -210,7 +224,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-        
+
         // Fetch API keys for the user
         let apiKeys: ApiKeyMapping;
         try {
@@ -222,17 +236,17 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-        
+
         // Get or create chat
         let chat: IGenerateChat | null;
         let isNewChat = false;
-        
+
         if (chatId) {
             chat = await GenerateChat.findOne({
                 _id: chatId,
                 projectId: new Types.ObjectId(projectId)
             });
-            
+
             if (!chat) {
                 res.status(404).json({
                     success: false,
@@ -249,7 +263,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             isNewChat = true;
         }
-        
+
         // Add user message to chat
         const userMessage: IGenerateChatMessage = {
             role: 'user',
@@ -260,10 +274,12 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             completed: false,
             plannerOut: false,
             generatorOutput: false,
-            error: "none"
+            error: "none",
+            requestType: (assetId && assetId.length > 0) ? "edit" : "generate",
+            assetsToEdit: assetId?.map(id => new mongoose.Types.ObjectId(id)) || [] //assetId is array of string, convert to array of objectId before saving it
         };
         chat.messages.push(userMessage);
-        
+
         // Add placeholder assistant message
         const assistantMessage: IGenerateChatMessage = {
             role: 'assistant',
@@ -277,25 +293,21 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             completed: false,
             plannerOut: false,
             generatorOutput: false,
-            error: "none"
+            error: "none",
+            requestType: undefined,
+            assetsToEdit: []
         };
         chat.messages.push(assistantMessage);
-        
+
         // Save chat
         await chat.save();
-        
+
         // Update project's edit_chat reference if it's a new chat
         if (isNewChat) {
             project.edit_chat = chat._id as Types.ObjectId;
             await project.save();
         }
-        
-        console.log("username: ", user?.username)
-        console.log("projectId: ", projectId)
-        console.log("userId: ", userId)
-        console.log("chatId from request: ", chatId)
-        console.log("chatId being sent: ", chat._id)
-        
+
         // Call appropriate microservice based on assetId presence
         let microserviceResult;
         if (assetId && assetId.length > 0) {
@@ -318,7 +330,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
                 apiKeys
             );
         }
-        
+
         if (microserviceResult.status === 'error') {
             res.status(503).json({
                 success: false,
@@ -326,7 +338,7 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             });
             return;
         }
-        
+
         // Return success response
         res.status(200).json({
             success: true,
@@ -403,12 +415,12 @@ export const getLatestAssistantMessage = async (req: Request, res: Response) => 
             _id: chatId,
             projectId: new Types.ObjectId(projectId as string)
         })
-        .populate({
-            path: 'messages.scenes.assetId',
-            model: 'Asset',
-            select: 'name type origin url thumbnail duration width height bytes metadata projectId isOnTimeline originalTemplateId' // Specify fields you want
-        })
-        .lean();
+            .populate({
+                path: 'messages.scenes.assetId',
+                model: 'Asset',
+                select: 'name type origin url thumbnail duration width height bytes metadata projectId isOnTimeline originalTemplateId' // Specify fields you want
+            })
+            .lean();
 
         if (!chat) {
             res.status(404).json({
@@ -420,7 +432,7 @@ export const getLatestAssistantMessage = async (req: Request, res: Response) => 
 
         // Find the last assistant message
         const assistantMessages = chat.messages.filter(msg => msg.role === 'assistant');
-        
+
         if (assistantMessages.length === 0) {
             res.status(404).json({
                 success: false,
@@ -470,7 +482,7 @@ export const getChatHistory = async (req: Request, res: Response) => {
                             const asset = await Asset.findById(scene.assetId)
                                 .select('name type origin url thumbnail duration width height bytes metadata isOnTimeline')
                                 .lean();
-                            
+
                             if (asset) {
                                 // Create new scene object with populated asset
                                 chat.messages[i].scenes[j] = {
@@ -554,7 +566,7 @@ export const stopGeneration = async (req: Request, res: Response) => {
 
         // Find the latest assistant message
         const assistantMessages = chat.messages.filter(msg => msg.role === 'assistant');
-        
+
         if (assistantMessages.length === 0) {
             res.status(404).json({
                 success: false,
@@ -564,8 +576,8 @@ export const stopGeneration = async (req: Request, res: Response) => {
         }
 
         const latestAssistantMessage = assistantMessages[assistantMessages.length - 1];
-        const messageIndex = chat.messages.findIndex(msg => 
-            msg.role === 'assistant' && 
+        const messageIndex = chat.messages.findIndex(msg =>
+            msg.role === 'assistant' &&
             msg.timestamp.getTime() === latestAssistantMessage.timestamp.getTime()
         );
 
@@ -582,7 +594,7 @@ export const stopGeneration = async (req: Request, res: Response) => {
         chat.messages[messageIndex].plannerOut = latestAssistantMessage.plannerOut || true;
         chat.messages[messageIndex].generatorOutput = latestAssistantMessage.generatorOutput || true;
         chat.messages[messageIndex].error = "cancelled";
-        
+
         // Update content based on type
         if (typeof latestAssistantMessage.content === 'string') {
             chat.messages[messageIndex].content = 'Generation was cancelled by user.';

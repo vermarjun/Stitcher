@@ -139,7 +139,7 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({ username, email, password: hashedPassword, usedOAuth: false });
+    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credtis: {generation: 3, editing: 5, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)} });
     await user.save();
     return res.status(201).json({ message: 'User created successfully.' });
   } catch (err: any) {

@@ -1,4 +1,4 @@
-import {Schema, Document, Types, Model, model} from "mongoose";
+import { Schema, Document, Types, Model, model } from "mongoose";
 
 // Interface for Scene
 export interface IScene {
@@ -20,13 +20,15 @@ export interface IAssistantContent {
 export interface IGenerateChatMessage {
     role: string; //'user' | 'assistant'
     content: string | IAssistantContent; // String for user, IAssistantContent for assistant
-    timestamp: Date; 
+    timestamp: Date;
     scenes: IScene[]; // Empty array for user messages, array of scenes for assistant messages
     projectDescription: string;
     completed: boolean;
     plannerOut: boolean;
     generatorOutput: boolean;
     error: string;
+    requestType: string | undefined;
+    assetsToEdit: Types.ObjectId[]; // If the request is to edit a video, the user must have passed an array of assets he wants to edit, so save their ID
 }
 
 // Interface representing a Chat document in MongoDB
@@ -34,12 +36,13 @@ export interface IGenerateChat extends Document {
     title: string; // Auto-generated from the first prompt
     messages: IGenerateChatMessage[];
     projectId: Types.ObjectId; // Generate chat's projectId
+    userId: Types.ObjectId;
 }
 
 // Scene Schema
 const SceneSchema = new Schema<IScene>({
-    prompt: { type: String, required: false},
-    code: { type: String, required: false},
+    prompt: { type: String, required: false },
+    code: { type: String, required: false },
     sceneName: { type: String, required: false },
     summary: { type: String, required: false },
     assetId: { type: Schema.Types.ObjectId, ref: 'Asset', required: true },
@@ -55,7 +58,13 @@ const ChatMessageSchema = new Schema<IGenerateChatMessage>({
     projectDescription: { type: String, default: "" },
     completed: { type: Boolean, default: false },
     plannerOut: { type: Boolean, default: false },
-    generatorOutput: { type: Boolean, default: false }
+    generatorOutput: { type: Boolean, default: false },
+    requestType: { type: String, enum: ["edit", "generate"], required: false }, // for assistant message this should be null but for user messages this should define what user wanted to do  
+    assetsToEdit: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Asset',
+        default: []
+    }],
 }, { _id: false });
 
 // Chat Schema
@@ -63,6 +72,7 @@ const GenerateChatSchema = new Schema<IGenerateChat>({
     title: { type: String, required: true },
     messages: [ChatMessageSchema],
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: false }
 }, { timestamps: true });
 
 // Create the Chat model

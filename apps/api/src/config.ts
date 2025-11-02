@@ -2,6 +2,16 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+if (process.env.RZP_KEY_ID == undefined){
+    throw new Error("RZP_KEY_ID is not defined in environment variables");
+}
+export const RZP_KEY_ID = process.env.RZP_KEY_ID;
+
+if (process.env.RZP_KEY_SECRET == undefined){
+    throw new Error("RZP_KEY_SECRET is not defined in environment variables");
+}
+export const RZP_KEY_SECRET = process.env.RZP_KEY_SECRET;
+
 if (process.env.GOOGLE_CLIENT_ID == undefined){
     throw new Error("GOOGLE_CLIENT_ID is not defined in environment variables");
 }

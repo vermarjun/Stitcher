@@ -8,6 +8,7 @@ import {
     getRecentProjectsByUser
 } from "../controller/project.controller";
 import auth from "../middleware/auth.middleware";
+import { refreshCredits } from "../middleware/refreshCredits.middleware";
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.get("/user/:userId", auth, getProjectsByUser);
 router.get("/user/:userId", auth, getRecentProjectsByUser);
 
 // Get single project by ID
-router.get("/:id", auth, getProjectById);
+router.get("/:id", auth, refreshCredits, getProjectById);
 
 // Update project
 router.put("/:id", auth, updateProject);

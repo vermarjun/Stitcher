@@ -11,6 +11,20 @@ export interface IUserStats {
   lastUpdated: Date;
 }
 
+export interface IPayment {
+  razorpayPaymentId: String,
+  razorpayOrderId: String,
+  plan: String,
+  amount: Number,
+  createdAt: Date
+  status: {
+    type: String,
+    enum: ["created", "paid", "failed", "refunded"],
+    default: "created"
+  },
+
+}
+
 // Interface representing a User document in MongoDB
 export interface IUser extends Document {
   username: string;
@@ -20,13 +34,25 @@ export interface IUser extends Document {
   // If user uses password to signup -> they can use both OAuth as well as password to login but if they used OAuth to signup they can't use password to login they must use OAuth only to login
   usedOAuth?: boolean; //Added this instead, it makes more sense so that if user tries to login with password, I can tell them that no you used OAuth go with that only
   profilePhoto: string;
-  profileBanner: string; 
+  profileBanner: string;
   lastActive: Date;
   createdAt: Date;
   isActive: boolean;
   bio: string;
-  role: 'user' | 'admin';
-  plan: string;
+  role: {
+    type: String;
+    enum: ['user', 'admin']
+  }
+  plan: 'free' | 'basic' | 'plus' | 'max';
+  credits: {
+    generation: number;
+    editing: number;
+    expiresAt: Date
+  };
+  isTestAccount: boolean;
+  invitedBy?: Types.ObjectId;
+  invitationCode?: string;
+  payments: IPayment[],
   resetPasswordToken?: string;
   resetPasswordExpires?: Date | number;
   projects?: Types.ObjectId[];
@@ -68,19 +94,13 @@ const UserSchema = new Schema<IUser>({
     type: Boolean,
     required: false // old users might not have this field
   },
-  // oAuthCredentials: [{
-  //   provider: { type: String, required: true },
-  //   providerId: { type: String, required: true },
-  //   accessToken: { type: String },
-  //   refreshToken: { type: String }
-  // }],
   profilePhoto: {
     type: String,
     default: 'https://www.gravatar.com/avatar/?d=mp',
   },
   profileBanner: {
     type: String,
-    default: '', 
+    default: '',
   },
   lastActive: {
     type: Date,
@@ -96,29 +116,52 @@ const UserSchema = new Schema<IUser>({
   },
   role: {
     type: String,
-    enum: ['user', 'admin', 'test_account'],
+    enum: ['user', 'admin'],
     default: 'user',
+  },
+  isTestAccount: {
+    type: Boolean,
+    default: false
   },
   plan: {
     type: String,
-    enum: ['free', 'pro', 'enterprise'],
+    enum: ['free', 'basic', 'plus', 'max'],
     default: 'free'
   },
+  credits: {
+    generation: { type: Number, default: 5 },
+    editing: { type: Number, default: 10 },
+    expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
+  },
+  payments: [
+    {
+      razorpayPaymentId: { type: String },
+      razorpayOrderId: { type: String },
+      plan: { type: String },
+      amount: { type: Number },
+      createdAt: { type: Date, default: Date.now },
+      status: {
+        type: String,
+        enum: ["created", "paid", "failed", "refunded"],
+        default: "created"
+      },
+    }
+  ],
   projects: [{
     type: Schema.Types.ObjectId,
     ref: 'Project',
   }],
-  communityPosts: [{ 
-    type: Schema.Types.ObjectId, 
+  communityPosts: [{
+    type: Schema.Types.ObjectId,
     required: true,
     default: [],
-    ref: 'CommunityPost' 
+    ref: 'CommunityPost'
   }],
-  likedPosts: [{ 
-    type: Schema.Types.ObjectId, 
+  likedPosts: [{
+    type: Schema.Types.ObjectId,
     required: true,
     default: [],
-    ref: 'CommunityPost' 
+    ref: 'CommunityPost'
   }],
   aura: {
     type: Number,

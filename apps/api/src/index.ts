@@ -21,6 +21,7 @@ import communityPostRoutes from "./router/communityPost.router"
 import backpackRoutes from "./router/backpack.router"
 import leaderboardRoutes from "./router/leaderboard.router"
 import notificationRoutes from "./router/notification.router"
+import paymentRoutes from "./router/payment.router"
 
 // Config
 import { API_PREFIX, PORT } from "./config";
@@ -61,6 +62,7 @@ app.use(`${API_PREFIX}/community`, communityPostRoutes);
 app.use(`${API_PREFIX}/backpack`, backpackRoutes);
 app.use(`${API_PREFIX}/leaderboard`, leaderboardRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
+app.use(`${API_PREFIX}/payments`, paymentRoutes);
 
 // Start the server
 httpServer.listen(PORT, async () => {

@@ -8,6 +8,7 @@ import {
     stopGeneration,
 } from '../controller/generateChat.controller';
 import auth from "../middleware/auth.middleware"; 
+import { refreshCredits } from '../middleware/refreshCredits.middleware';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ const router = Router();
  * @access  Private
  * @body    { projectId: string, prompt: string, chatId?: string }
  */
-router.post('/', auth, generateChatResponse);
+router.post('/', auth, refreshCredits, generateChatResponse);
 
 /**
  * @route   GET /api/generate-chat/update/:chatId
