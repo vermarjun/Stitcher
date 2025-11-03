@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import Header from "../Components/Dashboard/Header/Main.header";
-import LeftSideBar from "../Components/Dashboard/LeftSideBar/Main.leftsidebar";
-// import Footer from "../Components/Dashboard/Footer.dashboard"
-import RightSideBar from "../Components/Dashboard/RightSideBar/Main.rightsidebar";
+import Header from "./Header/Main.header";
+import LeftSideBar from "./LeftSideBar/Main.leftsidebar";
+import RightSideBar from "./RightSideBar/Main.rightsidebar";
 
 import VideoEditor from "@/Components/Dashboard/VideoEditor.dashboard";
 
@@ -15,6 +14,7 @@ import {
   RefreshProviderTimeline,
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
+import { PollingProvider, RefreshHeaderProvider } from "./context";
 
 import type { Project, IUser, Asset } from "@/State/Types";
 
@@ -28,14 +28,14 @@ const DashboardLayout = () => {
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
   const handleAssetDrop = (asset: Asset) => {
     // Check if asset already exists to avoid duplicates
-    if (!droppedAssets.find(item => item._id === asset._id)) {
-      setDroppedAssets(prev => [...prev, asset]);
+    if (!droppedAssets.find((item) => item._id === asset._id)) {
+      setDroppedAssets((prev) => [...prev, asset]);
       toast.success(`Added ${asset.name} to message`);
     }
   };
 
   const handleRemoveAsset = (assetId: string) => {
-    setDroppedAssets(prev => prev.filter(asset => asset._id !== assetId));
+    setDroppedAssets((prev) => prev.filter((asset) => asset._id !== assetId));
   };
 
   async function fetchData() {
@@ -83,37 +83,45 @@ const DashboardLayout = () => {
   }, []);
 
   return (
-    <div>
-      {isLoading ? (
-        <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-          <ThreeDotLoader />
+    <RefreshHeaderProvider>
+      <PollingProvider>
+        <div>
+          {isLoading ? (
+            <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
+              <ThreeDotLoader />
+            </div>
+          ) : (
+            <RefreshProviderTracks>
+              <RefreshProviderTimeline>
+                <RefreshProviderAssetStash>
+                  <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
+                    <Header currentProject={project} user={user} />
+
+                    <div className="flex-1 flex overflow-hidden">
+                      <LeftSideBar currentProject={project} user={user} />
+
+                      <main className="flex-1 flex flex-col overflow-hidden">
+                        <VideoEditor currentProject={project} />
+                      </main>
+
+                      <RightSideBar
+                        onAssetDrop={handleAssetDrop}
+                        droppedItems={droppedAssets}
+                        onRemoveItem={handleRemoveAsset}
+                        currentProject={project}
+                        user={user}
+                      />
+                    </div>
+
+                    {/* <Footer /> */}
+                  </div>
+                </RefreshProviderAssetStash>
+              </RefreshProviderTimeline>
+            </RefreshProviderTracks>
+          )}
         </div>
-      ) : (
-        <RefreshProviderTracks>
-          <RefreshProviderTimeline>
-            <RefreshProviderAssetStash>
-              <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-                <Header currentProject={project} user={user} />
-
-                <div className="flex-1 flex overflow-hidden">
-                  <LeftSideBar currentProject={project} user={user} />
-
-                  <main className="flex-1 flex flex-col overflow-hidden">
-                    <VideoEditor currentProject={project} />
-                  </main>
-
-                  <RightSideBar onAssetDrop={handleAssetDrop}
-  droppedItems={droppedAssets}
-  onRemoveItem={handleRemoveAsset} currentProject={project} user={user} />
-                </div>
-
-                {/* <Footer /> */}
-              </div>
-            </RefreshProviderAssetStash>
-          </RefreshProviderTimeline>
-        </RefreshProviderTracks>
-      )}
-    </div>
+      </PollingProvider>
+    </RefreshHeaderProvider>
   );
 };
 

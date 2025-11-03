@@ -10,6 +10,7 @@ import api from "@/api";
 import { toast } from "sonner";
 import type { Project, IUser, Asset } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
+import { usePolling, useRefreshHeader } from "../context";
 
 interface Props {
   currentProject?: Project;
@@ -101,12 +102,14 @@ const GenerateComponent = ({
   droppedItems, 
   onRemoveItem
 }: Props) => {
+  const { triggerHeaderRefresh } = useRefreshHeader()
   const plannerOutputRef = useRef("");
   const streamSummaryRef = useRef(false);
   const llmSummaryRef = useRef("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { triggerRefresh } = useRefreshAssetStash();
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = usePolling(); // make it a context
   const [pollingStatus, setPollingStatus] = useState<
     "generating" | "planning" | "generating-scenes" | null
   >(null);
@@ -196,7 +199,7 @@ const GenerateComponent = ({
       } catch (error) {
         console.error("Polling error:", error);
       }
-    }, 2000); // Poll every 2 seconds
+    }, 5000); // Poll every 5 seconds
   };
 
   // Stop polling
@@ -209,6 +212,7 @@ const GenerateComponent = ({
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
+    triggerHeaderRefresh();
 
     const userMessage = messageActions.createMessage(input.trim(), "user");
     setMessages((prev: Message[]) => [...prev, userMessage]);

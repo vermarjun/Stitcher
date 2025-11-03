@@ -137,6 +137,8 @@ const AuthPage: React.FC = () => {
         });
         const { token, user } = response.data;
 
+         console.log("login response data: ", user);
+
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
         toast.success("Welcome back!");
@@ -171,8 +173,9 @@ const AuthPage: React.FC = () => {
           profileBanner: data.profileBanner || "",
           createdAt,
           bio: data.bio || "",
-          role: data.role || "user",
+          role: data.role,
           plan: data.plan || "free",
+          credits: data.credits,
           aura: typeof data.aura === "number" ? data.aura : 0,
           stats: data.stats || {
             totalPosts: 0,

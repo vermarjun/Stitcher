@@ -42,47 +42,55 @@ const SocialModal = ({
     { icon: Mail, label: "Email", url: "mailto:you@example.com" },
   ];
 
-    return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-white">
-              Get 2x Free Credits
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-zinc-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-7 max-w-md w-full shadow-2xl">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-5">
+          <h3 className="text-xl font-semibold text-white">
+            Get 2× Free Credits
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-          <p className="text-zinc-400 text-sm mb-6">
-            DM me on any platform for an invitation to get 2x extra free credits
-            for testing!
-          </p>
+        {/* Description */}
+        <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+          I'm giving early users{" "}
+          <span className="text-white font-medium">2× free credits</span>
+          to test Stitcher.
+          <br />
+          Reach out to me on any of the platforms below and I’ll instantly send
+          you an invite.
+        </p>
 
-          <div className="grid grid-cols-2 gap-3">
-            {socialLinks.map((item) => {
-              const Icon = item.icon;
-              return (
-                <a
-                  key={item.label}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-300 hover:text-white group"
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm font-medium">{item.label}</span>
-                  <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                </a>
-              );
-            })}
-          </div>
+        {/* Social Links */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {socialLinks.map((item) => {
+            const Icon = item.icon;
+            return (
+              <a
+                key={item.label}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl 
+                         transition-colors text-zinc-300 hover:text-white group"
+              >
+                <Icon className="w-4 h-4" />
+                <span className="text-sm font-medium">{item.label}</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
+            );
+          })}
         </div>
       </div>
-    );
+    </div>
+  );
 };
 
 // User info component
@@ -388,7 +396,9 @@ const PaymentPage = () => {
             return (
               <div
                 key={plan.id}
-                className={`relative ${index == 1?"scale-105":""} bg-zinc-900 rounded-xl border overflow-hidden transition-all duration-200 hover:scale-[1.02] ${
+                className={`relative ${
+                  index == 1 ? "scale-105 hover:scale-110" : "hover:scale-105 "
+                } bg-zinc-900 rounded-xl border overflow-hidden transition-all duration-200 ${
                   plan.popular
                     ? "border-[#19E5A1] ring-2 ring-[#19E5A1]/20"
                     : "border-zinc-800 hover:border-zinc-700"
@@ -494,7 +504,6 @@ const PaymentPage = () => {
         <div className="mt-8 w-full flex justify-center items-center">
           <div className="max-w-5xl ">
             <FreeTierInfo />
-
           </div>
         </div>
       </div>

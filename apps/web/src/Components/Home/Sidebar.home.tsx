@@ -18,21 +18,31 @@ import type { NavigateFunction } from "react-router-dom";
 import { AuroraText } from "../magicui/aurora-text";
 import api from "@/api";
 import { Card, CardContent } from "@/Components/ui/card";
+import { toast } from "sonner";
 
-interface PricingInfoProps {
-  tier: "free" | "basic" | "pro" | "max";
-  editingCredits: number;
-  generationCredits: number;
-  expiresAt: string;
-}
+const UserSidebarInfo = () => {
+  const [tier, setTier] = useState("free");
+  const [editingCredits, setEditingCredits] = useState(0);
+  const [generationCredits, setGenerationCredits] = useState(0);
+  const [expiresAt, setExpiresAt] = useState("");
 
-const UserSidebarInfo: React.FC<PricingInfoProps> = ({
-  tier,
-  editingCredits,
-  generationCredits,
-  expiresAt,
-}) => {
   const formattedDate = new Date(expiresAt).toLocaleDateString();
+
+  const fetchData = async ()=>{
+    const response = await api.get("/users/me/credits");
+    if (response.data.success){
+      setTier(response.data.message.plan)
+      setEditingCredits(response.data.message.credits.editing);
+      setGenerationCredits(response.data.message.credits.generation);
+      setExpiresAt(response.data.credits.message.expiresAt);
+    } else {
+      toast.error("Cant fetch latest credits details!");
+    }
+  }
+
+  useEffect(()=>{
+    fetchData();
+  }, []);
 
   return (
     <Card className="bg-transparent text-gray-200 p-3 w-full border-0">
@@ -261,11 +271,11 @@ const Sidebar: React.FC<Props> = ({
                     key={index}
                     onClick={() => onNavigate(item.key)}
                     className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium
-                    transition-all duration-200 hover:bg-[#1A1D21] hover:text-white
+                    transition-all duration-200 hover:hover:bg-[#1A1D21] hover:text-white
                     ${
                       active
-                        ? "bg-green-600/10 text-green-400 border border-green-600/20"
-                        : "text-zinc-300"
+                        ? emeraldActive
+                        : "text-zinc-300 hover:bg-[#1A1D21] hover:text-white"
                     }
                     ${collapsed ? "justify-center px-2.5" : ""}`}
                   >
@@ -291,11 +301,11 @@ const Sidebar: React.FC<Props> = ({
                     key={index}
                     onClick={() => onNavigate(item.key)}
                     className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium
-                    transition-all duration-200 hover:bg-[#1A1D21] hover:text-white
+                    transition-all duration-200 hover:hover:bg-[#1A1D21] hover:text-white
                     ${
                       active
-                        ? "bg-green-600/10 text-green-400 border border-green-600/20"
-                        : "text-zinc-300"
+                        ? emeraldActive
+                        : "text-zinc-300 hover:bg-[#1A1D21] hover:text-white"
                     }
                     ${collapsed ? "justify-center px-2.5" : ""}`}
                   >
@@ -380,12 +390,7 @@ const Sidebar: React.FC<Props> = ({
                     </div>
                   </div>
                 </div>
-                <UserSidebarInfo
-                  tier="free"
-                  editingCredits={20}
-                  generationCredits={10}
-                  expiresAt={"12 Oct"}
-                />
+                <UserSidebarInfo/>
 
                 <button
                   onClick={onSignOut}

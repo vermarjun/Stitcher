@@ -12,7 +12,7 @@ import PrivacyPolicy from '@/Pages/PrivacyPolicy.page.tsx';
 const LandingPage = lazy(() => import('../Pages/LandingPage/Main.landing.page.tsx'));
 const AuthPage = lazy(() => import('../Pages/Auth.page.tsx'));
 const HomePage = lazy(() => import('../Components/Home/Main.home.tsx'));
-const DashboardLayout = lazy(() => import('../Layouts/Dashboard.layout'));
+const DashboardLayout = lazy(() => import('../Components/Dashboard/main.dashboard.tsx'));
 const ProfilePage = lazy(() => import('../Pages/ProfilePage.page'));
 const SettingsPage = lazy(() => import('../Pages/SettingsPage.page'));
 
