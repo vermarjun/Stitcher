@@ -331,6 +331,39 @@ class ChatUpdater:
             
             if result.modified_count > 0:
                 print(f"✓ Chat marked as completed: {chat_id}")
+
+                # --- Attempt to deduct 1 editing credit from the user ---
+                try:
+                    user_id = chat.get("userId")
+                    if user_id:
+                        users_col = db.users
+                        # Only decrement if editing credits > 0 and not a test account
+                        user_update = await users_col.update_one(
+                            {
+                                "_id": ObjectId(user_id),
+                                "credits.editing": {"$gt": 0},
+                                "isTestAccount": {"$ne": True}
+                            },
+                            {"$inc": {"credits.editing": -1}}
+                        )
+
+                        if user_update.modified_count > 0:
+                            print(f"✓ Deducted 1 editing credit from user {user_id}")
+                        else:
+                            # Provide helpful diagnostics
+                            user_doc = await users_col.find_one({"_id": ObjectId(user_id)}, {"credits": 1, "isTestAccount": 1})
+                            if user_doc and user_doc.get("isTestAccount"):
+                                print(f"⚠ User {user_id} is a test account — skipping credit deduction.")
+                            elif user_doc and user_doc.get("credits", {}).get("editing", 0) <= 0:
+                                print(f"⚠ User {user_id} has no editing credits to deduct.")
+                            else:
+                                print(f"⚠ Could not deduct editing credit for user {user_id}. (Unknown reason)")
+                    else:
+                        print(f"⚠ No userId found on chat {chat_id} — can't deduct credits.")
+                except Exception as e:
+                    print(f"✗ Error while deducting editing credit: {str(e)}")
+                    traceback.print_exc()
+
                 return True
             else:
                 print(f"⚠ No modifications made for chat_id: {chat_id}")
