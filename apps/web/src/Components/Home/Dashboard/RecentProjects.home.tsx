@@ -194,16 +194,16 @@ const RecentProjects = ({
           <table className="w-full">
             <thead>
               <tr className="border-b border-zinc-800">
-                <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
-                  Project Name
+                <th className="text-left py-3 px-6 text-zinc-300 text-sm font-medium">
+                  Recent Projects
                 </th>
-                <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
+                <th className="text-left py-3 px-6 text-zinc-300 text-sm font-medium">
                   Status
                 </th>
-                <th className="text-left py-3 px-6 text-zinc-300 text-xs font-medium">
+                <th className="text-left py-3 px-6 text-zinc-300 text-sm font-medium">
                   Last Updated
                 </th>
-                <th className="text-center py-3 px-6 text-zinc-300 text-xs font-medium">
+                <th className="text-center py-3 px-6 text-zinc-300 text-sm font-medium">
                   Actions
                 </th>
               </tr>

@@ -46,16 +46,25 @@ export interface IUserStats {
 // This is what is stored in local storage
 export type IUser = {
   _id: string;
-  username: string;
-  email: string;
-  profilePhoto: string;
+  username?: string;
+  email?: string;
+  profilePhoto?: string;
   profileBanner?: string; 
   lastActive?: Date;
   createdAt?: string | Date;
   isActive?: boolean;
   bio: string;
-  role: 'user' | 'admin';
-  plan: string;
+  role?: {
+    type: String;
+    enum: ['user', 'admin']
+  }
+  plan?: 'free' | 'basic' | 'plus' | 'max';
+  credits?: {
+    generation: number;
+    editing: number;
+    expiresAt: Date
+  };
+  isTestAccount?: boolean;
   projects?: string[];
   communityPosts?: string[];
   likedPosts?: string[];

@@ -76,6 +76,12 @@ const ProfileTab: React.FC = () => {
         bio: data.bio || "",
         role: data.role || "user",
         plan: data.plan || "free",
+        credits: data.credits || {
+          generation: 0,
+          editing: 0,
+          expiresAt: Date.now()
+        },
+        isTestAccount: data.isTestAccount || false,
         aura: typeof data.aura === "number" ? data.aura : 0,
         stats: data.stats || {
           totalPosts: 0,
@@ -230,6 +236,12 @@ const ProfileTab: React.FC = () => {
           updated.createdAt || user?.createdAt || new Date().toISOString(),
         bio: updated.bio ?? formData.bio ?? "",
         role: updated.role || user?.role || "user",
+        credits: updated.credits || {
+          generation: 0,
+          editing: 0,
+          expiresAt: Date.now()
+        },
+        isTestAccount: updated.isTestAccount || false,
         plan: updated.plan || user?.plan || "free",
         aura: typeof updated.aura === "number" ? updated.aura : user?.aura ?? 0,
         stats: updated.stats || user?.stats,
@@ -264,7 +276,7 @@ const ProfileTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-zinc-900 p-0 pb-4 border-zinc-800 overflow-hidden rounded-2xl shadow-lg">
+      <Card className="bg-zinc-950 p-0 pb-4 border-zinc-800 overflow-hidden rounded-2xl shadow-lg">
         {/* ===== Banner Section ===== */}
         <div className="relative">
           <div
@@ -300,14 +312,14 @@ const ProfileTab: React.FC = () => {
                 className="hidden"
               />
             </div>
-            <div className="flex bg-zinc-800 rounded-full py-1 pl-6 pr-2 absolute -bottom-8 right-3 justify-center items-center text-right">
+            <div className="flex bg-zinc-800 gap-2 rounded-xl py-1 px-2 absolute -bottom-8 right-3 justify-center items-center text-right">
               <div>
-                <p className="text-sm text-zinc-400">Aura</p>
-                <p className="text-2xl font-bold text-white">
+                {/* <p className="text-sm text-zinc-400">Aura</p> */}
+                <p className="text-xl font-bold text-white">
                   {user?.aura ?? 0}
                 </p>
               </div>
-              <span className="text-5xl">🔥</span>
+              <span className="text-2xl text-zinc-300">Aura</span>
             </div>
           </div>
 

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  Search,
   Home,
   FolderOpen,
   Key,
@@ -18,6 +17,43 @@ import type { IUser } from "@/State/Types";
 import type { NavigateFunction } from "react-router-dom";
 import { AuroraText } from "../magicui/aurora-text";
 import api from "@/api";
+import { Card, CardContent } from "@/Components/ui/card";
+
+interface PricingInfoProps {
+  tier: "free" | "basic" | "pro" | "max";
+  editingCredits: number;
+  generationCredits: number;
+  expiresAt: string;
+}
+
+const UserSidebarInfo: React.FC<PricingInfoProps> = ({
+  tier,
+  editingCredits,
+  generationCredits,
+  expiresAt,
+}) => {
+  const formattedDate = new Date(expiresAt).toLocaleDateString();
+
+  return (
+    <Card className="bg-transparent text-gray-200 p-3 w-full border-0">
+      <CardContent className="space-y-3 p-0 text-sm">
+        <div className="flex items-center gap-1">
+          <p className="text-sm text-gray-400">Tier</p>
+          <p className="font-semibold text-sm capitalize">{tier}</p>
+        </div>
+
+        <div className="border-t border-gray-800 pt-3">
+          <p className="text-xs text-gray-400 mb-1">Credits</p>
+          <div className="flex flex-col gap-1 text-sm">
+            <p>Editing: {editingCredits}</p>
+            <p>Generation: {generationCredits}</p>
+            <p className="text-xs text-gray-500">Expires on: {formattedDate}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface Props {
   collapsed: Boolean;
@@ -155,12 +191,6 @@ const Sidebar: React.FC<Props> = ({
           </button>
         </div>
 
-        <div className="text-white flex justify-center items-center w-full">
-          <p className="text-sm">
-            Free
-          </p>
-        </div>
-
         {/* Search */}
         {/* {!collapsed && (
           <div className="p-3 z-50">
@@ -196,8 +226,8 @@ const Sidebar: React.FC<Props> = ({
                     transition-all duration-200 hover:hover:bg-[#1A1D21] hover:text-white
                     ${
                       active
-                            ? emeraldActive
-                            : "text-zinc-300 hover:bg-[#1A1D21] hover:text-white"
+                        ? emeraldActive
+                        : "text-zinc-300 hover:bg-[#1A1D21] hover:text-white"
                     }
                     ${collapsed ? "justify-center px-2.5" : ""}`}
                   >
@@ -298,7 +328,7 @@ const Sidebar: React.FC<Props> = ({
             </div>
           </nav>
         </div>
-
+        
         {/* User Profile */}
         <div className="border-t border-zinc-800 p-3">
           <div className="relative" ref={userMenuRef}>
@@ -312,31 +342,50 @@ const Sidebar: React.FC<Props> = ({
                 className={`rounded-full border border-zinc-700 overflow-hidden bg-[#1A1D21] flex items-center justify-center 
                 ${collapsed ? "h-8 w-8" : "h-9 w-9"}`}
               >
-                <img src={user.profilePhoto} className="w-full h-full object-cover" />
+                <img
+                  src={user.profilePhoto}
+                  className="w-full h-full object-cover"
+                />
               </div>
 
               {!collapsed && (
                 <div className="flex-1 min-w-0 text-left">
-                  <div className="font-medium text-white truncate">{user.username}</div>
-                  <div className="text-xs text-zinc-400 truncate">{user.email}</div>
+                  <div className="font-medium text-white truncate">
+                    {user.username}
+                  </div>
+                  <div className="text-xs text-zinc-400 truncate">
+                    {user.email}
+                  </div>
                 </div>
               )}
             </button>
-
             {/* User Menu */}
             {showUserMenu && !collapsed && (
               <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-zinc-700 bg-[#111315] shadow-xl z-40">
                 <div className="border-b border-zinc-700 p-3">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full border border-zinc-700 overflow-hidden">
-                      <img src={user.profilePhoto} className="w-full h-full object-cover" />
+                      <img
+                        src={user.profilePhoto}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-medium text-white truncate">{user.username}</div>
-                      <div className="text-xs text-zinc-400 truncate">{user.email}</div>
+                      <div className="font-medium text-white truncate">
+                        {user.username}
+                      </div>
+                      <div className="text-xs text-zinc-400 truncate">
+                        {user.email}
+                      </div>
                     </div>
                   </div>
                 </div>
+                <UserSidebarInfo
+                  tier="free"
+                  editingCredits={20}
+                  generationCredits={10}
+                  expiresAt={"12 Oct"}
+                />
 
                 <button
                   onClick={onSignOut}
