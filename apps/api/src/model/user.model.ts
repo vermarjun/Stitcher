@@ -22,7 +22,6 @@ export interface IPayment {
     enum: ["created", "paid", "failed", "refunded"],
     default: "created"
   },
-
 }
 
 // Interface representing a User document in MongoDB

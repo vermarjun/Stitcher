@@ -259,7 +259,8 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             chat = new GenerateChat({
                 projectId: new Types.ObjectId(projectId),
                 messages: [],
-                title: prompt.trim().substring(0, 50)
+                title: prompt.trim().substring(0, 50),
+                userId: userId
             });
             isNewChat = true;
         }
