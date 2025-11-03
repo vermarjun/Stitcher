@@ -20,7 +20,8 @@ import {
   removeFollower,
   searchUsers,
   uploadProfileBanner,
-  authWithGoogle
+  authWithGoogle,
+  getUserCredits
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
@@ -37,6 +38,7 @@ router.post('/reset-password/:token', resetPassword);
 // Protected routes
 // Get Update Delete user's profile:
 router.get('/me', auth, getUser);
+router.get('/me/credits', auth, getUserCredits);
 router.put('/me', auth, updateUser);
 router.delete('/me', auth, deleteUser);
 

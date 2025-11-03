@@ -194,6 +194,8 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
         email: user.email,
         plan: user.plan,
         role: user.role,
+        credits: user.credits,
+        isTestAccount: user.isTestAccount,
         bio: user.bio,
         profilePhoto: user.profilePhoto,
         profileBanner: user.profileBanner,
@@ -213,11 +215,30 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
 
 export const getUser = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
   try {
-    const user: IUser | null = await User.findById(req.userId).select('-password');
+    const user: IUser | null = await User.findById(req.userId).select('-password -invitationCode -payments -resetPasswordToken -resetPasswordExpires');
     if (!user) return res.status(404).json({ message: 'User not found.' });
     return res.status(200).json(user);
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+export const getUserCredits = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    const user: IUser | null = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    return res.status(200).json({
+      success: true,
+      message: {
+        plan: user.plan,
+        credits: user.credits,
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server error', error: err.message 
+    });
   }
 };
 
@@ -228,7 +249,7 @@ export const getUserProfile = async (req: Request, res: Response): Promise<Respo
       return res.status(400).json({ message: 'User userId is required.' });
     }
     const user = await User.findById(userId)
-      .select('username bio profilePhoto profileBanner createdAt stats aura plan role likedPosts communityPosts followers following')
+      .select('username bio profilePhoto profileBanner createdAt stats aura plan role likedPosts communityPosts followers following isTestAccount credits')
       .lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -240,6 +261,8 @@ export const getUserProfile = async (req: Request, res: Response): Promise<Respo
       profileBanner: user.profileBanner,
       bio: user.bio || '',
       createdAt: user.createdAt,
+      credits: user.credits,
+      isTestAccount: user.isTestAccount,
       stats: user.stats,
       plan: user.plan,
       role: user.role,
