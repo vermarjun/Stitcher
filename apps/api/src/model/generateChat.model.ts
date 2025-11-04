@@ -45,7 +45,7 @@ const SceneSchema = new Schema<IScene>({
     code: { type: String, required: false },
     sceneName: { type: String, required: false },
     summary: { type: String, required: false },
-    assetId: { type: Schema.Types.ObjectId, ref: 'Asset', required: true },
+    assetId: { type: Schema.Types.ObjectId, ref: 'Asset', required: false},
     error: { type: String, default: null }
 }, { _id: false });
 
