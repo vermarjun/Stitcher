@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
 
-from core.GenerateVideo.Generate_new.generate_new_main import generate_new_video_main
+from app.core.GenerateVideo.Generate_new.generate_new_main import generate_new_video_main
 
 router = APIRouter()
 

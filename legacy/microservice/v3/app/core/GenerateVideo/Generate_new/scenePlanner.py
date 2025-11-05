@@ -1,7 +1,7 @@
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from typing import List
-from utils.initialize_redis import get_redis_manager
+from app.utils.initialize_redis import get_redis_manager
 from openai import AsyncOpenAI
 
 class Scene(BaseModel):
@@ -37,7 +37,7 @@ async def planner_agent_function(prompt: str):
 
     # Get least used API key from Redis
     redis_manager = get_redis_manager()
-    api_config = await redis_manager.get_least_used_api_key()
+    api_config = redis_manager.get_least_used_api_key()
 
     if not api_config:
         raise Exception("No API keys available in the heap")
@@ -72,7 +72,7 @@ async def planner_agent_function(prompt: str):
         
         # Update token usage
         new_total_tokens = current_tokens + tokens_used_in_request
-        await redis_manager.update_token_usage(email, new_total_tokens)
+        redis_manager.update_token_usage(email, new_total_tokens)
         
         print(f"Updated token usage for {email}: {new_total_tokens}")
         
@@ -84,4 +84,4 @@ async def planner_agent_function(prompt: str):
     
     finally:
         # Return the API key to heap even if there's an error
-        await redis_manager.return_api_key(email, current_tokens)
+        redis_manager.return_api_key(email, current_tokens)

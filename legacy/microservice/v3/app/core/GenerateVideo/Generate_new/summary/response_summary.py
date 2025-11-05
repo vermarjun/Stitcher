@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from openai import AsyncOpenAI
-from utils.initialize_redis import get_redis_manager
+from app.utils.initialize_redis import get_redis_manager
 
 class CompletionSummary(BaseModel):
     summary: str
@@ -64,7 +64,7 @@ Scene breakdown:
 """
         
         redis_manager = get_redis_manager()
-        api_config = await redis_manager.get_least_used_api_key()
+        api_config = redis_manager.get_least_used_api_key()
 
         if not api_config:
             raise Exception("No API keys available in heap")
@@ -100,7 +100,7 @@ Scene breakdown:
                 tokens_used = result.context_wrapper.usage.total_tokens
 
             new_total_tokens = current_tokens + tokens_used
-            await redis_manager.update_token_usage(email, new_total_tokens)
+            redis_manager.update_token_usage(email, new_total_tokens)
 
             print(f"[Response Generator] Updated tokens for {email}: {new_total_tokens}")
             print(f"✓ Response generator completed: {len(summary.split())} words")
@@ -112,7 +112,7 @@ Scene breakdown:
             raise e
 
         finally:
-            await redis_manager.return_api_key(email, current_tokens)    
+            redis_manager.return_api_key(email, current_tokens)    
         
     except Exception as e:
         print(f"Error in response generator: {e}")

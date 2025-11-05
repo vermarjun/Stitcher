@@ -1,6 +1,7 @@
-from agents import Agent, Runner, RunConfig
+from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
-from utils.model_provider import get_model  
+from openai import AsyncOpenAI
+from app.utils.initialize_redis import get_redis_manager
 
 class DebuggerOutput(BaseModel):
     fixed_code: str
@@ -33,12 +34,55 @@ async def debugger_agent_wrapper(original_code: str, error_msg: str):
         "Please produce a fixed, ready-to-render Python source file."
     )
 
-    debugger_model = get_model("DEBUGGER")
-    
-    result = await Runner.run(
-        manim_debugger_agent,
-        prompt,
-        run_config=RunConfig(model=debugger_model) 
-    )
-    print("debugger used: input_tokens used: ", result.context_wrapper.usage.input_tokens, " outputtokens_used: " , result.context_wrapper.usage.output_tokens," across: ", result.context_wrapper.usage.requests, " requests")
-    return result.final_output.fixed_code
+    try:
+        # Get least used API key from Redis
+        redis_manager = get_redis_manager()
+        api_config = redis_manager.get_least_used_api_key()
+
+        if not api_config:
+            raise Exception("No API keys available in the heap")
+
+        email = api_config["email"]
+        api_key = api_config["api_key"]
+        base_url = api_config["base_url"]
+        model_name = api_config["model"]
+        current_tokens = api_config.get("tokens_used", 0)
+
+        print(f"Using API key for: {email} with {current_tokens} tokens used")
+        try:
+            # Create OpenAI client with the retrieved config
+            client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url
+            )
+            
+            manim_debugger_agent.model = OpenAIChatCompletionsModel(model=model_name, openai_client=client)
+
+            # Run the planner agent with the custom model
+            result = await Runner.run(
+                manim_debugger_agent, 
+                prompt
+            )
+            
+            tokens_used_in_request = 0
+            if result.context_wrapper.usage:
+                tokens_used_in_request = result.context_wrapper.usage.total_tokens
+            
+            # Update token usage
+            new_total_tokens = current_tokens + tokens_used_in_request
+            redis_manager.update_token_usage(email, new_total_tokens)
+            
+            print(f"Updated token usage for {email}: {new_total_tokens}")
+
+            return result.final_output.fixed_code
+        
+        except Exception as e:
+            print(f"Error occurred, returned API key for {email} to heap")
+            raise e
+        finally:
+            # Return the API key to heap even if there's an error
+            redis_manager.return_api_key(email, current_tokens)
+        
+    except Exception as e:
+        print(f"Error in summarizer agent: {e}")
+        return

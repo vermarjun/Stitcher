@@ -1,12 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from core.GenerateVideo.debugger_agent import debugger_agent_wrapper
-from core.GenerateVideo.render_and_upload import render_and_upload_manim
+from app.core.GenerateVideo.debugger_agent import debugger_agent_wrapper
+from app.core.GenerateVideo.render_and_upload import render_and_upload_manim
 from .code_editor import coder_agent_wrapper
-from core.GenerateVideo.Generate_new.summary.response_summary import response_generator
-from utils.model_provider import MultiTenantModelManager
+from app.core.GenerateVideo.Generate_new.summary.response_summary import response_generator
+from app.utils.model_provider import MultiTenantModelManager
 from .chat_updater import ChatUpdater
-from utils.connect_mongo import mongodb
+from app.utils.connect_mongo import mongodb
 from bson import ObjectId
 
 

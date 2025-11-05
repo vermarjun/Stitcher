@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from config.environment import MONGO_NAME, MONGO_URL
+from app.config.environment import MONGO_NAME, MONGO_URL
 
 class MongoDB:
     def __init__(self):

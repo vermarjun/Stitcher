@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
 
 # from core.EditTimeline.timeline_agent import update_timeline
-from core.GenerateVideo.Edit_existing.edit_existing_main import edit_existing_main
+from app.core.GenerateVideo.Edit_existing.edit_existing_main import edit_existing_main
 
 router = APIRouter()
 

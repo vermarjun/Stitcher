@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from bson import ObjectId
-from utils.connect_mongo import mongodb
+from app.utils.connect_mongo import mongodb
 import traceback
 from datetime import datetime, timezone
 from pydantic import BaseModel

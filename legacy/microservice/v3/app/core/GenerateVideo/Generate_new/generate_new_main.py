@@ -2,7 +2,7 @@ import asyncio
 from pydantic import BaseModel
 from .codeGenerator import generate_all_scenes
 from .scenePlanner import planner_agent_function
-from utils.initialize_redis import get_scene_queue_manager
+from app.utils.initialize_redis import get_scene_queue_manager
 from .summary.planner_summary import summarizer_agent_wrapper
 from .chat_updater import ChatUpdater
 

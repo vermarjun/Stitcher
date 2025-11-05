@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from config.environment import PROJECT_VERSION, PROJECT_DESCRIPTION, PROJECT_NAME
+from app.config.environment import PROJECT_VERSION, PROJECT_DESCRIPTION, PROJECT_NAME
 
 # database
-from utils.connect_mongo import mongodb
-from utils.connect_cloudinary import connect_cloudinary
-from utils.initialize_redis import initializeRedis
+from app.utils.connect_mongo import mongodb
+from app.utils.connect_cloudinary import connect_cloudinary
+from app.utils.initialize_redis import initializeRedis
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     # Startup code
     await mongodb.connect()
     connect_cloudinary()
-    await initializeRedis()
+    initializeRedis()
     yield
     # Shutdown code
     await mongodb.close()
@@ -31,8 +31,8 @@ async def health_check():
     return {"status": "healthy"}
 
 # Import route modules
-from api.generate import router as generate_router
-from api.edit import router as edit_router
+from app.api.generate import router as generate_router
+from app.api.edit import router as edit_router
 
 # Include routers
 app.include_router(generate_router, prefix="/generate")

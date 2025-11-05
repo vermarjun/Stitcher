@@ -1,11 +1,12 @@
 from rq import Queue
+from redis import Redis
 from typing import Dict, Any
 
 class SceneQueueManager:
-    def __init__(self, redis_client):
+    def __init__(self, redis_client: Redis):
         self.redis = redis_client
         self.queue = Queue('scene_rendering', connection=redis_client)
-    
+
     def enqueue_scene(
         self,
         scene_data: Dict[str, Any],
@@ -34,9 +35,12 @@ class SceneQueueManager:
             'sceneIndex': scene_index
         }
         
+        # from app.utils.worker import render_scene
+
         # Enqueue the job - worker will call 'render_scene' function with this data
         job = self.queue.enqueue(
-            'worker.render_scene',  # This should match your worker function path
+            'app.utils.worker.render_scene',
+            # render_scene,  # This should match your worker function path
             job_data,
             job_timeout='10m',  # Adjust based on rendering time
             result_ttl=3600,  # Keep results for 1 hour

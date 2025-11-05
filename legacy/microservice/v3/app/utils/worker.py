@@ -3,9 +3,9 @@ import multiprocessing as mp
 from multiprocessing import Queue as MPQueue
 import time
 from typing import Any, Dict, Optional
-from core.GenerateVideo.render_and_upload import render_and_upload_manim
-from core.GenerateVideo.debugger_agent import debugger_agent_wrapper
-from core.GenerateVideo.Generate_new.chat_updater import ChatUpdater
+from app.core.GenerateVideo.render_and_upload import render_and_upload_manim
+from app.core.GenerateVideo.debugger_agent import debugger_agent_wrapper
+from app.core.GenerateVideo.Generate_new.chat_updater import ChatUpdater
 
 # Timeout (seconds) for rendering a scene
 RENDER_TIMEOUT_SECONDS = 200

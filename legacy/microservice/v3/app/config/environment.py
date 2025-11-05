@@ -38,13 +38,43 @@ VERMARJUN_API_KEY = os.getenv("VERMARJUN_API_KEY")
 VERMARJUN_BASE_URL = os.getenv("VERMARJUN_BASE_URL")
 VERMARJUN_MODEL_NAME = os.getenv("VERMARJUN_MODEL_NAME")
 
+RANCOR_API_KEY = os.getenv("RANCOR_API_KEY")
+RANCOR_BASE_URL = os.getenv("RANCOR_BASE_URL")
+RANCOR_MODEL_NAME = os.getenv("RANCOR_MODEL_NAME")
+
+DESTROYER_API_KEY = os.getenv("DESTROYER_API_KEY")
+DESTROYER_BASE_URL = os.getenv("DESTROYER_BASE_URL")
+DESTROYER_MODEL_NAME = os.getenv("DESTROYER_MODEL_NAME")
+
+VERMARJUNWORK_API_KEY = os.getenv("VERMARJUNWORK_API_KEY")
+VERMARJUNWORK_BASE_URL = os.getenv("VERMARJUNWORK_BASE_URL")
+VERMARJUNWORK_MODEL_NAME = os.getenv("VERMARJUNWORK_MODEL_NAME")
+
 INITIAL_CONFIGS = [
     {
         'email': "vermarjun26@gmail.com",
         'api_key': VERMARJUN_API_KEY,
         'model': VERMARJUN_MODEL_NAME,
         'base_url': VERMARJUN_BASE_URL 
-    }
+    },
+    {
+        'email': "rancor26av@gmail.com",
+        'api_key': RANCOR_API_KEY,
+        'model': RANCOR_MODEL_NAME,
+        'base_url': RANCOR_BASE_URL 
+    },
+    {
+        'email': "destroyer26av@gmail.com",
+        'api_key': DESTROYER_API_KEY,
+        'model': DESTROYER_MODEL_NAME,
+        'base_url': DESTROYER_BASE_URL 
+    },
+    {
+        'email': "vermarjun.work@gmail.com",
+        'api_key': VERMARJUNWORK_API_KEY,
+        'model': VERMARJUNWORK_MODEL_NAME,
+        'base_url': VERMARJUNWORK_BASE_URL 
+    },
 ]
 
 # Model providers

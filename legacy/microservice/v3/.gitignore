@@ -1,0 +1,7 @@
+node_modules
+.env
+MSenv
+media
+animation.py
+
+__pycache__

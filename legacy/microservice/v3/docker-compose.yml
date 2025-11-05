@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stitcher_api
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    depends_on: []
+    ports:
+      - "8000:8000"
+    command: >
+      bash -lc "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # container_name: stitcher_worker
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    depends_on: []
+    command: >
+      bash -lc "rq worker -u  scene_rendering"
+    restart: unless-stopped
+    # remove ports (workers don't expose anything)

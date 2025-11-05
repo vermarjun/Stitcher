@@ -1,7 +1,7 @@
 from agents import Agent, Runner, RunConfig
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from utils.model_provider import get_model
+from app.utils.model_provider import get_model
 
 class OutputSchema(BaseModel):
     code: str

@@ -1,6 +1,6 @@
 import cloudinary
 
-from config.environment import CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY
+from app.config.environment import CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY
 
 def connect_cloudinary():
     cloudinary.config(
