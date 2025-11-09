@@ -4,7 +4,7 @@ from typing import List
 from .scenePlanner import Scene
 from openai import AsyncOpenAI
 import asyncio
-from app.utils.initialize_redis import get_redis_manager
+from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
 
 class OutputSchema(BaseModel):
     code: str
@@ -33,10 +33,11 @@ async def codeGenerator_agent_function(Scene: Scene):
 
     # Get least used API key from Redis
     redis_manager = get_redis_manager()
-    api_config = redis_manager.get_least_used_api_key()
-
-    if not api_config:
-        raise Exception("No API keys available in the heap")
+    api_config = await fetch_api_key_with_wait(
+        redis_manager,
+        retry_delay=2,       # waits 2 seconds each time
+        max_wait=60         # max wait = 1 minute
+    )
     
     email = api_config["email"]
     api_key = api_config["api_key"]

@@ -1,6 +1,7 @@
 # FastAPI and web framework dependencies
 fastapi
 uvicorn
+pydantic
 
 # Authentication and security
 python-dotenv

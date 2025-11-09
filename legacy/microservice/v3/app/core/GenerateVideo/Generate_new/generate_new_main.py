@@ -22,20 +22,19 @@ async def generate_new_video_main(req: GenerateVideoRequest):
 
     # Step 1.5: Start summarizer agent in background (non-blocking)
     print("\n=== Step 1.5: Starting Summarizer Agent")
-    # start as background task so it doesn't block this function
-    asyncio.create_task(
-        summarizer_agent_wrapper(
-            chat_id=req.chatId,
-            planner_output=planner_output
-        )
+    await summarizer_agent_wrapper(
+        chat_id=req.chatId,
+        planner_output=planner_output
     )
-    print("Summarizer agent started in background (task created)")
+    print("Summarizer agent finished")
 
     # Step 2: Generate code for each scene
     print("\n=== Step 2: Generating Code ===")
-    coder_output = await generate_all_scenes(Scenes=planner_output, max_concurrency=4, per_scene_timeout=180) 
+    coder_output = await generate_all_scenes(Scenes=planner_output, max_concurrency=2, per_scene_timeout=180) 
     print(f"Code generation completed: {len(coder_output)} scenes")
     print("Generated results:", coder_output)
+
+    print("coder_output: ",coder_output)
 
     # Step 2.5: Update MongoDB with generator output
     print("\n=== Step 2.5: Updating Generator Output ===")
@@ -47,6 +46,8 @@ async def generate_new_video_main(req: GenerateVideoRequest):
         }
         for scene in coder_output
     ]
+
+    print("scenes_with_code: ",scenes_with_code)
 
     await ChatUpdater.update_generator_output(
         chat_id=req.chatId,
@@ -63,7 +64,8 @@ async def generate_new_video_main(req: GenerateVideoRequest):
         scenes=scenes_with_code,
         project_id=req.projectId,
         user_id=req.userId,
-        chat_id=req.chatId
+        chat_id=req.chatId,
+        is_edited=False
     )
     
     print(f"Successfully enqueued {len(job_ids)} scenes for rendering")

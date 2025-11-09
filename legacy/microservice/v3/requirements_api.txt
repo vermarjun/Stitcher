@@ -1,0 +1,21 @@
+# FastAPI and web framework
+fastapi
+uvicorn
+pydantic
+
+# Authentication and security
+python-dotenv
+
+# Database drivers
+motor
+pymongo
+
+# Cloud storage
+cloudinary
+
+# Redis for job queuing
+redis
+rq
+
+# OpenAI
+openai-agents

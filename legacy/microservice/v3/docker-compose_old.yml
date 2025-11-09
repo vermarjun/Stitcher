@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stitcher_api
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    depends_on: []
+    ports:
+      - "8000:8000"
+    command: >
+      bash -lc "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # container_name: stitcher_worker
+    env_file: .env
+    environment:
+      PYTHONPATH: /app
+    depends_on: []
+    command: >
+      bash -lc "rq worker -u redis://default:REDACTED_REDIS_PASSWORD@redis-16226.c52.us-east-1-4.ec2.redns.redis-cloud.com:16226 scene_rendering"
+    restart: unless-stopped
+    # remove ports (workers don't expose anything)

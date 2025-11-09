@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from app.utils.connect_mongo import mongodb
 import traceback
@@ -182,7 +182,7 @@ class ChatUpdater:
             return False
     
     @staticmethod
-    async def update_scene_code(chat_id: str, scene_name: str, new_code: str):
+    async def update_scene_code(chat_id: str, scene_name: str, new_code: str, scene_description: Optional[str] = ""):
         
         try:
             # Get database connection

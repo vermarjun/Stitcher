@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+# Minimal OS dependencies for FastAPI
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy API requirements
+COPY requirements_api.txt /app/requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy the rest of the code
+COPY . /app
+
+ENV PYTHONPATH=/app
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

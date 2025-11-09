@@ -4,12 +4,11 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.api
     container_name: stitcher_api
     env_file: .env
     environment:
       PYTHONPATH: /app
-    depends_on: []
     ports:
       - "8000:8000"
     command: >
@@ -19,13 +18,10 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile
-    # container_name: stitcher_worker
+      dockerfile: Dockerfile.worker
+    # Use: docker-compose up --scale worker=3
     env_file: .env
     environment:
       PYTHONPATH: /app
-    depends_on: []
-    command: >
-      bash -lc "rq worker -u  scene_rendering"
+      REDIS_URL: ${REDIS_URL}
     restart: unless-stopped
-    # remove ports (workers don't expose anything)

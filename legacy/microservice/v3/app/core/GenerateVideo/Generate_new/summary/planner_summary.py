@@ -2,7 +2,7 @@ from typing import List, Dict, Union
 from agents import Agent, Runner, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from openai import AsyncOpenAI
-from app.utils.initialize_redis import get_redis_manager
+from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
 from app.core.GenerateVideo.Generate_new.chat_updater import ChatUpdater
 
 class VideoSummary(BaseModel):
@@ -55,10 +55,11 @@ async def summarizer_agent_function(planner_output: List[Union[Dict, object]]) -
     try:
         # Get least used API key from Redis
         redis_manager = get_redis_manager()
-        api_config = redis_manager.get_least_used_api_key()
-
-        if not api_config:
-            raise Exception("No API keys available in the heap")
+        api_config = await fetch_api_key_with_wait(
+            redis_manager,
+            retry_delay=2,       # waits 2 seconds each time
+            max_wait=60         # max wait = 1 minute
+        )
 
         email = api_config["email"]
         api_key = api_config["api_key"]

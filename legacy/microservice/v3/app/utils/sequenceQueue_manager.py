@@ -13,7 +13,8 @@ class SceneQueueManager:
         project_id: str,
         user_id: str,
         chat_id: str,
-        scene_index: int
+        scene_index: int,
+        is_edited: bool = False,
     ):
         """
         Push a scene to the rendering queue
@@ -32,7 +33,8 @@ class SceneQueueManager:
             'projectId': project_id,
             'userId': user_id,
             'chatId': chat_id,
-            'sceneIndex': scene_index
+            'sceneIndex': scene_index,
+            'is_edited': bool(is_edited)
         }
         
         # from app.utils.worker import render_scene
@@ -54,7 +56,8 @@ class SceneQueueManager:
         scenes: list,
         project_id: str,
         user_id: str,
-        chat_id: str
+        chat_id: str,
+        is_edited: bool = False,
     ):
         """Enqueue all scenes for rendering"""
         job_ids = []
@@ -65,7 +68,8 @@ class SceneQueueManager:
                 project_id=project_id,
                 user_id=user_id,
                 chat_id=chat_id,
-                scene_index=idx
+                scene_index=idx,
+                is_edited=is_edited,
             )
             job_ids.append({
                 'sceneIndex': idx,

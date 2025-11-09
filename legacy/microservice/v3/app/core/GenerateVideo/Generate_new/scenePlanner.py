@@ -1,7 +1,7 @@
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from typing import List
-from app.utils.initialize_redis import get_redis_manager
+from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
 from openai import AsyncOpenAI
 
 class Scene(BaseModel):
@@ -22,7 +22,7 @@ planner_agent = Agent(
                 2) Always Always Always keep an opening scene which must be the simplest scene possible. Never keep the starting scene empty.
                 3) Keep all the scenes as simple as possible, don't take complex examples, keep animations minimal. 
                 4) The end goal of each scene is to achieve smallest possible code which could be rendered without any error even by the dumbest LLM models.
-                5) Produce between 1 to 6 sub-scenes. Prefer the smallest number of scenes possible
+                5) Produce between 1 to 4 sub-scenes. Prefer the smallest number of scenes possible.
                 NOTE: A SINGLE SCENE AT ANY POINT DOES NOT HAVE ANY CONTEXT OF SCENES BEFORE OR AFTER IT, NEVER EVER
                 MENTION PREVIOUS SCENES. EACH SCENE YOU PLAN MUST AT ALL COSTS ALWAYS AND ALWAYS BE SINGLE INDEPENDENT SCENE WITH
                 ZERO DEPENDANCE ON ANY SCENE OTHER THAN IT SELF. A SCENE AT ANY POINT SHOULD NOT TAKE ANY REFERENCE FROM ANY OTHER
@@ -37,10 +37,12 @@ async def planner_agent_function(prompt: str):
 
     # Get least used API key from Redis
     redis_manager = get_redis_manager()
-    api_config = redis_manager.get_least_used_api_key()
-
-    if not api_config:
-        raise Exception("No API keys available in the heap")
+    
+    api_config = await fetch_api_key_with_wait(
+        redis_manager,
+        retry_delay=2,       # waits 2 seconds each time
+        max_wait=60         # max wait = 1 minute
+    )
     
     email = api_config["email"]
     api_key = api_config["api_key"]
@@ -58,7 +60,6 @@ async def planner_agent_function(prompt: str):
         )
         
         planner_agent.model = OpenAIChatCompletionsModel(model=model_name, openai_client=client)
-
 
         # Run the planner agent with the custom model
         result = await Runner.run(
