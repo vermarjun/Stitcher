@@ -15,6 +15,8 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 
 from app import __version__
+from app.api import capabilities as capabilities_api
+from app.api import health as health_api
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
 from app.middleware.auth import ApiKeyMiddleware
@@ -49,6 +51,9 @@ def create_app() -> FastAPI:
     # middleware is applied bottom-up, so Trace wraps Auth (runs first)
     app.add_middleware(ApiKeyMiddleware)
     app.add_middleware(TraceMiddleware)
+
+    app.include_router(health_api.router)
+    app.include_router(capabilities_api.router)
 
     return app
 
