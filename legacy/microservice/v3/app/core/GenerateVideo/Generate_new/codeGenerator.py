@@ -46,7 +46,8 @@ async def codeGenerator_agent_function(Scene: Scene):
     current_tokens = api_config.get("tokens_used", 0)
 
     print(f"Using API key for: {email} with {current_tokens} tokens used")
-
+    
+    tokens_used_in_request = 0
     try:
         # Create OpenAI client with the retrieved config
         client = AsyncOpenAI(
@@ -63,15 +64,8 @@ async def codeGenerator_agent_function(Scene: Scene):
             prompt
         )
         
-        tokens_used_in_request = 0
         if result.context_wrapper.usage:
             tokens_used_in_request = result.context_wrapper.usage.total_tokens
-        
-        # Update token usage
-        new_total_tokens = current_tokens + tokens_used_in_request
-        redis_manager.update_token_usage(email, new_total_tokens)
-        
-        print(f"Updated token usage for {email}: {new_total_tokens}")
         
         return result.final_output.code
         
@@ -80,8 +74,10 @@ async def codeGenerator_agent_function(Scene: Scene):
         raise e
     
     finally:
-        # Return the API key to heap even if there's an error
-        redis_manager.return_api_key(email, current_tokens)
+        # Return the API key to heap with updated token count
+        new_total_tokens = current_tokens + tokens_used_in_request
+        redis_manager.update_token_usage(email, new_total_tokens)
+        print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")
 
 async def generate_all_scenes(Scenes: List[Scene], max_concurrency: int = 4, per_scene_timeout: int = 120):
     sem = asyncio.Semaphore(max_concurrency)

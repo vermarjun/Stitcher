@@ -30,6 +30,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 # API settings
 API_SERVICE_URL = os.getenv("API_SERVICE_URL")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:3000/api")
 
 # CORS
 BACKEND_CORS_ORIGINS: list = ["*"]
@@ -50,6 +51,26 @@ VERMARJUNWORK_API_KEY = os.getenv("VERMARJUNWORK_API_KEY")
 VERMARJUNWORK_BASE_URL = os.getenv("VERMARJUNWORK_BASE_URL")
 VERMARJUNWORK_MODEL_NAME = os.getenv("VERMARJUNWORK_MODEL_NAME")
 
+PARKINSON_API_KEY = os.getenv("PARKINSON_API_KEY")
+PARKINSON_BASE_URL = os.getenv("PARKINSON_BASE_URL")
+PARKINSON_MODEL_NAME = os.getenv("PARKINSON_MODEL_NAME")
+
+NEXUS_API_KEY = os.getenv("NEXUS_API_KEY")
+NEXUS_BASE_URL = os.getenv("NEXUS_BASE_URL")
+NEXUS_MODEL_NAME = os.getenv("NEXUS_MODEL_NAME")
+
+NEXUS2_API_KEY = os.getenv("NEXUS2_API_KEY")
+NEXUS2_BASE_URL = os.getenv("NEXUS2_BASE_URL")
+NEXUS2_MODEL_NAME = os.getenv("NEXUS2_MODEL_NAME")
+
+NEXUS3_API_KEY = os.getenv("NEXUS3_API_KEY")
+NEXUS3_BASE_URL = os.getenv("NEXUS3_BASE_URL")
+NEXUS3_MODEL_NAME = os.getenv("NEXUS3_MODEL_NAME")
+
+AV5699987_API_KEY = os.getenv("AV5699987_API_KEY")
+AV5699987_BASE_URL = os.getenv("AV5699987_BASE_URL")
+AV5699987_MODEL_NAME = os.getenv("AV5699987_MODEL_NAME")
+
 INITIAL_CONFIGS = [
     {
         'email': "vermarjun26@gmail.com",
@@ -63,17 +84,47 @@ INITIAL_CONFIGS = [
         'model': RANCOR_MODEL_NAME,
         'base_url': RANCOR_BASE_URL 
     },
-    {
-        'email': "destroyer26av@gmail.com",
-        'api_key': DESTROYER_API_KEY,
-        'model': DESTROYER_MODEL_NAME,
-        'base_url': DESTROYER_BASE_URL 
-    },
+    # {
+    #     'email': "destroyer26av@gmail.com",
+    #     'api_key': DESTROYER_API_KEY,
+    #     'model': DESTROYER_MODEL_NAME,
+    #     'base_url': DESTROYER_BASE_URL 
+    # },
     {
         'email': "vermarjun.work@gmail.com",
         'api_key': VERMARJUNWORK_API_KEY,
         'model': VERMARJUNWORK_MODEL_NAME,
         'base_url': VERMARJUNWORK_BASE_URL 
+    },
+    {
+        'email': "parkinson26av@gmail.com",
+        'api_key': PARKINSON_API_KEY,
+        'model': PARKINSON_MODEL_NAME,
+        'base_url': PARKINSON_BASE_URL 
+    },
+    {
+        'email': "nexus@gmail.com",
+        'api_key': NEXUS_API_KEY,
+        'model': NEXUS_MODEL_NAME,
+        'base_url': NEXUS_BASE_URL 
+    },
+    {
+        'email': "nexus@gmail.com",
+        'api_key': NEXUS2_API_KEY,
+        'model': NEXUS2_MODEL_NAME,
+        'base_url': NEXUS2_BASE_URL 
+    },
+    {
+        'email': "nexus@gmail.com",
+        'api_key': NEXUS3_API_KEY,
+        'model': NEXUS3_MODEL_NAME,
+        'base_url': NEXUS3_BASE_URL 
+    },
+    {
+        'email': "av5699987@gmail.com",
+        'api_key': AV5699987_API_KEY,
+        'model': AV5699987_MODEL_NAME,
+        'base_url': AV5699987_BASE_URL 
     },
 ]
 

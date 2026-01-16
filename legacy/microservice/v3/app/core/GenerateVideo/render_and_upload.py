@@ -16,11 +16,11 @@ def render_and_upload_manim(
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            script_path = Path("./animation.py")
+            script_path = Path(tmpdir) / "animation.py"
             script_path.write_text(code, encoding="utf-8")
 
             # Output directory inside temp
-            output_dir = Path("./media")
+            output_dir = Path(tmpdir) / "media"
             output_filename = "animation"
 
             # --- Render with Manim ---

@@ -1,3 +1,4 @@
+# FROM python:3.11-slim
 FROM python:3.11-slim
 
 # Comprehensive OS dependencies for Manim rendering
@@ -63,6 +64,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     # Basic dependencies (~500 MB)
+#     build-essential git curl wget ca-certificates \
+#     pkg-config cmake ffmpeg imagemagick ghostscript \
+#     poppler-utils libcairo2 libcairo2-dev \
+#     libpango-1.0-0 libpango1.0-dev \
+#     libgdk-pixbuf-2.0-0 libgdk-pixbuf-2.0-dev \
+#     fonts-lmodern fonts-dejavu fonts-liberation \
+#     libpng-dev libjpeg-dev zlib1g-dev \
+#     libffi-dev libssl-dev \
+#     # Minimal TeX (~800 MB instead of 4 GB!)
+#     texlive-latex-base \
+#     texlive-latex-recommended \
+#     dvisvgm \
+#     dvipng \
+#     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy worker requirements
@@ -80,4 +98,4 @@ RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /e
     sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/' /etc/ImageMagick-6/policy.xml || true && \
     sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/' /etc/ImageMagick-6/policy.xml || true
 
-CMD ["bash", "-lc", "rq worker -u \"$REDIS_URL\" scene_rendering"]
+CMD ["bash", "-lc", "rq worker -u redis://default:$REDIS_PASSWORD@$REDIS_HOST:$REDIS_PORT scene_rendering"]

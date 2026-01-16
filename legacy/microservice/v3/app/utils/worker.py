@@ -67,10 +67,33 @@ def run_func_in_process(func, args=(), timeout: int = 200) -> Dict[str, Any]:
 
 def _call_async(coro_fn, *args, **kwargs):
     """
-    Run an async function from sync context. Uses asyncio.run.
+    Run an async function from sync context. 
+    Creates a new event loop for each call to avoid "Event loop is closed" errors.
     """
     import asyncio
-    return asyncio.run(coro_fn(*args, **kwargs))
+    
+    # Create a new event loop for this call
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Run the coroutine in the new loop
+        result = loop.run_until_complete(coro_fn(*args, **kwargs))
+        return result
+    finally:
+        # Clean up the loop
+        try:
+            # Cancel any pending tasks
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            # Run the loop once more to process cancellations
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        except Exception as e:
+            print(f"[Worker] Warning during loop cleanup: {e}")
+        finally:
+            loop.close()
 
 def _get_chat_updater_class(is_edited: bool):
     """
@@ -188,6 +211,8 @@ def validate_manim_code(code: str) -> Optional[str]:
     except Exception as e:
         return f"SceneError: {type(e).__name__}: {e}"
 
+from app.utils.event_publisher import publish_event
+
 def render_scene(job_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     RQ job entrypoint: `worker.render_scene`
@@ -203,6 +228,13 @@ def render_scene(job_data: Dict[str, Any]) -> Dict[str, Any]:
     scene_index = job_data.get("sceneIndex")
     is_edited = bool(job_data.get("is_edited", False))
     public_id = user_id
+    
+    # Notify start
+    publish_event(chat_id, "RENDER_START", {
+        "sceneName": scene_name,
+        "sceneIndex": scene_index,
+        "message": f"Started rendering {scene_name}"
+    })
 
     if code is None:
         err = "No code provided for scene"
@@ -271,6 +303,13 @@ def render_scene(job_data: Dict[str, Any]) -> Dict[str, Any]:
                 _safe_update_scene_error(is_edited=is_edited, chat_id=chat_id, scene_name=scene_name, error=final_err)
             except Exception as e:
                 print("[Worker] Warning: failed to write final validation error to DB:", e)
+            
+            publish_event(chat_id, "RENDER_ERROR", {
+                "sceneName": scene_name,
+                "sceneIndex": scene_index,
+                "error": final_err
+            })
+            
             return {"success": False, "sceneName": scene_name, "metadata": None, "error": final_err}
 
     # -------------------------
@@ -323,6 +362,13 @@ def render_scene(job_data: Dict[str, Any]) -> Dict[str, Any]:
                         except Exception as e:
                             print("[Worker] Warning: failed to update DB after success (exception):", e)
                             traceback.print_exc()
+                        
+                        publish_event(chat_id, "RENDER_SUCCESS", {
+                            "sceneName": scene_name,
+                            "sceneIndex": scene_index,
+                            "metadata": metadata
+                        })
+
                         return {
                             "success": True,
                             "sceneName": scene_name,
@@ -376,6 +422,13 @@ def render_scene(job_data: Dict[str, Any]) -> Dict[str, Any]:
                 _safe_update_scene_error(is_edited=is_edited, chat_id=chat_id, scene_name=scene_name, error=last_error)
             except Exception as e:
                 print("[Worker] Warning: failed to write final error to DB:", e)
+            
+            publish_event(chat_id, "RENDER_ERROR", {
+                "sceneName": scene_name,
+                "sceneIndex": scene_index,
+                "error": last_error
+            })
+            
             return {"success": False, "sceneName": scene_name, "metadata": None, "error": last_error}
 
     return {"success": False, "sceneName": scene_name, "metadata": None, "error": last_error or "Unknown"}

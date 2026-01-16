@@ -51,7 +51,8 @@ async def planner_agent_function(prompt: str):
     current_tokens = api_config.get("tokens_used", 0)
 
     print(f"Using API key for: {email} with {current_tokens} tokens used")
-
+    
+    tokens_used_in_request = 0
     try:
         # Create OpenAI client with the retrieved config
         client = AsyncOpenAI(
@@ -67,15 +68,8 @@ async def planner_agent_function(prompt: str):
             prompt
         )
         
-        tokens_used_in_request = 0
         if result.context_wrapper.usage:
             tokens_used_in_request = result.context_wrapper.usage.total_tokens
-        
-        # Update token usage
-        new_total_tokens = current_tokens + tokens_used_in_request
-        redis_manager.update_token_usage(email, new_total_tokens)
-        
-        print(f"Updated token usage for {email}: {new_total_tokens}")
         
         return result.final_output
         
@@ -84,5 +78,7 @@ async def planner_agent_function(prompt: str):
         raise e
     
     finally:
-        # Return the API key to heap even if there's an error
-        redis_manager.return_api_key(email, current_tokens)
+        # Return the API key to heap with updated token count
+        new_total_tokens = current_tokens + tokens_used_in_request
+        redis_manager.update_token_usage(email, new_total_tokens)
+        print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")

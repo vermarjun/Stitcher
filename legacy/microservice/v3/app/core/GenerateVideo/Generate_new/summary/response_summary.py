@@ -77,33 +77,29 @@ Scene breakdown:
         current_tokens = api_config.get("tokens_used", 0)
 
         print(f"[Response Generator] Using {email} with {current_tokens} tokens")
-
-        # Create OpenAI client
-        client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url
-        )
-
-        # Inject dynamic model
-        response_generator_agent.model = OpenAIChatCompletionsModel(
-            model=model_name,
-            openai_client=client
-        )
+        
+        tokens_used_in_request = 0
         try:
+            # Create OpenAI client
+            client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url
+            )
+
+            # Inject dynamic model
+            response_generator_agent.model = OpenAIChatCompletionsModel(
+                model=model_name,
+                openai_client=client
+            )
             result = await Runner.run(
                 response_generator_agent,
                 user_prompt
             )
             summary = result.final_output.summary
 
-            tokens_used = 0
             if result.context_wrapper.usage:
-                tokens_used = result.context_wrapper.usage.total_tokens
+                tokens_used_in_request = result.context_wrapper.usage.total_tokens
 
-            new_total_tokens = current_tokens + tokens_used
-            redis_manager.update_token_usage(email, new_total_tokens)
-
-            print(f"[Response Generator] Updated tokens for {email}: {new_total_tokens}")
             print(f"✓ Response generator completed: {len(summary.split())} words")
 
             return summary
@@ -113,7 +109,10 @@ Scene breakdown:
             raise e
 
         finally:
-            redis_manager.return_api_key(email, current_tokens)    
+            # Return the API key to heap with updated token count
+            new_total_tokens = current_tokens + tokens_used_in_request
+            redis_manager.update_token_usage(email, new_total_tokens)
+            print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")    
         
     except Exception as e:
         print(f"Error in response generator: {e}")
