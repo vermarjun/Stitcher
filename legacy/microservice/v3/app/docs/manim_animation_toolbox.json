@@ -1,0 +1,243 @@
+{
+    "animations": {
+        "rotation": {
+            "Rotating": {
+                "description": "Continuously rotates an object over the animation duration",
+                "use_when": "Object needs to spin/rotate smoothly over time",
+                "key_parameters": {
+                    "angle": "Total rotation angle in radians (e.g., TAU for one full spin)",
+                    "axis": "The axis to rotate around (e.g., OUT, UP, RIGHT)",
+                    "about_point": "The center point of rotation",
+                    "run_time": "The duration of the rotation animation"
+                },
+                "differences": "Unlike Rotate, this animates continuously over run_time and doesn't necessarily have a fixed 'target' state."
+            },
+            "Rotate": {
+                "description": "Rotates an object from its current state to a rotated state",
+                "use_when": "Object needs to reach a specific rotated orientation",
+                "key_parameters": {
+                    "angle": "Rotation angle in radians",
+                    "axis": "Rotation axis",
+                    "about_point": "Rotation center"
+                },
+                "differences": "Unlike Rotating, this is a Transform animation that targets a specific end state."
+            }
+        },
+        "fading": {
+            "FadeIn": {
+                "description": "Smoothly fade objects from transparent to opaque",
+                "use_when": "Objects should appear gradually and softly",
+                "key_parameters": {
+                    "shift": "Optional direction to slide in from while fading",
+                    "scale": "Optional initial scale factor (object grows while fading in)",
+                    "target_position": "Point or object to move towards while fading in"
+                },
+                "commonly_used_with": [
+                    "Text",
+                    "SVG shapes",
+                    "introductions of new elements"
+                ]
+            },
+            "FadeOut": {
+                "description": "Smoothly fade objects from opaque to transparent",
+                "use_when": "Objects should disappear gradually and softly",
+                "key_parameters": {
+                    "shift": "Optional direction to slide towards while fading out",
+                    "scale": "Optional final scale factor (object shrinks while fading out)",
+                    "target_position": "Point or object to move towards while fading out"
+                }
+            }
+        },
+        "creation": {
+            "Create": {
+                "description": "Incrementally show a VMobject by drawing its strokes",
+                "use_when": "A vectorized object (like a square or circle) needs to be drawn onto the scene",
+                "key_parameters": {
+                    "lag_ratio": "Delay between drawing different submobjects (0.0 to 1.0)"
+                }
+            },
+            "Uncreate": {
+                "description": "Like Create but in reverse, erasing the object",
+                "use_when": "An object needs to be erased by 'un-drawing' its strokes",
+                "key_parameters": {
+                    "lag_ratio": "Delay between erasing different submobjects"
+                }
+            },
+            "DrawBorderThenFill": {
+                "description": "Draw the border first and then show the fill color",
+                "use_when": "Emphasizing a shape's outline before making it fully solid",
+                "key_parameters": {
+                    "stroke_width": "Width of the border during drawing",
+                    "stroke_color": "Color of the border during drawing"
+                }
+            },
+            "Write": {
+                "description": "Simulate hand-writing a Text or hand-drawing a VMobject",
+                "use_when": "Introducing text or complex line drawings in a natural-looking way",
+                "key_parameters": {
+                    "reverse": "If True, simulates erasing instead of writing"
+                },
+                "differences": "Specialized version of DrawBorderThenFill tailored for text and complex VMobjects."
+            },
+            "Unwrite": {
+                "description": "Simulate erasing text or a VMobject by hand",
+                "use_when": "Removing text as if it's being erased",
+                "key_parameters": {
+                    "reverse": "Direction of the erasing process"
+                }
+            },
+            "TypeWithCursor": {
+                "description": "Show text character by character with a moving cursor effect",
+                "use_when": "Simulating a computer terminal or live typing effect",
+                "key_parameters": {
+                    "cursor": "The Mobject to use as a cursor (e.g., a small rectangle)",
+                    "time_per_char": "Speed of the typing effect",
+                    "leave_cursor_on": "Whether to keep the cursor visible after typing"
+                }
+            },
+            "SpiralIn": {
+                "description": "Objects fly in from a distance on spiral trajectories",
+                "use_when": "Creating a dynamic and energetic introduction for a group of objects",
+                "key_parameters": {
+                    "scale_factor": "Initial scale of objects (usually very high)",
+                    "fade_in_fraction": "Fraction of runtime spent fading in"
+                }
+            }
+        },
+        "transform": {
+            "Transform": {
+                "description": "Morphs a Mobject into a target Mobject",
+                "use_when": "One object needs to smoothly change into a completely different shape, color, or position",
+                "key_parameters": {
+                    "target_mobject": "The object to transform into",
+                    "path_arc": "Angle of rotation for the path between states",
+                    "path_func": "Custom function defining the transition path"
+                }
+            },
+            "ReplacementTransform": {
+                "description": "Morphs a mobject and replaces it with the target in the scene",
+                "use_when": "The original object identity is no longer needed after the transformation",
+                "key_parameters": {
+                    "target_mobject": "The object that will stay in the scene"
+                },
+                "differences": "Unlike Transform, the original object is removed from the scene's memory and replaced by the target."
+            },
+            "FadeToColor": {
+                "description": "Transitions an object's color smoothly",
+                "use_when": "Changing the color of an existing object without changing its shape",
+                "key_parameters": {
+                    "color": "The target color"
+                }
+            },
+            "ScaleInPlace": {
+                "description": "Scales an object relative to its own center",
+                "use_when": "Making an object grow or shrink without shifting its position",
+                "key_parameters": {
+                    "scale_factor": "Multiplier for the size change"
+                }
+            },
+            "Restore": {
+                "description": "Reverts an object to its last saved state",
+                "use_when": "An object was modified and needs to return to its original form using save_state()",
+                "key_parameters": {}
+            },
+            "CyclicReplace": {
+                "description": "Moves multiple objects cyclically to each other's positions",
+                "use_when": "Multiple objects need to swap places in a loop",
+                "key_parameters": {
+                    "mobjects": "List of objects to be cycled"
+                }
+            }
+        },
+        "indication": {
+            "FocusOn": {
+                "description": "Shrinks a spotlight effect onto a specific point or object",
+                "use_when": "Directing the viewer's eye to a precise location",
+                "key_parameters": {
+                    "focus_point": "The point or object to spotlight",
+                    "opacity": "Opacity of the spotlight shadow",
+                    "color": "Color of the spotlight effect"
+                }
+            },
+            "Indicate": {
+                "description": "Temporarily resizes and recolors an object to draw attention",
+                "use_when": "Briefly highlighting an object without making a permanent change",
+                "key_parameters": {
+                    "scale_factor": "How much to grow during the indication",
+                    "color": "Highlight color"
+                }
+            },
+            "Flash": {
+                "description": "Sends out short lines from a central point like a burst",
+                "use_when": "Emphasizing a sudden event or a specific coordinate",
+                "key_parameters": {
+                    "point": "Center of the burst",
+                    "line_length": "Length of the flash lines",
+                    "num_lines": "Density of the flash"
+                }
+            },
+            "Wiggle": {
+                "description": "Shakes an object back and forth",
+                "use_when": "Indicating instability, error, or simply making an object more noticeable",
+                "key_parameters": {
+                    "n_wiggles": "Number of shakes",
+                    "rotation_angle": "Max angle of the shake"
+                }
+            },
+            "Circumscribe": {
+                "description": "Draws a temporary rectangle or circle around an object",
+                "use_when": "Highlighting an object or group by 'boxing it in'",
+                "key_parameters": {
+                    "shape": "Rectangle or Circle class",
+                    "buff": "Padding between object and frame"
+                }
+            }
+        },
+        "movement": {
+            "MoveAlongPath": {
+                "description": "Moves an object along the curve of another Mobject",
+                "use_when": "An object needs to follow a specific geometric path precisely",
+                "key_parameters": {
+                    "path": "The VMobject (Line, Curve, etc.) to follow"
+                }
+            }
+        },
+        "numbers": {
+            "ChangeDecimalToValue": {
+                "description": "Animates a DecimalNumber counter to a new value",
+                "use_when": "Updating a stat, timer, or counter on screen",
+                "key_parameters": {
+                    "target_number": "The final value to reach"
+                }
+            }
+        },
+        "matching": {
+            "TransformMatchingTex": {
+                "description": "Morphs one LaTeX equation into another by matching common parts",
+                "use_when": "Transforming mathematical expressions where terms move to new positions",
+                "key_parameters": {
+                    "target_mobject": "The new equation",
+                    "key_map": "Manual overrides for matching specific parts"
+                },
+                "commonly_used_with": [
+                    "MathTex",
+                    "complex algebraic manipulations"
+                ]
+            }
+        },
+        "composition": {
+            "AnimationGroup": {
+                "description": "Plays multiple animations together",
+                "use_when": "Independent actions should happen at the same time",
+                "key_parameters": {
+                    "lag_ratio": "Delay between starts of included animations"
+                }
+            },
+            "Succession": {
+                "description": "Plays animations one after another",
+                "use_when": "Actions must happen in a specific chronological order",
+                "key_parameters": {}
+            }
+        }
+    }
+}

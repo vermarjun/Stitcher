@@ -59,7 +59,9 @@ async def generate_new_video_main(req: GenerateVideoRequest):
         {
             "sceneName": scene["sceneName"],
             "code": scene["code"],
-            "description": scene["description"]
+            "description": scene["description"],
+            "RequiredMObjects": getattr(next((s for s in planner_output if s.SceneName == scene["sceneName"]), None), 'RequiredMObjects', []),
+            "RequiredAnimations": getattr(next((s for s in planner_output if s.SceneName == scene["sceneName"]), None), 'RequiredAnimations', [])
         }
         for scene in coder_output
     ]

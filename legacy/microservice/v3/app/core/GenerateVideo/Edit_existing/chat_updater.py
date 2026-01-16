@@ -317,6 +317,12 @@ class ChatUpdater:
             db = await mongodb.get_db()
             collection = db.generatechats
             
+            # Use conditional update so we only set completed=True when it wasn't already True.
+            # This protects against double-charging when this function is called multiple times.
+            filter_doc = {
+                "_id": ObjectId(chat_id),
+                f"messages.{assistant_msg_index}.completed": {"$ne": True}
+            }
             update_query = {
                 "$set": {
                     f"messages.{assistant_msg_index}.content.llmResponse": llm_response,
@@ -324,10 +330,7 @@ class ChatUpdater:
                 }
             }
             
-            result = await collection.update_one(
-                {"_id": ObjectId(chat_id)},
-                update_query
-            )
+            result = await collection.update_one(filter_doc, update_query)
             
             if result.modified_count > 0:
                 print(f"✓ Chat marked as completed: {chat_id}")
@@ -337,27 +340,45 @@ class ChatUpdater:
                     user_id = chat.get("userId")
                     if user_id:
                         users_col = db.users
-                        # Only decrement if editing credits > 0 and not a test account
-                        user_update = await users_col.update_one(
-                            {
-                                "_id": ObjectId(user_id),
-                                "credits.editing": {"$gt": 0},
-                                "isTestAccount": {"$ne": True}
-                            },
-                            {"$inc": {"credits.editing": -1}}
-                        )
-
-                        if user_update.modified_count > 0:
-                            print(f"✓ Deducted 1 editing credit from user {user_id}")
+                        
+                        # Normalize to ObjectId if needed (handles populated user or string)
+                        user_obj_id = None
+                        if isinstance(user_id, ObjectId):
+                            user_obj_id = user_id
+                        elif isinstance(user_id, dict) and user_id.get("_id"):
+                            try:
+                                user_obj_id = ObjectId(user_id["_id"])
+                            except Exception:
+                                user_obj_id = user_id["_id"]
                         else:
-                            # Provide helpful diagnostics
-                            user_doc = await users_col.find_one({"_id": ObjectId(user_id)}, {"credits": 1, "isTestAccount": 1})
-                            if user_doc and user_doc.get("isTestAccount"):
-                                print(f"⚠ User {user_id} is a test account — skipping credit deduction.")
-                            elif user_doc and user_doc.get("credits", {}).get("editing", 0) <= 0:
-                                print(f"⚠ User {user_id} has no editing credits to deduct.")
+                            try:
+                                user_obj_id = ObjectId(user_id)
+                            except Exception:
+                                print(f"✗ Invalid userId format: {user_id}")
+                                user_obj_id = None
+                        
+                        if user_obj_id:
+                            # Only decrement if editing credits > 0 and not a test account
+                            user_update = await users_col.update_one(
+                                {
+                                    "_id": user_obj_id,
+                                    "credits.editing": {"$gt": 0},
+                                    "isTestAccount": {"$ne": True}
+                                },
+                                {"$inc": {"credits.editing": -1}}
+                            )
+
+                            if user_update.modified_count > 0:
+                                print(f"✓ Deducted 1 editing credit from user {user_obj_id}")
                             else:
-                                print(f"⚠ Could not deduct editing credit for user {user_id}. (Unknown reason)")
+                                # Provide helpful diagnostics
+                                user_doc = await users_col.find_one({"_id": user_obj_id}, {"credits": 1, "isTestAccount": 1})
+                                if user_doc and user_doc.get("isTestAccount"):
+                                    print(f"⚠ User {user_obj_id} is a test account — skipping credit deduction.")
+                                elif user_doc and user_doc.get("credits", {}).get("editing", 0) <= 0:
+                                    print(f"⚠ User {user_obj_id} has no editing credits to deduct.")
+                                else:
+                                    print(f"⚠ Could not deduct editing credit for user {user_obj_id}. (Unknown reason)")
                     else:
                         print(f"⚠ No userId found on chat {chat_id} — can't deduct credits.")
                 except Exception as e:
@@ -366,10 +387,12 @@ class ChatUpdater:
 
                 return True
             else:
-                print(f"⚠ No modifications made for chat_id: {chat_id}")
+                # No modification => either completed already True, or no change required
+                print(f"⚠ No modifications made for chat_id: {chat_id} (maybe already completed)")
                 return False
             
         except Exception as e:
             print(f"✗ Error updating final response: {str(e)}")
             traceback.print_exc()
             return False
+

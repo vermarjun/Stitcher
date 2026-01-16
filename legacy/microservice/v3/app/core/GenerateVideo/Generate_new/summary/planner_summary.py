@@ -12,6 +12,8 @@ class VideoSummary(BaseModel):
 class SceneObject(BaseModel):
     SceneName: str
     Prompt: str
+    RequiredMObjects: List[str] = []
+    RequiredAnimations: List[str] = []
 
 SUMMARIZER_SYSTEM_PROMPT = """
 You are plan summarizer agent. Your job is to summarize the plans made by other agents. You are provided with an 
@@ -44,12 +46,16 @@ def normalize_scene(scene: Union[Dict, object]) -> SceneObject:
     if isinstance(scene, dict):
         return SceneObject(
             SceneName=scene.get('SceneName', scene.get('sceneName', 'Unknown')),
-            Prompt=scene.get('Prompt', scene.get('prompt', ''))
+            Prompt=scene.get('Prompt', scene.get('prompt', '')),
+            RequiredMObjects=scene.get('RequiredMObjects', []),
+            RequiredAnimations=scene.get('RequiredAnimations', [])
         )
     # Handle Pydantic model or object with attributes
     return SceneObject(
         SceneName=getattr(scene, 'SceneName', getattr(scene, 'sceneName', 'Unknown')),
-        Prompt=getattr(scene, 'Prompt', getattr(scene, 'prompt', ''))
+        Prompt=getattr(scene, 'Prompt', getattr(scene, 'prompt', '')),
+        RequiredMObjects=getattr(scene, 'RequiredMObjects', []),
+        RequiredAnimations=getattr(scene, 'RequiredAnimations', [])
     )
 
 async def summarizer_agent_function_streaming(

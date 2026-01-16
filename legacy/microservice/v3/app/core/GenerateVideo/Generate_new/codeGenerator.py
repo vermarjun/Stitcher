@@ -5,9 +5,49 @@ from .scenePlanner import Scene
 from openai import AsyncOpenAI
 import asyncio
 from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
+from app.docs.mObject_examples import CODE_SNIPPETS as MOBJECT_EXAMPLES
+from app.docs.animation_examples import CODE_SNIPPETS as ANIMATION_EXAMPLES
+import re
 
 class OutputSchema(BaseModel):
     code: str
+
+def clean_name(name: str) -> str:
+    """Converts name to lowercase and removes spaces."""
+    return name.lower().replace(" ", "")
+
+def get_example_context(required_mobjects: List[str], required_animations: List[str]) -> str:
+    context = []
+    
+    # Process MObjects
+    if required_mobjects:
+        context.append("MOBJECT EXAMPLES AND PARAMETERS:")
+        for mob in required_mobjects:
+            clean_mob = clean_name(mob)
+            if clean_mob in MOBJECT_EXAMPLES:
+                data = MOBJECT_EXAMPLES[clean_mob]
+                context.append(f"\n--- {mob} ---")
+                context.append("Parameters:")
+                context.append(str(data.get("parameters", {})))
+                context.append("Examples:")
+                for ex in data.get("examples", []):
+                    context.append(ex)
+    
+    # Process Animations
+    if required_animations:
+        context.append("\nANIMATION EXAMPLES AND PARAMETERS:")
+        for anim in required_animations:
+            clean_anim = clean_name(anim)
+            if clean_anim in ANIMATION_EXAMPLES:
+                data = ANIMATION_EXAMPLES[clean_anim]
+                context.append(f"\n--- {anim} ---")
+                context.append("Parameters:")
+                context.append(str(data.get("parameters", {})))
+                context.append("Examples:")
+                for ex in data.get("examples", []):
+                    context.append(ex)
+                    
+    return "\n".join(context)
 
 code_generator_agent = Agent(
     name="Manim Code Generator",
@@ -23,12 +63,17 @@ code_generator_agent = Agent(
 )
 
 async def codeGenerator_agent_function(Scene: Scene):
+    # Get relevant examples based on required lists
+    knowledge_base = get_example_context(Scene.RequiredMObjects, Scene.RequiredAnimations)
+    
     prompt = (
         f"You have to write the simplest possible code which keeps things minimal, does not break and does what is asked with minimum possible lines of code. Do not include comments in the output code."
         f"Generate python code for manim-community version v0.19.0 to implement this: {Scene.Prompt}. "
         f"Name the Scene class as: {Scene.SceneName}. "
         f"Use Black as the background color. "
         f"End the scene with a Fade transition. Ex: self.wait(2)\n self.play(FadeOut(*self.mobjects)). "
+        f"\n\nHere is the KNOWLEDGE BASE containing relevant parameters and examples for the MObjects and Animations used in this scene. USE THIS KNOWLEDGE BASE to ensure correct usage and avoid hallucinations:\n"
+        f"{knowledge_base}"
     )
 
     # Get least used API key from Redis

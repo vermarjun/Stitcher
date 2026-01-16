@@ -8,6 +8,8 @@ from pydantic import BaseModel
 class SceneObject(BaseModel):
     SceneName: str
     Prompt: str
+    RequiredMObjects: List[str] = []
+    RequiredAnimations: List[str] = []
 
 class ChatUpdater:
 
@@ -74,7 +76,9 @@ class ChatUpdater:
                     "summary": "",
                     "code": None,
                     "assetId": None,
-                    "error": None
+                    "error": None,
+                    "RequiredMObjects": scene.RequiredMObjects,
+                    "RequiredAnimations": scene.RequiredAnimations
                 }
                 for scene in scenes
             ]

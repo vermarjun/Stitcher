@@ -71,6 +71,16 @@ def _call_async(coro_fn, *args, **kwargs):
     Creates a new event loop for each call to avoid "Event loop is closed" errors.
     """
     import asyncio
+    from app.utils.connect_mongo import mongodb
+    
+    # Reset MongoDB client to prevent using a client attached to a closed loop
+    if mongodb.client:
+        try:
+            mongodb.client.close()
+        except Exception:
+            pass
+        mongodb.client = None
+        mongodb.db = None
     
     # Create a new event loop for this call
     loop = asyncio.new_event_loop()
@@ -102,8 +112,8 @@ def _get_chat_updater_class(is_edited: bool):
     """
     try:
         if is_edited:
-            # edited-video updater
-            mod = __import__('app.core.GenerateVideo.edit.chat_updater', fromlist=['ChatUpdater'])
+            # edited-video updater - FIXED: correct path is Edit_existing, not edit
+            mod = __import__('app.core.GenerateVideo.Edit_existing.chat_updater', fromlist=['ChatUpdater'])
             return getattr(mod, 'ChatUpdater', None)
         else:
             # new-video updater
@@ -111,6 +121,7 @@ def _get_chat_updater_class(is_edited: bool):
             return getattr(mod, 'ChatUpdater', None)
     except Exception as e:
         print(f"[Worker] Failed to import ChatUpdater (is_edited={is_edited}): {e}")
+        traceback.print_exc()  # Added traceback for better debugging
         return None
     
 def _call_updater_method(is_edited: bool, method_name: str, *args, **kwargs):

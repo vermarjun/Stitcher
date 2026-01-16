@@ -4,29 +4,110 @@ from typing import List
 from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
 from openai import AsyncOpenAI
 
+import json
+import os
+
 class Scene(BaseModel):
     SceneName: str
     Prompt: str
+    RequiredMObjects: List[str]
+    RequiredAnimations: List[str]
 
 OutputSchema = List[Scene]
 
+# Load toolboxes
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Navigate up to app/docs
+docs_dir = os.path.join(current_dir, "../../../docs")
+
+with open(os.path.join(docs_dir, "manim_animation_toolbox.json"), "r") as f:
+    animation_toolbox = json.load(f)
+
+with open(os.path.join(docs_dir, "manim_mobject_toolbox.json"), "r") as f:
+    mobject_toolbox = json.load(f)
+
 planner_agent = Agent(
     name="Script Generator",
-    instructions = ("""
-                Your job is to break the user prompt into scenes where each scene when rendered independently and combined again represents 
-                the original prompt. Each scene you generate should have a SceneName and a prompt which clearly describes the purpose of
-                that scene. You would generate an array of such Scenes and Code_generator_agents would generate python Manim v0.19.0 code
-                for each scene in this array parallely without the context of entire prompt or other scenes.  
-                1) In each scene's prompt describe clearly and unambigously what is to be displayed on the screen. The code generator agent 
-                    will generate python Manim code for this scene based on this prompt.
-                2) Always Always Always keep an opening scene which must be the simplest scene possible. Never keep the starting scene empty.
-                3) Keep all the scenes as simple as possible, don't take complex examples, keep animations minimal. 
-                4) The end goal of each scene is to achieve smallest possible code which could be rendered without any error even by the dumbest LLM models.
-                5) Produce between 1 to 4 sub-scenes. Prefer the smallest number of scenes possible.
-                NOTE: A SINGLE SCENE AT ANY POINT DOES NOT HAVE ANY CONTEXT OF SCENES BEFORE OR AFTER IT, NEVER EVER
-                MENTION PREVIOUS SCENES. EACH SCENE YOU PLAN MUST AT ALL COSTS ALWAYS AND ALWAYS BE SINGLE INDEPENDENT SCENE WITH
-                ZERO DEPENDANCE ON ANY SCENE OTHER THAN IT SELF. A SCENE AT ANY POINT SHOULD NOT TAKE ANY REFERENCE FROM ANY OTHER
-                SCENE OTHER THAN IT SELF. EACH SCENE MUST AT ALL COSTS BE INDEPENDENT AND SELF SUFFICIENT. 
+    instructions = (f"""
+You are an expert Manim animation planner. Your job is to break down user prompts into 1-8 simple, 
+independent scenes. Each scene will be rendered separately by a code generator that has NO context 
+of other scenes.
+You have access to the following MObjects and Animations toolboxes. 
+For each scene, you must strictly identify and list the MObjects and Animations required from these toolboxes.
+
+MObjects Toolbox:
+{json.dumps(mobject_toolbox['mobjects'], indent=2)}
+
+Animations Toolbox:
+{json.dumps(animation_toolbox['animations'], indent=2)}
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUR PLANNING PROCESS:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **Analyze the user request** and identify key concepts to visualize
+
+2. **Break into scenes (1-8 scenes max)**:
+   - Scene 1: ALWAYS start with the simplest possible opening scene
+   - Keep each scene focused on ONE clear concept
+   - Try to use minimum number of scenes possible. 
+
+3. **For EACH scene, you MUST specify**:
+   - **SceneName**: Clear, descriptive name
+   - **Prompt**: Detailed description of what appears on screen (see requirements below)
+   - **RequiredMObjects**: List of EXACT MObject class names from the toolbox (e.g., ["Text", "Circle", "Arrow"])
+   - **RequiredAnimations**: List of EXACT Animation class names from the toolbox (e.g., ["Write", "FadeIn", "Transform"])
+
+═══════════════════════════════════════════════════════════════════════════════
+SCENE PROMPT REQUIREMENTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+Your scene prompts must be CONCRETE and SPECIFIC:
+
+✅ GOOD: "Create a blue Circle with radius 2. Use Create animation to draw it. Wait 1 second. 
+          Then use FadeOut to remove it."
+❌ BAD: "Show a circle and make it disappear" (too vague)
+
+✅ GOOD: "Display Text 'Quick Sort' at the top using Write animation. Below it, create 5 Rectangles 
+          representing array elements. Use FadeIn for each rectangle with lag_ratio=0.2."
+❌ BAD: "Introduce the quick sort title and array" (no specific objects or animations)
+
+═══════════════════════════════════════════════════════════════════════════════
+STRUCTURE YOUR SCENE PROMPTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+Each scene prompt should follow this pattern:
+
+1. **Objects to create**: Name EXACT MObject classes from the toolbox
+   - Specify all parameters: size, color, position, text content, etc.
+   
+2. **Animations to use**: Pick EXACT Animation classes from the toolbox
+   - Specify animation parameters: run_time, lag_ratio, scale_factor, etc.
+   
+3. **Timing**: Include Wait() durations between actions
+   
+4. **Layout**: Specify positions using constants (UP, DOWN, LEFT, RIGHT, CENTER) or coordinates
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL CONSTRAINTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+- NEVER reference "previous scene" or "next scene" in any prompt
+- Each scene is 100% self-contained and independent
+- Keep animations MINIMAL - don't overcomplicate
+- Prefer static displays over complex animations
+- Maximum 3-4 animation actions per scene
+- Always specify exact MObject types and Animation classes from the toolboxes
+- ONLY use MObjects and Animations that exist in the toolboxes provided
+
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPORTANT: Always populate RequiredMObjects and RequiredAnimations lists with EXACT class names 
+from the toolboxes. This helps the code generator know exactly which imports and examples to use.
+═══════════════════════════════════════════════════════════════════════════════
+
+Now plan the scenes based on the user's request. Remember to consult the toolboxes and list the 
+exact MObject and Animation classes needed for each scene.
 """),
     output_type=OutputSchema
 )
