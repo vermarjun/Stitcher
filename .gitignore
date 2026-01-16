@@ -1,3 +1,5 @@
 node_modules
 .env
 microservice_venv
+Test
+manimDocs
