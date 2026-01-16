@@ -29,9 +29,9 @@ const VideoPlayer = ({ scene }: { scene: any }) => {
   };
 
   // Access the asset data from the new schema structure
-  const videoUrl = scene.assetId?.url || "";
-  const thumbnailUrl = scene.assetId?.thumbnail || "";
-  const duration = scene.assetId?.duration || 0;
+  const videoUrl = scene.assetId?.url || scene.url || "";
+  const thumbnailUrl = scene.assetId?.thumbnail || scene.thumbnail || "";
+  const duration = scene.assetId?.duration || scene.duration || 0;
 
   return (
     <div className="mt-3 rounded-md overflow-hidden w-full border border-zinc-800 shadow-lg">
@@ -116,8 +116,9 @@ const MessageBubble = ({
   plannerOutputRef,
   isLastMessage,
   isProcessing,
-  streamSummaryRef
-}: Props) => {
+  streamSummaryRef,
+  onStreamingComplete // New prop
+}: Props & { onStreamingComplete?: () => void }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -199,9 +200,16 @@ const MessageBubble = ({
     : "";
   const hasScenes = message.scenes && message.scenes.length > 0;
 
-  // Filter out scenes that don't have a valid assetId
+  // Filter out scenes that don't have a valid assetId OR valid direct properties
   const validScenes =
-    message.scenes?.filter((scene) => scene.assetId && scene.assetId.url) || [];
+    message.scenes?.filter((scene: any) => (scene.assetId && scene.assetId.url) || scene.url) || [];
+
+  // Hide bot icon if no content and no scenes yet (wait for content to start)
+  const showBotIcon = plannerOutput || llmResponse || hasScenes || (typeof message.content === 'string' && message.content);
+
+  if (!showBotIcon && isProcessing) {
+      return null;
+  }
 
   return (
     <div className="mb-6">
@@ -218,7 +226,7 @@ const MessageBubble = ({
                 (plannerOutputRef.current = plannerOutput) && 
                 <LiveTextStream
                   text={plannerOutputRef.current}
-                  streamingSpeed={200}
+                  streamingSpeed={50} // Faster speed for better UX
                 />
               ) : ( 
                 <p className="break-words">{plannerOutput}</p>
@@ -226,31 +234,10 @@ const MessageBubble = ({
             </div>
           )}
 
-          {/* Status indicators */}
-          {/* {isContentObject && (
-            <div className="flex items-center gap-2 mb-3 text-xs">
-              {message.plannerOut && (
-                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md border border-blue-500/30">
-                  Planner ✓
-                </span>
-              )}
-              {message.generatorOutput && (
-                <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-md border border-green-500/30">
-                  Generated ✓
-                </span>
-              )}
-              {message.completed && (
-                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/30">
-                  Completed ✓
-                </span>
-              )}
-            </div>
-          )} */}
-
           {/* Scenes */}
           {validScenes.length > 0 && (
             <div className="space-y-3 mb-3">
-              {validScenes.map((scene, index) => (
+              {validScenes.map((scene: any, index) => (
                 <VideoPlayer key={scene.assetId?._id || index} scene={scene} />
               ))}
             </div>
@@ -267,11 +254,12 @@ const MessageBubble = ({
           {/* LLM Response */}
           {llmResponse && (
             <div className="text-sm text-zinc-400 leading-relaxed mb-2 break-words">
-              {(streamSummaryRef.current && llmSummaryRef.current != llmResponse && isLastMessage) ? (
+              {(streamSummaryRef.current && llmSummaryRef.current != llmResponse && isLastMessage && isProcessing) ? (
                 (llmSummaryRef.current = llmResponse) && 
                 <LiveTextStream
                   text={llmSummaryRef.current}
-                  streamingSpeed={200}
+                  streamingSpeed={50}
+                  onStreamingComplete={onStreamingComplete}
                 />
               ) : (
                 <p className="break-words">{llmResponse}</p>

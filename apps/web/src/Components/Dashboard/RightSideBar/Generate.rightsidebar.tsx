@@ -10,7 +10,8 @@ import api from "@/api";
 import { toast } from "sonner";
 import type { Project, IUser, Asset } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
-import { usePolling, useRefreshHeader } from "../context";
+import { useRefreshHeader } from "../context";
+import { socket } from "@/socket";
 
 interface Props {
   currentProject?: Project;
@@ -108,8 +109,7 @@ const GenerateComponent = ({
   const llmSummaryRef = useRef("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { triggerRefresh } = useRefreshAssetStash();
-  // const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingIntervalRef = usePolling(); // make it a context
+  // Socket-based status management instead of polling
   const [pollingStatus, setPollingStatus] = useState<
     "generating" | "planning" | "generating-scenes" | null
   >(null);
@@ -123,92 +123,158 @@ const GenerateComponent = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Cleanup polling on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
+       socket.disconnect();
+       socket.connect(); // Reconnect fresh on remount if needed, or just let autoConnect handle it.
+       // Actually typically we don't disconnect on component unmount if socket is global, 
+       // but we might want to leave the room?
+       // For now, no explicit cleanup needed for global socket except listeners.
     };
   }, []);
 
-  // Start polling for updates
-  const startPolling = (chatId: string) => {
-    // Clear any existing polling
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
+  const handleStreamingComplete = () => {
+      // Only called when final LLM response finishes streaming
+      console.log("Streaming complete - removing progress bar"); // Log to verify
+      setPollingStatus(null);
+      setIsProcessing(false);
+      triggerRefresh();
+      triggerHeaderRefresh();
+  };
 
-    streamSummaryRef.current = true; 
+  // Socket Event Listeners
+  useEffect(() => {
+    if (!currentChatId) return;
 
-    // Poll every 2 seconds
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const response = await api.get(
-          `/generatechat/latest-message/${chatId}`,
-          {
-            params: {
-              projectId: currentProject?._id,
-              userId: user?._id,
-            },
-          }
-        );
+    // Join the chat room
+    socket.emit('join_chat', currentChatId);
 
-        if (response.data.success) {
-          const latestMessage = response.data.data;
+  const handleUpdate = (event: any) => {
+    console.log("Socket Event:", event);
+    const { type, data } = event;
 
-          // Update the last assistant message with the latest data
-          setMessages((prevMessages) => {
-            const updatedMessages = [...prevMessages];
-            const lastAssistantIndex = updatedMessages.length - 1;
-
-            if (
-              lastAssistantIndex >= 0 &&
-              updatedMessages[lastAssistantIndex].role === "assistant"
-            ) {
-              updatedMessages[lastAssistantIndex] = {
-                ...updatedMessages[lastAssistantIndex],
-                content: latestMessage.content,
-                scenes: latestMessage.scenes || [],
-                completed: latestMessage.completed,
-                plannerOut: latestMessage.plannerOut,
-                generatorOutput: latestMessage.generatorOutput,
-                projectDescription: latestMessage.projectDescription,
-                timestamp: latestMessage.timestamp,
-              };
+    if (type === 'PLANNING_START') {
+         setPollingStatus("planning");
+         streamSummaryRef.current = true; // Enable streaming for this session
+         // Reset refs for new generation
+         plannerOutputRef.current = "";
+         llmSummaryRef.current = "";
+    } else if (type === 'PLANNING_COMPLETE') {
+         setPollingStatus("generating");
+         // Optional: update message content with "Planned X scenes"
+    } else if (type === 'GENERATING_CODE_START') {
+         setPollingStatus("generating");
+    } else if (type === 'GENERATING_CODE_COMPLETE') {
+         setPollingStatus("generating-scenes");
+         // Update scenes in the last assistant message
+         if (data.scenes && Array.isArray(data.scenes)) {
+             setMessages((prevMessages) => {
+                const updated = [...prevMessages];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                    // Map structure if needed, or assume cleaner contract
+                    updated[lastIdx] = {
+                        ...updated[lastIdx],
+                        scenes: data.scenes,
+                        generatorOutput: true,
+                        plannerOut: true
+                    };
+                }
+                return updated;
+             });
+         }
+    } else if (type === 'ENQUEUED_FOR_RENDERING') {
+         setPollingStatus("generating-scenes");
+    } else if (type === 'RENDER_SUCCESS') {
+         // Update specific scene
+         setMessages((prevMessages) => {
+            const updated = [...prevMessages];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                const currentScenes = updated[lastIdx].scenes || [];
+                const sceneIdx = currentScenes.findIndex((s: any) => s.sceneName === data.sceneName);
+                
+                if (sceneIdx !== -1) {
+                     const updatedScenes = [...currentScenes];
+                     updatedScenes[sceneIdx] = { 
+                         ...updatedScenes[sceneIdx], 
+                         ...data.metadata,
+                         completed: true 
+                     };
+                     
+                     updated[lastIdx] = {
+                        ...updated[lastIdx],
+                        scenes: updatedScenes,
+                        // Do NOT mark entire message as completed yet, wait for final summary
+                     };
+                }
             }
-
-            return updatedMessages;
-          });
-
-          // Update polling status based on the response
-          if (latestMessage.completed) {
-            setPollingStatus(null);
-            stopPolling();
-            setIsProcessing(false);
-            triggerRefresh();
-          } else if (
-            latestMessage.plannerOut &&
-            !latestMessage.generatorOutput
-          ) {
-            setPollingStatus("generating-scenes");
-          } else if (latestMessage.plannerOut) {
-            setPollingStatus("generating-scenes");
-          }
-        }
-      } catch (error) {
-        console.error("Polling error:", error);
-      }
-    }, 5000); // Poll every 5 seconds
-  };
-
-  // Stop polling
-  const stopPolling = () => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
+            return updated;
+         });
+    } else if (type === "RENDER_ERROR") {
+         toast.error(`Error rendering ${data.sceneName}: ${data.error}`);
+    } else if (type === 'SUMMARY_COMPLETE') {
+         // Planner summary is ready - Update full text and let LiveTextStream animate it
+         setMessages((prevMessages) => {
+             const updated = [...prevMessages];
+             const lastIdx = updated.length - 1;
+             
+             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                 updated[lastIdx] = {
+                     ...updated[lastIdx],
+                     content: {
+                         plannerOutput: data.summary || '', // Set FULL text
+                         llmResponse: typeof updated[lastIdx].content === 'object'
+                             ? updated[lastIdx].content?.llmResponse || ''
+                             : ''
+                     },
+                     plannerOut: true
+                 };
+             }
+             return updated;
+         });
+         
+         // Update status to show code generation is starting
+         setPollingStatus("generating");
+    } else if (type === 'GENERATION_COMPLETE') {
+         // KEEP isProcessing = true to continue showing progress bar until streaming finishes
+         // setPollingStatus(null); // Don't nullify yet
+         
+         // Update last assistant message with final summary
+         setMessages((prevMessages) => {
+             const updated = [...prevMessages];
+             const lastIdx = updated.length - 1;
+             
+             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                 updated[lastIdx] = {
+                     ...updated[lastIdx],
+                     content: {
+                         plannerOutput: typeof updated[lastIdx].content === 'object' 
+                             ? updated[lastIdx].content?.plannerOutput || '' 
+                             : '',
+                         llmResponse: data.summary // Set FULL text, LiveTextStream will animate
+                     },
+                     completed: true
+                 };
+             }
+             
+             return updated;
+         });
+         
+         // Show success toast
+         toast.success(`Video generated! ${data.scenesCompleted}/${data.totalScenes} scenes completed`);
     }
   };
+
+    socket.on('chat_update', handleUpdate);
+
+    return () => {
+        socket.off('chat_update', handleUpdate);
+        
+        // Clear cleanup if needed (refs are handled by React)
+    };
+  }, [currentChatId, triggerRefresh]);
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
@@ -266,9 +332,9 @@ const GenerateComponent = ({
 
         setMessages((prev: Message[]) => [...prev, placeholderMessage]);
 
-        // Change status to planning and start polling
+        // Change status to planning. Socket connection in useEffect will handle updates
         setPollingStatus("planning");
-        startPolling(chatIdToUse);
+        socket.emit('join_chat', chatIdToUse);
       } else {
         toast.error(response.data.message);
         throw new Error(response.data.message);
@@ -296,7 +362,6 @@ const GenerateComponent = ({
         toast.success("Generation cancelled");
         setIsProcessing(false);
         setPollingStatus(null);
-        stopPolling();
 
         // Update the last message to show it was cancelled
         setMessages((prevMessages) => {
@@ -565,6 +630,7 @@ const GenerateComponent = ({
                         isLastMessage={isLastMessage}
                         llmSummaryRef={llmSummaryRef}
                         isProcessing={isProcessing}
+                        onStreamingComplete={handleStreamingComplete}
                       />
                     )}
                   </div>

@@ -410,12 +410,12 @@ const Hero = () => {
                 {/* Subheading - Fixed typography and presentation */}
                 <div className="md:mb-8 mb-14 max-w-4xl text-center mx-auto w-full">
                   <p className="text-xl md:text-2xl text-neutral-400 leading-relaxed font-normal tracking-wide">
-                    Turn your prompts into engaging videos, no editing required.
-                    <br className="md:flex hidden" />
+                    Turn your prompts into animations.
+                    {/* <br className="md:flex hidden" />
                     <span> </span>
                     Just explain, Stitcher animates! Tough concepts or tricky
                     questions, Stitcher transforms your words into visuals that
-                    make understanding easier.
+                    make understanding easier. */}
                   </p>
                 </div>
 
