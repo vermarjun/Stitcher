@@ -107,10 +107,11 @@ async function callVideoGenerationMicroservice(
         return { status: 'success' };
     } catch (error) {
         console.error('Microservice call error:', error);
-        if (axios.isAxiosError(error)) {
-            console.error('Response data:', error.response?.data);
-            console.error('Response status:', error.response?.status);
-            console.error('Request config:', error.config);
+        const err = error as any;
+        if (err.response) {
+            console.error('Response data:', err.response.data);
+            console.error('Response status:', err.response.status);
+            console.error('Request config:', err.config);
         }
         return { status: 'error', error };
     }
@@ -163,10 +164,11 @@ async function callVideoEditMicroservice(
         return { status: 'success' };
     } catch (error) {
         console.error('Microservice call error:', error);
-        if (axios.isAxiosError(error)) {
-            console.error('Response data:', error.response?.data);
-            console.error('Response status:', error.response?.status);
-            console.error('Request config:', error.config);
+        const err = error as any;
+        if (err.response) {
+            console.error('Response data:', err.response.data);
+            console.error('Response status:', err.response.status);
+            console.error('Request config:', err.config);
         }
         return { status: 'error', error };
     }
@@ -626,6 +628,89 @@ export const stopGeneration = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: 'Failed to cancel generation',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+};
+
+export const completeGeneration = async (req: Request, res: Response) => {
+    try {
+        const { chatId, userId, projectId, isEdited } = req.body;
+
+        if (!chatId || !userId) {
+            res.status(400).json({
+                success: false,
+                message: 'Chat ID and User ID are required'
+            });
+            return;
+        }
+
+        // Fetch user
+        const user = await User.findById(userId);
+        if (!user) {
+            res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+            return;
+        }
+
+        // Skip if test account
+        if (user.isTestAccount) {
+            console.log(`✓ Test account ${userId} - skipping credit deduction`);
+            res.status(200).json({
+                success: true,
+                message: 'Completion recorded (test account)'
+            });
+            return;
+        }
+
+        // Deduct appropriate credit
+        const creditField = isEdited ? 'credits.editing' : 'credits.generation';
+
+        if (user.credits[isEdited ? 'editing' : 'generation'] <= 0) {
+            console.warn(`⚠ User ${userId} has no ${isEdited ? 'editing' : 'generation'} credits`);
+            res.status(200).json({
+                success: true,
+                message: 'No credits to deduct'
+            });
+            return;
+        }
+
+        // Atomic decrement
+        const updateResult = await User.updateOne(
+            {
+                _id: userId,
+                [creditField]: { $gt: 0 }
+            },
+            {
+                $inc: { [creditField]: -1 }
+            }
+        );
+
+        if (updateResult.modifiedCount > 0) {
+            console.log(`✓ Deducted 1 ${isEdited ? 'editing' : 'generation'} credit from user ${userId}`);
+            res.status(200).json({
+                success: true,
+                message: 'Credit deducted successfully',
+                remainingCredits: {
+                    generation: user.credits.generation - (isEdited ? 0 : 1),
+                    editing: user.credits.editing - (isEdited ? 1 : 0)
+                }
+            });
+        } else {
+            console.warn(`⚠ Credit deduction failed for user ${userId} (race condition or insufficient credits)`);
+            res.status(200).json({
+                success: true,
+                message: 'Credit deduction skipped'
+            });
+        }
+
+    } catch (error) {
+        console.error('Complete generation error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to complete generation',
             error: error instanceof Error ? error.message : 'Unknown error'
         });
     }

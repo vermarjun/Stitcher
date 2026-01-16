@@ -1,13 +1,14 @@
 import { Router } from 'express';
-import { 
-    generateChatResponse, 
-    getChatHistory, 
+import {
+    generateChatResponse,
+    getChatHistory,
     getProjectChats,
     getChatUpdate,
     getLatestAssistantMessage,
     stopGeneration,
+    completeGeneration,
 } from '../controller/generateChat.controller';
-import auth from "../middleware/auth.middleware"; 
+import auth from "../middleware/auth.middleware";
 import { refreshCredits } from '../middleware/refreshCredits.middleware';
 
 const router = Router();
@@ -55,5 +56,7 @@ router.get('/project/:projectId', auth, getProjectChats);
 router.get('/:chatId', auth, getChatHistory);
 
 router.post('/cancel/:chatId', auth, stopGeneration);
+
+router.post('/complete', completeGeneration);
 
 export default router;

@@ -1,4 +1,4 @@
-import express, {Request, Response} from "express";
+import express, { Request, Response } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import connectDB from "./util/database.util";
@@ -30,13 +30,36 @@ const app = express();
 const httpServer = createServer(app);
 
 // Initialize Socket.IO with the HTTP server
-export const io = new Server(httpServer);
+export const io = new Server(httpServer, {
+    cors: {
+        origin: "*", // Allow all origins for now
+        methods: ["GET", "POST"]
+    }
+});
+
+import { initRedisSubscriber } from "./util/redis.util";
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors());
+
+// Socket.IO Connection Logic
+io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+
+    socket.on('join_chat', (chatId) => {
+        if (chatId) {
+            socket.join(chatId);
+            console.log(`Socket ${socket.id} joined chat: ${chatId}`);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+    });
+});
 
 // Health check endpoint
 app.get(`${API_PREFIX}/health`, (req: Request, res: Response): Response => {
@@ -70,6 +93,10 @@ httpServer.listen(PORT, async () => {
         await connectDB();
         console.log(`Server running on port ${PORT}`);
         console.log(`Socket.IO server is ready for connections`);
+
+        // Initialize Redis Subscriber
+        await initRedisSubscriber(io);
+
     } catch (error) {
         console.error('Failed to connect to database:', error);
     }

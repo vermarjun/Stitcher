@@ -30,6 +30,17 @@ interface IUserResponse extends Response {
   [key: string]: any;
 }
 
+interface IGoogleUser {
+  id: string;
+  email: string;
+  verified_email: boolean;
+  name: string;
+  given_name: string;
+  family_name: string;
+  picture: string;
+  locale: string;
+}
+
 export const authWithGoogle = async (req: Request, res: Response) => {
   const code = req.query.code;
 
@@ -41,7 +52,7 @@ export const authWithGoogle = async (req: Request, res: Response) => {
     const googleRes = await oauth2Client.getToken(code as string);
     oauth2Client.setCredentials(googleRes.tokens);
 
-    const userRes = await axios.get(
+    const userRes = await axios.get<IGoogleUser>(
       `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${googleRes.tokens.access_token}`
     );
 
@@ -139,7 +150,7 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credtis: {generation: 3, editing: 5, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)} });
+    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credtis: { generation: 3, editing: 5, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } });
     await user.save();
     return res.status(201).json({ message: 'User created successfully.' });
   } catch (err: any) {
@@ -235,9 +246,9 @@ export const getUserCredits = async (req: IUserRequest, res: IUserResponse): Pro
       }
     });
   } catch (err: any) {
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: 'Server error', error: err.message 
+      message: 'Server error', error: err.message
     });
   }
 };
