@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.core.classify import classify
 from app.core.manim_runner import build_invocation, resolve_artifact_on_host
 from app.core.sandbox import Sandbox, SandboxLimits
+from app.core.thumbnail import ThumbnailError, extract as extract_thumbnail
 from app.core.validate import first_issue_as_error, validate
 from app.logging import get_logger
 from app.models import (
@@ -163,6 +164,20 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
                      render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
     upload_ms = int((time.perf_counter() - upload_t0) * 1000)
 
+    # --- 4b. Thumbnail (best-effort — failure here is non-fatal) ---
+    thumbnail_url: str | None = None
+    if req.storage.generate_thumbnail and req.render.format in {"mp4", "webm", "mov", "gif"}:
+        try:
+            thumb = extract_thumbnail(host_artifact, at_fraction=req.storage.thumbnail_at)
+            t_url, _ = store.put(
+                thumb.path, folder=f"{req.storage.folder}/thumbs",
+                public=req.storage.public, content_type="image/jpeg",
+            )
+            thumbnail_url = t_url
+            thumb.path.unlink(missing_ok=True)
+        except (ThumbnailError, StorageError) as e:
+            log.warning("pipeline.thumbnail_failed", error=str(e))
+
     # --- 5. Clean up workdir ---
     shutil.rmtree(result.workdir, ignore_errors=True)
 
@@ -171,7 +186,7 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
 
     return RenderSuccessResponse(
         render=RenderOutput(
-            url=url, thumbnailUrl=None, format=req.render.format,
+            url=url, thumbnailUrl=thumbnail_url, format=req.render.format,
             durationSec=0.0,  # TODO(jan-17): probe with ffprobe
             width=inv.width, height=inv.height, fps=inv.fps, bytes=size,
             codec=None, hasAudio=req.audio is not None,
