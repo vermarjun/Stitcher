@@ -154,7 +154,7 @@ const GenerateComponent = ({
     console.log("Socket Event:", event);
     const { type, data } = event;
 
-    if (type === 'PLANNING_START') {
+    if (type === 'PLANNING_START' || type === 'EDITING_START') {
          setPollingStatus("planning");
          streamSummaryRef.current = true; // Enable streaming for this session
          // Reset refs for new generation
@@ -163,9 +163,9 @@ const GenerateComponent = ({
     } else if (type === 'PLANNING_COMPLETE') {
          setPollingStatus("generating");
          // Optional: update message content with "Planned X scenes"
-    } else if (type === 'GENERATING_CODE_START') {
+    } else if (type === 'GENERATING_CODE_START' || type === 'EDITING_CODE_START') {
          setPollingStatus("generating");
-    } else if (type === 'GENERATING_CODE_COMPLETE') {
+    } else if (type === 'GENERATING_CODE_COMPLETE' || type === 'EDITING_CODE_COMPLETE') {
          setPollingStatus("generating-scenes");
          // Update scenes in the last assistant message
          if (data.scenes && Array.isArray(data.scenes)) {
@@ -177,6 +177,28 @@ const GenerateComponent = ({
                     updated[lastIdx] = {
                         ...updated[lastIdx],
                         scenes: data.scenes,
+                        generatorOutput: true,
+                        plannerOut: true
+                    };
+                }
+                return updated;
+             });
+         } else if (data.sceneName) {
+             // For edit flow, create a single scene entry
+             setMessages((prevMessages) => {
+                const updated = [...prevMessages];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                    updated[lastIdx] = {
+                        ...updated[lastIdx],
+                        scenes: [{
+                            sceneName: data.sceneName,
+                            prompt: "",
+                            summary: "",
+                            code: "",
+                            assetId: null,
+                            error: null
+                        }],
                         generatorOutput: true,
                         plannerOut: true
                     };
@@ -237,7 +259,7 @@ const GenerateComponent = ({
          
          // Update status to show code generation is starting
          setPollingStatus("generating");
-    } else if (type === 'GENERATION_COMPLETE') {
+    } else if (type === 'GENERATION_COMPLETE' || type === 'EDITING_COMPLETE') {
          // KEEP isProcessing = true to continue showing progress bar until streaming finishes
          // setPollingStatus(null); // Don't nullify yet
          
@@ -263,7 +285,32 @@ const GenerateComponent = ({
          });
          
          // Show success toast
-         toast.success(`Video generated! ${data.scenesCompleted}/${data.totalScenes} scenes completed`);
+         const successMessage = type === 'EDITING_COMPLETE' 
+             ? 'Video edited successfully!' 
+             : `Video generated! ${data.scenesCompleted}/${data.totalScenes} scenes completed`;
+         toast.success(successMessage);
+    } else if (type === 'EDITING_ERROR') {
+         // Handle editing errors
+         toast.error(`Editing error: ${data.error || data.message}`);
+         setMessages((prevMessages) => {
+             const updated = [...prevMessages];
+             const lastIdx = updated.length - 1;
+             
+             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                 updated[lastIdx] = {
+                     ...updated[lastIdx],
+                     content: {
+                         plannerOutput: '',
+                         llmResponse: data.message || `Error: ${data.error}`
+                     },
+                     completed: true
+                 };
+             }
+             
+             return updated;
+         });
+         setIsProcessing(false);
+         setPollingStatus(null);
     }
   };
 
