@@ -14,6 +14,7 @@ from pathlib import Path
 
 from app import __version__ as _svc_version
 from app.config import get_settings
+from app.core.audio import AudioError, bake as bake_audio, decode_to_tempfile
 from app.core.classify import classify
 from app.core.manim_runner import build_invocation, resolve_artifact_on_host
 from app.core.sandbox import Sandbox, SandboxLimits
@@ -149,6 +150,19 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
                      f"manim exited 0 but no file at {host_artifact.name}",
                      stderr=result.stderr, stdout=result.stdout,
                      render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
+
+    # --- 3b. Audio mux (optional) ---
+    if req.audio is not None and req.render.format in {"mp4", "webm", "mov"}:
+        try:
+            audio_src = decode_to_tempfile(req.audio.base64, req.audio.filename)
+            muxed = bake_audio(host_artifact, audio_src,
+                               offset_sec=req.audio.offset, gain_db=req.audio.gain)
+            audio_src.unlink(missing_ok=True)
+            host_artifact = muxed  # upload the muxed version, not the silent original
+        except AudioError as e:
+            log.warning("pipeline.audio_failed", error=str(e))
+            return _fail(req, t0, "internal", "AudioError", str(e),
+                         render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
 
     # --- 4. Upload ---
     upload_t0 = time.perf_counter()
