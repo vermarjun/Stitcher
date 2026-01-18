@@ -26,10 +26,10 @@ const TimelineTracksSidebar = ({ currentProject }: Props) => {
       setError(null);
       const response = await api.get(`/track/timeline/${timelineId}`);
       
-      if (response.data.success) {
-        setTracks(response.data.data);
+      if ((response.data as any).success) {
+        setTracks((response.data as any).data);
       } else {
-        setError(response.data.message || 'Failed to fetch tracks');
+        setError((response.data as any).message || 'Failed to fetch tracks');
       }
     } catch (err: any) {
       console.error('Error fetching tracks:', err);

@@ -183,7 +183,7 @@ const PostDetail = ({
     try {
       setFetchingPost(true);
       const response = await api.get(`/community/posts/${selectedPost._id}`);
-      setSelectedPost(response.data.data);
+      setSelectedPost((response.data as any).data);
     } catch (e: any) {
       console.log(e);
       toast.error(e?.message || "Error fetching post data");
@@ -211,7 +211,7 @@ const PostDetail = ({
   const handleSaveToBackPack = async (post: ICommunityPost) => {
     setSavingToBackPack(true);
     try {
-      const response = await api.post("/backpack/items", {
+      const response = await api.post<any>("/backpack/items", {
         itemType: "Asset",
         itemId: post.assetId._id,
         source: "community_post",
@@ -220,7 +220,7 @@ const PostDetail = ({
         tags: [],
         notes: "",
       });
-      if (response.data.success == true) {
+      if ((response.data as any).success == true) {
         post.isAddedToBackpack = true;
       } else {
         throw Error("Error came in saving template item to backpack");

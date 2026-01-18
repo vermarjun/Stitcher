@@ -43,13 +43,13 @@ const DashboardLayout = () => {
       setIsLoading(true);
 
       // FETCH PROJECT DATA FOR THIS PROJECT ID
-      const projectResponse = await api.get(`/project/${projectId}`);
+      const projectResponse = await api.get<Project>(`/project/${projectId}`);
 
       if (projectResponse.status === 200 || projectResponse.status === 201) {
         setProject(projectResponse.data);
       } else {
         throw new Error(
-          projectResponse.data?.message || "Failed to fetch project"
+          "Failed to fetch project"
         );
       }
 

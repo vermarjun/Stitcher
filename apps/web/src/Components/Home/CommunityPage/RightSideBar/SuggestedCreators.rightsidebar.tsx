@@ -22,7 +22,7 @@ const SuggestedCreators = () => {
     const fetchSuggestedUsers = async () => {
       try {
         setLoading(true);
-        const res = await api.get("/users/suggestions");
+        const res = await api.get<any>("/users/suggestions");
         if (res.data.success) {
           setUsers(res.data.suggestions);
         } else {

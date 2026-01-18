@@ -54,15 +54,12 @@ export type IUser = {
   createdAt?: string | Date;
   isActive?: boolean;
   bio: string;
-  role?: {
-    type: String;
-    enum: ['user', 'admin']
-  }
+  role?: string | 'user' | 'admin';
   plan?: 'free' | 'basic' | 'plus' | 'max';
   credits?: {
     generation: number;
     editing: number;
-    expiresAt: Date
+    expiresAt: Date | string | number;
   };
   isTestAccount?: boolean;
   projects?: string[];

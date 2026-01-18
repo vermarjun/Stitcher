@@ -58,17 +58,17 @@ const BackpackComponent: React.FC<BackpackProps> = ({ currentProject }) => {
       const response = await api.get(`/backpack/${currentProject?._id}`);
 
       if (response.status === 200 || response.status === 201) {
-        setBackpack(response.data.backpack);
-        setItems(response.data.backpack.items || []);
+        setBackpack((response.data as any).backpack);
+        setItems((response.data as any).backpack.items || []);
 
         // Extract all unique tags
         const tags = new Set<string>();
-        response.data.backpack.items?.forEach((item: BackpackItem) => {
+        (response.data as any).backpack.items?.forEach((item: BackpackItem) => {
           item.tags.forEach((tag) => tags.add(tag));
         });
         setAllTags(Array.from(tags));
       } else {
-        throw new Error(response.data?.message || "Failed to fetch backpack");
+        throw new Error("Failed to fetch backpack");
       }
     } catch (error: any) {
       const errorMessage =
@@ -103,10 +103,10 @@ const BackpackComponent: React.FC<BackpackProps> = ({ currentProject }) => {
         }
       );
 
-      if (!response.data.success) {
+      if (!(response.data as any).success) {
         throw new Error("Network connection failed. Please try again.");
       } else {
-        toast.success(response.data.message);
+        toast.success((response.data as any).message);
       }
 
       // Update item state
@@ -160,7 +160,7 @@ const BackpackComponent: React.FC<BackpackProps> = ({ currentProject }) => {
         }
       );
 
-      if (response.data.success) {
+      if ((response.data as any).success) {
         // Show success animation
         setSuccessAnimations((prev) => new Set(prev).add(item._id.toString()));
 
@@ -179,12 +179,12 @@ const BackpackComponent: React.FC<BackpackProps> = ({ currentProject }) => {
           });
         }, 2000);
       } else {
-        throw new Error(response.data.message);
+        throw new Error((response.data as any).message);
       }
     } catch (error:any) {
         console.log(error)
       toast.error("Failed to use item", {
-        description: error.response.data.message,
+        description: error.response?.data.message,
         duration: 4000,
       });
     } finally {

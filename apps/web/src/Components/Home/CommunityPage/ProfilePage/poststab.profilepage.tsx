@@ -65,7 +65,7 @@ function PostsTab({ userId, onPostClick }: Props) {
     async function fetchPosts() {
       try {
         setLoading(true);
-        const res = await api.get(`/community/users/${userId}/posts?limit=20`);
+        const res = await api.get<{ success: boolean; data: ICommunityPost[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/community/users/${userId}/posts?limit=20`);
         if (mounted) setPosts(res.data.data || []);
       } catch (err) {
         console.error("Failed to fetch posts", err);

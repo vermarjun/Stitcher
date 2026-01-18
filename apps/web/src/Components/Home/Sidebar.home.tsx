@@ -29,12 +29,12 @@ const UserSidebarInfo = () => {
   const formattedDate = new Date(expiresAt).toLocaleDateString();
 
   const fetchData = async ()=>{
-    const response = await api.get("/users/me/credits");
-    if (response.data.success){
-      setTier(response.data.message.plan)
-      setEditingCredits(response.data.message.credits.editing);
-      setGenerationCredits(response.data.message.credits.generation);
-      setExpiresAt(response.data.credits.message.expiresAt);
+    const response = await api.get<any>("/users/me/credits");
+    if ((response.data as any).success){
+      setTier((response.data as any).message.plan)
+      setEditingCredits((response.data as any).message.credits.editing);
+      setGenerationCredits((response.data as any).message.credits.generation);
+      setExpiresAt((response.data as any).credits.message.expiresAt);
     } else {
       toast.error("Cant fetch latest credits details!");
     }
@@ -110,7 +110,7 @@ const Sidebar: React.FC<Props> = ({
 
   const fetchUnread = async () => {
     try {
-      const res = await api.get("/notifications/unread-count");
+      const res = await api.get<any>("/notifications/unread-count");
       const count = res.data?.data?.count ?? 0;
       setUnreadCount(count);
     } catch (err: any) {

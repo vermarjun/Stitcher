@@ -145,7 +145,7 @@ const AuthPage: React.FC = () => {
         navigate("/home", { replace: true });
       } else {
         // Signup request
-        await api.post("/users/signup", {
+        await api.post<any>("/users/signup", {
           username: formData.name,
           email: formData.email,
           password: formData.password,
@@ -211,7 +211,7 @@ const AuthPage: React.FC = () => {
       } else if (error.response?.status === 409) {
         console.log(error);
         toast.error(
-          error.response.data.message ||
+          error.response?.data.message ||
             "Invalid credentials. Please try again."
         );
       } else if (error.response?.status === 400) {
@@ -292,7 +292,7 @@ const AuthPage: React.FC = () => {
       } else if (error.response?.status === 409) {
         console.log(error);
         toast.error(
-          error.response.data.message ||
+          error.response?.data.message ||
             "Invalid credentials. Please try again."
         );
       } else if (error.response?.status === 400) {

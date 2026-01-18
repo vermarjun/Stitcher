@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import api from "@/api";
 import type { IUser } from "@/State/Types";
+import type { UserCreditsResponse } from "@/types/api.types";
 import { useRefreshHeader } from "../context";
 
 interface UserSectionProps {
@@ -38,11 +39,12 @@ function UserSection({ user }: UserSectionProps) {
   const [generationCredits, setGenerationCredits] = useState(0);
 
   const fetchData = async () => {
-    const response = await api.get("/users/me/credits");
-    if (response.data.success) {
-      setTier(response.data.message.plan);
-      setEditingCredits(response.data.message.credits.editing);
-      setGenerationCredits(response.data.message.credits.generation);
+    const response = await api.get<UserCreditsResponse>("/users/me/credits");
+    const data = response.data as any;
+    if (data.success) {
+      setTier(data.message.plan);
+      setEditingCredits(data.message.credits.editing);
+      setGenerationCredits(data.message.credits.generation);
     } else {
       console.error("Cant fetch latest credits details!");
     }

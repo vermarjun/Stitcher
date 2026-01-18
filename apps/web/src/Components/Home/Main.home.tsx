@@ -36,7 +36,7 @@ const Main = () => {
 
   async function fetchRecentProjects() {
     try {
-      const response = await api.get(`/project/user/${user._id}`);
+      const response = await api.get<Project[]>(`/project/user/${user._id}`);
       setRecentProjects(response.data);
       console.log(response.data)
     } catch (error: any) {

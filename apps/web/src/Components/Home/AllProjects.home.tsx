@@ -56,7 +56,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
     }
     try {
       setIsLoading(true);
-      const response = await api.get(`/project/user/${userId}`);
+      const response = await api.get<Project[]>(`/project/user/${userId}`);
       setAllProjects(response.data);
       console.log('All projects fetched:', response.data);
     } catch (error: any) {
@@ -150,7 +150,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
     }
     setIsLoading(true);
     try {
-      const response = await api.post("/project", {
+      const response = await api.post<any>("/project", {
         name: formData.projectName,
         description: formData.description,
         category: formData.category,
@@ -159,9 +159,9 @@ const AllProjects: React.FC<AllProjectsProps> = ({
         toast.success("Project created successfully!");
         setIsModalOpen(false);
         setFormData({ projectName: "", description: "", category: "" });
-        navigate(`/dashboard/${response.data._id}`);
+        navigate(`/dashboard/${(response.data as any)._id}`);
       } else {
-        toast.error(response.data.message || "Failed to create project");
+        toast.error((response.data as any).message || "Failed to create project");
       }
     } catch (error: any) {
       const errorMessage = error.message || "Failed to create project";

@@ -102,12 +102,12 @@ const AISidebar = ({ currentProject, user, onAssetDrop, droppedItems, onRemoveIt
     
     setIsLoadingChats(true);
     try {
-      const generateChats = await api.get(`/generatechat/project/${currentProject._id}`);
+      const generateChats = await api.get<{ success: boolean; data: Array<{ _id: string }> }>(`/generatechat/project/${currentProject._id}`);
       if (generateChats?.data.success && generateChats.data.data.length > 0) {
         const latestChat = generateChats.data.data[0];
         setCurrentGenerateChatId(latestChat._id);
         
-        const chatHistory = await api.get(`/generatechat/${latestChat._id}`);
+        const chatHistory = await api.get<{ success: boolean; data: { messages: Message[] } }>(`/generatechat/${latestChat._id}`);
         
         if (chatHistory?.data.success) {
           const messages = chatHistory.data.data.messages || [];
@@ -131,7 +131,7 @@ const AISidebar = ({ currentProject, user, onAssetDrop, droppedItems, onRemoveIt
     if (!currentProject?._id) return;
     
     try {
-      const editChatHistory = await api.get(`/editchat/history/${currentProject._id}`);
+      const editChatHistory = await api.get<{ success: boolean; messages: Message[] }>(`/editchat/history/${currentProject._id}`);
       
       if (editChatHistory?.data.success) {
         setEditMessages(editChatHistory.data.messages || []);

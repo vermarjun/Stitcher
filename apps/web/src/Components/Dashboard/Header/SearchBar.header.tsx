@@ -32,7 +32,7 @@ function SearchSection({ searchQuery, setSearchQuery, projectId }: SearchSection
 
     setIsLoading(true);
     try {
-      const response = await api.get(`/search/prompts`, {
+      const response:any = await api.get(`/search/prompts`, {
         params: {
           projectId,
           q: query

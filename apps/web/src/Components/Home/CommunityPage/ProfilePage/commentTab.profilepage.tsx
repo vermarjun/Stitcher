@@ -146,7 +146,7 @@ function CommentsTab({ userId }: { userId: string }) {
     async function fetchComments() {
       try {
         setLoading(true);
-        const res = await api.get(`/community/users/${userId}/comments?limit=20`);
+        const res = await api.get<{ success: boolean; comments: IComment[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/community/users/${userId}/comments?limit=20`);
         if (mounted) {
           setComments(res.data.comments || []);
         }

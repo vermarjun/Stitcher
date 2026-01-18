@@ -30,7 +30,7 @@ interface Props {
   post: ICommunityPost;
   index: number;
   posts: ICommunityPost[];
-  lastPostRef?: React.RefObject<HTMLDivElement> | null;
+  lastPostRef?: React.RefObject<HTMLDivElement | null>;
   formatCount: (count: number) => string;
   currentUser?: IUser;
   onPostClick: (post: ICommunityPost) => void;
@@ -72,7 +72,7 @@ const PostCard = ({
     setLoadingStates((prev) => ({ ...prev, [post._id]: true }));
 
     try {
-      const response = await api.post("/backpack/items", {
+      const response = await api.post<any>("/backpack/items", {
         itemType: "Asset",
         itemId: post.assetId._id,
         source: "community_post",
@@ -81,7 +81,7 @@ const PostCard = ({
         tags: [],
         notes: "",
       });
-      if (response.data.success == true) {
+      if ((response.data as any).success == true) {
         post.isAddedToBackpack = true;
       } else {
         throw Error("Error came in saving template item to backpack");
@@ -107,7 +107,7 @@ const PostCard = ({
         tags: tagsArray,
       });
 
-      if (response.data.success) {
+      if ((response.data as any).success) {
         toast.success("Post updated successfully");
         // Update the post in the local state
         post.title = editTitle;
@@ -127,7 +127,7 @@ const PostCard = ({
     try {
       const response = await api.delete(`/community/posts/${post._id}`);
 
-      if (response.data.success) {
+      if ((response.data as any).success) {
         toast.success("Post deleted successfully");
         // Remove the post from the posts array
         const postIndex = posts.findIndex((p) => p._id === post._id);
@@ -152,7 +152,7 @@ const PostCard = ({
 
     try {
       const response = await api.post(`/community/posts/${post._id}/like`);
-      if (response.data.success) {
+      if ((response.data as any).success) {
         // Update with actual data from server
         setIsLiked(!isLiked);
         setLikesCount((prev) => (previousIsLiked ? prev - 1 : prev + 1));
@@ -178,7 +178,7 @@ const PostCard = ({
         const response = await api.delete(
           `/users/${post.authorId._id}/unfollow`
         );
-        if (response.data.following === false) {
+        if ((response.data as any).following === false) {
           setIsFollowing(false);
         } else {
           throw new Error("Failed to unfollow");
@@ -186,7 +186,7 @@ const PostCard = ({
       } else {
         // Follow
         const response = await api.post(`/users/${post.authorId._id}/follow`);
-        if (response.data.following === true) {
+        if ((response.data as any).following === true) {
           setIsFollowing(true);
         } else {
           throw new Error("Failed to follow");

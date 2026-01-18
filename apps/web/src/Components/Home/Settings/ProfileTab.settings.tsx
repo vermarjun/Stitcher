@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import api from "@/api";
 import { format } from "date-fns";
 import type { IUser } from "@/State/Types";
+import type { ProfilePhotoUploadResponse, ProfileBannerUploadResponse } from "@/types/api.types";
 
 const ProfileTab: React.FC = () => {
   const [user, setUser] = useState<IUser | null>(null);
@@ -34,8 +35,8 @@ const ProfileTab: React.FC = () => {
     if (!user) return;
     setListLoading(true);
     try {
-      const res = await api.get(`/users/${user._id}/${type}?page=${page}`);
-      const data = res.data;
+      const res = await api.get<any>(`/users/${user._id}/${type}?page=${page}`);
+      const data = res.data as any;
       setListData((prev) =>
         page === 1 ? data[type] : [...prev, ...data[type]]
       );
@@ -57,8 +58,8 @@ const ProfileTab: React.FC = () => {
   const fetchUserData = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/users/me");
-      const data = res.data;
+      const res = await api.get<IUser>("/users/me");
+      const data = res.data as any;
 
       // normalize createdAt to string
       const createdAt = data.createdAt
@@ -150,15 +151,11 @@ const ProfileTab: React.FC = () => {
     try {
       const fd = new FormData();
       fd.append("profilePhoto", file);
-      const response = await api.post("/users/profile-photo", fd, {
+      const response = await api.post<ProfilePhotoUploadResponse>("/users/profile-photo", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const newPhoto =
-        response.data.profilePhoto ||
-        response.data.profilePhotoUrl ||
-        response.data.url ||
-        response.data;
+      const newPhoto = (response.data as any).profilePhoto;
 
       if (user) {
         const updatedUser = { ...user, profilePhoto: newPhoto };
@@ -186,15 +183,11 @@ const ProfileTab: React.FC = () => {
     try {
       const fd = new FormData();
       fd.append("profileBanner", file);
-      const response = await api.post("/users/profile-banner", fd, {
+      const response = await api.post<ProfileBannerUploadResponse>("/users/profile-banner", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const newBanner =
-        response.data.profileBanner ||
-        response.data.profileBannerUrl ||
-        response.data.url ||
-        response.data;
+      const newBanner = (response.data as any).profileBanner;
 
       if (user) {
         const updatedUser = { ...user, profileBanner: newBanner };
@@ -223,12 +216,12 @@ const ProfileTab: React.FC = () => {
         username: formData.username,
         bio: formData.bio,
       };
-      const response = await api.put("/users/me", payload);
+      const response = await api.put<IUser>("/users/me", payload);
       const updated = response.data;
       const updatedUser: IUser = {
         _id: user?._id || "",
         username:
-          updated.username || updated.user?.username || formData.username || "",
+          updated.username || formData.username || "",
         email: updated.email || formData.email || "",
         profilePhoto: updated.profilePhoto || user?.profilePhoto || "",
         profileBanner: updated.profileBanner || user?.profileBanner || "",

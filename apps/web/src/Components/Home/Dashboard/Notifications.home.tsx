@@ -127,7 +127,7 @@ const NotificationsComponent: React.FC = () => {
 
   const markAsRead = async (id: string) => {
     try {
-      const res = await api.patch(`/notifications/${id}/read`);
+      const res = await api.patch<{ success: boolean; data: { readAt: string } }>(`/notifications/${id}/read`);
       setNotifications((prev) =>
         prev.map((n) =>
           n._id === id
@@ -148,7 +148,7 @@ const NotificationsComponent: React.FC = () => {
 
   const markAllAsRead = async () => {
     try {
-      await api.patch("/notifications/read-all");
+      await api.patch<any>("/notifications/read-all");
       setNotifications((prev) =>
         prev.map((n) => ({
           ...n,

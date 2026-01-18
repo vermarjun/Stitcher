@@ -15,7 +15,7 @@ const Leaderboard = ({ onProfileClick, onBack }: Props) => {
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const res = await api.get("/leaderboard/top");
+        const res = await api.get<any>("/leaderboard/top");
         if (res.data?.success) setData(res.data.data);
       } catch (error) {
         console.error("Error fetching leaderboard:", error);

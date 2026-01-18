@@ -37,8 +37,8 @@ const ChatHistoryComponent = ({
     try {
       if (mode === 'generate') {
         const response = await api.get(`/generatechat/project/${currentProject._id}`);
-        if (response.data.success) {
-          setChats(response.data.data || []);
+        if ((response.data as any).success) {
+          setChats((response.data as any).data || []);
         }
       } 
     } catch (error) {
@@ -54,8 +54,8 @@ const ChatHistoryComponent = ({
     try {
       if (mode === 'generate') {
         const response = await api.get(`/generatechat/${chat._id}`);
-        if (response.data.success) {
-          const messages = response.data.data.messages || [];
+        if ((response.data as any).success) {
+          const messages = (response.data as any).data.messages || [];
           onSelectHistory(messages);
           onGoBack();
         }

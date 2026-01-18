@@ -48,7 +48,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
       setIsLoading(true);
 
       // FETCH TEMPLATE DATA FOR THIS PROJECT ID
-      const templateResponse = await api.get(
+      const templateResponse = await api.get<{ success: boolean; data: { templates: Template[] }; message?: string }>(
         `/template?projectId=${currentProject?._id}`
       );
 
@@ -56,7 +56,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
         setTemplates(templateResponse.data.data.templates);
       } else {
         throw new Error(
-          templateResponse.data?.message || "Failed to fetch project"
+          "Failed to fetch project"
         );
       }
     } catch (error: any) {
@@ -95,10 +95,10 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
     try {
       const response = await api.post(`/template/${template._id}/like`);
       console.log(response.data);
-      if (!response.data.success) {
+      if (!(response.data as any).success) {
         throw new Error("Network connection failed. Please try again.");
       } else {
-        toast.success(response.data.message);
+        toast.success((response.data as any).message);
       }
 
       // Update template state - toggle the like status
@@ -108,7 +108,7 @@ const TemplateStore: React.FC<TemplateStoreProps> = ({
             ? {
                 ...t,
                 isLikedByUser: !t.isLikedByUser,
-                likesCount: response.data.data.likesCount,
+                likesCount: (response.data as any).data.likesCount,
               }
             : t
         )

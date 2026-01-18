@@ -56,15 +56,15 @@ const BackpackComponent: React.FC<BackpackProps> = ({
   async function fetchBackpack() {
     try {
       setIsLoading(true);
-      const response = await api.get("/backpack");
+      const response = await api.get<any>("/backpack");
       
       if (response.status === 200 || response.status === 201) {
-        setBackpack(response.data.backpack);
-        setItems(response.data.backpack.items || []);
+        setBackpack((response.data as any).backpack);
+        setItems((response.data as any).backpack.items || []);
         
         // Extract all unique tags
         const tags = new Set<string>();
-        response.data.backpack.items?.forEach((item: BackpackItem) => {
+        (response.data as any).backpack.items?.forEach((item: BackpackItem) => {
           item.tags.forEach(tag => tags.add(tag));
         });
         setAllTags(Array.from(tags));
@@ -98,10 +98,10 @@ const BackpackComponent: React.FC<BackpackProps> = ({
         favourite: !item.favourite
       });
 
-      if (!response.data.success) {
+      if (!(response.data as any).success) {
         throw new Error("Network connection failed. Please try again.");
       } else {
-        toast.success(response.data.message);
+        toast.success((response.data as any).message);
       }
 
       // Update item state
@@ -147,7 +147,7 @@ const BackpackComponent: React.FC<BackpackProps> = ({
       const response = await api.get(`/backpack/items/${item._id}/details`);
       
       if (onUseItem) {
-        await onUseItem(item, response.data.data.item);
+        await onUseItem(item, (response.data as any).data.item);
       }
 
       // Show success animation

@@ -131,16 +131,16 @@ export default function ApiKeyManager() {
   const fetchApiKeys = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/apikeys");
+      const response = await api.get<any>("/apikeys");
 
-      if (response.data && response.data.apiKeys) {
+      if (response.data && (response.data as any).apiKeys) {
         setApiKeys((prev) => {
           const updated = { ...prev };
-          Object.keys(response.data.apiKeys).forEach((agentId) => {
+          Object.keys((response.data as any).apiKeys).forEach((agentId) => {
             updated[agentId] = {
-              keyValue: response.data.apiKeys[agentId].keyValue || "",
-              baseUrl: response.data.apiKeys[agentId].baseUrl || "",
-              modelName: response.data.apiKeys[agentId].modelName || "",
+              keyValue: (response.data as any).apiKeys[agentId].keyValue || "",
+              baseUrl: (response.data as any).apiKeys[agentId].baseUrl || "",
+              modelName: (response.data as any).apiKeys[agentId].modelName || "",
             };
           });
           return updated;
@@ -201,7 +201,7 @@ export default function ApiKeyManager() {
     try {
       setSaving(true);
 
-      await api.post("/apikeys", {
+      await api.post<any>("/apikeys", {
         apiKeys: apiKeys,
       });
 

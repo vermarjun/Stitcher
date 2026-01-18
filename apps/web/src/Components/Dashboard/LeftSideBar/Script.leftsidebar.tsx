@@ -13,7 +13,7 @@ interface ScriptSidebarProps {
 const fetchProjectScript = async (currentProject?: Project): Promise<string> => {
   try {
     const response = await api.get(`/script/${currentProject?._id}`)
-    return response.data.project_script
+    return (response.data as any).project_script
   } catch(error){
     toast.error("Error fetching project description.");
     return ""

@@ -135,12 +135,12 @@ const CommunityPage = ({ currentUser }: Props) => {
 
         const response = await api.get(endpoint, { params });
 
-        if (response.data.success) {
-          const newPosts = response.data.data;
+        if ((response.data as any).success) {
+          const newPosts = (response.data as any).data;
           setPosts(append ? [...posts, ...newPosts] : newPosts);
-          setPagination(response.data.pagination);
+          setPagination((response.data as any).pagination);
           setHasMore(
-            response.data.pagination.page < response.data.pagination.pages
+            (response.data as any).pagination.page < (response.data as any).pagination.pages
           );
         }
       } catch (error: any) {

@@ -2,14 +2,14 @@ import axios from 'axios';
 
 // Create an axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api', 
+  baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api',
 });
 
 // Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    if (token) {
+    if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

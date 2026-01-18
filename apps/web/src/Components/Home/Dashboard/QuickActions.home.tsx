@@ -55,7 +55,7 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
 
     setIsLoading(true);
     try {
-      const response = await api.post("/project", {
+      const response = await api.post<any>("/project", {
         name: formData.projectName,
         description: formData.description,
         category: formData.category,
@@ -65,9 +65,9 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
         toast.success("Project created successfully!");
         setIsModalOpen(false);
         setFormData({ projectName: "", description: "", category: "" });
-        navigate(`/dashboard/${response.data._id}`);
+        navigate(`/dashboard/${(response.data as any)._id}`);
       } else {
-        toast.error(response.data.message || "Failed to create project");
+        toast.error((response.data as any).message || "Failed to create project");
       }
     } catch (error: any) {
       const errorMessage = error.message || "Failed to create project";

@@ -75,8 +75,8 @@ const SearchSection = ({ onProfileClick, onBack }: Props) => {
         `/users/search?q=${encodeURIComponent(query)}`
       );
 
-      if (response.data.success) {
-        setSearchResults(response.data.data);
+      if ((response.data as any).success) {
+        setSearchResults((response.data as any).data);
         setShowDropdown(true);
       } else {
         setError("Failed to fetch results");

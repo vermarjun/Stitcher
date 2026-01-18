@@ -97,7 +97,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
     try {
       setIsLoading(true);
 
-      const assetResponse = await api.get(
+      const assetResponse = await api.get<{ success: boolean; data: Asset[] }>(
         `/asset/project/${currentProject?._id}`
       );
 
@@ -105,7 +105,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
         setAssets(assetResponse.data.data);
       } else {
         throw new Error(
-          assetResponse.data?.message || "Failed to fetch project"
+          "Failed to fetch project"
         );
       }
     } catch (error: any) {
@@ -220,17 +220,17 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
       };
 
       // Make API request
-      const response = await api.post(`/track/${trackId}/asset`, requestBody);
+      const response = await api.post<{ success: boolean; message?: string }>(`/track/${trackId}/asset`, requestBody);
 
       // Check if response indicates success
-      if (response.data?.success) {
+      if (response.data.success) {
         triggerTimelineRefresh();
         triggerTracksRefresh();
         toast.success("Successfully Added to timeline");
       } else {
         // Display error message from response
         const errorMessage =
-          response.data?.message || "Failed to add asset to timeline";
+          response.data.message || "Failed to add asset to timeline";
         toast.error(errorMessage);
       }
     } catch (error: any) {
@@ -251,7 +251,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
       // Set loading state for this specific asset
       setAssetLoadingState(asset._id, "backpack", true);
 
-      const response = await api.post("/backpack/items", {
+      const response = await api.post<{ success: boolean; message?: string }>("/backpack/items", {
         itemType: "Asset",
         itemId: asset._id,
         source: "project",
@@ -261,7 +261,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
         notes: "",
       });
 
-      if (response.data.success == true) {
+      if (response.data.success === true) {
         asset.isAddedToBackpack = true;
         toast.success("Successfully added template to backpack");
       } else {
@@ -347,7 +347,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
       }));
 
       // Step 1: Get upload signature
-      const signatureResponse = await api.post("/asset/upload-signature", {
+      const signatureResponse = await api.post<any>("/asset/upload-signature", {
         projectId: currentProject?._id, // You might want to make this dynamic
         resourceType,
       });
@@ -399,7 +399,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
       // Add the new asset to the local state
       const newAsset: Asset = {
-        _id: metadataResponse.data.asset._id,
+        _id: (metadataResponse.data as any).asset._id,
         name: file.name,
         type: isVideo ? AssetType.VIDEO : AssetType.AUDIO,
         origin: AssetOrigin.UPLOAD,
@@ -414,10 +414,10 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
         width: cloudinaryResponse.width || undefined,
         height: cloudinaryResponse.height || undefined,
         bytes: cloudinaryResponse.bytes,
-        metadata: metadataResponse.data.asset.metadata,
+        metadata: (metadataResponse.data as any).asset.metadata,
         projectId: "project1",
-        createdAt: metadataResponse.data.asset.createdAt,
-        updatedAt: metadataResponse.data.asset.updatedAt,
+        createdAt: (metadataResponse.data as any).asset.createdAt,
+        updatedAt: (metadataResponse.data as any).asset.updatedAt,
       };
 
       setAssets((prev) => [newAsset, ...prev]);

@@ -206,7 +206,7 @@ const TimelineEditor = ({
     setIsDeleting(true);
     try {
       const response = await api.delete(`/track/items/${selectedItem._id}`);
-      if (response.data.success) {
+      if ((response.data as any).success) {
         // Remove the item from the timeline
         const updatedTimeline = {
           ...timeline,
@@ -462,13 +462,13 @@ const TimelineEditor = ({
         `/track/${textTrack._id}/text`,
         newTextItem
       );
-      if (!response.data.success) {
+      if (!(response.data as any).success) {
         throw Error(
           "Operation failed, backend responded with",
-          response.data.error
+          (response.data as any).error
         );
       } else {
-        newTextItem = response.data.data.timelineItem;
+        newTextItem = (response.data as any).data.timelineItem;
         const updated: Timeline = {
           ...timeline,
           tracks: tracks.map((t) =>

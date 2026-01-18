@@ -70,8 +70,8 @@ export const ApiKeyManagementModal: React.FC<ApiKeyManagementModalProps> = ({ is
   const loadApiKeys = async (): Promise<void> => {
     try {
       setLoading(true);
-      const response = await api.get('/api-keys');
-      setApiKeys(response.data);
+      const response = await api.get<{ apiKeys: Record<string, { keyValue: string; baseUrl: string; modelName: string }> }>('/api-keys');
+      setApiKeys(response.data.apiKeys as unknown as IApiKey[]);
     } catch (error: any) {
       console.error('Failed to load API keys:', error);
       toast.error(error.response?.data?.message || 'Failed to load API keys');

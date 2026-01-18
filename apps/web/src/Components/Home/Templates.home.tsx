@@ -105,10 +105,10 @@ const TemplateGallery: React.FC = () => {
       };
       if (searchQuery) params.search = searchQuery;
       if (selectedType !== "all") params.type = selectedType;
-      const response = await api.get("/template", { params });
-      if (response.data.success) {
-        setTemplates(response.data.data.templates);
-        setPagination(response.data.data.pagination);
+      const response = await api.get<any>("/template", { params });
+      if ((response.data as any).success) {
+        setTemplates((response.data as any).data.templates);
+        setPagination((response.data as any).data.pagination);
       }
     } catch (error) {
       console.error("Failed to fetch templates:", error);
@@ -228,7 +228,7 @@ const TemplateGallery: React.FC = () => {
     setLoadingStates(prev => ({ ...prev, [template._id]: true }));
     
     try {
-      const response = await api.post("/backpack/items", {
+      const response = await api.post<any>("/backpack/items", {
         itemType: "Template",
         itemId: template._id,
         source: "template_library",
@@ -237,7 +237,7 @@ const TemplateGallery: React.FC = () => {
         tags: [],
         notes: "",
       });
-      if (response.data.success == true) {
+      if ((response.data as any).success == true) {
         toast.success("Successfully added template to backpack");
         // Update the template to show it's added to backpack
         setTemplates(prev => 

@@ -158,9 +158,9 @@ export default function ProfilePage({
     if (!userId) return;
     try {
       setLoading(true);
-      const profileRes = await api.get(`/users/${userId}/profile`);
+      const profileRes = await api.get<IUser>(`/users/${userId}/profile`);
       const profileData: IUser = profileRes.data;
-      const rankRes = await api.get(`/leaderboard/user/${userId}/rank`);
+      const rankRes = await api.get<{ success: boolean; rank: number }>(`/leaderboard/user/${userId}/rank`);
       setUser(profileData);
       setRank(rankRes?.data?.rank ?? null);
       setIsFollowing(

@@ -34,7 +34,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       setLoading(true);
       const projectId = currentProject?._id;
       if (!projectId) return;
-      const response = await api.get(`/timeline/project/${projectId}`);
+      const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
       console.log("Timeline Object: ", response.data);
       setTimeline(response.data);
     } catch (err) {
@@ -118,7 +118,7 @@ const VideoEditor = ({ currentProject }: Props) => {
   const syncToBackend = useCallback(
     async (tl: Timeline) => {
       console.log("Syncing timeline:", tl); // Debug log
-      const res = await api.put(`/timeline/${tl._id}`, tl);
+      const res = await api.put<{ success: boolean; message: string }>(`/timeline/${tl._id}`, tl);
       if (!res.data.success) throw new Error("Failed to sync");
     },
     [timeline]

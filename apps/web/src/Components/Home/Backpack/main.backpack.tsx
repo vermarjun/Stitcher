@@ -94,8 +94,8 @@ const BackpackPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.get(`/backpack`);
-      if (response.data.success) {
-        setBackpack(response.data.backpack);
+      if ((response.data as any).success) {
+        setBackpack((response.data as any).backpack);
       }
     } catch (error) {
       console.error("Failed to fetch backpack:", error);
@@ -113,7 +113,7 @@ const BackpackPage: React.FC = () => {
       console.log("check1");
       const response = await api.patch(`/backpack/items/${itemId}/favorite`);
       console.log("check2", response);
-      if (response.data.success) {
+      if ((response.data as any).success) {
         setBackpack((prev) =>
           prev
             ? {
@@ -136,7 +136,7 @@ const BackpackPage: React.FC = () => {
   const handleDeleteItem = async (itemId: string) => {
     try {
       const response = await api.delete(`/backpack/items/${itemId}`);
-      if (response.data.success) {
+      if ((response.data as any).success) {
         setBackpack((prev) =>
           prev
             ? {
@@ -164,13 +164,13 @@ const BackpackPage: React.FC = () => {
   }) => {
     if (!selectedItemForPost) return;
     try {
-      const response = await api.post("/community/posts", {
+      const response = await api.post<any>("/community/posts", {
         assetId: selectedItemForPost.itemId._id,
         ...postData,
       });
-      if (response.data.success) {
+      if ((response.data as any).success) {
         // Post created successfully
-        console.log("Post created:", response.data.data);
+        console.log("Post created:", (response.data as any).data);
       }
     } catch (error) {
       console.error("Failed to create post:", error);

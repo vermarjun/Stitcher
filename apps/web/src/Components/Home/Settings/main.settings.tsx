@@ -99,7 +99,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
 
   const fetchUserData = async () => {
     try {
-      const response = await api.get("/users/me");
+      const response = await api.get<any>("/users/me");
       setUser(response.data);
     } catch (error: any) {
       toast.error("Failed to load user data");
@@ -116,7 +116,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
     }
     setLoading(true);
     try {
-      await api.put("/users/change-password", {
+      await api.put<any>("/users/change-password", {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
@@ -143,7 +143,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
     }
     setLoading(true);
     try {
-      await api.delete("/users/me");
+      await api.delete<any>("/users/me");
       toast.success("Account deleted successfully");
       window.location.href = "/";
     } catch (error: any) {

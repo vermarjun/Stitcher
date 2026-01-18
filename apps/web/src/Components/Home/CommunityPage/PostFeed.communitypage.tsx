@@ -40,7 +40,7 @@ interface FeedProps {
   feedType: "trending" | "following";
   setFeedType: (type: "trending" | "following") => void;
   hasMore: boolean;
-  lastPostRef?: React.RefObject<HTMLDivElement> | null;
+  lastPostRef?: React.RefObject<HTMLDivElement | null>;
   formatCount: (count: number) => string;
   currentUser?: IUser;
   onPostClick: (post: ICommunityPost) => void;

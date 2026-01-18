@@ -265,7 +265,7 @@ const PaymentPage = () => {
         return;
       }
 
-      const orderResponse = await api.post("/payments/create-order", {
+      const orderResponse = await api.post<any>("/payments/create-order", {
         pack: planId,
         currency: "INR",
       });
@@ -285,7 +285,7 @@ const PaymentPage = () => {
         order_id: orderData.order.id,
         handler: async function (response: any) {
           try {
-            const verifyResponse = await api.post("/payments/verify", {
+            const verifyResponse = await api.post<any>("/payments/verify", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,

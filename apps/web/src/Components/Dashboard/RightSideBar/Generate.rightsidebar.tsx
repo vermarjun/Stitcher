@@ -42,7 +42,7 @@ const formatErrorMessage = (error: any): string => {
   }
 
   if (error?.response?.data?.message) {
-    return error.response.data.message;
+    return error.response?.data.message;
   }
 
   if (error?.message) {
@@ -352,8 +352,8 @@ const GenerateComponent = ({
 
       const response = await api.post(`/generatechat/`, requestData);
 
-      if (response.data.success) {
-        const chatData = response.data.data;
+      if ((response.data as any).success) {
+        const chatData = (response.data as any).data;
 
         // Update current chat ID if it's a new chat
         const chatIdToUse = currentChatId || chatData.chatId;
@@ -383,8 +383,8 @@ const GenerateComponent = ({
         setPollingStatus("planning");
         socket.emit('join_chat', chatIdToUse);
       } else {
-        toast.error(response.data.message);
-        throw new Error(response.data.message);
+        toast.error((response.data as any).message);
+        throw new Error((response.data as any).message);
       }
     } catch (error: any) {
       const errorDetails = getErrorDetails(error);
@@ -405,7 +405,7 @@ const GenerateComponent = ({
     try {
       const response = await api.post(`/generatechat/cancel/${currentChatId}`);
 
-      if (response.data.success) {
+      if ((response.data as any).success) {
         toast.success("Generation cancelled");
         setIsProcessing(false);
         setPollingStatus(null);

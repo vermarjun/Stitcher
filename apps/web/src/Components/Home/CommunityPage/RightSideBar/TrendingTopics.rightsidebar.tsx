@@ -26,7 +26,7 @@ const TrendingTopics = () => {
   useEffect(() => {
     const fetchTrendingTopics = async () => {
       try {
-        const res = await api.get("/community/trending/tags?limit=5");
+        const res = await api.get<any>("/community/trending/tags?limit=5");
         if (res.data?.success) {
           setTopics(res.data.data || []);
         }
