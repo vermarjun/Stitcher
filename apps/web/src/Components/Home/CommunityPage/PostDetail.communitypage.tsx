@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { useRef } from "react";
 import api from "@/api";
 import { toast } from "sonner";
-import type { ICommunityPost } from "./main.communitypage";
+import type { ICommunityPost, IComment } from "./main.communitypage";
 import type { IUser } from "@/State/Types";
 
 export const Avatar = ({
@@ -235,7 +235,7 @@ const PostDetail = ({
   const handleLikeToggle = async (postId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      const res = await api.post(`/community/posts/${postId}/like`);
+      const res = await api.post<{ success: boolean; data: { liked: boolean; likesCount: number } }>(`/community/posts/${postId}/like`);
       if (res.data.success) {
         setSelectedPost({
           ...selectedPost,
@@ -288,7 +288,7 @@ const PostDetail = ({
         `/community/posts/${selectedPost._id}/comments/${id}/like`
       );
       // Refresh comments to get updated likes
-      const res = await api.get(
+      const res = await api.get<{ success: boolean; data: IComment[] }>(
         `/community/posts/${selectedPost._id}/comments`
       );
       if (res.data.success)
@@ -301,7 +301,7 @@ const PostDetail = ({
   const handleEditComment = async (id: string) => {
     setIsUpdatingComment(true);
     try {
-      const res = await api.patch(
+      const res = await api.patch<{ success: boolean }>(
         `/community/posts/${selectedPost._id}/comments/${id}`,
         { content: editCommentContent }
       );
@@ -320,7 +320,7 @@ const PostDetail = ({
   const handleDeleteComment = async (id: string) => {
     setIsDeletingComment(true);
     try {
-      const res = await api.delete(
+      const res = await api.delete<{ success: boolean }>(
         `/community/posts/${selectedPost._id}/comments/${id}`
       );
       if (res.data.success) {
@@ -366,7 +366,7 @@ const PostDetail = ({
       setLoadingReplies(newLoading);
       try {
         // Fetch replies for this specific comment
-        const res = await api.get(
+        const res = await api.get<{ success: boolean; data: IComment[] }>(
           `/community/posts/${selectedPost._id}/comments?parentCommentId=${commentId}`
         );
         if (res.data.success) {
@@ -490,7 +490,7 @@ const PostDetail = ({
         <div className="flex gap-3 mb-3">
           <Avatar
             src={selectedPost.authorId.profilePhoto}
-            alt={selectedPost.authorId.username}
+            alt={selectedPost.authorId.username ?? ""}
             className="h-10 w-10 cursor-pointer"
           />
           <div>
@@ -501,7 +501,7 @@ const PostDetail = ({
               {selectedPost.authorId.username}
             </p>
             <p className="text-sm text-zinc-500">
-              @{selectedPost.authorId.username.toLowerCase()} ·{" "}
+              @{selectedPost.authorId.username?.toLowerCase()} ·{" "}
               {formatTimeAgo(selectedPost.publishedAt)}
             </p>
           </div>
@@ -637,7 +637,7 @@ const PostDetail = ({
               <div className="border-t border-zinc-800 px-4 py-3 flex gap-3">
                 <Avatar
                   src={comment.userId.profilePhoto}
-                  alt={comment.userId.username}
+                  alt={comment.userId.username ?? ""}
                   className="h-9 w-9"
                 />
                 <div className="flex-1">
@@ -835,7 +835,7 @@ const PostDetail = ({
                       >
                         <Avatar
                           src={reply.userId.profilePhoto}
-                          alt={reply.userId.username}
+                          alt={reply.userId.username ?? ""}
                           className="h-8 w-8"
                         />
                         <div className="flex-1">
