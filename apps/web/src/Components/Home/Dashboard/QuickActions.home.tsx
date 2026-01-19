@@ -83,20 +83,20 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
 
   return (
     <>
-      <div className="space-y-4 animate-in fade-in duration-500">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-white">Quick Actions</h2>
-          <p className="text-zinc-400 text-xs">
+      <div className="space-y-3 animate-in fade-in duration-500">
+        <div className="space-y-0.5">
+          <h2 className="text-lg font-semibold text-white">Quick Actions</h2>
+          <p className="text-zinc-400 text-[10px] sm:text-xs">
             Get started with your next project
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
               <Card
                 onClick={startNewProject}
-                className="relative overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800"
+                className="relative overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[85px]"
               >
                 <ShineBorder
                   borderWidth={1}
@@ -104,17 +104,17 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
                   shineColor={["#19E5A1", "#02684D", "#00231a"]}
                 />
 
-                <CardContent className="p-2.5">
+                <CardContent className="p-3 flex flex-col items-center justify-center h-full">
                   <div className="flex flex-col items-center text-center space-y-2">
-                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200">
+                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
                       <Plus className="w-4 h-4 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                     </div>
                     <div className="space-y-0.5">
                       <h3 className="font-medium text-white text-xs group-hover:text-white transition-colors duration-200">
-                        Create New Project
+                        New Project
                       </h3>
-                      <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200">
-                        Start a fresh project
+                      <p className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
+                        Start fresh
                       </p>
                     </div>
                   </div>
@@ -204,62 +204,43 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
 
           <Card 
             onClick={()=>{onNavigate("backpack")}}
-            className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800">
-            <CardContent className="p-2.5">
+            className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[85px]">
+            <CardContent className="p-3 flex flex-col items-center justify-center h-full">
               <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200">
+                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
                   <Share2 className="w-4 h-4 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                 </div>
                 <div className="space-y-0.5">
                   <h3 className="font-medium text-white text-xs group-hover:text-white transition-colors duration-200">
-                    Share new post
+                    Community Post
                   </h3>
-                  <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200">
-                    Share a new post with community
+                  <p className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
+                    Share with others
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
+          
           <Card 
             onClick={()=>{onNavigate("api-keys")}}
-            className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800">
-            <CardContent className="p-2.5">
+            className="hidden md:flex border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[85px] col-span-2 md:col-span-1">
+            <CardContent className="p-3 flex flex-col items-center justify-center h-full w-full">
               <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200">
+                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
                   <Upload className="w-4 h-4 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                 </div>
                 <div className="space-y-0.5">
                   <h3 className="font-medium text-white text-xs group-hover:text-white transition-colors duration-200">
                     API Keys
                   </h3>
-                  <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200">
-                    Add API keys or check usage
+                  <p className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
+                    Manage usage
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* <Card 
-            onClick={() => onNavigate("templates")}
-            className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900 hover:bg-zinc-800">
-            <CardContent className="p-2.5">
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200">
-                  <LayoutTemplate className="w-4 h-4 text-zinc-300 group-hover:text-white transition-colors duration-200" />
-                </div>
-                <div className="space-y-0.5">
-                  <h3 className="font-medium text-white text-xs group-hover:text-white transition-colors duration-200">
-                    Browse Templates
-                  </h3>
-                  <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200">
-                    Choose from templates
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card> */}
         </div>
       </div>
     </>

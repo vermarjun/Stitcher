@@ -18,26 +18,37 @@ const TopDesign = () => {
   }
   const user = JSON.parse(localStorage.getItem("user") || "");
   const username = capitalizeFirstLetter(user.username) || "Guest";
+  
   return (
-    <div className="w-full max-h-40 overflow-hidden bg-gradient-to-b from-green-950/80 to-green-950/30 px-4 md:px-6 rounded-lg flex justify-center items-center">
-      <img
-        className="max-h-fit max-w-52"
-        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094972/image-removebg-preview_fshtui.png"
-        alt=""
-      />
-      <div className="w-full">
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 text-center">
-          Welcome, {username}
-        </h1>
-        <p className="text-sm md:text-base text-gray-200 truncate text-center">
-          Start creating animations that Explain, Convert and just WORK!
-        </p>
-      </div>
-      <img
-        className="max-h-fit max-w-52"
-        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
-        alt=""
-      />
+    <div className="relative w-full overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 h-32 md:h-40">
+       <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-green-500/10 rounded-full blur-3xl pointer-events-none"></div>
+       <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+       
+       <div className="relative z-10 p-6 md:p-8 flex items-center justify-between h-full">
+         <div className="space-y-1.5 max-w-xl">
+           <h1 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400 tracking-tight">
+             Welcome back, {username}
+           </h1>
+           <p className="text-zinc-400 text-xs md:text-sm font-light max-w-sm md:max-w-none">
+             Ready to create your next masterpiece?
+           </p>
+         </div>
+
+         {/* Images added back as requested, positioned for theme */}
+         <div className="hidden md:flex items-center space-x-4 absolute right-0 top-0 h-full opacity-40 pointer-events-none fade-in mask-image-gradient">
+            <img
+              className="h-full object-cover mix-blend-screen"
+              src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094972/image-removebg-preview_fshtui.png"
+              alt="math-theme-1"
+            />
+            <div className="h-full w-px bg-gradient-to-b from-transparent via-zinc-700 to-transparent"></div>
+            <img
+              className="h-full object-cover mix-blend-screen pr-4"
+              src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
+              alt="math-theme-2"
+            />
+         </div>
+       </div>
     </div>
   );
 };
@@ -49,8 +60,8 @@ const Dashboard = ({
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-black p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-black p-3 md:p-4">
+      <div className="max-w-7xl mx-auto space-y-5">
         <TopDesign />
         <QuickActions navigate={navigate} onNavigate={onNavigate} />
         <RecentProjects
@@ -63,7 +74,7 @@ const Dashboard = ({
           missingFields={["Add a profile photo", "Verify your email"]}
           onContinue={() => navigate("/settings")}
         /> */}
-        <GettingStarted />
+        <GettingStarted onNavigate={onNavigate} />
       </div>
     </div>
   );
