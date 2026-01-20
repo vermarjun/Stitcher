@@ -724,12 +724,23 @@ const TimelineEditor = ({
               )}px`,
             }}
           >
-            {/* Minimal Time Ruler */}
-            <div className="relative h-6 bg-zinc-950 border-b border-zinc-800">
+            {/* Minimal Time Ruler with Click-to-Seek */}
+            <div 
+              className="relative h-6 bg-zinc-950 border-b border-zinc-800 cursor-pointer hover:bg-zinc-900/50 transition-colors"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const clickTime = x / pixelsPerSecond;
+                // Clamp to valid range
+                const targetTime = Math.max(0, Math.min(clickTime, Number(timeline.duration)));
+                onTimeUpdate(targetTime);
+              }}
+              title="Click to seek"
+            >
               {Array.from({ length: rulerDuration }).map((_, i) => (
                 <div
                   key={i}
-                  className="absolute top-0 flex flex-col"
+                  className="absolute top-0 flex flex-col pointer-events-none"
                   style={{ left: `${i * pixelsPerSecond}px` }}
                 >
                   <div className="w-px h-3 bg-zinc-600" />

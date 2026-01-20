@@ -493,6 +493,9 @@ const VideoPlayer = ({
     }
   }, [currentTime, isPlaying, getActiveVideo]);
 
+  // Track last audio seek time to debounce
+  const lastAudioSeekRef = useRef<Map<string, number>>(new Map());
+
   // Handle audio items
   useEffect(() => {
     const activeAudio = getActiveAudio();
@@ -503,6 +506,7 @@ const VideoPlayer = ({
         audio.pause();
         audio.remove();
         audioRefs.current.delete(id);
+        lastAudioSeekRef.current.delete(id);
       }
     });
 
@@ -519,9 +523,22 @@ const VideoPlayer = ({
 
       const timeInClip = currentTime - item.startTime;
       const sourceTime = item.sourceStartTime + timeInClip;
+      const drift = Math.abs(audio.currentTime - sourceTime);
 
-      if (Math.abs(audio.currentTime - sourceTime) > 0.1)
+      // IMPROVED SYNC LOGIC to prevent crackling:
+      // 1. Higher tolerance (0.3s instead of 0.1s) for normal drift
+      // 2. Only seek if significantly out of sync (>0.5s)
+      // 3. Debounce seeks to prevent rapid consecutive updates
+      const now = Date.now();
+      const lastSeek = lastAudioSeekRef.current.get(item._id) || 0;
+      const timeSinceLastSeek = now - lastSeek;
+
+      // Only seek if drift is significant AND enough time has passed since last seek
+      if (drift > 0.5 && timeSinceLastSeek > 200) {
+        // 200ms debounce
         audio.currentTime = sourceTime;
+        lastAudioSeekRef.current.set(item._id, now);
+      }
 
       if (isPlaying) {
         if (audio.paused) void audio.play().catch(() => {});
