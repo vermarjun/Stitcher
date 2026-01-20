@@ -258,15 +258,15 @@ const PostCard = ({
     <div
       key={post._id}
       ref={index === posts.length - 1 ? lastPostRef : null}
-      className="border-b border-zinc-800 hover:bg-zinc-900/30 transition-colors cursor-pointer"
+      className="border-b border-zinc-800 hover:bg-zinc-900/20 transition-all duration-200 cursor-pointer animate-in fade-in slide-in-from-bottom-2"
     >
-      <div className="flex gap-3 px-4 py-3">
+      <div className="flex gap-4 px-5 py-5">
         {/* Profile Picture */}
         <div className="flex-shrink-0">
           <img
             src={post.authorId.profilePhoto || "https://i.pravatar.cc/150"}
             alt={post.authorId.username}
-            className="h-10 w-10 rounded-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+            className="h-11 w-11 rounded-full object-cover cursor-pointer hover:opacity-90 transition-opacity ring-2 ring-transparent hover:ring-zinc-800"
             onClick={(e) => {
               e.stopPropagation();
               onProfileClick(post.authorId);
@@ -275,33 +275,35 @@ const PostCard = ({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 min-w-0 relative">
+        <div className="flex-1 min-w-0 relative space-y-3">
           {/* Header */}
-          <div className="flex items-start justify-between mb-1">
-            <div className="flex items-center gap-1 flex-wrap min-w-0">
-              <span
-                className="font-bold text-[15px] hover:underline cursor-pointer truncate"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onProfileClick(post.authorId);
-                }}
-              >
-                {post.authorId.username}
-              </span>
-              {getPlanBadge(post.authorId.plan)}
-              <span className="text-zinc-500 text-[15px] truncate">
-                @{post.authorId.username}
-              </span>
-              <span className="text-zinc-500 text-[15px]">·</span>
-              <span className="text-zinc-500 text-[15px] hover:underline">
-                {timeAgo(new Date(post.publishedAt))}
-              </span>
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col min-w-0 pr-2">
+              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                <span
+                  className="font-bold text-[15px] text-white hover:underline cursor-pointer truncate flex-shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onProfileClick(post.authorId);
+                  }}
+                >
+                  {post.authorId.username}
+                </span>
+                {getPlanBadge(post.authorId.plan)}
+                <span className="text-zinc-500 text-[15px] truncate flex-shrink min-w-0">
+                  @{post.authorId.username}
+                </span>
+                <span className="text-zinc-500 text-[15px] flex-shrink-0">·</span>
+                <span className="text-zinc-500 text-[15px] hover:text-zinc-400 transition-colors flex-shrink-0 whitespace-nowrap">
+                  {timeAgo(new Date(post.publishedAt))}
+                </span>
+              </div>
             </div>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="text-zinc-400 hover:text-zinc-300 p-1 hover:bg-zinc-800 rounded-full transition-colors"
+                  className="text-zinc-500 hover:text-zinc-300 p-1.5 hover:bg-zinc-800/80 rounded-full transition-all flex-shrink-0 -mt-1 -mr-2"
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
@@ -311,22 +313,22 @@ const PostCard = ({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="bg-zinc-800 border-zinc-600 absolute right-0 w-48 z-50"
+                className="bg-black/95 border-zinc-800 absolute right-0 w-48 z-50 backdrop-blur-xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 {!isOwner && (
                   <DropdownMenuItem
                     onClick={onFollowClick}
-                    className="cursor-pointer focus:bg-zinc-200 text-white"
+                    className="cursor-pointer focus:bg-zinc-900 text-zinc-200 focus:text-white py-2.5"
                   >
                     {isFollowing ? (
                       <>
-                        <UserCheck className="w-4 h-4 mr-2" />
+                        <UserCheck className="w-4 h-4 mr-2.5" />
                         Following
                       </>
                     ) : (
                       <>
-                        <UserPlus className="w-4 h-4 mr-2" />
+                        <UserPlus className="w-4 h-4 mr-2.5" />
                         Follow @{post.authorId.username}
                       </>
                     )}
@@ -334,66 +336,67 @@ const PostCard = ({
                 )}
                 {/* Edit post button */}
                 {isOwner && (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowEditModal(true);
-                    }}
-                    className="cursor-pointer focus:bg-zinc-200 text-white"
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Post
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowEditModal(true);
+                      }}
+                      className="cursor-pointer focus:bg-zinc-900 text-zinc-200 focus:text-white py-2.5"
+                    >
+                      <Edit className="h-4 w-4 mr-2.5" />
+                      Edit Post
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteModal(true);
+                      }}
+                      className="cursor-pointer focus:bg-red-950/30 text-red-400 focus:text-red-300 py-2.5"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2.5" />
+                      Delete Post
+                    </DropdownMenuItem>
+                  </>
                 )}
-                {/* Delete post button */}
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDeleteModal(true);
-                  }}
-                  className="cursor-pointer focus:bg-zinc-200 text-red-100"
-                >
-                  <Trash2 className="h-4 w-4 text-red-500 mr-2" />
-                  Delete Post
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
           {/* Text Content */}
-          <div className="mb-3" onClick={() => onPostClick(post)}>
-            <p className="text-[15px] leading-5 whitespace-pre-wrap break-words">
-              <span className="font-semibold">{post.title}</span>
-              {post.description && (
-                <>
-                  {" "}
-                  <span className="text-zinc-300">{post.description}</span>
-                </>
-              )}
-            </p>
+          <div className="space-y-1.5" onClick={() => onPostClick(post)}>
+            <h3 className="text-[16px] font-semibold text-white leading-snug">
+              {post.title}
+            </h3>
+            {post.description && (
+              <p className="text-[15px] text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+                {post.description}
+              </p>
+            )}
+             {/* Tags if available could go here, but relying on description for now */}
           </div>
 
           {/* Media */}
           <div
-            className="relative border border-zinc-700 rounded-2xl overflow-hidden mb-3 group"
+            className="relative border border-zinc-800 rounded-xl overflow-hidden group bg-zinc-900/30"
             onClick={() => onPostClick(post)}
           >
             <img
               src={post.assetId.thumbnail}
               alt={post.title}
-              className="w-full aspect-video object-cover"
+              className="w-full aspect-video object-cover transition-transform duration-500"
             />
 
             {/* Play Button Overlay */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-              <div className="bg-white rounded-full p-3">
-                <Play className="h-6 w-6 text-black fill-black" />
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/30 backdrop-blur-[1px]">
+              <div className="bg-white/90 rounded-full p-3.5 shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-300 hover:bg-white hover:scale-110">
+                <Play className="h-6 w-6 text-black fill-black ml-0.5" />
               </div>
             </div>
 
             {/* Duration Badge */}
             {post.assetId.duration && (
-              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/75 text-white text-xs px-2 py-1 rounded">
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/80 backdrop-blur-sm text-white text-[10px] font-medium px-2 py-1 rounded-md border border-white/10 shadow-sm">
                 <Clock className="h-3 w-3" />
                 {formatDuration(post.assetId.duration)}
               </div>
@@ -401,22 +404,22 @@ const PostCard = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-between items-center -ml-2">
-            <div className="flex gap-3">
+          <div className="flex justify-between items-center pt-1">
+            <div className="flex gap-1 -ml-2">
               {/* Like */}
               <button
-                className="flex items-center gap-2 group p-2 hover:bg-pink-500/10 rounded-full transition-colors"
+                className="flex items-center gap-1.5 group p-2 hover:bg-pink-500/10 rounded-full transition-all duration-200"
                 onClick={handleLike}
               >
                 <Heart
-                  className={`w-[18px] h-[18px] transition-colors ${
+                  className={`w-5 h-5 transition-all duration-200 ${
                     isLiked
-                      ? "fill-pink-500 text-red-500"
-                      : "text-zinc-500 group-hover:text-pink-500"
+                      ? "fill-pink-500 text-pink-500 scale-110"
+                      : "text-zinc-400 group-hover:text-pink-500 group-hover:scale-110"
                   }`}
                 />
                 <span
-                  className={`text-[13px] transition-colors ${
+                  className={`text-xs font-medium transition-colors ${
                     isLiked
                       ? "text-pink-500"
                       : "text-zinc-500 group-hover:text-pink-500"
@@ -424,44 +427,31 @@ const PostCard = ({
                 >
                   {formatCount(likesCount)}
                 </span>
-                <span
-                  className={`text-[13px] transition-colors hidden sm:inline ${
-                    isLiked
-                      ? "text-pink-500"
-                      : "text-zinc-500 group-hover:text-pink-500"
-                  }`}
-                >
-                  Likes
-                </span>
               </button>
 
               <button
-                className="flex items-center gap-2 group cursor-pointer p-2 hover:bg-blue-500/10 rounded-full transition-colors"
+                className="flex items-center gap-1.5 group cursor-pointer p-2 hover:bg-blue-500/10 rounded-full transition-all duration-200"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPostClick(post); // This will open the detailed post view for comments
+                  onPostClick(post); 
                 }}
               >
-                <MessageCircle className="w-[18px] h-[18px] text-zinc-400 group-hover:text-blue-500 transition-colors" />
-                <span className="text-[13px] text-zinc-400 group-hover:text-blue-500 transition-colors">
+                <MessageCircle className="w-5 h-5 text-zinc-400 group-hover:text-blue-500 transition-all duration-200 group-hover:scale-110" />
+                <span className="text-xs font-medium text-zinc-500 group-hover:text-blue-500 transition-colors">
                   {formatCount(post.commentsCount)}
-                </span>
-                <span className="text-[13px] text-zinc-400 group-hover:text-blue-500 transition-colors hidden sm:inline">
-                  Comments
                 </span>
               </button>
 
               {/* Views Badge */}
-              <div className="flex items-center gap-1 bg-black/75 text-zinc-400 text-xs px-2 py-1 rounded">
-                <ChartColumn className="w-[18px] h-[18px]" />
-                {formatCount(post.analytics.views)}
-                <span>Views</span>
+              <div className="ml-2 flex items-center gap-1.5 text-zinc-500 text-xs px-2 py-1.5">
+                <ChartColumn className="w-4 h-4 opacity-70" />
+                <span className="font-medium">{formatCount(post.analytics.views)}</span>
               </div>
             </div>
 
             {/* Backpack/Save */}
             <button
-              className="flex items-center gap-2 group p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 group p-2 hover:bg-blue-500/10 rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={(e) => {
                 e.stopPropagation();
                 if (!post.isAddedToBackpack) {
@@ -472,24 +462,21 @@ const PostCard = ({
             >
               {isPostLoading ? (
                 <>
-                  <Loader2 className="w-[18px] h-[18px] text-zinc-500 animate-spin" />
-                  <span className="text-[13px] text-zinc-500 hidden sm:inline">
-                    Saving...
-                  </span>
+                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
                 </>
               ) : post.isAddedToBackpack ? (
                 <>
-                  <Check className="w-[18px] h-[18px] text-green-500" />
-                  <span className="text-[13px] text-green-500 hidden sm:inline">
+                  <Check className="w-5 h-5 text-green-500" />
+                  <span className="text-xs text-green-500 font-medium hidden sm:inline">
                     Saved
                   </span>
                 </>
               ) : (
                 <>
-                  <Backpack className="w-[18px] h-[18px] text-zinc-500 group-hover:text-blue-500 transition-colors" />
-                  <span className="text-[13px] text-zinc-500 group-hover:text-blue-500 transition-colors hidden sm:inline">
-                    Save to Backpack
-                  </span>
+                  <Backpack className="w-5 h-5 text-zinc-400 group-hover:text-blue-500 transition-all duration-200 group-hover:scale-110" />
+                  {/* <span className="text-xs text-zinc-500 group-hover:text-blue-500 transition-colors hidden sm:inline font-medium">
+                    Save
+                  </span> */}
                 </>
               )}
             </button>

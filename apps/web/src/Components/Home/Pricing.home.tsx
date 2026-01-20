@@ -4,7 +4,6 @@ import {
   Zap,
   Crown,
   Rocket,
-  Star,
   ExternalLink,
   Mail,
   Twitter,
@@ -43,33 +42,36 @@ const SocialModal = ({
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-7 max-w-md w-full shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-zinc-900/90 border border-zinc-800/50 rounded-2xl p-7 max-w-md w-full shadow-2xl relative overflow-hidden">
+        {/* Glow effect */}
+        <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#19E5A1]/10 rounded-full blur-3xl pointer-events-none" />
+        
         {/* Header */}
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-semibold text-white">
+        <div className="flex justify-between items-center mb-5 relative z-10">
+          <h3 className="text-xl font-semibold text-white tracking-tight">
             Get 2× Free Credits
           </h3>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white transition-colors"
+            className="text-zinc-500 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Description */}
-        <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+        <p className="text-zinc-400 text-sm leading-relaxed mb-6 relative z-10">
           I'm giving early users{" "}
-          <span className="text-white font-medium">2× free credits</span>
-          to test Stitcher.
+          <span className="text-white font-medium">2× free credits</span> to
+          test Stitcher.
           <br />
           Reach out to me on any of the platforms below and I’ll instantly send
           you an invite.
         </p>
 
         {/* Social Links */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
           {socialLinks.map((item) => {
             const Icon = item.icon;
             return (
@@ -78,12 +80,12 @@ const SocialModal = ({
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl 
-                         transition-colors text-zinc-300 hover:text-white group"
+                className="flex items-center gap-3 p-3 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 hover:border-zinc-600 rounded-xl 
+                         transition-all duration-200 text-zinc-300 hover:text-white group"
               >
                 <Icon className="w-4 h-4" />
                 <span className="text-sm font-medium">{item.label}</span>
-                <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ExternalLink className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500" />
               </a>
             );
           })}
@@ -115,50 +117,33 @@ const UserCurrentPlan = ({
   };
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 mb-6">
-      <div className="flex items-center justify-around">
-        <div className="flex justify-center items-center gap-2">
-          <p className="text-zinc-400 text-xs">Current Plan: </p>
-          <p className="text-white text-sm font-medium capitalize">
+    <div className="w-full max-w-2xl mx-auto mb-10">
+      <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-full px-6 py-3 flex flex-wrap items-center justify-between gap-4 shadow-lg shadow-black/20">
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Current Plan</span>
+          <span className="bg-zinc-800 text-white text-xs px-2 py-0.5 rounded border border-zinc-700 font-medium capitalize">
             {userData.plan}
-          </p>
+          </span>
         </div>
-        <div className="flex">
-          <p className="text-white text-xs">
-            {userData.credits.generation} generations •{" "}
-          </p>
-          <p className="text-[#19E5A1] text-xs">
-            {userData.credits.editing} edits left
-          </p>
-        </div>
-        <div className="flex justify-center items-center gap-2">
-          <p className="text-zinc-400 text-xs">Expires:</p>
-          <p className="text-white text-sm font-medium">
-            {formatDate(userData.credits.expiresAt)}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
+        
+        <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
 
-// Free tier info component
-const FreeTierInfo = () => {
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-6">
-      <div className="flex items-start gap-3">
-        <div className="bg-[#02684D] rounded-lg p-2 mt-0.5">
-          <Star className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-zinc-300">
+            <span className="text-white font-medium">{userData.credits.generation}</span> generations
+          </span>
+          <span className="text-[#19E5A1]">
+            <span className="font-medium">{userData.credits.editing}</span> edits left
+          </span>
         </div>
-        <div>
-          <h4 className="text-white font-semibold text-sm mb-1">
-            Stitcher is Free
-          </h4>
-          <p className="text-zinc-400 text-xs leading-relaxed">
-            You can use your own API keys (must support tool calling and
-            structured output) but requests will be rendered slower compared to
-            paid or testing users.
-          </p>
+
+        <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
+
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-500 text-xs">Expires</span>
+          <span className="text-zinc-300 text-xs font-medium">
+            {formatDate(userData.credits.expiresAt)}
+          </span>
         </div>
       </div>
     </div>
@@ -177,7 +162,6 @@ const PaymentPage = () => {
   const [selectedPlan, setSelectedPlan] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSocialModal, setShowSocialModal] = useState(false);
-  // const { width, height } = useWindowSize();
 
   // Mock user data - replace with actual data from your app
   const userData = {
@@ -340,7 +324,11 @@ const PaymentPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black py-8 px-4">
+    <div className="min-h-screen bg-black text-white selection:bg-[#19E5A1]/30 overflow-x-hidden relative">
+      {/* Background Ambient Effects */}
+      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
+      <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
+
       <Toaster
         position="top-center"
         theme="dark"
@@ -355,7 +343,12 @@ const PaymentPage = () => {
       />
 
       {showConfetti && (
-        <Confetti recycle={false} numberOfPieces={200} gravity={0.3} />
+        <Confetti 
+          recycle={false} 
+          numberOfPieces={500} 
+          gravity={0.15} 
+          colors={['#19E5A1', '#ffffff', '#27272a']}
+        />
       )}
 
       <SocialModal
@@ -363,148 +356,114 @@ const PaymentPage = () => {
         onClose={() => setShowSocialModal(false)}
       />
 
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex justify-center">
+      <div className="max-w-7xl mx-auto px-6 py-12 lg:py-20 relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]">
+        
+        {/* Top Banner Button */}
+        <div className="mb-12">
           <ShimmerButton
             onClick={() => setShowSocialModal(true)}
-            className="text-xs px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-[#19E5A1]/50 text-zinc-300 rounded-lg transition-all duration-200 font-medium"
+            className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800 hover:border-[#19E5A1]/30 text-zinc-300 hover:text-white rounded-full transition-all duration-300 shadow-xl shadow-black/20 overflow-hidden"
           >
-            Get 2x Free credits via invitation →
+            <span className="text-xs font-medium tracking-wide">Get 2x Free credits via invitation</span>
+            <ExternalLink className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+            <div className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/5 group-hover:ring-white/10" />
           </ShimmerButton>
         </div>
+
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-3">
-            Upgrade Your Experience
+        <div className="text-center mb-16 max-w-3xl">
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 tracking-tight leading-tight">
+            Upgrade Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">Experience</span>
           </h1>
-          <p className="text-zinc-400 text-sm max-w-2xl mx-auto">
-            Get high quality animations Faster. Upgrade to unlock premium
-            features.
+          <p className="text-zinc-400 text-lg leading-relaxed max-w-xl mx-auto">
+            Unlock premium features and create high-quality animations faster.
           </p>
         </div>
 
-        {/* User Info Sections */}
-        <div className="max-w-2xl mx-auto mb-8">
-          {/* Need More Credits Button */}
-          <UserCurrentPlan userData={userData} />
-        </div>
+        {/* User Info */}
+        <UserCurrentPlan userData={userData} />
 
-        {/* Pricing Cards */}
-        <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {plans.map((plan, index) => {
+        {/* Pricing Cards Grid */}
+        <div className="grid md:grid-cols-3 gap-8 w-full max-w-5xl mx-auto perspective-1000">
+          {plans.map((plan) => {
             const Icon = plan.icon;
             return (
               <div
                 key={plan.id}
-                className={`relative ${
-                  index == 1 ? "scale-105 hover:scale-110" : "hover:scale-105 "
-                } bg-zinc-900 rounded-xl border overflow-hidden transition-all duration-200 ${
+                className={`group relative flex flex-col p-8 rounded-3xl border transition-all duration-500 ${
                   plan.popular
-                    ? "border-[#19E5A1] ring-2 ring-[#19E5A1]/20"
-                    : "border-zinc-800 hover:border-zinc-700"
+                    ? "bg-zinc-900/60 border-[#19E5A1]/30 shadow-2xl shadow-[#19E5A1]/10 scale-105 z-10 ring-1 ring-[#19E5A1]/20"
+                    : "bg-zinc-900/20 border-zinc-800 hover:border-zinc-700/80 hover:bg-zinc-900/40"
                 }`}
               >
+                {/* Popular Badge */}
                 {plan.popular && (
-                  <div className="absolute top-0 right-0 bg-[#19E5A1] text-black px-3 py-1 text-xs font-semibold rounded-bl-lg">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#19E5A1] text-black px-4 py-1.5 text-xs font-bold rounded-full shadow-[0_0_20px_rgba(25,229,161,0.3)] tracking-wide">
                     MOST POPULAR
                   </div>
                 )}
-
-                <div className="p-6">
-                  {/* Icon and Name */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div
-                      className={`p-2 rounded-lg ${
-                        plan.popular ? "bg-[#19E5A1]" : "bg-zinc-800"
-                      }`}
-                    >
-                      <Icon
-                        className={`w-5 h-5 ${
-                          plan.popular ? "text-black" : "text-[#19E5A1]"
-                        }`}
-                      />
+                
+                {/* Plan Header */}
+                <div className="mb-6 space-y-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                    plan.popular ? "bg-[#19E5A1]/10 text-[#19E5A1]" : "bg-zinc-800 text-zinc-400 group-hover:text-zinc-200"
+                  } transition-colors`}>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-xl font-bold text-white tracking-tight">{plan.name}</h3>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-4xl font-bold text-white tracking-tight">₹{plan.price}</span>
+                      <span className="text-zinc-500 text-sm font-medium">/ lifetime</span>
                     </div>
-                    <h3 className="text-lg font-bold text-white">
-                      {plan.name}
-                    </h3>
                   </div>
+                </div>
 
-                  {/* Price */}
-                  <div className="mb-6">
-                    <span className="text-3xl font-bold text-white">
-                      ₹{plan.price}
-                    </span>
-                    <span className="text-zinc-400 text-sm ml-2">one-time</span>
-                  </div>
+                <div className="w-full h-px bg-zinc-800/50 mb-6" />
 
-                  {/* Features */}
-                  <ul className="space-y-3 mb-6">
-                    {plan.features.map((feature, index) => (
-                      <li key={index} className="flex items-start">
-                        <Check className="w-4 h-4 text-[#19E5A1] mr-3 flex-shrink-0 mt-0.5" />
-                        <span className="text-zinc-300 text-sm">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                {/* Features */}
+                <ul className="space-y-4 mb-8 flex-1">
+                  {plan.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <div className={`mt-1 p-0.5 rounded-full ${
+                        plan.popular ? "bg-[#19E5A1]/20 text-[#19E5A1]" : "bg-zinc-800 text-zinc-400"
+                      }`}>
+                         <Check className="w-3 h-3" strokeWidth={3} />
+                      </div>
+                      <span className="text-zinc-300 text-sm leading-tight pt-0.5">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
 
-                  {/* CTA Button */}
-                  <button
-                    onClick={() => handlePayment(plan.id)}
-                    disabled={loading && selectedPlan === plan.id}
-                    className={`w-full py-3 px-6 rounded-lg font-semibold text-sm transition-all ${
-                      plan.popular
-                        ? "bg-[#19E5A1] hover:bg-[#14c28b] text-black shadow-lg hover:shadow-xl"
-                        : "bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
-                    } ${
-                      loading && selectedPlan === plan.id
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                    }`}
-                  >
+                {/* CTA Button */}
+                <button
+                  onClick={() => handlePayment(plan.id)}
+                  disabled={loading && selectedPlan === plan.id}
+                  className={`w-full py-4 px-6 rounded-2xl font-semibold text-sm transition-all duration-300 relative overflow-hidden ${
+                    plan.popular
+                      ? "bg-[#19E5A1] hover:bg-[#15cea0] text-black shadow-[0_4px_20px_rgba(25,229,161,0.2)] hover:shadow-[0_4px_25px_rgba(25,229,161,0.4)] transform hover:-translate-y-1"
+                      : "bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 hover:border-zinc-600"
+                  } ${
+                    loading && selectedPlan === plan.id
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
                     {loading && selectedPlan === plan.id ? (
-                      <span className="flex items-center justify-center">
-                        <svg
-                          className="animate-spin h-4 w-4 mr-2"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="none"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
+                      <>
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         Processing...
-                      </span>
+                      </>
                     ) : (
                       "Get Started"
                     )}
-                  </button>
-                </div>
+                  </span>
+                </button>
               </div>
             );
           })}
-        </div>
-
-        {/* Footer Note */}
-        <div className="text-center mt-8">
-          <p className="text-zinc-500 text-xs">
-            All plans include 30-day access. Upgrade or downgrade anytime.
-          </p>
-        </div>
-
-        <div className="mt-8 w-full flex justify-center items-center">
-          <div className="max-w-5xl ">
-            <FreeTierInfo />
-          </div>
         </div>
       </div>
     </div>

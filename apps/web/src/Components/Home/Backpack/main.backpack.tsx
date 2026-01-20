@@ -246,91 +246,61 @@ const BackpackPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Navbar */}
-      <div className="h-14 sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-zinc-800">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 flex-1">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                My Backpack
-              </h1>
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-4 text-zinc-400" />
-                <Input
-                  type="text"
-                  placeholder="Search items, tags, notes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 focus:border-zinc-600 rounded-full h-8"
-                />
-              </div>
+      <div className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-zinc-800 h-16">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 h-full flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1">
+            <h1 className="text-xl font-bold text-white tracking-tight shrink-0">
+              My Backpack
+            </h1>
+            <div className="relative flex-1 max-w-sm hidden md:block">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Input
+                type="text"
+                placeholder="Search items..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-zinc-900/50 border-zinc-800 text-white placeholder:text-zinc-500 focus:border-emerald-500/50 rounded-full h-9 text-sm transition-all"
+              />
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
-                  <SelectTrigger className="w-32 bg-zinc-900 border-zinc-800 text-white h-8 rounded-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800">
-                    <SelectItem
-                      value="all"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      All Items
-                    </SelectItem>
-                    <SelectItem
-                      value="assets"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      Assets
-                    </SelectItem>
-                    <SelectItem
-                      value="templates"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      Templates
-                    </SelectItem>
-                    <SelectItem
-                      value="favorites"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      Favorites
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                  <SelectTrigger className="w-32 bg-zinc-900 border-zinc-800 text-white h-8 rounded-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800">
-                    <SelectItem
-                      value="addedAt"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      Recently Added
-                    </SelectItem>
-                    <SelectItem
-                      value="name"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      Name
-                    </SelectItem>
-                    <SelectItem
-                      value="size"
-                      className="text-white hover:bg-zinc-800"
-                    >
-                      Size
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+             {/* Mobile Search Trigger (Optional, or just show filters directly) - keeping simple for now */}
+            
             <div className="flex items-center gap-2">
-              {backpack && (
-                <div className="text-sm text-zinc-400 mr-4">
-                  {formatCount(backpack.totalItems)} items
-                </div>
-              )}
+              <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
+                <SelectTrigger className="w-[110px] sm:w-[140px] bg-zinc-900/50 border-zinc-800 text-zinc-200 h-9 rounded-lg text-xs sm:text-sm focus:ring-0 focus:ring-offset-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-950 border-zinc-800">
+                  <SelectItem value="all" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">All Items</SelectItem>
+                  <SelectItem value="assets" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">Assets</SelectItem>
+                  <SelectItem value="templates" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">Templates</SelectItem>
+                  <SelectItem value="favorites" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">Favorites</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                <SelectTrigger className="w-[110px] sm:w-[140px] bg-zinc-900/50 border-zinc-800 text-zinc-200 h-9 rounded-lg text-xs sm:text-sm focus:ring-0 focus:ring-offset-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-950 border-zinc-800">
+                  <SelectItem value="addedAt" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">Recently Added</SelectItem>
+                  <SelectItem value="name" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">Name</SelectItem>
+                  <SelectItem value="size" className="text-zinc-200 focus:bg-zinc-900 focus:text-white cursor-pointer">Size</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {backpack && (
+              <div className="hidden sm:block w-px h-6 bg-zinc-800 mx-2" />
+            )}
+            
+            {backpack && (
+              <div className="hidden sm:block text-xs font-medium text-zinc-500">
+                {formatCount(backpack.totalItems)} items
+              </div>
+            )}
           </div>
         </div>
       </div>

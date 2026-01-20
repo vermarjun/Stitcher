@@ -221,9 +221,9 @@ export default function ProfilePage({
       />
 
       {/* Tabs */}
-      <div className="px-4">
+      <div className="px-5 mt-4">
         <div className="border-b border-zinc-800">
-          <nav className="flex justify-around">
+          <nav className="flex justify-start gap-8">
             <TabButton
               active={activeTab === "posts"}
               onClick={() => handleTabChange("posts")}
@@ -247,7 +247,7 @@ export default function ProfilePage({
       </div>
 
       {/* Dynamic Tab */}
-      <div className="px-4 mt-4">
+      <div className="mt-2 text-zinc-200">
         {activeTab === "posts" && <PostsTab onPostClick={onPostClick} userId={user._id} />}
         {activeTab === "likes" && <LikesTab onPostClick={onPostClick} userId={user._id} />}
         {activeTab === "comments" && <CommentsTab userId={user._id} />}
@@ -270,16 +270,18 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-4 text-center transition-colors relative ${
-        active ? "text-white font-semibold" : "text-neutral-400 hover:text-neutral-200"
+      className={`py-4 transition-all relative flex items-center gap-2 ${
+        active ? "text-white font-medium" : "text-zinc-500 hover:text-zinc-300"
       }`}
     >
       <span className="text-sm">{label}</span>
       {count !== undefined && count > 0 && (
-        <span className="ml-1 text-neutral-400 text-xs">({count})</span>
+        <span className={`text-xs ${active ? "text-zinc-400" : "text-zinc-600"}`}>
+            {count}
+        </span>
       )}
       {active && (
-        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-blue-500 rounded-full"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-500 rounded-t-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
       )}
     </button>
   );

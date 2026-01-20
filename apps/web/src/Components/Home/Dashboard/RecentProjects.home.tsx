@@ -175,12 +175,12 @@ const RecentProjects = ({
   }
 
   return (
-    <div className="space-y-3 animate-in fade-in duration-700">
+    <div className="space-y-4 animate-in fade-in duration-700">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="space-y-0.5">
-          <h2 className="text-lg font-semibold text-white">Recent Projects</h2>
-          <p className="text-zinc-400 text-[10px] sm:text-xs">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-white">Recent Projects</h2>
+          <p className="text-zinc-400 text-sm">
             {projectsToDisplay.length === 0
               ? "Your projects will appear here once you create them"
               : "Continue working on your recent projects"}
@@ -194,16 +194,16 @@ const RecentProjects = ({
           <table className="w-full">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                <th className="text-left py-2.5 px-4 text-zinc-400 text-[10px] uppercase tracking-wider font-medium">
+                <th className="text-left py-3 px-4 text-zinc-400 text-xs uppercase tracking-wider font-medium">
                   Recent Projects
                 </th>
-                <th className="text-left py-2.5 px-4 text-zinc-400 text-[10px] uppercase tracking-wider font-medium">
+                <th className="text-left py-3 px-4 text-zinc-400 text-xs uppercase tracking-wider font-medium">
                   Status
                 </th>
-                <th className="text-left py-2.5 px-4 text-zinc-400 text-[10px] uppercase tracking-wider font-medium">
+                <th className="text-left py-3 px-4 text-zinc-400 text-xs uppercase tracking-wider font-medium">
                   Last Updated
                 </th>
-                <th className="text-center py-2.5 px-4 text-zinc-400 text-[10px] uppercase tracking-wider font-medium">
+                <th className="text-center py-3 px-4 text-zinc-400 text-xs uppercase tracking-wider font-medium">
                   Actions
                 </th>
               </tr>
@@ -215,19 +215,19 @@ const RecentProjects = ({
                   className="border-b border-zinc-800 last:border-b-0 hover:bg-zinc-900/50 transition-colors duration-200 animate-in fade-in slide-in-from-left-4"
                   style={{ animationDelay: `${(index + 1) * 100}ms` }}
                 >
-                  <td className="py-2.5 px-4">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="w-8 h-8 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 group-hover:border-zinc-700 transition-colors">
-                        <FolderOpen className="w-4 h-4 text-zinc-400" />
+                  <td className="py-3 px-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-9 h-9 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 group-hover:border-zinc-700 transition-colors">
+                        <FolderOpen className="w-5 h-5 text-zinc-400" />
                       </div>
-                      <span className="text-white text-xs font-medium">
+                      <span className="text-white text-sm font-medium">
                         {project.name}
                       </span>
                     </div>
                   </td>
-                  <td className="py-2.5 px-4">
+                  <td className="py-3 px-4">
                     <span
-                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                      className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                         project.status === "completed"
                           ? "bg-green-500/10 text-green-500 border-green-500/20"
                           : project.status === "processing"
@@ -240,24 +240,24 @@ const RecentProjects = ({
                       {project.status || "draft"}
                     </span>
                   </td>
-                  <td className="py-2.5 px-4 text-zinc-400 text-xs">
+                  <td className="py-3 px-4 text-zinc-400 text-xs">
                     {timeAgo(project.updatedAt)}
                   </td>
-                  <td className="py-2.5 px-4">
-                    <div className="flex justify-center items-center gap-1.5">
+                  <td className="py-3 px-4">
+                    <div className="flex justify-center items-center gap-2">
                       <button
                         onClick={() => handleResumeProject(project._id)}
                         className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-white transition-colors"
                         title="Resume"
                       >
-                        <Edit className="w-3.5 h-3.5" />
+                        <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={handleAddCollaborators}
                         className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-white transition-colors"
                         title="Add Collaborators"
                       >
-                        <UserPlus className="w-3.5 h-3.5" />
+                        <UserPlus className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() =>
@@ -266,7 +266,7 @@ const RecentProjects = ({
                         className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-red-400 transition-colors"
                         title="Delete"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -278,25 +278,25 @@ const RecentProjects = ({
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden grid grid-cols-1 gap-3">
+      <div className="md:hidden grid grid-cols-1 gap-4">
         {projectsToDisplay.map((project, index) => (
           <div 
             key={project._id}
-            className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3 space-y-3 animate-in fade-in slide-in-from-bottom-4"
+            className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3 animate-in fade-in slide-in-from-bottom-4"
             style={{ animationDelay: `${(index + 1) * 100}ms` }}
           >
             <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-md bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
-                   <FolderOpen className="w-4 h-4 text-zinc-400" />
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-md bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                   <FolderOpen className="w-5 h-5 text-zinc-400" />
                 </div>
                 <div>
-                  <h3 className="text-white text-xs font-medium">{project.name}</h3>
-                  <p className="text-zinc-500 text-[10px]">{timeAgo(project.updatedAt)}</p>
+                  <h3 className="text-white text-sm font-medium">{project.name}</h3>
+                  <p className="text-zinc-500 text-xs">{timeAgo(project.updatedAt)}</p>
                 </div>
               </div>
               <span
-                className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                   project.status === "completed"
                     ? "bg-green-500/10 text-green-500 border-green-500/20"
                     : project.status === "processing"
@@ -310,26 +310,26 @@ const RecentProjects = ({
               </span>
             </div>
             
-            <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex items-center gap-2 pt-3 border-t border-zinc-800">
                <button
                   onClick={() => handleResumeProject(project._id)}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
                 >
-                  <Edit className="w-3 h-3" />
+                  <Edit className="w-3.5 h-3.5" />
                   Resume
                 </button>
                 <button
                   onClick={handleAddCollaborators}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] py-1.5 rounded-md transition-colors flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
                 >
-                  <UserPlus className="w-3 h-3" />
+                  <UserPlus className="w-3.5 h-3.5" />
                   Add
                 </button>
                 <button
                   onClick={() => handleDeleteProject(project.name, project._id)}
-                  className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-red-400 rounded-md transition-colors"
+                  className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-red-400 rounded-md transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
             </div>
           </div>

@@ -321,88 +321,436 @@ const TemplateGallery: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Audio Player Overlay */}
-      {isAudioPlayerVisible && playingAudio && (
-        <div className="fixed px-4 left-1/2 transform -translate-x-1/2 w-full bottom-4 flex justify-center items-center z-50">
-          <div className="relative bg-zinc-900 w-full max-w-4xl rounded-lg shadow-2xl border border-zinc-800">
-            <div className="p-4">
-              <Button
-                onClick={closeAudioPlayer}
-                className="absolute top-2 right-2 z-10 bg-zinc-800/80 hover:bg-zinc-700/90 text-white rounded-full p-1 backdrop-blur-md transition-all duration-200 hover:scale-105"
-                size="icon"
-                aria-label="Close audio player"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center mb-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-zinc-800 to-zinc-700 rounded-md flex items-center justify-center mr-3">
-                  <FileAudio className="h-6 w-6 text-zinc-400" />
-                </div>
-                <div className="flex-grow overflow-hidden">
-                  <h3 className="text-sm font-medium text-white truncate">
-                    {playingAudio.title}
-                  </h3>
-                  {playingAudio.post_description && (
-                    <p className="text-xs text-zinc-400 truncate">
-                      {playingAudio.post_description}
-                    </p>
-                  )}
-                  <div className="flex items-center text-xs text-zinc-500 mt-1">
-                    <span className="mr-3">
-                      {formatBytes(playingAudio.bytes)}
-                    </span>
-                    {playingAudio.duration && (
-                      <span className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {formatDuration(playingAudio.duration)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-black text-white selection:bg-emerald-500/30">
+      {/* Search & Header Section - Aligned with Sidebar */}
+      <div className="sticky top-0 z-20 bg-black/80 backdrop-blur-md border-b border-zinc-800 h-16 transition-all duration-200">
+        <div className="h-full container mx-auto px-4 lg:px-6">
+          <div className="h-full flex items-center justify-between gap-4">
+            {/* Search Bar */}
+            <div className="relative flex-1 max-w-md group">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-500 transition-colors duration-200" />
+              <Input
+                type="text"
+                placeholder="Search templates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-zinc-900/50 border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus:bg-zinc-900 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 h-9 rounded-lg transition-all duration-200 w-full text-sm"
+              />
+            </div>
+
+            {/* Filters */}
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="hidden md:flex items-center gap-2 bg-zinc-900/50 p-1 rounded-lg border border-zinc-800">
                 <Button
-                  onClick={togglePlayPause}
-                  className="bg-white hover:bg-zinc-200 text-black rounded-full h-8 w-8 p-0 flex items-center justify-center"
-                  size="icon"
-                  aria-label={isPlaying ? "Pause" : "Play"}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedType("all")}
+                  className={`h-7 px-3 text-xs rounded-md transition-all duration-200 ${
+                    selectedType === "all"
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  }`}
                 >
-                  {isPlaying ? (
-                    <Pause className="h-4 w-4 fill-current" />
-                  ) : (
-                    <Play className="h-4 w-4 fill-current ml-0.5" />
-                  )}
+                  All
                 </Button>
-                <div className="flex-grow mx-4">
-                  <div
-                    ref={progressBarRef}
-                    className="h-1.5 bg-zinc-800 rounded-full cursor-pointer"
-                    onClick={handleProgressClick}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedType(TemplateType.VIDEO)}
+                  className={`h-7 px-3 text-xs rounded-md gap-1.5 transition-all duration-200 ${
+                    selectedType === TemplateType.VIDEO
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <FileVideo className="h-3 w-3" />
+                  Video
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedType(TemplateType.AUDIO)}
+                  className={`h-7 px-3 text-xs rounded-md gap-1.5 transition-all duration-200 ${
+                    selectedType === TemplateType.AUDIO
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <FileAudio className="h-3 w-3" />
+                  Audio
+                </Button>
+              </div>
+
+              <div className="h-6 w-px bg-zinc-800 hidden md:block" />
+
+              <Select
+                value={sortBy}
+                onValueChange={(v) =>
+                  setSortBy(v as "createdAt" | "likesCount" | "name")
+                }
+              >
+                <SelectTrigger className="w-[140px] bg-zinc-900/50 border-zinc-800 text-zinc-300 text-xs h-9 rounded-lg hover:bg-zinc-900 hover:border-zinc-700 focus:ring-emerald-500/20 transition-all duration-200">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 rounded-lg shadow-xl shadow-black/50">
+                  <SelectItem
+                    value="createdAt"
+                    className="text-zinc-300 hover:bg-zinc-800 focus:bg-zinc-800 text-xs cursor-pointer"
                   >
-                    <div
-                      className="h-full bg-white rounded-full relative"
-                      style={{ width: `${(currentTime / duration) * 100}%` }}
-                    >
-                      <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-white rounded-full"></div>
+                    Latest Added
+                  </SelectItem>
+                  <SelectItem
+                    value="likesCount"
+                    className="text-zinc-300 hover:bg-zinc-800 focus:bg-zinc-800 text-xs cursor-pointer"
+                  >
+                    Most Popular
+                  </SelectItem>
+                  <SelectItem
+                    value="name"
+                    className="text-zinc-300 hover:bg-zinc-800 focus:bg-zinc-800 text-xs cursor-pointer"
+                  >
+                    Name (A-Z)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+                }
+                className="bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 hover:border-zinc-700 h-9 w-9 rounded-lg transition-all duration-200"
+              >
+                {sortOrder === "asc" ? (
+                  <span className="text-xs font-bold">↑</span>
+                ) : (
+                  <span className="text-xs font-bold">↓</span>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div
+        className="container mx-auto px-4 lg:px-6 py-8"
+        ref={scrollContainerRef}
+      >
+        {loading ? (
+          renderSkeleton()
+        ) : templates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 animate-in fade-in duration-500">
+            <div className="w-20 h-20 bg-zinc-900/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-zinc-800">
+              <Search className="h-8 w-8 opacity-50" />
+            </div>
+            <h3 className="text-lg font-medium text-white mb-2">No templates found</h3>
+            <p className="text-sm text-zinc-500 max-w-sm text-center">
+              We couldn't find any templates matching your search filters. Try adjusting your query.
+            </p>
+            <Button 
+              variant="link" 
+              className="mt-4 text-emerald-500 hover:text-emerald-400"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedType("all");
+              }}
+            >
+              Clear all filters
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+            {templates.map((template) => {
+              const isTemplateLoading = loadingStates[template._id];
+              const isHovered = hoveredCard === template._id;
+              
+              return (
+                <div
+                  key={template._id}
+                  className="group bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-black/50 hover:-translate-y-1"
+                  onMouseEnter={() => setHoveredCard(template._id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
+                  {/* Thumbnail Section */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePlayVideo(template);
+                    }}
+                    className="relative cursor-pointer aspect-video bg-black border-b border-zinc-800/50 overflow-hidden"
+                  >
+                    {!imageLoadErrors.has(template._id) && template.thumbnail ? (
+                      <img
+                        src={template.thumbnail}
+                        alt={template.title}
+                        className="w-full h-full object-cover transition-transform duration-500"
+                        onError={() => handleImageError(template._id)}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800/30 text-zinc-600 gap-3">
+                        {template.type === TemplateType.VIDEO ? (
+                          <FileVideo className="h-10 w-10 opacity-30" />
+                        ) : (
+                          <FileAudio className="h-10 w-10 opacity-30" />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+
+                    {/* Play Button Overlay */}
+                    <div className={`absolute inset-0 flex items-center justify-center transition-all ${
+                      isHovered ? "opacity-100 scale-100" : "opacity-0 scale-90"
+                    }`}>
+                      <div className="bg-white/10 backdrop-blur-md rounded-full p-4 border border-white/20 hover:bg-white/20 hover:scale-110 transition-all">
+                        <Play className="h-6 w-6 text-white fill-current ml-0.5" />
+                      </div>
+                    </div>
+
+                    {/* Badges */}
+                    <div className="absolute top-3 right-3 flex gap-2">
+                       {template.type === TemplateType.VIDEO ? (
+                        <div className="bg-black/40 backdrop-blur-md text-white text-[10px] font-medium px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 shadow-sm">
+                          <FileVideo className="h-3 w-3" />
+                         Video
+                        </div>
+                       ) : (
+                        <div className="bg-black/40 backdrop-blur-md text-white text-[10px] font-medium px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1.5 shadow-sm">
+                          <FileAudio className="h-3 w-3" />
+                          Audio
+                        </div>
+                       )}
+                    </div>
+
+                    <div className="absolute bottom-3 right-3">
+                      {template.duration && (
+                        <div className="bg-black/60 backdrop-blur-md text-zinc-200 text-[10px] font-mono px-2 py-1 rounded-md border border-white/5 flex items-center gap-1.5">
+                          <Clock className="h-3 w-3" />
+                          {formatDuration(template.duration)}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex justify-between text-xs text-zinc-500 mt-1">
-                    <span>{formatDuration(currentTime)}</span>
-                    <span>{formatDuration(duration)}</span>
+
+                  {/* Content Section */}
+                  <div className="px-3 py-3 space-y-2">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-start gap-4">
+                        <h3 className="text-sm font-semibold text-zinc-100 line-clamp-1 group-hover:text-emerald-400 transition-colors duration-200">
+                          {template.title}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 line-clamp-1 leading-relaxed">
+                        {template.post_description || "No description available"}
+                      </p>
+                    </div>
+
+                    {/* Actions Divider */}
+                    <div className="w-full h-px bg-zinc-800/50" />
+
+                    {/* Interaction Buttons */}
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLikeToggle(template._id);
+                        }}
+                        className={`group/like flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full transition-all duration-200 ${
+                          template.isLikedByUser
+                            ? "text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                            : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
+                        }`}
+                      >
+                        <Heart
+                          className={`h-3.5 w-3.5 transition-transform duration-200 group-hover/like:scale-110 ${
+                            template.isLikedByUser ? "fill-current" : ""
+                          }`}
+                        />
+                        {formatCount(template.likesCount || 0)}
+                      </button>
+
+                      {!template.isAddedToBackpack ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSaveToBackPack(template);
+                          }}
+                          disabled={isTemplateLoading}
+                          className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isTemplateLoading ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <Backpack className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Save</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                          <Check className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Saved</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center">
-                  <Volume2 className="h-4 w-4 text-zinc-400 mr-2" />
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={volume}
-                    onChange={(e) => setVolume(parseFloat(e.target.value))}
-                    className="w-20 accent-white"
-                  />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Improved Pagination */}
+        {pagination.pages > 1 && (
+          <div className="flex flex-col items-center gap-4 mt-8">
+            <div className="flex items-center gap-2 bg-zinc-900/50 p-1.5 rounded-xl border border-zinc-800/50 backdrop-blur-sm">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setPagination((prev) => ({
+                    ...prev,
+                    page: Math.max(1, prev.page - 1),
+                  }))
+                }
+                disabled={pagination.page === 1}
+                className="h-8 w-8 p-0 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              <div className="flex gap-1 px-2">
+                {[...Array(Math.min(5, pagination.pages))].map((_, i) => {
+                   let pageNum;
+                    // Improved pagination logic for smaller display (max 5 items)
+                   if (pagination.pages <= 5) {
+                      pageNum = i + 1;
+                   } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                   } else if (pagination.page >= pagination.pages - 2) {
+                      pageNum = pagination.pages - 4 + i;
+                   } else {
+                      pageNum = pagination.page - 2 + i;
+                   }
+                   
+                   return (
+                    <button
+                      key={pageNum}
+                      onClick={() =>
+                        setPagination((prev) => ({ ...prev, page: pageNum }))
+                      }
+                      className={`h-8 min-w-[32px] px-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        pageNum === pagination.page
+                          ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                          : "text-zinc-500 hover:bg-zinc-800 hover:text-white"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setPagination((prev) => ({
+                    ...prev,
+                    page: Math.min(prev.pages, prev.page + 1),
+                  }))
+                }
+                disabled={pagination.page === pagination.pages}
+                className="h-8 w-8 p-0 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-zinc-600">
+               Showing <span className="text-zinc-400">{(pagination.page - 1) * pagination.limit + 1}</span> - <span className="text-zinc-400">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of <span className="text-zinc-400">{pagination.total}</span> templates
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Overlays - Audio Player */}
+      {isAudioPlayerVisible && playingAudio && (
+        <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <div className="bg-zinc-900/90 backdrop-blur-xl border border-zinc-800 w-full max-w-2xl rounded-2xl shadow-2xl shadow-black/50 overflow-hidden ring-1 ring-white/10">
+            <div className="relative p-1">
+              {/* Progress Bar Background */}
+              <div 
+                ref={progressBarRef}
+                className="absolute top-0 left-0 right-0 h-1 bg-zinc-800 cursor-pointer group"
+                onClick={handleProgressClick}
+              >
+                <div
+                  className="h-full bg-emerald-500 relative transition-all duration-100"
+                  style={{ width: `${(currentTime / duration) * 100}%` }}
+                >
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md scale-0 group-hover:scale-100 transition-transform duration-200" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[auto_1fr_auto] gap-6 items-center p-4 pt-5">
+                {/* Track Info */}
+                <div className="flex items-center gap-4 min-w-[180px]">
+                  <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center border border-zinc-700/50 shadow-inner">
+                    <FileAudio className="h-5 w-5 text-emerald-500" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <h4 className="text-sm font-semibold text-white truncate max-w-[150px]">{playingAudio.title}</h4>
+                    <p className="text-xs text-zinc-500 font-medium font-mono mt-0.5">
+                      {formatDuration(currentTime)} / {formatDuration(duration)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Controls */}
+                <div className="flex items-center justify-center gap-6">
+                  <button className="text-zinc-400 hover:text-white transition-colors">
+                     <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={togglePlayPause}
+                    className="w-10 h-10 bg-white text-black hover:bg-zinc-200 rounded-full flex items-center justify-center shadow-lg shadow-white/10 transition-transform active:scale-95"
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-4 w-4 fill-current" />
+                    ) : (
+                      <Play className="h-4 w-4 fill-current ml-0.5" />
+                    )}
+                  </button>
+                  <button className="text-zinc-400 hover:text-white transition-colors">
+                     <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Volume & Close */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 group">
+                    <Volume2 className="h-4 w-4 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={volume}
+                      onChange={(e) => setVolume(parseFloat(e.target.value))}
+                      className="w-20 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                    />
+                  </div>
+                  <div className="w-px h-8 bg-zinc-800" />
+                  <button
+                    onClick={closeAudioPlayer}
+                    className="text-zinc-500 hover:text-white hover:bg-zinc-800 p-2 rounded-lg transition-all"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -413,48 +761,49 @@ const TemplateGallery: React.FC = () => {
 
       {/* Video Player Overlay */}
       {isVideoPlayerVisible && playingVideo && (
-        <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div
             ref={videoPlayerRef}
-            className="relative w-full max-w-4xl mx-auto"
+            className="relative w-full max-w-5xl mx-auto bg-zinc-900 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-zinc-800"
           >
-            <div className="bg-zinc-900 rounded-lg overflow-hidden shadow-2xl border border-zinc-800">
-              <div className="relative aspect-video">
-                <video
-                  ref={videoRef}
-                  src={playingVideo.url}
-                  controls
-                  autoPlay
-                  className="w-full h-full object-cover"
-                  onError={() => console.error("Video failed to load")}
-                />
-              </div>
+            <div className="relative aspect-video bg-black group">
+              <video
+                ref={videoRef}
+                src={playingVideo.url}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+                onError={() => console.error("Video failed to load")}
+              />
               <Button
                 onClick={closeVideoPlayer}
-                className="absolute top-2 right-2 z-10 bg-zinc-800/80 hover:bg-zinc-700/90 text-white rounded-full p-1.5 backdrop-blur-md transition-all duration-200 hover:scale-105"
+                className="absolute top-4 right-4 z-20 bg-black/50 hover:bg-black/70 text-white border border-white/10 rounded-full h-10 w-10 p-0 backdrop-blur-md transition-all duration-200 hover:scale-105"
                 size="icon"
-                aria-label="Close video player"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
-              <div className="p-4">
-                <h3 className="text-sm font-medium text-white mb-2 line-clamp-1">
-                  {playingVideo.title}
-                </h3>
-                {playingVideo.post_description && (
-                  <p className="text-xs text-zinc-300 mb-3 leading-relaxed">
-                    {playingVideo.post_description}
+            </div>
+            
+            <div className="p-6 bg-zinc-900 border-t border-zinc-800">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-2">
+                    {playingVideo.title}
+                  </h3>
+                   <p className="text-sm text-zinc-400 leading-relaxed max-w-2xl">
+                    {playingVideo.post_description || "No description provided."}
                   </p>
-                )}
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 bg-zinc-800/60 px-2 py-1 rounded-full">
-                    {formatBytes(playingVideo.bytes)}
-                  </span>
-                  {playingVideo.duration && (
-                    <span className="flex items-center gap-1 text-zinc-400 bg-zinc-800/60 px-2 py-1 rounded-full">
-                      <Clock className="h-3 w-3" />
-                      {formatDuration(playingVideo.duration)}
-                    </span>
+                </div>
+                <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex items-center gap-2 text-xs text-zinc-400 bg-zinc-800 px-3 py-1.5 rounded-full">
+                    <FileVideo className="h-3.5 w-3.5" />
+                    <span className="font-medium text-white">{formatBytes(playingVideo.bytes)}</span>
+                  </div>
+                   {playingVideo.duration && (
+                    <div className="flex items-center gap-2 text-xs text-zinc-400 bg-zinc-800 px-3 py-1.5 rounded-full">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span className="font-medium text-white">{formatDuration(playingVideo.duration)}</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -462,348 +811,9 @@ const TemplateGallery: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Header with Filters */}
-      <div className="sticky top-0 z-10 bg-black border-b border-zinc-800 h-14">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-              <Input
-                type="text"
-                placeholder="Search templates..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 focus:border-zinc-600 text-xs h-8 rounded-lg"
-              />
-            </div>
-            <div className="flex gap-2 items-center w-full md:w-auto">
-              <Select
-                value={selectedType}
-                onValueChange={(v) =>
-                  setSelectedType(v as TemplateType | "all")
-                }
-              >
-                <SelectTrigger className="w-28 bg-zinc-900 border-zinc-800 text-white text-xs h-8 rounded-lg">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 rounded-lg">
-                  <SelectItem
-                    value="all"
-                    className="text-white hover:bg-zinc-800 text-xs rounded-md"
-                  >
-                    All Types
-                  </SelectItem>
-                  <SelectItem
-                    value={TemplateType.VIDEO}
-                    className="text-white hover:bg-zinc-800 text-xs rounded-md"
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileVideo className="h-3.5 w-3.5" />
-                      Video
-                    </div>
-                  </SelectItem>
-                  <SelectItem
-                    value={TemplateType.AUDIO}
-                    className="text-white hover:bg-zinc-800 text-xs rounded-md"
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileAudio className="h-3.5 w-3.5" />
-                      Audio
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={sortBy}
-                onValueChange={(v) =>
-                  setSortBy(v as "createdAt" | "likesCount" | "name")
-                }
-              >
-                <SelectTrigger className="w-32 bg-zinc-900 border-zinc-800 text-white text-xs h-8 rounded-lg">
-                  <SelectValue placeholder="Sort By" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 rounded-lg">
-                  <SelectItem
-                    value="createdAt"
-                    className="text-white hover:bg-zinc-800 text-xs rounded-md"
-                  >
-                    Latest
-                  </SelectItem>
-                  <SelectItem
-                    value="likesCount"
-                    className="text-white hover:bg-zinc-800 text-xs rounded-md"
-                  >
-                    Most Liked
-                  </SelectItem>
-                  <SelectItem
-                    value="name"
-                    className="text-white hover:bg-zinc-800 text-xs rounded-md"
-                  >
-                    Name
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
-                className="text-white hover:bg-zinc-800 rounded-lg h-8 w-8"
-              >
-                {sortOrder === "asc" ? "↑" : "↓"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div
-        className="container mx-auto px-4 py-6 md:mt-0 mt-6"
-        ref={scrollContainerRef}
-      >
-        {loading ? (
-          renderSkeleton()
-        ) : templates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[300px] text-zinc-400">
-            <FileVideo className="h-12 w-12 mb-3 opacity-50" />
-            <p className="text-sm">No templates found</p>
-            <p className="text-xs mt-1">
-              Try adjusting your filters or search query
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
-            {templates.map((template) => {
-              const isTemplateLoading = loadingStates[template._id];
-              
-              return (
-                <div
-                  key={template._id}
-                  className="bg-zinc-800 rounded-xl overflow-hidden group transition-all duration-200 hover:-translate-y-0.5"
-                  onMouseEnter={() => setHoveredCard(template._id)}
-                  onMouseLeave={() => setHoveredCard(null)}
-                >
-                  {/* Video Thumbnail */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePlayVideo(template);
-                    }}
-                    className="relative cursor-pointer aspect-video bg-zinc-700 border border-zinc-800 rounded-t-xl overflow-hidden"
-                  >
-                    {!imageLoadErrors.has(template._id) && template.thumbnail ? (
-                      <img
-                        src={template.thumbnail}
-                        alt={template.title}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        onError={() => handleImageError(template._id)}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700">
-                        {template.type === TemplateType.VIDEO ? (
-                          <FileVideo className="h-8 w-8 text-zinc-600" />
-                        ) : (
-                          <FileAudio className="h-8 w-8 text-zinc-600" />
-                        )}
-                      </div>
-                    )}
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-                    {/* Play Button Overlay */}
-                    <div
-                      className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-                        hoveredCard === template._id ? "opacity-100" : "opacity-0"
-                      } bg-black/40`}
-                    >
-                      <div className="bg-white rounded-full p-4">
-                        <Play className="h-6 w-6 text-black fill-current" />
-                      </div>
-                    </div>
-
-                    {/* Duration Badge */}
-                    {template.duration && (
-                      <div className="absolute bottom-2 right-2 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDuration(template.duration)}
-                      </div>
-                    )}
-
-                    {/* Type Badge */}
-                    <div className="absolute bottom-2 left-2">
-                      <div className=" text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
-                        {template.type === TemplateType.VIDEO ? (
-                          <FileVideo className="h-3 w-3" />
-                        ) : (
-                          <FileAudio className="h-3 w-3" />
-                        )}
-                        {template.type}
-                      </div>
-                    </div>
-
-                    {/* Stats Overlay */}
-                    {/* <div className="absolute bottom-2 left-2">
-                      <div className="bg-zinc-700 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1">
-                        <Heart
-                          className={`h-3 w-3 ${
-                            template.isLikedByUser ? "fill-white" : ""
-                          }`}
-                        />
-                        {formatCount(template.likesCount || 0)}
-                        <span className="text-[10px]">Likes</span>
-                      </div>
-                    </div> */}
-                  </div>
-
-                  {/* Post Info */}
-                  <div className="pb-4">
-                    {/* File Size Info */}
-                    <div className="px-3 flex justify-between items-center border-b border-zinc-600 mb-4 py-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLikeToggle(template._id);
-                        }}
-                        className="flex hover:scale-105 cursor-pointer items-center justify-center gap-1.5 text-xs text-zinc-200 hover:text-white transition-colors"
-                      >
-                        <Heart
-                          className={`h-5 w-5 transition-all ${
-                            template.isLikedByUser
-                              ? "fill-red-400 text-red-500"
-                              : ""
-                          }`}
-                        />
-                        {formatCount(template.likesCount || 0)} Likes
-                      </button>
-                      {!template.isAddedToBackpack ? (
-                        <div>
-                          <button
-                            onClick={() => {
-                              handleSaveToBackPack(template);
-                            }}
-                            disabled={isTemplateLoading}
-                            className="bg-zinc-600 hover:scale-105 cursor-pointer px-2 py-1 rounded-full gap-2 text-xs text-zinc-200 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
-                          >
-                            {isTemplateLoading ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                Save to backpack
-                                <Backpack className="h-4 w-4" />
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      ) : (
-                        <div
-                            className="bg-green-900/50 border border-green-800 hover:scale-100 cursor-default px-2 py-1 rounded-full gap-2 text-xs text-green-100 flex justify-center items-center"
-                          >
-                            Added to backpack
-                            <Check className="h-4 w-4" />
-                          </div>
-                      )}
-                    </div>
-
-                    <div className="px-3">
-                      {/* Title */}
-                      <h3 className="text-sm font-medium text-white mb-2 line-clamp-2 group-hover:text-zinc-300 transition-colors">
-                        {template.title}
-                      </h3>
-                      {template.post_description && (
-                        <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
-                          {template.post_description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="mt-8 flex items-center justify-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() =>
-                setPagination((prev) => ({
-                  ...prev,
-                  page: Math.max(1, prev.page - 1),
-                }))
-              }
-              disabled={pagination.page === 1}
-              className="bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-800 hover:text-white disabled:opacity-50 rounded-lg h-7 w-7"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <div className="flex gap-1">
-              {[...Array(Math.min(7, pagination.pages))].map((_, i) => {
-                let pageNum;
-                if (pagination.pages <= 7) {
-                  pageNum = i + 1;
-                } else if (pagination.page <= 4) {
-                  pageNum = i + 1;
-                } else if (pagination.page >= pagination.pages - 3) {
-                  pageNum = pagination.pages - 6 + i;
-                } else {
-                  pageNum = pagination.page - 3 + i;
-                }
-                if (pageNum < 1 || pageNum > pagination.pages) return null;
-                return (
-                  <Button
-                    key={pageNum}
-                    variant={
-                      pageNum === pagination.page ? "default" : "outline"
-                    }
-                    size="icon"
-                    onClick={() =>
-                      setPagination((prev) => ({ ...prev, page: pageNum }))
-                    }
-                    className={
-                      pageNum === pagination.page
-                        ? "bg-white text-black hover:bg-zinc-200 rounded-lg h-7 w-7 text-xs"
-                        : "bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-800 hover:text-white rounded-lg h-7 w-7 text-xs"
-                    }
-                  >
-                    {pageNum}
-                  </Button>
-                );
-              })}
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() =>
-                setPagination((prev) => ({
-                  ...prev,
-                  page: Math.min(prev.pages, prev.page + 1),
-                }))
-              }
-              disabled={pagination.page === pagination.pages}
-              className="bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-800 hover:text-white disabled:opacity-50 rounded-lg h-7 w-7"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-        <div className="mt-3 text-center text-xs text-zinc-500">
-          Showing {(pagination.page - 1) * pagination.limit + 1} -{" "}
-          {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
-          {pagination.total} templates
-        </div>
-      </div>
     </div>
   );
+
 };
 
 export default TemplateGallery;

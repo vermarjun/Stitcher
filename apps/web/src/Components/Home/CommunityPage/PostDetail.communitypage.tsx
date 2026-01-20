@@ -33,7 +33,7 @@ export const Avatar = ({
   className?: string;
 }) => (
   <div
-    className={`relative rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center ${className}`}
+    className={`relative rounded-full overflow-hidden bg-zinc-900 flex items-center justify-center ring-1 ring-zinc-800/50 ${className}`}
   >
     {src ? (
       <img src={src} alt={alt} className="w-full h-full object-cover" />
@@ -80,75 +80,77 @@ const CommentInput = ({
   };
 
   return (
-    <div className="bg-black border-b border-zinc-800 w-full px-4 pb-3">
-      <div className="flex items-start gap-3">
+    <div className="bg-black border-b border-zinc-800 w-full px-5 py-4">
+      <div className="flex items-start gap-4">
         <Avatar
           src={currentUser?.profilePhoto}
           alt="me"
-          className="h-12 w-12 shrink-0"
+          className="h-10 w-10 shrink-0"
         />
-        <div className="flex-1">
+        <div className="flex-1 w-full min-w-0">
           {/* Text Input */}
-          <Input
-            type="text"
-            placeholder="Post your reply"
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitComment()}
-            className="border-none placeholder:text-md bg-zinc-900 text-white h-12 rounded-md focus:ring-0"
-          />
+          <div className="relative">
+             <Input
+                type="text"
+                placeholder="Post your reply..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitComment()}
+                className="w-full bg-zinc-900/50 border-zinc-800 text-white h-12 rounded-xl focus:bg-zinc-900 transition-colors focus:ring-1 focus:ring-zinc-700 placeholder:text-zinc-500"
+              />
+          </div>
+         
           {/* Image Preview */}
           {previewUrl && (
-            <div className="relative mt-3 w-fit">
+            <div className="relative mt-3 w-fit group">
               <img
                 src={previewUrl}
                 alt="preview"
-                className="rounded-2xl border border-zinc-700 max-h-60 object-contain"
+                className="rounded-xl border border-zinc-800 max-h-60 object-contain bg-zinc-900"
               />
               <button
                 onClick={removeImage}
-                className="absolute top-2 right-2 bg-black/70 p-1 rounded-full hover:bg-black transition"
+                className="absolute top-2 right-2 bg-black/80 p-1.5 rounded-full hover:bg-black transition text-white/70 hover:text-white"
               >
-                <X size={16} className="text-white" />
+                <X size={14} />
               </button>
             </div>
           )}
           {/* Action Row */}
-          <div className="flex justify-between items-center mt-3">
-            <div className="flex justify-center items-center gap-1">
-              <span className="text-zinc-400 text-sm">Replying to </span>
-              <span className="text-sky-500">@{currentUser?.username}</span>
-            </div>
-            <div className="flex justify-center items-center gap-5">
-              <label
-                htmlFor="commentImage"
-                className="cursor-pointer gap-1 flex text-sm justify-center items-center text-zinc-400 hover:text-sky-500 transition"
-              >
-                {/* <span>Add image</span> */}
-                <ImageIcon size={20} />
-                <input
-                  id="commentImage"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageSelect}
-                />
-              </label>
-              <Button
-                disabled={!commentText.trim() && !attachedImage}
-                onClick={submitComment}
-                className="bg-sky-500 hover:bg-sky-600 rounded-full text-white font-semibold px-4 py-1.5"
-              >
-                Reply
-              </Button>
-            </div>
+          <div className="flex justify-between items-center mt-3 pl-1">
+             <div className="flex items-center gap-4">
+                <label
+                    htmlFor="commentImage"
+                    className="cursor-pointer flex items-center justify-center text-zinc-400 hover:text-blue-400 transition-colors p-1.5 hover:bg-blue-500/10 rounded-full"
+                    title="Attach image"
+                >
+                    <ImageIcon size={18} />
+                    <input
+                    id="commentImage"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelect}
+                    />
+                </label>
+             </div>
+            
+            <Button
+              disabled={!commentText.trim() && !attachedImage}
+              onClick={submitComment}
+              className="bg-blue-600 hover:bg-blue-700 rounded-full text-white font-medium px-5 h-9 text-sm disabled:opacity-50 transition-all"
+            >
+              Reply
+            </Button>
           </div>
         </div>
       </div>
     </div>
   );
 };
+// ... existing imports and interfaces ...
 
+// The actual PostDetail component (skipping unchanged logic lines until render)
 const PostDetail = ({
   post,
   formatCount,
@@ -162,6 +164,22 @@ const PostDetail = ({
   onBack: () => void;
   onProfileClick: (user: IUser) => void;
 }) => {
+    // ... state declarations ...
+    // Note: I cannot replace the implementation detail lines here easily with "Replace all" without context, 
+    // so I will target the RENDER function specifically.
+    // However, since `replace_file_content` works on line ranges, I will assume the previous tool call 
+    // gave me the full file content (it did). 
+    
+    // I need to be careful not to delete the logic.
+    // I will target the `return` block of PostDetail.
+    
+    // BUT first re-declaring the whole component is too big. 
+    // I should probably edit minimal chunks.
+    
+    // Let's scroll down to where `return` starts in the `PostDetail`.
+    // It starts around line 477.
+
+  // ... (keep state logic the same) ...
   const videoRef = useRef<HTMLVideoElement>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState("");
@@ -397,78 +415,44 @@ const PostDetail = ({
     return (
       <div className="flex flex-col items-center w-full min-h-screen bg-black text-white">
         {/* Header Skeleton */}
-        <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-4 py-3">
+        <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-5 py-4 h-16">
           <div className="w-9 h-9 rounded-full bg-zinc-800 animate-pulse"></div>
-          <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse"></div>
+          <div className="h-6 w-24 bg-zinc-800 rounded animate-pulse"></div>
         </div>
 
         {/* Post Card Skeleton */}
-        <div className="w-full px-4 py-5">
+        <div className="w-full px-5 py-6">
           {/* Author Info Skeleton */}
-          <div className="flex gap-3 mb-3">
-            <div className="h-10 w-10 rounded-full bg-zinc-800 animate-pulse"></div>
+          <div className="flex gap-4 mb-4">
+            <div className="h-11 w-11 rounded-full bg-zinc-800 animate-pulse"></div>
             <div className="flex-1">
-              <div className="h-4 w-24 bg-zinc-800 rounded mb-2 animate-pulse"></div>
-              <div className="h-3 w-32 bg-zinc-800 rounded animate-pulse"></div>
+              <div className="h-4 w-32 bg-zinc-800 rounded mb-2 animate-pulse"></div>
+              <div className="h-3 w-40 bg-zinc-800 rounded animate-pulse"></div>
             </div>
           </div>
 
           {/* Post Body Skeleton */}
-          <div className="ml-[52px]">
-            <div className="h-4 w-full bg-zinc-800 rounded mb-2 animate-pulse"></div>
-            <div className="h-4 w-3/4 bg-zinc-800 rounded mb-3 animate-pulse"></div>
+          <div className="pl-[60px]">
+            <div className="h-5 w-full bg-zinc-800 rounded mb-2 animate-pulse"></div>
+            <div className="h-4 w-3/4 bg-zinc-800 rounded mb-4 animate-pulse"></div>
             
             {/* Video Skeleton */}
-            <div className="w-full h-64 bg-zinc-800 rounded-2xl border border-zinc-800 my-3 animate-pulse"></div>
+            <div className="w-full h-80 bg-zinc-800 rounded-xl border border-zinc-800 my-4 animate-pulse"></div>
 
             {/* Tags Skeleton */}
-            <div className="flex gap-2 mb-3">
+            <div className="flex gap-2 mb-4">
               <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse"></div>
               <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse"></div>
             </div>
 
             {/* Post Footer Skeleton */}
-            <div className="flex justify-between border-t border-b border-zinc-800 py-2 items-center text-zinc-500 text-sm gap-5">
+            <div className="flex justify-between border-t border-b border-zinc-800 py-3 items-center text-zinc-500 text-sm gap-5">
               <div className="flex items-center gap-5 w-full">
-                <div className="h-6 w-16 bg-zinc-800 rounded animate-pulse"></div>
-                <div className="h-6 w-32 bg-zinc-800 rounded animate-pulse"></div>
-              </div>
-              <div className="flex justify-center items-center gap-10 w-full">
-                <div className="h-6 w-20 bg-zinc-800 rounded animate-pulse"></div>
-                <div className="h-6 w-24 bg-zinc-800 rounded animate-pulse"></div>
+                <div className="h-8 w-20 bg-zinc-800 rounded animate-pulse"></div>
+                <div className="h-8 w-32 bg-zinc-800 rounded animate-pulse"></div>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Comment Input Skeleton */}
-        <div className="bg-black border-b border-zinc-800 w-full px-4 pb-3">
-          <div className="flex items-start gap-3">
-            <div className="h-12 w-12 rounded-full bg-zinc-800 animate-pulse"></div>
-            <div className="flex-1">
-              <div className="h-12 w-full bg-zinc-800 rounded-md animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Comments Skeleton */}
-        <div className="w-full">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="border-t border-zinc-800 px-4 py-3 flex gap-3">
-              <div className="h-9 w-9 rounded-full bg-zinc-800 animate-pulse"></div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="h-4 w-32 bg-zinc-800 rounded animate-pulse"></div>
-                </div>
-                <div className="h-3 w-full bg-zinc-800 rounded mb-1 animate-pulse"></div>
-                <div className="h-3 w-3/4 bg-zinc-800 rounded animate-pulse"></div>
-                <div className="flex gap-3 mt-2">
-                  <div className="h-4 w-12 bg-zinc-800 rounded animate-pulse"></div>
-                  <div className="h-4 w-12 bg-zinc-800 rounded animate-pulse"></div>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     );
@@ -477,30 +461,33 @@ const PostDetail = ({
   return (
     <div className="flex flex-col items-center w-full min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="sticky h-14 top-0 z-10 bg-black/80 backdrop-blur-lg w-full border-b border-zinc-800 flex items-center gap-3 px-4 py-3">
-        <button onClick={onBack} className="hover:bg-zinc-800 rounded-full p-2">
+      <div className="sticky h-16 top-0 z-40 bg-black/80 backdrop-blur-xl w-full border-b border-zinc-800 flex items-center gap-4 px-5">
+        <button 
+            onClick={onBack} 
+            className="hover:bg-zinc-800 rounded-full p-2.5 transition-colors text-zinc-400 hover:text-white"
+        >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-lg font-semibold">Post</h2>
+        <h2 className="text-xl font-bold tracking-tight">Post</h2>
       </div>
 
       {/* Post Card */}
-      <div className="w-full px-4 py-5">
+      <div className="w-full px-6 py-6 border-b border-zinc-800">
         {/* Author Info */}
-        <div className="flex gap-3 mb-3">
+        <div className="flex gap-4 mb-4">
           <Avatar
             src={selectedPost.authorId.profilePhoto}
             alt={selectedPost.authorId.username ?? ""}
-            className="h-10 w-10 cursor-pointer"
+            className="h-11 w-11 cursor-pointer ring-2 ring-transparent hover:ring-zinc-800 transition-all"
           />
-          <div>
+          <div className="flex flex-col justify-center">
             <p
-              className="font-semibold cursor-pointer hover:underline"
+              className="font-bold text-[16px] leading-tight hover:underline cursor-pointer text-white"
               onClick={() => onProfileClick(selectedPost.authorId)}
             >
               {selectedPost.authorId.username}
             </p>
-            <p className="text-sm text-zinc-500">
+            <p className="text-[14px] text-zinc-500 leading-tight mt-0.5">
               @{selectedPost.authorId.username?.toLowerCase()} ·{" "}
               {formatTimeAgo(selectedPost.publishedAt)}
             </p>
@@ -508,28 +495,29 @@ const PostDetail = ({
         </div>
 
         {/* Post Body */}
-        <div className="ml-[52px]">
-          <p className="text-base mb-2">{selectedPost.title}</p>
+        <div className="pl-[60px]">
+          <h1 className="text-2xl font-bold mb-3 text-white">{selectedPost.title}</h1>
           {selectedPost.description && (
-            <p className="text-zinc-300 mb-3">{selectedPost.description}</p>
+            <p className="text-zinc-300 mb-5 whitespace-pre-wrap leading-relaxed text-[16px]">{selectedPost.description}</p>
           )}
           {selectedPost.assetId?.url && (
-            <video
-              ref={videoRef}
-              autoPlay
-              controls
-              className="rounded-2xl border border-zinc-800 w-full max-h-[60vh] my-3"
-              src={selectedPost.assetId.url}
-            />
+            <div className="max-w-4xl">
+                <video
+                ref={videoRef}
+                controls
+                className="rounded-xl border border-zinc-800 w-full max-h-[70vh] my-4 shadow-lg bg-black"
+                src={selectedPost.assetId.url}
+                />
+            </div>
           )}
 
           {/* Tags */}
-          {selectedPost.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
+          {selectedPost.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
               {selectedPost.tags.map((tag, i) => (
                 <span
                   key={i}
-                  className="text-blue-400 hover:underline text-sm cursor-pointer"
+                  className="text-blue-400 hover:text-blue-300 text-sm cursor-pointer transition-colors"
                 >
                   #{tag}
                 </span>
@@ -538,22 +526,44 @@ const PostDetail = ({
           )}
 
           {/* Post Footer */}
-          <div className="flex justify-between border-t border-b border-zinc-800 py-2 items-center text-zinc-500 text-sm gap-5">
-            {/* Action Bar */}
-            <div className="flex items-center text-zinc-500 gap-5 w-full">
+          <div className="flex justify-between border-t border-b border-zinc-800 py-3 items-center text-zinc-500 gap-6 mt-2">
+            
+            {/* Stats */}
+            <div className="flex items-center gap-6 text-sm">
+                <div className="flex items-center gap-1.5 hover:text-white transition-colors cursor-default">
+                    <span className="text-white font-bold text-base">
+                        {formatCount(selectedPost.likesCount)}
+                    </span>
+                    <span>Likes</span>
+                </div>
+                <div className="flex items-center gap-1.5 hover:text-white transition-colors cursor-default">
+                    <span className="text-white font-bold text-base">
+                        {formatCount(selectedPost.commentsCount)}
+                    </span>
+                    <span>Comments</span>
+                </div>
+                 <div className="flex items-center gap-1.5 hover:text-white transition-colors cursor-default">
+                    <span className="text-white font-bold text-base">
+                        {formatCount(selectedPost.analytics.views)}
+                    </span>
+                    <span>Views</span>
+                </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3">
               <button
                 onClick={(e) => handleLikeToggle(selectedPost._id, e)}
-                className="flex items-center gap-2 hover:text-red-500 transition"
+                className="flex items-center gap-2 p-2 rounded-full hover:bg-pink-500/10 transition group"
               >
                 <Heart
-                  className={`h-5 w-5 ${
-                    selectedPost.isLiked ? "fill-red-500 text-red-500" : ""
+                  className={`w-5 h-5 transition-transform group-hover:scale-110 ${
+                    selectedPost.isLiked ? "fill-pink-500 text-pink-500" : "text-zinc-500 group-hover:text-pink-500"
                   }`}
                 />
-                Like
               </button>
               <button
-                className="flex items-center gap-2 group p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 p-2 rounded-full hover:bg-blue-500/10 transition group disabled:opacity-50"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!post.isAddedToBackpack) {
@@ -563,47 +573,15 @@ const PostDetail = ({
                 disabled={savingToBackPack}
               >
                 {savingToBackPack ? (
-                  <>
-                    <Loader2 className="w-[18px] h-[18px] text-zinc-500 animate-spin" />
-                    <span className="text-[13px] text-zinc-500 hidden sm:inline">
-                      Saving...
-                    </span>
-                  </>
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
                 ) : post.isAddedToBackpack ? (
-                  <>
-                    <Check className="w-[18px] h-[18px] text-green-500" />
-                    <span className="text-[13px] text-green-500 hidden sm:inline">
-                      Saved
-                    </span>
-                  </>
+                    <Check className="w-5 h-5 text-green-500" />
                 ) : (
-                  <>
-                    <Backpack className="w-[18px] h-[18px] text-zinc-500 group-hover:text-blue-500 transition-colors" />
-                    <span className="text-[13px] text-zinc-500 group-hover:text-blue-500 transition-colors hidden sm:inline">
-                      Save to Backpack
-                    </span>
-                  </>
+                    <Backpack className="w-5 h-5 text-zinc-500 group-hover:text-blue-500 transition-transform group-hover:scale-110" />
                 )}
               </button>
             </div>
-            <div className="flex justify-center items-center gap-10 w-full">
-              <p>
-                <span className="text-white font-semibold">
-                  {formatCount(selectedPost.likesCount)}
-                </span>{" "}
-                Likes
-              </p>
-              <p>
-                <span className="text-white font-semibold">
-                  {formatCount(selectedPost.commentsCount)}
-                </span>{" "}
-                Comments
-              </p>
-              <p className="hidden sm:inline">
-                <BarChart3 className="inline w-4 h-4 mr-1" />
-                {formatCount(selectedPost.analytics.views)} Views
-              </p>
-            </div>
+
           </div>
         </div>
       </div>

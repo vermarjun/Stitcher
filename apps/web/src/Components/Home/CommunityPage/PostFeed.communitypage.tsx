@@ -79,38 +79,38 @@ const Feed = ({
   return (
     <div className="flex-1 justify-center min-w-0 w-full">
       {/* Feed Type Selector */}
-      <div className="sticky top-0 z-10 backdrop-blur-sm bg-black/80 mb-6 border-b border-zinc-800 h-14">
-        <div className="flex gap-0">
+      {/* Feed Type Selector */}
+      <div className="sticky top-0 z-40 backdrop-blur-xl bg-black/80 border-b border-zinc-800">
+        <div className="flex items-center justify-between w-full h-14 relative">
           <button
             onClick={() => setFeedType("trending")}
-            className={`flex-1 py-4 px-4 font-semibold text-sm transition-colors relative ${
+            className={`flex-1 flex items-center justify-center gap-2 h-full relative transition-colors ${
               feedType === "trending"
                 ? "text-white"
                 : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
-            <div className="flex items-center justify-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Trending
-            </div>
+            <TrendingUp className="h-4 w-4" />
+            <span className="text-[15px] font-medium">Trending</span>
             {feedType === "trending" && (
-              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[#02684D] rounded-full" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             )}
           </button>
+          
+          <div className="h-5 w-px bg-zinc-800" />
+          
           <button
             onClick={() => setFeedType("following")}
-            className={`flex-1 py-3 px-4 font-semibold text-sm transition-colors relative ${
+            className={`flex-1 flex items-center justify-center gap-2 h-full relative transition-colors ${
               feedType === "following"
                 ? "text-white"
                 : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
-            <div className="flex items-center justify-center gap-2">
-              <Users className="h-4 w-4" />
-              Following
-            </div>
+            <Users className="h-4 w-4" />
+            <span className="text-[15px] font-medium">Following</span>
             {feedType === "following" && (
-              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-[#02684D] rounded-full" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             )}
           </button>
         </div>

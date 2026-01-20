@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Mail, Upload, Save, Calendar, UserPlus } from "lucide-react";
+import { Mail, Save, Calendar, UserPlus, Camera } from "lucide-react";
 import { Card, CardContent } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
 import { Label } from "@/Components/ui/label";
 import { Textarea } from "@/Components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
-import { Separator } from "@/Components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -268,79 +267,59 @@ const ProfileTab: React.FC = () => {
     : "";
 
   return (
-    <div className="space-y-6">
-      <Card className="bg-zinc-950 p-0 pb-4 border-zinc-800 overflow-hidden rounded-2xl shadow-lg">
-        {/* ===== Banner Section ===== */}
-        <div className="relative">
-          <div
-            className="w-full h-44 md:h-52 bg-zinc-800"
-            style={{
-              backgroundImage: user?.profileBanner
-                ? `url(${user.profileBanner})`
-                : undefined,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }}
+    <div className="space-y-8">
+      {/* Banner & Header Card */}
+      <div className="relative group rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-900 shadow-2xl">
+        <div className="relative h-48 md:h-64 w-full bg-zinc-800 overflow-hidden">
+          {user?.profileBanner ? (
+            <img 
+              src={user.profileBanner} 
+              alt="Banner" 
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900" />
+          )}
+          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+          
+          <Button
+            variant="secondary"
+            size="sm"
+            className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm border border-white/10"
+            onClick={() => document.getElementById("banner-upload")?.click()}
           >
-            <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
+            <Camera className="h-4 w-4 mr-2" />
+            Edit Banner
+          </Button>
+          <input
+            id="banner-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleProfileBannerUpload}
+            className="hidden"
+          />
+        </div>
 
-            {/* Change Banner Button */}
-            <div className="absolute top-3 right-3">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-zinc-600 bg-black/40 text-white hover:bg-zinc-700/50"
-                onClick={() =>
-                  document.getElementById("banner-upload")?.click()
-                }
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Change Banner
-              </Button>
-              <input
-                id="banner-upload"
-                type="file"
-                accept="image/*"
-                onChange={handleProfileBannerUpload}
-                className="hidden"
-              />
-            </div>
-            <div className="flex bg-zinc-800 gap-2 rounded-xl py-1 px-2 absolute -bottom-8 right-3 justify-center items-center text-right">
-              <div>
-                {/* <p className="text-sm text-zinc-400">Aura</p> */}
-                <p className="text-xl font-bold text-white">
-                  {user?.aura ?? 0}
-                </p>
-              </div>
-              <span className="text-2xl text-zinc-300">Aura</span>
-            </div>
-          </div>
-
-          {/* ===== Avatar Section ===== */}
-          <div className="relative px-6 pb-3">
-            <div className="absolute -top-12 flex items-end gap-4">
-              <div className="relative justify-center items-end">
-                <Avatar className="h-24 w-24 md:h-28 md:w-28 border-4 border-zinc-900 rounded-full">
+        <div className="px-6 md:px-10 pb-6 relative">
+          <div className="flex flex-col md:flex-row items-start md:items-end -mt-12 md:-mt-16 mb-4 gap-4 md:gap-6">
+            <div className="flex items-end gap-5">
+              <div className="relative group/avatar">
+                <Avatar className="h-28 w-28 md:h-36 md:w-36 border-4 border-zinc-900 shadow-xl ring-2 ring-zinc-800">
                   <AvatarImage
                     src={user?.profilePhoto}
                     alt="Profile"
                     className="object-cover"
                   />
-                  <AvatarFallback className="bg-zinc-700 text-white text-xl">
+                  <AvatarFallback className="bg-zinc-800 text-white text-3xl font-bold">
                     {user?.username?.charAt(0)?.toUpperCase() ?? "U"}
                   </AvatarFallback>
                 </Avatar>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-zinc-600 absolute bottom-1 -right-16 bg-black/40 text-white hover:bg-zinc-700/50"
-                  onClick={() =>
-                    document.getElementById("profilephoto-upload")?.click()
-                  }
+                <div 
+                  className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer"
+                  onClick={() => document.getElementById("profilephoto-upload")?.click()}
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload
-                </Button>
+                  <Camera className="h-8 w-8 text-white/80" />
+                </div>
                 <input
                   id="profilephoto-upload"
                   type="file"
@@ -349,147 +328,100 @@ const ProfileTab: React.FC = () => {
                   className="hidden"
                 />
               </div>
+              <h2 className="md:hidden text-2xl font-bold text-white tracking-tight mb-4">{user?.username}</h2>
             </div>
-          </div>
-        </div>
-
-        {/* ===== User Info Section ===== */}
-        <div className="mt-10 px-6 space-y-4">
-          <div className="flex flex-wrap justify-between items-start">
-            <div>
-              <h2 className="text-xl md:text-2xl font-semibold text-white">
-                {user?.username}
-              </h2>
-              <p className="text-zinc-400 text-sm mt-1 flex items-center gap-1">
-                <Mail className="h-3 w-3" />
-                {user?.email}
-              </p>
+            
+            <div className="flex-1 mb-2 w-full">
+              <h2 className="hidden md:block text-3xl font-bold text-white tracking-tight">{user?.username}</h2>
+              <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 text-zinc-400 mt-1 text-sm">
+                <span className="flex items-center gap-1.5">
+                   <Mail className="h-3.5 w-3.5" />
+                   {user?.email}
+                </span>
+                <span className="hidden md:block w-1 h-1 rounded-full bg-zinc-600" />
+                <span className="flex items-center gap-1.5">
+                   <Calendar className="h-3.5 w-3.5" />
+                   Joined {createdAtDisplay}
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="text-sm font-normal text-zinc-400 flex items-center gap-1">
-            <Calendar className="w-4 h-4" />
-            {createdAtDisplay}
-          </div>
-
-          {/* ===== Meta Info Section (Followers / Following) ===== */}
-          <div className="text-sm text-zinc-300 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1 sm:gap-4 justify-between">
-            <div className="flex justify-center gap-4">
-              <button
+            <div className="flex gap-3 mb-3 w-full md:w-auto">
+              <Button 
+                variant="outline" 
+                className="flex-1 md:flex-none border-zinc-700 bg-zinc-900/50 text-zinc-300 hover:bg-zinc-800 hover:text-white"
                 onClick={() => handleOpenModal("followers")}
-                className="hover:underline cursor-pointer hover:text-white transition"
               >
-                <span className="font-semibold text-white">
-                  {followersCount}
-                </span>{" "}
-                Followers
-              </button>
-              <button
+                <span className="font-bold text-white mr-1.5">{followersCount}</span> Followers
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1 md:flex-none border-zinc-700 bg-zinc-900/50 text-zinc-300 hover:bg-zinc-800 hover:text-white"
                 onClick={() => handleOpenModal("following")}
-                className="hover:underline cursor-pointer hover:text-white transition"
               >
-                <span className="font-semibold text-white">
-                  {followingCount}
-                </span>{" "}
-                Following
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between w-full flex-wrap gap-4">
-            <div className="flex text-sm text-zinc-400">
-              <div className="border-r pr-4">
-                <span className="text-white font-medium">
-                  {user?.stats?.totalPosts ?? 0}
-                </span>{" "}
-                Posts
-              </div>
-              <div className="border-r px-4">
-                <span className="text-white font-medium">
-                  {user?.stats?.totalLikes ?? 0}
-                </span>{" "}
-                Likes
-              </div>
-              <div className="border-r px-4">
-                Comments:{" "}
-                <span className="text-white font-medium">
-                  {user?.stats?.totalComments ?? 0}
-                </span>
-              </div>
-              <div className="px-4">
-                Views:{" "}
-                <span className="text-white font-medium">
-                  {user?.stats?.totalViews ?? 0}
-                </span>
-              </div>
+                 <span className="font-bold text-white mr-1.5">{followingCount}</span> Following
+              </Button>
             </div>
           </div>
         </div>
+      </div>
 
-        <Separator className="my-2 bg-zinc-800" />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Posts", value: user?.stats?.totalPosts ?? 0 },
+          { label: "Total Likes", value: user?.stats?.totalLikes ?? 0 },
+          { label: "Comments", value: user?.stats?.totalComments ?? 0 },
+          { label: "Total Views", value: user?.stats?.totalViews ?? 0 },
+        ].map((stat, i) => (
+          <Card key={i} className="bg-zinc-900/50 border-zinc-800/50 backdrop-blur-sm">
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-white mb-1">{stat.value}</p>
+              <p className="text-xs text-zinc-500 uppercase tracking-widest">{stat.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-        <CardContent className="space-y-6">
-          <form onSubmit={handleProfileUpdate} className="space-y-4">
-            <div className="flex justify-center items-end gap-4 h-full">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="username"
-                    className="text-sm font-medium text-white"
-                  >
-                    Username
-                  </Label>
-                  {formData && (
-                    <Input
-                      id="username"
-                      value={formData.username || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, username: e.target.value })
-                      }
-                      className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
-                      required
-                    />
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="email"
-                    className="text-sm font-medium text-white"
-                  >
-                    Email
-                  </Label>
-                  {formData && (
-                    <Input
-                      id="email"
-                      type="email"
-                      disabled
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                      required
-                      value={formData.email || ""}
-                      className="bg-zinc-800 border-zinc-700 text-white focus:border-white h-10"
-                    />
-                  )}
-                </div>
+      {/* Edit Form */}
+      <Card className="bg-zinc-900 border-zinc-800 overflow-hidden">
+        <CardContent className="p-0">
+          <div className="p-6 border-b border-zinc-800">
+            <h3 className="text-lg font-semibold text-white">Profile Information</h3>
+            <p className="text-sm text-zinc-400">Update your account details and public profile.</p>
+          </div>
+          
+          <form onSubmit={handleProfileUpdate} className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-zinc-300">Username</Label>
+                {formData && (
+                  <Input
+                    id="username"
+                    value={formData.username || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, username: e.target.value })
+                    }
+                    className="bg-zinc-950 border-zinc-800 text-white focus:ring-blue-500/20 focus:border-blue-500/50"
+                  />
+                )}
               </div>
-              <div className="flex w-fit h-full justify-end items-start">
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-white text-black hover:bg-zinc-200 rounded-md h-10 px-6"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {loading ? "Saving..." : "Save Changes"}
-                </Button>
+
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-zinc-300">Email Address</Label>
+                {formData && (
+                  <Input
+                    id="email"
+                    value={formData.email || ""}
+                    disabled
+                    className="bg-zinc-950/50 border-zinc-900 text-zinc-500 cursor-not-allowed"
+                  />
+                )}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="bio" className="text-sm font-medium text-white">
-                Bio
-              </Label>
+              <Label htmlFor="bio" className="text-zinc-300">Bio</Label>
               {formData && (
                 <Textarea
                   id="bio"
@@ -497,92 +429,110 @@ const ProfileTab: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, bio: e.target.value })
                   }
-                  className="bg-zinc-800 border-zinc-700 text-white focus:border-white min-h-[100px] resize-none"
-                  placeholder="Tell us about yourself..."
+                  className="bg-zinc-950 border-zinc-800 text-white min-h-[120px] focus:ring-blue-500/20 focus:border-blue-500/50 resize-none"
+                  placeholder="Tell us a bit about yourself..."
                 />
               )}
+              <p className="text-xs text-zinc-500 text-right">
+                {(formData?.bio?.length || 0)}/500 characters
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-white text-black hover:bg-zinc-200 min-w-[120px]"
+              >
+                {loading ? (
+                  <div className="h-4 w-4 border-2 border-black/30 border-t-black rounded-full animate-spin mr-2" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      {/* ===== Followers / Following Modal ===== */}
+      {/* Followers / Following Modal */}
       <Dialog open={!!modalOpen} onOpenChange={() => setModalOpen(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white border-none focus:ring-0 max-w-md sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-white capitalize text-center">
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white sm:max-w-md p-0 overflow-hidden gap-0">
+          <DialogHeader className="p-4 border-b border-zinc-800">
+            <DialogTitle className="text-white capitalize text-center text-lg">
               {modalOpen}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="max-h-[60vh] overflow-y-auto space-y-3 mt-3">
+          <div className="max-h-[60vh] overflow-y-auto p-2">
             {listLoading && (
-              <p className="text-center text-zinc-400 py-6">Loading...</p>
+              <div className="flex justify-center py-8">
+                <div className="h-6 w-6 border-2 border-zinc-800 border-t-white rounded-full animate-spin" />
+              </div>
             )}
             {!listLoading && listData.length === 0 && (
-              <p className="text-center text-zinc-400 py-6">
-                No {modalOpen} yet.
-              </p>
+              <div className="py-12 text-center text-zinc-500">
+                <UserPlus className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                <p>No {modalOpen} found</p>
+              </div>
             )}
 
-            {listData.map((item) => (
-              <div
-                key={item._id}
-                className="flex items-center justify-between border-b border-zinc-800 hover:bg-zinc-800/70 p-3 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={item.profilePhoto} />
-                    <AvatarFallback>
-                      {item.username?.charAt(0)?.toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-white font-medium text-sm">
-                      {item.username}
-                    </p>
-                    {item.bio && (
-                      <p className="text-xs text-zinc-400 line-clamp-1">
-                        {item.bio}
+            <div className="space-y-1">
+              {listData.map((item) => (
+                <div
+                  key={item._id}
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-zinc-900 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 border border-zinc-800">
+                      <AvatarImage src={item.profilePhoto} />
+                      <AvatarFallback className="bg-zinc-900 text-zinc-500">
+                        {item.username?.charAt(0)?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-white font-medium text-sm group-hover:text-blue-400 transition-colors">
+                        {item.username}
                       </p>
-                    )}
-                    <p className="text-[11px] text-zinc-500">
-                      {item.stats?.followersCount || 0} followers ·{" "}
-                      {item.stats?.followingCount || 0} following
-                    </p>
+                      {item.bio && (
+                        <p className="text-xs text-zinc-500 line-clamp-1 max-w-[180px]">
+                          {item.bio}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
 
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-3 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800"
+                  >
+                    View
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {pagination?.hasMore && (
+              <div className="p-4 flex justify-center">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-zinc-700 text-black hover:text-white bg-zinc-200 hover:bg-zinc-600"
+                  disabled={listLoading}
+                  onClick={() =>
+                    fetchList(
+                      modalOpen as "followers" | "following",
+                      pagination.currentPage + 1
+                    )
+                  }
+                  className="w-full border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 text-zinc-400 hover:text-white"
                 >
-                  <UserPlus className="h-4 w-4 mr-1" />
-                  Follow
+                  Load more
                 </Button>
               </div>
-            ))}
+            )}
           </div>
-
-          {pagination?.hasMore && (
-            <div className="flex justify-center pt-3">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={listLoading}
-                onClick={() =>
-                  fetchList(
-                    modalOpen as "followers" | "following",
-                    pagination.currentPage + 1
-                  )
-                }
-                className="text-white border-zinc-700"
-              >
-                Load more
-              </Button>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>

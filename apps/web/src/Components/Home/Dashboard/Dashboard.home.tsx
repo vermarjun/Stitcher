@@ -60,7 +60,7 @@ const Dashboard = ({
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-black p-3 md:p-4">
+    <div className="min-h-screen bg-black p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-5">
         <TopDesign />
         <QuickActions navigate={navigate} onNavigate={onNavigate} />

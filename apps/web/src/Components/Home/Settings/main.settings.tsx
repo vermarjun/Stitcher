@@ -7,11 +7,13 @@ import {
   Heart,
   MessageCircle,
   PenBoxIcon,
+  ChevronRight,
+  Menu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/Components/ui/button";
 import { Alert, AlertDescription } from "@/Components/ui/alert";
-import { Card, CardContent } from "@/Components/ui/card";
+import { Sheet, SheetContent, SheetTrigger } from "@/Components/ui/sheet";
 import SkeletonLoader from "./SkeletonLoader.settings";
 import Header from "./Header.settings";
 import ProfileTab from "./ProfileTab.settings";
@@ -20,6 +22,7 @@ import DangerTab from "./DangerTab.settings";
 import type { PasswordData, ShowPasswords, Message } from "./types.settings";
 import api from "@/api";
 import type { IUser } from "@/State/Types";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Community components we reuse
 import PostsTab from "@/Components/Home/CommunityPage/ProfilePage/poststab.profilepage";
@@ -40,44 +43,52 @@ interface NavigationState {
 const Navigation: React.FC<{
   activeTab: string;
   setActiveTab: (t: string) => void;
-}> = ({ activeTab, setActiveTab }) => {
+  className?: string;
+  onSelect?: () => void;
+}> = ({ activeTab, setActiveTab, className, onSelect }) => {
   const navItems = [
     { id: "editmyprofile", label: "Profile", icon: User },
-    { id: "password", label: "Password", icon: Lock },
+    { id: "password", label: "Security", icon: Lock },
     { id: "myposts", label: "My Posts", icon: PenBoxIcon },
     { id: "likedposts", label: "Liked Posts", icon: Heart },
     { id: "comments", label: "Comments", icon: MessageCircle },
-    { id: "danger", label: "Danger Zone", icon: Trash2 },
+    { id: "danger", label: "Danger Zone", icon: Trash2, className: "text-red-400 hover:text-red-300 hover:bg-red-950/30" },
   ];
 
   return (
-    <div className="lg:col-span-1">
-      <Card className="bg-zinc-900 border-zinc-800 sticky top-18">
-        <CardContent className="px-4">
-          <nav className="space-y-1">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                  activeTab === item.id
-                    ? "bg-zinc-800 text-white"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
-                }`}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </CardContent>
-      </Card>
-    </div>
+    <nav className={`space-y-1 ${className}`}>
+      {navItems.filter(item => item.id !== 'danger').map((item) => (
+        <button
+          key={item.id}
+          onClick={() => {
+            setActiveTab(item.id);
+            onSelect?.();
+          }}
+          className={`w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+            activeTab === item.id
+              ? "bg-white/10 text-white shadow-lg backdrop-blur-sm border border-white/10"
+              : `text-zinc-400 hover:text-white hover:bg-zinc-800/50 ${item.className || ""}`
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <item.icon className={`h-4 w-4 ${activeTab === item.id ? "text-blue-400" : "text-zinc-500 group-hover:text-zinc-300"} transition-colors`} />
+            {item.label}
+          </div>
+          {activeTab === item.id && (
+            <motion.div
+              layoutId="nav-indicator"
+              className="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+            />
+          )}
+        </button>
+      ))}
+    </nav>
   );
 };
 
 const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
   const [user, setUser] = useState<IUser>(currentUser);
+  // ... (rest of state items are fine, omitting for brevity in replacement if not changed, but I must provide full replacement for the chunk)
   const [passwordData, setPasswordData] = useState<PasswordData>({
     currentPassword: "",
     newPassword: "",
@@ -226,28 +237,48 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
         return <LikesTab userId={user._id} onPostClick={handlePostClick} />;
       case "comments":
         return <CommentsTab userId={user?._id} />;
-      case "post":
-        return (
-          <PostDetail
-            post={currentView.data}
-            currentUser={currentUser}
-            onBack={navigateBack}
-            onProfileClick={handleProfileClick}
-            formatCount={formatCount}
-          />
-        );
-      case "profile":
-        return (
-          <Profile
-            profile={currentUser}
-            currentUser={currentUser}
-            onBack={navigateBack}
-            onPostClick={handlePostClick}
-          />
-        );
       default:
         return null;
     }
+  };
+
+  const renderContent = () => {
+    if (currentView.view === "post") {
+      return (
+        <PostDetail
+          post={currentView.data}
+          currentUser={currentUser}
+          onBack={navigateBack}
+          onProfileClick={handleProfileClick}
+          formatCount={formatCount}
+        />
+      );
+    }
+    
+    if (currentView.view === "profile") {
+      return (
+        <Profile
+          profile={currentUser}
+          currentUser={currentUser}
+          onBack={navigateBack}
+          onPostClick={handlePostClick}
+        />
+      );
+    }
+
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.2 }}
+        >
+          {renderActiveTab()}
+        </motion.div>
+      </AnimatePresence>
+    );
   };
 
   if (initialLoading) return <SkeletonLoader />;
@@ -268,67 +299,88 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
       {/* Header (always visible above content) */}
       <Header user={user} />
 
-      <div className="px-6 max-w-6xl mx-auto">
+      <div className="px-4 md:px-6 max-w-7xl mx-auto pb-20">
         {/* Message */}
         {message && (
           <Alert
             className={`mb-6 ${
               message.type === "error"
-                ? "border-red-500 bg-red-900/30"
-                : "border-green-500 bg-green-900/30"
+                ? "border-red-500/50 bg-red-900/10 text-red-200"
+                : "border-green-500/50 bg-green-900/10 text-green-200"
             }`}
           >
-            <AlertDescription className="flex items-center justify-between text-sm">
-              <span
-                className={
-                  message.type === "error" ? "text-red-300" : "text-green-300"
-                }
-              >
-                {message.text}
-              </span>
+            <AlertDescription className="flex items-center justify-between text-sm font-medium">
+              <span>{message.text}</span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setMessage(null)}
-                className="h-5 w-5 p-0 hover:bg-transparent text-zinc-400 hover:text-white"
+                className="h-6 w-6 p-0 hover:bg-transparent text-current opacity-70 hover:opacity-100"
               >
-                <X className="h-3" />
+                <X className="h-4 w-4" />
               </Button>
             </AlertDescription>
           </Alert>
         )}
 
-        {/* GRID: Navigation (col 1) always visible, Main stage (col 2-4) switches */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="grid sm:hidden">
-            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8">
+          {/* Sidebar / Navigation */}
+          <div className="lg:col-span-3">
+            {/* Desktop Navigation */}
+            <div className="hidden lg:block sticky top-24">
+              <div className="bg-zinc-900/50 backdrop-blur-md rounded-2xl border border-white/5 p-4">
+                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-4">
+                  Settings Menu
+                </h3>
+                <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+              </div>
+            </div>
+
+            {/* Mobile Navigation Trigger */}
+            <div className="lg:hidden mb-4">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-800">
+                    <span className="flex items-center gap-2">
+                       <Menu className="h-4 w-4" />
+                       Menu
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-zinc-500" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="top" className="bg-zinc-950 border-b-zinc-800 p-0">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3 mb-8">
+                      {user.profilePhoto ? (
+                        <img 
+                          src={user.profilePhoto} 
+                          alt={user.username} 
+                          className="h-10 w-10 rounded-full object-cover border border-zinc-700"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center">
+                           <User className="h-5 w-5 text-white" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-semibold text-white">Settings</p>
+                        <p className="text-xs text-zinc-400">Manage your account</p>
+                      </div>
+                    </div>
+                    <Navigation 
+                      activeTab={activeTab} 
+                      setActiveTab={setActiveTab} 
+                      onSelect={() => document.getElementById('close-sheet')?.click()}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
 
-          <div className="lg:col-span-3 space-y-6">
-            {/* MAIN AREA: Switch based on navigationStack top */}
-            {currentView.view === "settings" && renderActiveTab()}
-
-            {currentView.view === "post" && (
-              <PostDetail
-                post={currentView.data}
-                currentUser={currentUser}
-                onBack={navigateBack}
-                onProfileClick={handleProfileClick}
-                formatCount={formatCount}
-              />
-            )}
-
-            {currentView.view === "profile" && (
-              <Profile
-                profile={currentUser}
-                currentUser={currentUser}
-                onBack={navigateBack}
-                onPostClick={handlePostClick}
-              />
-            )}
-          </div>
-          <div className="hidden sm:grid">
-            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+          {/* Main Content Area */}
+          <div className="lg:col-span-9 space-y-4 md:space-y-6">
+            {renderContent()}
           </div>
         </div>
       </div>
