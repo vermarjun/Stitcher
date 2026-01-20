@@ -451,21 +451,27 @@ const VideoPlayer = ({
     ) as ITextTimelineItem[];
   }, [timeline, currentTime]);
 
+  // Track previous active video to detect transitions
+  const prevActiveVideoRef = useRef<IVideoTimelineItem | null>(null);
+
   // Sync video element with timeline time
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const activeVideo = getActiveVideo();
+    
     if (activeVideo && activeVideo.assetId) {
       const timeInClip = currentTime - activeVideo.startTime;
       const sourceTime = activeVideo.sourceStartTime + timeInClip;
 
+      // Track video transition
+      prevActiveVideoRef.current = activeVideo;
+
       if (video.src !== activeVideo.assetId.url) {
         video.src = activeVideo.assetId.url;
-      }
-
-      if (Math.abs(video.currentTime - sourceTime) > 0.1) {
+        video.currentTime = sourceTime;
+      } else if (Math.abs(video.currentTime - sourceTime) > 0.1) {
         video.currentTime = sourceTime;
       }
 
@@ -475,9 +481,15 @@ const VideoPlayer = ({
         video.pause();
       }
     } else {
-      // no active video -> show black screen by removing src and pausing
-      video.pause();
-      if (video.src) video.removeAttribute("src");
+      // No active video at current time
+      prevActiveVideoRef.current = null;
+      
+      // If we're playing but no video is active, let the playhead continue
+      // This handles the case where video is shorter than audio
+      if (!isPlaying) {
+        video.pause();
+        if (video.src) video.removeAttribute("src");
+      }
     }
   }, [currentTime, isPlaying, getActiveVideo]);
 
@@ -627,20 +639,25 @@ const VideoPlayer = ({
                   activeVideo.startTime +
                   (sourceTime - activeVideo.sourceStartTime);
                 
-                // CRITICAL FIX: Only update if we're within the bounds of the current video item
+                // CRITICAL FIX: Only update if we're within bounds AND not going backwards
                 // This prevents looping back to the start when the video ends
-                if (timelineTime <= activeVideo.endTime) {
-                  onTimeUpdate(timelineTime);
+                if (timelineTime <= activeVideo.endTime && timelineTime >= activeVideo.startTime) {
+                  // Additional check: don't let video element updates move timeline backwards
+                  if (timelineTime >= currentTime - 0.5) { // Allow small backward tolerance for seek operations
+                    onTimeUpdate(timelineTime);
+                  }
                 }
               }
             }
           }}
           onEnded={() => {
-            // When video ends, advance timeline to next item if available
+            // When video ends, advance timeline past the current video item
             const activeVideo = getActiveVideo();
             if (activeVideo) {
-              // Move timeline to the end of current video item
-              onTimeUpdate(activeVideo.endTime);
+              // Add small offset (0.016s ≈ 1 frame at 60fps) to move past junction
+              // This ensures we transition to next video smoothly
+              const nextTime = activeVideo.endTime + 0.016;
+              onTimeUpdate(Math.min(nextTime, Number(timeline.duration)));
             }
           }}
         />

@@ -57,21 +57,39 @@ const VideoEditor = ({ currentProject }: Props) => {
   useEffect(() => {
     if (!timeline) return;
     if (isPlaying) {
+      // Reset the lastTimeRef when starting playback to avoid stale values
+      lastTimeRef.current = 0;
+      
       const animate = (ts: number) => {
-        if (lastTimeRef.current) {
+        if (lastTimeRef.current === 0) {
+          // First frame: just record timestamp, don't update time
+          lastTimeRef.current = ts;
+        } else {
           const delta = (ts - lastTimeRef.current) / 1000;
+          lastTimeRef.current = ts;
+          
           setCurrentTime((prev) => {
             const nt = prev + delta;
+            
+            // Safety check: prevent timeline from going backwards
+            if (nt < prev) {
+              console.warn('Timeline tried to go backwards, prevented');
+              return prev;
+            }
+            
+            // Check if we've reached the end
             if (nt >= Number(timeline.duration)) {
               setIsPlaying(false);
               return Number(timeline.duration);
             }
+            
             return nt;
           });
         }
-        lastTimeRef.current = ts;
+        
         animationFrameRef.current = requestAnimationFrame(animate);
       };
+      
       animationFrameRef.current = requestAnimationFrame(animate);
     } else {
       if (animationFrameRef.current)

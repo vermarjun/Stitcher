@@ -308,7 +308,36 @@ const TimelineEditor = ({
 
       const spp = secondsPerPixel();
       const deltaTime = (e.clientX - dragData.startX) * spp;
-      const timelineDuration = Number(timeline.duration);
+
+      // Helper function to check if two time ranges overlap
+      const checkOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+        // Use small epsilon for floating point comparison
+        const epsilon = 0.01;
+        return (start1 < end2 - epsilon) && (end1 > start2 + epsilon);
+      };
+
+      // Helper function to validate no overlap with other items on same track
+      const validateNoOverlap = (
+        trackId: string, 
+        itemId: string, 
+        newStart: number, 
+        newEnd: number,
+        allTracks: ITrack[]
+      ): boolean => {
+        const track = allTracks.find(t => t._id === trackId);
+        if (!track) return true;
+
+        // Check against all other items on the same track
+        for (const otherItem of track.items) {
+          if (otherItem._id === itemId) continue; // Skip self
+          
+          if (checkOverlap(newStart, newEnd, otherItem.startTime, otherItem.endTime)) {
+            return false; // Overlap detected
+          }
+        }
+        
+        return true; // No overlap
+      };
 
       const updatedTimeline = {
         ...timeline,
@@ -321,17 +350,26 @@ const TimelineEditor = ({
               if (it._id !== dragData.item._id) return it;
 
               if (dragAction === "move") {
-                const newStart = Math.max(
-                  0,
-                  Math.min(
-                    timelineDuration - dragData.duration,
-                    dragData.initialStart + deltaTime
-                  )
-                );
+                // Calculate desired new position
+                let newStart = dragData.initialStart + deltaTime;
+                
+                // Apply basic constraints
+                newStart = Math.max(0, newStart); // Can't go before 0
+                
+                // Don't constrain by timeline duration - allow extending timeline
+                // This fixes the issue where items can't be moved when at the end
+                const newEnd = newStart + dragData.duration;
+                
+                // Validate no overlap
+                if (!validateNoOverlap(track._id, it._id, newStart, newEnd, timeline.tracks as ITrack[])) {
+                  // If overlap detected, don't update position (keep previous valid position)
+                  return it;
+                }
+                
                 return {
                   ...it,
                   startTime: newStart,
-                  endTime: newStart + dragData.duration,
+                  endTime: newEnd,
                 };
               }
 
@@ -339,19 +377,36 @@ const TimelineEditor = ({
                 const newStart = Math.max(
                   0,
                   Math.min(
-                    dragData.initialEnd - 0.1,
+                    dragData.initialEnd - 0.1, // Minimum 0.1s duration
                     dragData.initialStart + deltaTime
                   )
                 );
+                
+                // Validate no overlap
+                if (!validateNoOverlap(track._id, it._id, newStart, dragData.initialEnd, timeline.tracks as ITrack[])) {
+                  return it;
+                }
+                
                 // for media, shift sourceStartTime; for text, just change startTime
                 if (it.type === "text") {
                   return { ...it, startTime: newStart };
                 }
+                
                 const cropDelta = newStart - dragData.initialStart;
                 const newSourceStart = Math.max(
                   0,
                   dragData.initialSourceStart + cropDelta
                 );
+                
+                // Validate source range doesn't exceed asset duration
+                if (it.type === "video" || it.type === "audio") {
+                  const mediaItem = it as IVideoTimelineItem | IAudioTimelineItem;
+                  const assetDuration = mediaItem.assetId?.duration || 0;
+                  if (newSourceStart >= assetDuration) {
+                    return it; // Invalid source range
+                  }
+                }
+                
                 return {
                   ...it,
                   startTime: newStart,
@@ -365,17 +420,46 @@ const TimelineEditor = ({
 
               if (dragAction === "resize-right") {
                 const newEnd = Math.max(
-                  dragData.initialStart + 0.1,
+                  dragData.initialStart + 0.1, // Minimum 0.1s duration
                   dragData.initialEnd + deltaTime
                 );
-                if (it.type === "text") {
-                  return { ...it, endTime: Math.min(timelineDuration, newEnd) };
+                
+                // Validate no overlap
+                if (!validateNoOverlap(track._id, it._id, dragData.initialStart, newEnd, timeline.tracks as ITrack[])) {
+                  return it;
                 }
+                
+                if (it.type === "text") {
+                  // For text, don't constrain by timeline duration
+                  return { ...it, endTime: newEnd };
+                }
+                
                 const cropDelta = newEnd - dragData.initialEnd;
                 const newSourceEnd = dragData.initialSourceEnd + cropDelta;
+                
+                // Validate source range doesn't exceed asset duration
+                if (it.type === "video" || it.type === "audio") {
+                  const mediaItem = it as IVideoTimelineItem | IAudioTimelineItem;
+                  const assetDuration = mediaItem.assetId?.duration || 0;
+                  if (newSourceEnd > assetDuration) {
+                    // Clamp to asset duration
+                    const clampedSourceEnd = assetDuration;
+                    const clampedEnd = dragData.initialStart + (clampedSourceEnd - dragData.initialSourceStart);
+                    return {
+                      ...it,
+                      endTime: clampedEnd,
+                      ...(it.type === "video" || it.type === "audio"
+                        ? {
+                            sourceEndTime: clampedSourceEnd,
+                          }
+                        : {}),
+                    } as ITimelineItemBase;
+                  }
+                }
+                
                 return {
                   ...it,
-                  endTime: Math.min(timelineDuration, newEnd),
+                  endTime: newEnd,
                   ...(it.type === "video" || it.type === "audio"
                     ? {
                         sourceEndTime: newSourceEnd,
