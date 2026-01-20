@@ -391,14 +391,14 @@ const Hero = () => {
                         <FlipWords words={words} className="text-neutral-400" />
                       </div>
                     </div>
-                    <div className="flex justify-center items-center">
+                    {/* <div className="flex justify-center items-center">
                       Something?
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Tagline */}
                   <div className="mt-2 text-xl md:text-2xl text-neutral-400 font-bold">
-                    Explain
+                    Try
                     <span> </span>
                     <AuroraText>VISUALLY</AuroraText>, Try
                     <SparklesText sparklesCount={5}>

@@ -11,7 +11,10 @@ interface Props {
   onAssetDrop?: (asset: any) => void; 
   droppedItems?: Asset[];
   onRemoveItem?: (id: string) => void;
-
+  mode?: 'generate' | 'edit';
+  setMode?: (mode: 'generate' | 'edit') => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 } 
 
 export type VideoGenerationRequest = {
@@ -81,8 +84,22 @@ export const messageActions = {
   }),
 };
 
-const AISidebar = ({ currentProject, user, onAssetDrop, droppedItems, onRemoveItem}: Props) => {
-  const [mode, setMode] = useState<'generate' | 'edit'>('generate');
+const AISidebar = ({ 
+  currentProject, 
+  user, 
+  onAssetDrop, 
+  droppedItems, 
+  onRemoveItem,
+  mode: propMode,
+  setMode: propSetMode,
+  isOpen = false,
+  onClose
+}: Props) => {
+  const [localMode, setLocalMode] = useState<'generate' | 'edit'>('generate');
+  
+  // Use props if available, otherwise local state (for desktop backward compatibility if needed, though we passed it from parent)
+  const mode = propMode || localMode;
+  const setMode = propSetMode || setLocalMode;
   
   const [generateMessages, setGenerateMessages] = useState<Message[]>([]);
   const [generateInput, setGenerateInput] = useState('');
@@ -209,62 +226,78 @@ const AISidebar = ({ currentProject, user, onAssetDrop, droppedItems, onRemoveIt
   };
   
   return (
-    <div className="bg-black border-l border-zinc-700 flex flex-col w-80 relative">
-      <AISidebarHeader 
-        mode={mode} 
-        setMode={setMode} 
-        onNewChatClick={handleNewChatClick}
-        onClearChat={() => {}}
-        onExportChat={handleExportChat}
-        messageCount={getMessageCount()}
-        onSelectHistory={handleSelectHistory}
-        currentProject={currentProject}
-      />
-      
-      {/* Show loading state while fetching chats */}
-      {isLoadingChats ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
-            <span>Loading chats...</span>
-          </div>
-        </div>
-      ) : (
-        <>
-          {mode === 'generate' ? 
-            <GenerateComponent 
-              currentProject={currentProject}
-              ref={generateRef}
-              messages={generateMessages}
-              setMessages={setGenerateMessages}
-              input={generateInput}
-              setInput={setGenerateInput}
-              isProcessing={generateIsProcessing}
-              setIsProcessing={setGenerateIsProcessing}
-              currentChatId={currentGenerateChatId}
-              setCurrentChatId={setCurrentGenerateChatId}
-              user={user}
-              onAssetDrop={onAssetDrop}
-              droppedItems={droppedItems}
-              onRemoveItem={onRemoveItem}
-            />
-            : 
-            <EditComponent/>
-          }
-        </>
+    <>
+      {/* Mobile Overlay Background */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-[55] md:hidden"
+          onClick={onClose}
+        />
       )}
-      
-      {/* Confirmation Dialog - positioned relative to entire sidebar */}
-      <ConfirmationDialog
-        isOpen={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
-        onConfirm={handleNewChat}
-        title="Start New Chat?"
-        description={`This will reset the context and start a fresh chat. If you want to work on current scene continue here.`}
-        confirmText="New Chat"
-        cancelText="Cancel"
-      />
-    </div>
+
+      <div className={`
+        bg-black border-l border-zinc-700 flex flex-col 
+        transition-transform duration-300 ease-in-out
+        md:w-80 md:relative md:translate-x-0 md:flex
+        fixed top-[57px] md:top-0 right-0 bottom-0 w-[85%] z-[60]
+        ${isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+      `}>
+        <AISidebarHeader 
+          mode={mode} 
+          setMode={setMode} 
+          onNewChatClick={handleNewChatClick}
+          onClearChat={() => {}}
+          onExportChat={handleExportChat}
+          messageCount={getMessageCount()}
+          onSelectHistory={handleSelectHistory}
+          currentProject={currentProject}
+        />
+        
+        {/* Show loading state while fetching chats */}
+        {isLoadingChats ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-zinc-400">
+              <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
+              <span>Loading chats...</span>
+            </div>
+          </div>
+        ) : (
+          <>
+            {mode === 'generate' ? 
+              <GenerateComponent 
+                currentProject={currentProject}
+                ref={generateRef}
+                messages={generateMessages}
+                setMessages={setGenerateMessages}
+                input={generateInput}
+                setInput={setGenerateInput}
+                isProcessing={generateIsProcessing}
+                setIsProcessing={setGenerateIsProcessing}
+                currentChatId={currentGenerateChatId}
+                setCurrentChatId={setCurrentGenerateChatId}
+                user={user}
+                onAssetDrop={onAssetDrop}
+                droppedItems={droppedItems}
+                onRemoveItem={onRemoveItem}
+              />
+              : 
+              <EditComponent/>
+            }
+          </>
+        )}
+        
+        {/* Confirmation Dialog - positioned relative to entire sidebar */}
+        <ConfirmationDialog
+          isOpen={showConfirmation}
+          onClose={() => setShowConfirmation(false)}
+          onConfirm={handleNewChat}
+          title="Start New Chat?"
+          description={`This will reset the context and start a fresh chat. If you want to work on current scene continue here.`}
+          confirmText="New Chat"
+          cancelText="Cancel"
+        />
+      </div>
+    </>
   );
 };
 

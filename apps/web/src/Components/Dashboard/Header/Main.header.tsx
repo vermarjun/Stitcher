@@ -14,11 +14,13 @@ function Header({ user }: Props) {
 
   return (
     <>
-      <header className="relative flex h-12 items-center border-b border-zinc-700 bg-neutral-950 backdrop-blur-sm px-4 text-sm">
+      <header className="relative z-[70] flex h-12 items-center border-b border-zinc-700 bg-neutral-950 backdrop-blur-sm px-4 text-sm">
         {/* Left */}
         <div className="flex items-center gap-6">
           <LogoSection />
-          <FileMenuSection />
+          <div className="hidden md:block">
+            <FileMenuSection />
+          </div>
         </div>
 
         {/* Middle (ABSOLUTELY CENTERED) */}

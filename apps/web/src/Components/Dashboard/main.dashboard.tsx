@@ -26,6 +26,11 @@ const DashboardLayout = () => {
   const [user, setUser] = useState<IUser>();
 
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
+  
+  // Right Sidebar State
+  const [rightSidebarMode, setRightSidebarMode] = useState<'generate' | 'edit'>('generate');
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+
   const handleAssetDrop = (asset: Asset) => {
     // Check if asset already exists to avoid duplicates
     if (!droppedAssets.find((item) => item._id === asset._id)) {
@@ -94,13 +99,35 @@ const DashboardLayout = () => {
             <RefreshProviderTracks>
               <RefreshProviderTimeline>
                 <RefreshProviderAssetStash>
-                  <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
+                    <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
                     <Header currentProject={project} user={user} />
+                    
+                    {/* Mobile Only: Generate / Edit Buttons */}
+                    <div className="md:hidden flex w-full border-b border-zinc-800 bg-black">
+                      <button 
+                        onClick={() => {
+                          setRightSidebarMode('generate');
+                          setIsRightSidebarOpen(true);
+                        }}
+                        className="flex-1 py-3 text-sm font-medium border-r border-zinc-800 hover:bg-zinc-900 transition-colors"
+                      >
+                        Generate
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setRightSidebarMode('edit');
+                          setIsRightSidebarOpen(true);
+                        }}
+                        className="flex-1 py-3 text-sm font-medium hover:bg-zinc-900 transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </div>
 
-                    <div className="flex-1 flex overflow-hidden">
+                    <div className="flex-1 flex overflow-hidden relative">
                       <LeftSideBar currentProject={project} user={user} />
 
-                      <main className="flex-1 flex flex-col overflow-hidden">
+                      <main className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-0">
                         <VideoEditor currentProject={project} />
                       </main>
 
@@ -110,6 +137,10 @@ const DashboardLayout = () => {
                         onRemoveItem={handleRemoveAsset}
                         currentProject={project}
                         user={user}
+                        mode={rightSidebarMode}
+                        setMode={setRightSidebarMode}
+                        isOpen={isRightSidebarOpen}
+                        onClose={() => setIsRightSidebarOpen(false)}
                       />
                     </div>
 

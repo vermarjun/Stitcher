@@ -56,7 +56,7 @@ function UserSection({ user }: UserSectionProps) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="flex items-center gap-1">
+      <div className="hidden md:flex items-center gap-1">
         <p className="text-xs flex gap-1 border-r px-2 py-0.5 border-zinc-500">
           <span className="text-[#19E5A1]">{generationCredits}</span>
           <span className="capitalize">generations</span>

@@ -18,7 +18,6 @@ import type { NavigateFunction } from "react-router-dom";
 import { AuroraText } from "../magicui/aurora-text";
 import api from "@/api";
 import { Card, CardContent } from "@/Components/ui/card";
-import { toast } from "sonner";
 
 const UserSidebarInfo = () => {
   const [tier, setTier] = useState("free");

@@ -124,10 +124,18 @@ const VideoEditor = ({ currentProject }: Props) => {
     [timeline]
   ); // Add timeline as dependency
 
+  // Initialize default layout based on screen size
+  const [defaultLayout] = useState(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+      return { video: 62, timeline: 38 }; // Large screens (Laptop)
+    }
+    return { video: 58, timeline: 42 }; // Small screens (Mobile/Tablet)
+  });
+
   return (
     <ResizablePanelGroup direction="vertical" className="h-full w-full">
       {/* Video Player Resizable */}
-      <ResizablePanel defaultSize={62}>
+      <ResizablePanel defaultSize={defaultLayout.video}>
         {isLoading || !timeline ? (
           <VideoPlayerLoading />
         ) : (
@@ -145,7 +153,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       </ResizablePanel>
       <ResizableHandle withHandle />
       {/* Timeline Resizable */}
-      <ResizablePanel defaultSize={38}>
+      <ResizablePanel defaultSize={defaultLayout.timeline}>
         {isLoading || !timeline ? (
           <TimelineEditorLoading />
         ) : (
