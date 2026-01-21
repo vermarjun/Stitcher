@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from openai import AsyncOpenAI
-from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
+from app.utils.initialize_redis import get_summarizer_heap_manager, fetch_api_key_with_queue
 
 class CompletionSummary(BaseModel):
     summary: str
@@ -63,11 +63,10 @@ Scene breakdown:
 {scenes_text}
 """
         
-        redis_manager = get_redis_manager()
-        api_config = await fetch_api_key_with_wait(
-            redis_manager,
-            retry_delay=2,       # waits 2 seconds each time
-            max_wait=60         # max wait = 1 minute
+        summarizer_heap_manager = get_summarizer_heap_manager()
+        api_config = await fetch_api_key_with_queue(
+            summarizer_heap_manager,
+            timeout=300  # 5 minutes max wait
         )
 
         email = api_config["email"]
@@ -109,10 +108,10 @@ Scene breakdown:
             raise e
 
         finally:
-            # Return the API key to heap with updated token count
+            # Return the API key to summarizer heap with updated token count
             new_total_tokens = current_tokens + tokens_used_in_request
-            redis_manager.update_token_usage(email, new_total_tokens)
-            print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")    
+            summarizer_heap_manager.update_token_usage(email, new_total_tokens)
+            print(f"Returned API key for {email} to summarizer heap. New token usage: {new_total_tokens}")    
         
     except Exception as e:
         print(f"Error in response generator: {e}")

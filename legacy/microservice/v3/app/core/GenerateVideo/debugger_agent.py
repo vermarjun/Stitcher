@@ -1,7 +1,7 @@
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from openai import AsyncOpenAI
-from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
+from app.utils.initialize_redis import get_coder_heap_manager, fetch_api_key_with_queue
 
 class DebuggerOutput(BaseModel):
     fixed_code: str
@@ -36,12 +36,11 @@ async def debugger_agent_wrapper(original_code: str, error_msg: str):
     )
 
     try:
-        # Get least used API key from Redis
-        redis_manager = get_redis_manager()
-        api_config = await fetch_api_key_with_wait(
-            redis_manager,
-            retry_delay=2,       # waits 2 seconds each time
-            max_wait=60         # max wait = 1 minute
+        # Get least used API key from Coder Heap (big models)
+        coder_heap_manager = get_coder_heap_manager()
+        api_config = await fetch_api_key_with_queue(
+            coder_heap_manager,
+            timeout=300  # 5 minutes max wait
         )
 
         email = api_config["email"]
@@ -77,10 +76,10 @@ async def debugger_agent_wrapper(original_code: str, error_msg: str):
             print(f"Error occurred, returned API key for {email} to heap")
             raise e
         finally:
-            # Return the API key to heap with updated token count
+            # Return the API key to coder heap with updated token count
             new_total_tokens = current_tokens + tokens_used_in_request
-            redis_manager.update_token_usage(email, new_total_tokens)
-            print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")
+            coder_heap_manager.update_token_usage(email, new_total_tokens)
+            print(f"Returned API key for {email} to coder heap. New token usage: {new_total_tokens}")
         
     except Exception as e:
         print(f"Error in summarizer agent: {e}")

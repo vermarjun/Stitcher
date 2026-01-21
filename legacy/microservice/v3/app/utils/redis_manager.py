@@ -7,6 +7,9 @@ class APIKeyHeapManager:
         self.redis = redis_client
         self.heap_key = heap_key
         self.api_config_key = "api_configs"
+        # Queue-based system properties
+        self.request_queue_key = f"{heap_key}_requests"
+        self.notify_channel = f"{heap_key}_available"
 
     def initialize_heap(self, api_configs):
         self.redis.delete(self.heap_key)
@@ -42,6 +45,8 @@ class APIKeyHeapManager:
 
     def return_api_key(self, email, tokens_used):
         self.redis.zadd(self.heap_key, {email: tokens_used})
+        # Notify waiting requests that a key is available
+        self.notify_waiting_requests()
 
     def update_token_usage(self, email, new_tokens_used):
         self.redis.zadd(self.heap_key, {email: new_tokens_used})
@@ -55,6 +60,9 @@ class APIKeyHeapManager:
                 email,
                 json.dumps(config)
             )
+        
+        # Notify waiting requests that a key is available
+        self.notify_waiting_requests()
 
     def get_heap_size(self):
         return self.redis.zcard(self.heap_key)
@@ -65,58 +73,29 @@ class APIKeyHeapManager:
             ((email.decode() if isinstance(email, bytes) else email), score)
             for email, score in results
         ]
-
-# Example usage
-# if __name__ == "__main__":
-#     # Initialize Redis client
-#     r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
     
-#     # Create heap manager
-#     manager = APIKeyHeapManager(r)
+    # ===================================================================
+    # Queue Management Methods
+    # ===================================================================
     
-#     # Sample API configurations to initialize on startup
-#     initial_configs = [
-#         {
-#             'email': 'user1@example.com',
-#             'api_key': 'sk-abc123',
-#             'tokens_used': 1000,
-#             'rate_limit': 10000
-#         },
-#         {
-#             'email': 'user2@example.com',
-#             'api_key': 'sk-def456',
-#             'tokens_used': 500,
-#             'rate_limit': 10000
-#         },
-#         {
-#             'email': 'user3@example.com',
-#             'api_key': 'sk-ghi789',
-#             'tokens_used': 2000,
-#             'rate_limit': 10000
-#         },
-#         {
-#             'email': 'user4@example.com',
-#             'api_key': 'sk-jkl012',
-#             'tokens_used': 100,
-#             'rate_limit': 10000
-#         }
-#     ]
+    def get_queue_size(self):
+        """Get number of waiting requests in queue"""
+        return self.redis.llen(self.request_queue_key)
     
-#     # Initialize heap on backend startup
-#     manager.initialize_heap(initial_configs)
+    def add_to_queue(self, request_id: str):
+        """Add a request to the waiting queue"""
+        self.redis.rpush(self.request_queue_key, request_id)
     
-#     print(f"Heap size: {manager.get_heap_size()}")
-#     print(f"Current heap state: {manager.get_all_emails_sorted()}")
+    def remove_from_queue(self, request_id: str):
+        """Remove a request from the waiting queue"""
+        self.redis.lrem(self.request_queue_key, 0, request_id)
     
-#     # Get least used API key
-#     least_used = manager.get_least_used_api_key()
-#     print(f"\nLeast used API key: {least_used}")
-#     print(f"Heap size after removal: {manager.get_heap_size()}")
-    
-#     # Simulate usage and return with updated token count
-#     if least_used:
-#         new_token_count = least_used['tokens_used'] + 50
-#         manager.return_api_key(least_used['email'], new_token_count)
-#         print(f"\nReturned {least_used['email']} with {new_token_count} tokens")
-#         print(f"Heap size after return: {manager.get_heap_size()}")
-#         print(f"Updated heap state: {manager.get_all_emails_sorted()}")
+    def notify_waiting_requests(self):
+        """Notify waiting requests that an API key is available"""
+        queue_size = self.get_queue_size()
+        if queue_size > 0:
+            # Publish notification - waiting agents will compete for the key
+            self.redis.publish(self.notify_channel, "key_available")
+            print(f"[Queue] Notified {queue_size} waiting request(s) in {self.heap_key}")
+            return True
+        return False

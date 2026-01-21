@@ -42,8 +42,8 @@ htmlcov/
 logs/
 
 # Environment files (should use env_file in compose)
-.env.local
-.env.*.local
+# .env.local
+# .env.*.local
 
 # Docker files (no need to copy these into the image)
 Dockerfile*

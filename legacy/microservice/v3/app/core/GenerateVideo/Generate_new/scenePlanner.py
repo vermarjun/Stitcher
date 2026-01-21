@@ -1,7 +1,7 @@
 from agents import Agent, Runner, RunConfig, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from typing import List
-from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
+from app.utils.initialize_redis import get_planner_heap_manager, fetch_api_key_with_queue
 from openai import AsyncOpenAI
 
 import json
@@ -116,13 +116,12 @@ exact MObject and Animation classes needed for each scene.
 async def planner_agent_function(prompt: str):
     print("planner model called!")
 
-    # Get least used API key from Redis
-    redis_manager = get_redis_manager()
+    # Get least used API key from Planner Heap (medium models)
+    planner_heap_manager = get_planner_heap_manager()
     
-    api_config = await fetch_api_key_with_wait(
-        redis_manager,
-        retry_delay=2,       # waits 2 seconds each time
-        max_wait=60         # max wait = 1 minute
+    api_config = await fetch_api_key_with_queue(
+        planner_heap_manager,
+        timeout=300  # 5 minutes max wait
     )
     
     email = api_config["email"]
@@ -159,7 +158,7 @@ async def planner_agent_function(prompt: str):
         raise e
     
     finally:
-        # Return the API key to heap with updated token count
+        # Return the API key to planner heap with updated token count
         new_total_tokens = current_tokens + tokens_used_in_request
-        redis_manager.update_token_usage(email, new_total_tokens)
-        print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")
+        planner_heap_manager.update_token_usage(email, new_total_tokens)
+        print(f"Returned API key for {email} to planner heap. New token usage: {new_total_tokens}")

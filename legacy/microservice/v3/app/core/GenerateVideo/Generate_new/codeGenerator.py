@@ -4,7 +4,7 @@ from typing import List
 from .scenePlanner import Scene
 from openai import AsyncOpenAI
 import asyncio
-from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
+from app.utils.initialize_redis import get_coder_heap_manager, fetch_api_key_with_queue
 from app.docs.mObject_examples import CODE_SNIPPETS as MOBJECT_EXAMPLES
 from app.docs.animation_examples import CODE_SNIPPETS as ANIMATION_EXAMPLES
 import re
@@ -76,12 +76,11 @@ async def codeGenerator_agent_function(Scene: Scene):
         f"{knowledge_base}"
     )
 
-    # Get least used API key from Redis
-    redis_manager = get_redis_manager()
-    api_config = await fetch_api_key_with_wait(
-        redis_manager,
-        retry_delay=2,       # waits 2 seconds each time
-        max_wait=60         # max wait = 1 minute
+    # Get least used API key from Coder Heap (big models)
+    coder_heap_manager = get_coder_heap_manager()
+    api_config = await fetch_api_key_with_queue(
+        coder_heap_manager,
+        timeout=300  # 5 minutes max wait
     )
     
     email = api_config["email"]
@@ -119,10 +118,10 @@ async def codeGenerator_agent_function(Scene: Scene):
         raise e
     
     finally:
-        # Return the API key to heap with updated token count
+        # Return the API key to coder heap with updated token count
         new_total_tokens = current_tokens + tokens_used_in_request
-        redis_manager.update_token_usage(email, new_total_tokens)
-        print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")
+        coder_heap_manager.update_token_usage(email, new_total_tokens)
+        print(f"Returned API key for {email} to coder heap. New token usage: {new_total_tokens}")
 
 async def generate_all_scenes(Scenes: List[Scene], max_concurrency: int = 4, per_scene_timeout: int = 120):
     sem = asyncio.Semaphore(max_concurrency)

@@ -98,4 +98,5 @@ RUN sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /e
     sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/' /etc/ImageMagick-6/policy.xml || true && \
     sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/' /etc/ImageMagick-6/policy.xml || true
 
-CMD ["bash", "-lc", "rq worker -u redis://default:$REDIS_PASSWORD@$REDIS_HOST:$REDIS_PORT scene_rendering"]
+# CMD ["bash", "-lc", "rq worker -u redis://default:$REDIS_PASSWORD@$REDIS_HOST:$REDIS_PORT scene_rendering"]
+CMD ["bash", "-lc", "set -a && source /app/.env && set +a && rq worker -u redis://default:$REDIS_PASSWORD@$REDIS_HOST:$REDIS_PORT scene_rendering"]

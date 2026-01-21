@@ -21,6 +21,22 @@ async def process_video_generation(req: GenerateVideoRequest):
         print(f"Chat: {req.chatId}")
         print(f"{'='*60}\n")
         
+        # NEW: Check if prompt matches cached examples
+        from app.core.GenerateVideo.example_cache import find_cached_example
+        from app.core.GenerateVideo.fake_processor import process_cached_example
+        
+        cached_example = find_cached_example(req.prompt)
+        
+        if cached_example:
+            print(f"[CACHE HIT] Using pre-generated result for: {req.prompt[:50]}...")
+            await process_cached_example(req=req, cached_data=cached_example)
+            print(f"\n{'='*60}")
+            print(f"BACKGROUND TASK COMPLETED - Cached example")
+            print(f"Chat: {req.chatId}")
+            print(f"{'='*60}\n")
+            return
+        
+        # EXISTING: Normal processing flow
         # This runs independently and updates MongoDB as it progresses
         final_results = await generate_new_video_main(req=req)
         

@@ -2,7 +2,7 @@ from typing import List, Dict, Union
 from agents import Agent, Runner, OpenAIChatCompletionsModel
 from pydantic import BaseModel
 from openai import AsyncOpenAI
-from app.utils.initialize_redis import get_redis_manager, fetch_api_key_with_wait
+from app.utils.initialize_redis import get_summarizer_heap_manager, fetch_api_key_with_queue
 from app.core.GenerateVideo.Generate_new.chat_updater import ChatUpdater
 from app.utils.event_publisher import publish_event
 
@@ -67,12 +67,11 @@ async def summarizer_agent_function_streaming(
     Returns the complete summary text.
     """
     try:
-        # Get least used API key from Redis
-        redis_manager = get_redis_manager()
-        api_config = await fetch_api_key_with_wait(
-            redis_manager,
-            retry_delay=2,
-            max_wait=60
+        # Get least used API key from Summarizer Heap (small models)
+        summarizer_heap_manager = get_summarizer_heap_manager()
+        api_config = await fetch_api_key_with_queue(
+            summarizer_heap_manager,
+            timeout=300
         )
 
         email = api_config["email"]
@@ -152,9 +151,9 @@ async def summarizer_agent_function_streaming(
             # Estimate token usage (rough approximation: 1 token ≈ 4 characters)
             tokens_used_in_request = len(scenes_text + summary) // 4
             
-            # Update token usage
+            # Update token usage in summarizer heap
             new_total_tokens = current_tokens + tokens_used_in_request
-            redis_manager.update_token_usage(email, new_total_tokens)
+            summarizer_heap_manager.update_token_usage(email, new_total_tokens)
             
             print(f"[Summarizer Streaming] Completed: {len(summary.split())} words streamed")
             print(f"[Summarizer Streaming] Updated token usage for {email}: {new_total_tokens}")
@@ -165,8 +164,8 @@ async def summarizer_agent_function_streaming(
             print(f"[Summarizer Streaming] Error occurred, returned API key for {email} to heap")
             raise e
         finally:
-            # Return the API key to heap even if there's an error
-            redis_manager.return_api_key(email, current_tokens)
+            # Return the API key to summarizer heap even if there's an error
+            summarizer_heap_manager.return_api_key(email, current_tokens)
         
     except Exception as e:
         print(f"[Summarizer Streaming] Error in streaming: {e}")
@@ -188,12 +187,11 @@ async def summarizer_agent_function(planner_output: List[Union[Dict, object]]) -
     Non-streaming version (fallback compatibility).
     """
     try:
-        # Get least used API key from Redis
-        redis_manager = get_redis_manager()
-        api_config = await fetch_api_key_with_wait(
-            redis_manager,
-            retry_delay=2,       # waits 2 seconds each time
-            max_wait=60         # max wait = 1 minute
+        # Get least used API key from Summarizer Heap (small models)
+        summarizer_heap_manager = get_summarizer_heap_manager()
+        api_config = await fetch_api_key_with_queue(
+            summarizer_heap_manager,
+            timeout=300  # 5 minutes max wait
         )
 
         email = api_config["email"]
@@ -243,10 +241,10 @@ async def summarizer_agent_function(planner_output: List[Union[Dict, object]]) -
             print(f"Error occurred, returned API key for {email} to heap")
             raise e
         finally:
-            # Return the API key to heap with updated token count
+            # Return the API key to summarizer heap with updated token count
             new_total_tokens = current_tokens + tokens_used_in_request
-            redis_manager.update_token_usage(email, new_total_tokens)
-            print(f"Returned API key for {email} to heap. New token usage: {new_total_tokens}")
+            summarizer_heap_manager.update_token_usage(email, new_total_tokens)
+            print(f"Returned API key for {email} to summarizer heap. New token usage: {new_total_tokens}")
         
     except Exception as e:
         print(f"Error in summarizer agent: {e}")
