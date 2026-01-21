@@ -1,6 +1,6 @@
 // import { Request, Response } from "express";
 // import Project from "../model/project.model";
-// // import Chat from "../model/chat.model";
+// import Chat from "../model/chat.model";
 // import User from "../model/user.model";
 // import mongoose from "mongoose";
 
@@ -48,17 +48,19 @@
 //         }
 
 //         // Search in chat messages content and chat names
-//         const chats = await Chat.find({
-//             ...searchFilter,
-//             $or: [
-//                 { name: { $regex: query, $options: 'i' } },
-//                 { 'messages.content': { $regex: query, $options: 'i' } },
-//                 { summary: { $regex: query, $options: 'i' } }
-//             ]
-//         })
-//         .populate('projectId', 'name')
-//         .sort({ updatedAt: -1 })
-//         .limit(10);
+//         // const chats = await Chat.find({
+//         //     ...searchFilter,
+//         //     $or: [
+//         //         { name: { $regex: query, $options: 'i' } },
+//         //         { 'messages.content': { $regex: query, $options: 'i' } },
+//         //         { summary: { $regex: query, $options: 'i' } }
+//         //     ]
+//         // })
+//         // .populate('projectId', 'name')
+//         // .sort({ updatedAt: -1 })
+//         // .limit(10);
+
+//         const chats:any = []
 
 //         // Filter and highlight matching messages
 //         const searchResults = chats.map(chat => {
