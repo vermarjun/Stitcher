@@ -7,7 +7,6 @@ import {
   Edit,
   Trash2,
   Loader2,
-  BarChart3,
   MessageSquare,
   ChevronDown,
   ChevronUp,

@@ -23,9 +23,9 @@ const UserSidebarInfo = () => {
   const [tier, setTier] = useState("free");
   const [editingCredits, setEditingCredits] = useState(0);
   const [generationCredits, setGenerationCredits] = useState(0);
-  const [expiresAt, setExpiresAt] = useState("");
+  const [, setExpiresAt] = useState("");
 
-  const formattedDate = new Date(expiresAt).toLocaleDateString();
+  // const formattedDate = new Date(expiresAt).toLocaleDateString();
 
   const fetchData = async ()=>{
     const response = await api.get<any>("/users/me/credits");

@@ -5,10 +5,7 @@ import {
   Trash2,
   UserPlus,
   FolderOpen,
-  Sparkles,
   Search,
-  LayoutGrid,
-  List as ListIcon,
   Calendar,
   MoreVertical,
 } from 'lucide-react';

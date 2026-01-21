@@ -1,5 +1,5 @@
 import React from "react";
-import { Eye, EyeOff, ShieldCheck, KeyRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 import {
   Card,
   CardContent,
