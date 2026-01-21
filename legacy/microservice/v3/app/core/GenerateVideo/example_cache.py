@@ -19,56 +19,38 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         "prompts": [
             "Create a flower of life pattern by drawing overlapping circles that form the sacred geometry symbol",
         ],
-        
-        # Planner output - matches SceneObject structure
         "planner_output": [
             {
                 "SceneName": "scene_1",
-                "Prompt": "PLACEHOLDER - Replace with actual scene description",
+                "Prompt": "",
                 "RequiredMObjects": ["Circle", "VGroup"],  # Example - replace with actual
                 "RequiredAnimations": ["Create", "FadeIn"]  # Example - replace with actual
             },
-            # Add more scenes if needed
         ],
-        
-        # Generator output - code for each scene
         "scenes_with_code": [
             {
                 "sceneName": "scene_1",
-                "code": """# PLACEHOLDER - Replace with actual generated Manim code
-from manim import *
-
-class scene_1(Scene):
-    def construct(self):
-        # Your pre-generated code here
-        pass
-""",
-                "description": "PLACEHOLDER - Replace with scene description",
-                "RequiredMObjects": ["Circle", "VGroup"],
-                "RequiredAnimations": ["Create", "FadeIn"]
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
             },
-            # Add more scenes matching planner_output
         ],
-        
-        # Cloudinary metadata for each rendered scene
         "cloudinary_metadata": [
             {
-                "sceneName": "scene_1",
-                "videoUrl": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768943612/68eefd7b0465a2d1f8576947_SineToCosineTransform_1768943609.mp4",
-                "thumbnailUrl": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1768422994/pinkroom/thumbnails/e17dlezemgykn7fv0zfu.jpg",
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958312/FlowerOfLife_xt02gy.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1768958422/Screenshot_2026-01-21_at_6.50.13_AM_wirgix.png",
                 "width": 1920,
                 "height": 1080,
-                "duration": 5.0,  # in seconds
-                "format": "mp4",
-                "bytes": 1234567,  # file size
-                "public_id": "PLACEHOLDER - cloudinary_public_id",
-                # Add any other Cloudinary metadata you have
+                "duration": 5,
+                "bytes": 1567890,
+                "public_id": "FlowerOfLife_xt02gy",
             },
-            # Add metadata for each scene
         ],
         
         # Final summary response
-        "summary": "PLACEHOLDER - Replace with your final LLM response summary for this example"
+        "planner_summary": "I've created 1 beautiful scene, revealing sacred geometry. From a central circle, you'll see the Seed, then the wondrous Flower of Life bloom, merging into one elegant journey.",
+        "final_summary": "I successfully created your 'flower of life' video! All three scenes, CentralCircle, SeedOfLife, and FlowerOfLife, rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     },
     
     "lissajous_curve": {
@@ -78,8 +60,8 @@ class scene_1(Scene):
         
         "planner_output": [
             {
-                "SceneName": "scene_1",
-                "Prompt": "PLACEHOLDER - Replace with actual scene description",
+                "SceneName": "Lissajous curve",
+                "Prompt": "",
                 "RequiredMObjects": ["ParametricFunction", "Axes"],
                 "RequiredAnimations": ["Create", "Write"]
             },
@@ -87,15 +69,8 @@ class scene_1(Scene):
         
         "scenes_with_code": [
             {
-                "sceneName": "scene_1",
-                "code": """# PLACEHOLDER - Replace with actual generated Manim code
-from manim import *
-
-class scene_1(Scene):
-    def construct(self):
-        # Your pre-generated code here
-        pass
-""",
+                "sceneName": "LissajousCurveScene",
+                "code": """""",
                 "description": "PLACEHOLDER - Replace with scene description",
                 "RequiredMObjects": ["ParametricFunction", "Axes"],
                 "RequiredAnimations": ["Create", "Write"]
@@ -104,19 +79,18 @@ class scene_1(Scene):
         
         "cloudinary_metadata": [
             {
-                "sceneName": "scene_1",
-                "videoUrl": "PLACEHOLDER - https://res.cloudinary.com/...",
-                "thumbnailUrl": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1768422994/pinkroom/thumbnails/e17dlezemgykn7fv0zfu.jpg",
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958327/LissajousCurves_r9lmr3.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1768959322/Screenshot_2026-01-21_at_7.05.13_AM_h6tuei.png",
                 "width": 1920,
                 "height": 1080,
-                "duration": 5.0,
-                "format": "mp4",
+                "duration": 5,
                 "bytes": 1234567,
-                "public_id": "PLACEHOLDER - cloudinary_public_id",
+                "public_id": "LissajousCurves_r9lmr3",
             },
         ],
         
-        "summary": "PLACEHOLDER - Replace with your final LLM response summary"
+        "planner_summary": "I've crafted one scene, LissajousCurveScene, showcasing a beautiful Lissajous curve, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'lissajous curve' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     },
     
     "golden_mandala": {
@@ -126,8 +100,8 @@ class scene_1(Scene):
         
         "planner_output": [
             {
-                "SceneName": "scene_1",
-                "Prompt": "PLACEHOLDER - Replace with actual scene description",
+                "SceneName": "Golden Mandala",
+                "Prompt": "",
                 "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
                 "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
             },
@@ -135,36 +109,28 @@ class scene_1(Scene):
         
         "scenes_with_code": [
             {
-                "sceneName": "scene_1",
-                "code": """# PLACEHOLDER - Replace with actual generated Manim code
-from manim import *
-
-class scene_1(Scene):
-    def construct(self):
-        # Your pre-generated code here
-        pass
-""",
-                "description": "PLACEHOLDER - Replace with scene description",
-                "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
-                "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
+                "sceneName": "GoldenMandalaScene",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
             },
         ],
         
         "cloudinary_metadata": [
             {
-                "sceneName": "scene_1",
-                "videoUrl": "PLACEHOLDER - https://res.cloudinary.com/...",
-                "thumbnailUrl": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1768422994/pinkroom/thumbnails/e17dlezemgykn7fv0zfu.jpg",
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958348/MandalaPattern_vfemzi.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1768958958/Screenshot_2026-01-21_at_6.59.05_AM_sqv0pb.png",
                 "width": 1920,
                 "height": 1080,
-                "duration": 5.0,
-                "format": "mp4",
+                "duration": 5,
                 "bytes": 1234567,
-                "public_id": "PLACEHOLDER - cloudinary_public_id",
+                "public_id": "MandalaPattern_vfemzi",
             },
         ],
         
-        "summary": "PLACEHOLDER - Replace with your final LLM response summary"
+        "planner_summary": "I've crafted one scene, GoldenMandalaScene, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'Golden Mandala' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     }
 }
 

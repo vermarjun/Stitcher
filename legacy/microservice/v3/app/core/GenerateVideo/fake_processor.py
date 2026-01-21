@@ -7,11 +7,10 @@ pre-generated results from the cache instead of actual processing.
 """
 
 import asyncio
-import httpx
 from typing import Dict, Any
 from app.utils.event_publisher import publish_event
 from app.core.GenerateVideo.Generate_new.chat_updater import ChatUpdater
-from app.config.environment import API_BASE_URL
+
 
 
 async def process_cached_example(req: Any, cached_data: Dict[str, Any]):
@@ -61,7 +60,7 @@ async def process_cached_example(req: Any, cached_data: Dict[str, Any]):
         # Update DB with planner output
         await ChatUpdater.update_planner_output(
             chat_id=req.chatId,
-            planner_summary=cached_data["summary"],  # Use cached summary
+            planner_summary=cached_data["planner_summary"],  # Use cached summary
             scenes=planner_objects
         )
         
@@ -72,6 +71,11 @@ async def process_cached_example(req: Any, cached_data: Dict[str, Any]):
         
         print(f"Planning complete: {len(planner_objects)} scenes planned")
         
+        publish_event(req.chatId, "SUMMARY_COMPLETE", {
+            "summary": cached_data["planner_summary"],
+            "sceneCount": 1
+        })
+
         # ===================================================================
         # Step 2: Simulate Code Generation (4 seconds)
         # ===================================================================
@@ -116,16 +120,13 @@ async def process_cached_example(req: Any, cached_data: Dict[str, Any]):
             # Simulate rendering time
             await asyncio.sleep(3)
             
-            # Get cached metadata for this scene
-            metadata = None
-            for cached_meta in cached_data["cloudinary_metadata"]:
-                if cached_meta["sceneName"] == scene_name:
-                    metadata = cached_meta
-                    break
-            
-            if not metadata:
-                print(f"Warning: No cached metadata for scene {scene_name}")
+            # Get cached metadata for this scene (by index)
+            if idx < len(cached_data["cloudinary_metadata"]):
+                metadata = cached_data["cloudinary_metadata"][idx]
+            else:
+                print(f"Warning: No cached metadata for scene index {idx}")
                 continue
+
             
             # Update DB with rendered scene (including asset creation)
             await ChatUpdater.update_scene_render(
@@ -137,8 +138,8 @@ async def process_cached_example(req: Any, cached_data: Dict[str, Any]):
                 metadata=metadata  # Cloudinary URLs and metadata
             )
             
-            # Publish scene completion event
-            publish_event(req.chatId, "SCENE_RENDERED", {
+            # Publish scene completion event (matching real worker event name)
+            publish_event(req.chatId, "RENDER_SUCCESS", {
                 "message": f"Scene {scene_name} rendered",
                 "sceneName": scene_name,
                 "sceneIndex": idx,
@@ -148,46 +149,24 @@ async def process_cached_example(req: Any, cached_data: Dict[str, Any]):
             print(f"✓ Scene {scene_name} render simulated")
         
         # ===================================================================
-        # Step 4: Update Final Response
+        # Step 4: Update Final Response (includes credit deduction)
         # ===================================================================
         print("\\n=== Step 4: Updating Final Response ===")
         
+        # Note: ChatUpdater.update_final_response() handles credit deduction internally
         await ChatUpdater.update_final_response(
             chat_id=req.chatId,
-            llm_response=cached_data["summary"]
+            llm_response=cached_data["final_summary"]
         )
         
-        # ===================================================================
-        # Step 5: Deduct Credits (same as real flow)
-        # ===================================================================
-        print("\\n=== Step 5: Deducting Credits ===")
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                credit_response = await client.post(
-                    f"{API_BASE_URL}/generatechat/complete",
-                    json={
-                        'chatId': req.chatId,
-                        'userId': req.userId,
-                        'projectId': req.projectId,
-                        'isEdited': False
-                    },
-                    timeout=30.0
-                )
-                
-                if credit_response.status_code == 200:
-                    print("✓ Credits deducted successfully")
-                else:
-                    print(f"⚠ Credit deduction failed: {credit_response.text}")
-        except Exception as e:
-            print(f"⚠ Error calling credit deduction API: {e}")
+        print("✓ Final response updated (credits deducted by ChatUpdater)")
         
         # ===================================================================
-        # Step 6: Publish Final Completion Event
+        # Step 5: Publish Final Completion Event
         # ===================================================================
         publish_event(req.chatId, "GENERATION_COMPLETE", {
             "message": "Video generation completed",
-            "summary": cached_data["summary"],
+            "summary": cached_data["final_summary"],
             "scenesCompleted": len(scenes_with_code),
             "scenesFailed": 0,
             "totalScenes": len(scenes_with_code)
