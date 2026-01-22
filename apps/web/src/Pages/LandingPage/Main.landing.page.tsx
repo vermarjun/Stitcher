@@ -25,54 +25,56 @@ const LoadingFallback: React.FC<{ height?: string }> = ({
 );
 
 const LandingPage: React.FC = () => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
   return (
-    <div className="min-h-screen bg-black">
-      <div className="absolute w-screen">
+    <div ref={scrollRef} className="h-screen w-full bg-black overflow-y-scroll snap-y snap-proximity scroll-smooth no-scrollbar overscroll-none">
+      <div className="fixed top-0 left-0 z-50 w-full" id="home">
         <GlassyNavbar />
       </div>
 
-      <Hero />
+      <section className="w-full h-screen">
+        <Hero />
+      </section>
 
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <Testimonials />
+           <section id="features" className="snap-always w-full min-h-screen flex flex-col justify-center">
+             <Features />
+           </section>
         </Suspense>
       </LazyWrapper>
 
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <Features />
+           <section id="examples" className="w-full min-h-screen flex flex-col justify-center">
+             <Examples />
+           </section>
         </Suspense>
       </LazyWrapper>
 
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <Examples />
-        </Suspense>
-      </LazyWrapper>
-
-      {/* <LazyWrapper fallback={<LoadingFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
-          <Testimonials />
-        </Suspense>
-      </LazyWrapper> */}
-
-      <LazyWrapper fallback={<LoadingFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
-          <PaymentPage/>
-          {/* <EndPageCTA /> */}
+           <section className="w-full flex flex-col justify-center">
+             <Testimonials />
+           </section>
         </Suspense>
       </LazyWrapper>
 
       <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
-          <EndPageCTA />
+           <section className="w-full min-h-screen flex flex-col justify-center">
+             <PaymentPage/>
+           </section>
         </Suspense>
       </LazyWrapper>
 
-      <LazyWrapper fallback={<LoadingFallback height="h-32" />}>
-        <Suspense fallback={<LoadingFallback height="h-32" />}>
-          <Footer />
+      <LazyWrapper fallback={<LoadingFallback />}>
+        <Suspense fallback={<LoadingFallback />}>
+           <section id="endpagecta" className="w-full flex flex-col justify-center">
+            <EndPageCTA />
+            <Footer />
+           </section>
         </Suspense>
       </LazyWrapper>
     </div>

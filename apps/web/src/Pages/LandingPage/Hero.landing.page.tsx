@@ -422,7 +422,7 @@ const Hero = () => {
   return (
     <section
       id="home"
-      className="relative w-full h-screen rounded-b-4xl overflow-hidden bg-black flex flex-col items-center justify-center pt-20"
+      className="relative w-full min-h-screen rounded-b-4xl overflow-hidden bg-black flex flex-col items-center justify-center pt-20"
     >
       {/* Prism animated background */}
       <div className="absolute inset-0 z-0 opacity-60">
@@ -442,6 +442,26 @@ const Hero = () => {
           // Mobile
           mobileGlow={1.2}
           mobileNoise={0.2}
+        />
+      </div>
+
+      {/* Math Theme Overlays - Left */}
+      <div className="hidden lg:flex absolute left-30 top-50 opacity-50 pointer-events-none mix-blend-screen z-10 select-none">
+        <img
+          className="h-40 object-cover object-left scale-125 -translate-x-10"
+          src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094972/image-removebg-preview_fshtui.png"
+          alt="math-theme-left"
+        />
+        <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-r from-transparent to-black" />
+      </div>
+
+      {/* Math Theme Overlays - Right */}
+      <div className="hidden lg:flex absolute right-10 top-80 opacity-30 pointer-events-none mix-blend-screen z-10 select-none justify-end">
+        <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-l from-transparent to-black" />
+        <img
+          className="h-40 object-cover object-right scale-125 translate-x-10"
+          src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
+          alt="math-theme-right"
         />
       </div>
 
@@ -583,7 +603,7 @@ const Hero = () => {
       {chatStarted && (
         <button 
             onClick={() => setShowSidebar(true)} 
-            className="fixed top-6 right-6 z-40 p-3 bg-neutral-900/80 backdrop-blur-md rounded-full border border-white/10 text-white shadow-lg hover:bg-neutral-800 transition-all hover:scale-105 animate-in fade-in zoom-in duration-300"
+            className="fixed top-24 right-6 z-40 p-3 bg-neutral-900/80 backdrop-blur-md rounded-full border border-white/10 text-white shadow-lg hover:bg-neutral-800 transition-all hover:scale-105 animate-in fade-in zoom-in duration-300"
         >
             <Menu className="w-6 h-6" />
         </button>

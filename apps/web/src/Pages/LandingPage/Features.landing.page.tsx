@@ -1,74 +1,117 @@
-import { WobbleCard } from "@/Components/ui/wobble-card";
-import { HyperText } from "@/Components/magicui/hyper-text";
+import { BentoCard, BentoGrid } from "@/Components/magicui/bento-grid";
+import {
+  Wand2,
+  Zap,
+  Clapperboard,
+  LayoutTemplate,
+  Sparkles,
+} from "lucide-react";
 
-export function VideoFeaturesDemo() {
+const features = [
+  {
+    Icon: Wand2,
+    name: "AI Animation Editing",
+    description: "Use AI to edit animations effortlessly. Attach data to a Graph template and let AI animate the plotting for you.",
+    href: "/home",
+    cta: "Try AI Edit",
+    className: "col-span-3 lg:col-span-2 lg:row-span-2",
+    background: (
+      <img 
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769086787/pika-1769086763115-1x_uwl8fu.png" 
+        alt="" 
+        className="h-full w-full object-cover object-center"
+      />
+    ),
+  },
+  {
+    Icon: Zap,
+    name: "Lightning Fast Renders",
+    description: "First animation pops up in under 20 seconds. Experience speed significantly faster than competitors.",
+    href: "/home",
+    cta: "Experience Speed",
+    className: "col-span-3 lg:col-span-1",
+    background: (
+      <img 
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769087348/pika-1769087012923-1x_qe6ki9.png" 
+        alt="" 
+         className="h-full w-full object-cover object-center"
+      />
+    ),
+  },
+  {
+    Icon: Clapperboard,
+    name: "Community",
+    description: "Share your creative works. Like, comment, and interact with posts from other creators in the community.",
+    href: "/home",
+    cta: "Join Community",
+    className: "col-span-3 lg:col-span-1",
+    background: (
+      <img 
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769073837/pika-1769073815887-1x_h7urtv.png" 
+        alt="" 
+        className="h-full w-full object-cover object-center"
+      />
+    ),
+  },
+  {
+    Icon: LayoutTemplate,
+    name: "Web-Based Video Editor",
+    description: "A full timeline-based editor. Stitch clips, add text overlays, audio tracks, and export 1080p video directly from your browser.",
+    href: "/home",
+    cta: "Open Editor",
+    className: "col-span-3 lg:col-span-1",
+    background: (
+      <img 
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769073749/pika-1769073701395-1x_goiqwz.png" 
+        alt="" 
+        className="h-full w-full object-cover object-center"
+      />
+    ),
+  },
+  {
+    Icon: Sparkles,
+    name: "Animation Generation",
+    description: "The core of Stitcher. Generate multi-scene animations with simple prompts like 'explain binary search' or 'plot indian gdp'. Refine them with natural language.",
+    href: "/home",
+    cta: "Start Generating",
+    className: "col-span-3 lg:col-span-2",
+    background: (
+        <img 
+            src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769087579/pika-1769087553128-1x_mrpyeh.png" 
+            alt="" 
+            className="h-full w-full object-cover object-center"
+        />
+    ),
+  },
+];
+
+const Features = () => {
   return (
-    <section id="features">
-      <div className="w-full flex justify-center items-center text-white pt-10 pb-10 md:px-0">
-        <HyperText className="font-bold text-5xl md:text-6xl" startOnView={true} animateOnHover={true}>
-          Features
-        </HyperText>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-7xl mx-auto w-full px-4 md:px-0">
-        {/* Main Feature - AI Chat Animation */}
-        <WobbleCard
-          containerClassName="col-span-1 lg:col-span-2 h-full bg-gradient-to-br from-purple-600 to-blue-700 min-h-[500px] lg:min-h-[300px]"
-          className=""
-        >
-          <div className="max-w-lg">
-            <h2 className="text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
-              Chat with AI to Create Mathematical Animations
-            </h2>
-            <p className="mt-4 text-left text-base/6 text-neutral-200">
-              Generate high-quality, mathematically accurate programmatic
-              animations for explanatory videos. No timeline complexity - just
-              describe what you want and AI implements it.
-            </p>
-          </div>
-          <div className="absolute -right-4 lg:-right-[20%] -bottom-10 w-32 h-32 bg-white/20 rounded-full flex items-center justify-center">
-            <div className="w-16 h-16 bg-white/40 rounded-full animate-pulse"></div>
-          </div>
-        </WobbleCard>
-        {/* Timeline & Manual Tools */}
-        <WobbleCard containerClassName="col-span-1 min-h-[300px] bg-gradient-to-br from-green-600 to-teal-700">
-          <h2 className="max-w-80 text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
-            Visual Timeline & Manual Controls
-          </h2>
-          <p className="mt-4 max-w-[26rem] text-left text-base/6 text-neutral-200">
-            Access a visual timeline to see your video tracks and manually add
-            texts, crop content, or apply fading effects when you need precise
-            control.
-          </p>
-        </WobbleCard>
+    <section className="relative w-full pt-32 pb-10 bg-black text-white overflow-hidden">
+        {/* Background Gradients */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+            <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[120px]" />
+            <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-blue-900/5 rounded-full blur-[100px]" />
+        </div>
 
-        {/* Content Library & Custom API */}
-        <WobbleCard containerClassName="col-span-1 lg:col-span-3 bg-gradient-to-br from-slate-800 to-slate-900 min-h-[500px] lg:min-h-[600px] xl:min-h-[300px]">
-          <div className="max-w-2xl">
-            <h2 className="max-w-sm md:max-w-lg text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
-              Massive Content Library & Custom AI Integration
-            </h2>
-            <p className="mt-4 max-w-[40rem] text-left text-base/6 text-neutral-200">
-              Import audio and video content from our huge library of prebuilt
-              templates for direct use in your projects. Plus, bring your own
-              API keys for custom AI models - pay only for the software, use
-              your preferred AI services.
-            </p>
-          </div>
-          <div className="absolute -right-10 md:-right-[20%] lg:-right-[10%] -bottom-10 flex space-x-4">
-            <div className="w-24 h-24 bg-white/10 rounded-lg flex items-center justify-center">
-              <div className="w-8 h-8 bg-white/30 rounded"></div>
+        <div className="container mx-auto px-4 md:px-6 relative z-10">
+            <div className="flex flex-col items-center text-center mb-10">
+                <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-white mb-6">
+                    Everything you need to <span className="text-neutral-400">Stitch-it!</span>
+                </h2>
+                {/* <p className="text-neutral-400 text-lg md:text-xl max-w-2xl mx-auto font-light leading-relaxed">
+                    Stitcher gives you the power to generate, edit, and share mathematical animations with unprecedented ease.
+                </p> */}
             </div>
-            <div className="w-24 h-24 bg-white/10 rounded-lg flex items-center justify-center">
-              <div className="w-8 h-8 bg-white/30 rounded-full"></div>
-            </div>
-            <div className="w-24 h-24 bg-white/10 rounded-lg flex items-center justify-center">
-              <div className="w-8 h-8 bg-white/30 rounded-sm"></div>
-            </div>
-          </div>
-        </WobbleCard>
-      </div>
+
+            <BentoGrid className="grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
+                {features.map((feature, idx) => (
+                    <BentoCard key={idx} {...feature} />
+                ))}
+            </BentoGrid>
+        </div>
     </section>
   );
-}
+};
 
-export default VideoFeaturesDemo;
+export default Features;

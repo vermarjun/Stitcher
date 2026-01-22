@@ -127,13 +127,13 @@ const MessageBubble = ({
 
   if (message.role === "user") {
     return (
-      <div className="flex justify-end mb-4 group max-w-[85%] ml-auto">
-        <div className="bg-neutral-800 rounded-2xl rounded-tr-sm px-4 py-3 border border-white/5 shadow-sm">
-          <div className="text-sm text-neutral-200 leading-relaxed break-words">
+      <div className="flex justify-end mb-6 group max-w-[85%] ml-auto pl-4">
+        <div className="bg-neutral-800/80 rounded-2xl rounded-tr-sm px-5 py-3.5 border border-white/10 shadow-sm backdrop-blur-sm">
+          <div className="text-sm text-neutral-200 leading-relaxed break-words font-light">
             {typeof message.content === "string" ? message.content : ""}
           </div>
-          <div className="flex items-center justify-end mt-1 gap-2">
-            <span className="text-[10px] text-neutral-500">
+          <div className="flex items-center justify-end mt-1.5 gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
+            <span className="text-[10px] text-neutral-500 font-medium">
               {formatTimestamp(message.timestamp)}
             </span>
           </div>

@@ -75,33 +75,33 @@ const GlassyNavbar = () => {
       </div>
 
       {/* Mobile Navigation */}
-      <div className="md:hidden flex items-center justify-between w-screen bg-white/10 backdrop-blur-xl border-b border-white/20 rounded-b-4xl px-8 shadow-2xl">
+      <div className="md:hidden flex items-center justify-between w-screen bg-black/50 backdrop-blur-xl border-b border-white/10 rounded-b-3xl px-6 py-4 fixed top-0 left-0 z-50">
         <div>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="rounded-full py-4 shadow-2xl"
+            className="p-2 text-white/80 hover:text-white transition-colors"
           >
             {isMobileMenuOpen ? (
-              <X className="w-6 h-6 text-white" />
+              <X className="w-6 h-6" />
             ) : (
-              <div className='flex justify-center items-center gap-2'>
-                <Menu className="w-6 h-6 text-white" />
-                <span className='text-white'>Menu</span>
-              </div>
+              <Menu className="w-6 h-6" />
             )}
           </button>
         </div>
+        
         <div className=''>
-            <button className="bg-white/2 backdrop-blur-xl rounded-full px-6 py-2 text-white/80 hover:text-white hover:bg-white/10 transition-all duration-300 font-medium">
-              <ShineBorder borderWidth={2} duration={8} shineColor={["#A07CFE", "#FE8FB5", "#FFBE7B"]} />
-              Get Started
+            <button 
+              onClick={() => navigate("/home")}
+              className="bg-white/10 backdrop-blur-md rounded-full px-5 py-2 text-sm text-white font-medium hover:bg-white/20 transition-all border border-white/10 relative overflow-hidden"
+            >
+              <ShineBorder borderWidth={1.5} duration={8} shineColor={["#A07CFE", "#FE8FB5", "#FFBE7B"]} />
+              <span className="relative z-10">Get Started</span>
             </button>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Menu Overlay */}
         {isMobileMenuOpen && (
-          <div className="absolute w-full top-20 left-1/2 transform -translate-x-1/2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl">
-          <div className="flex flex-col space-y-4">
+          <div className="absolute top-full left-0 w-full bg-black/95 backdrop-blur-xl border-b border-white/10 p-6 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-top-2 duration-200">
             {navItems.map((item, index) => (
               <button
                 key={index}
@@ -109,18 +109,21 @@ const GlassyNavbar = () => {
                   scrollToSection(item.href);
                   setIsMobileMenuOpen(false);
                 }}
-                className="group flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 hover:bg-white/20"
+                className="text-left py-3 px-4 rounded-xl text-lg text-white/80 hover:text-white hover:bg-white/10 transition-all font-medium"
               >
-                <span className="text-white/80 group-hover:text-white transition-colors duration-300 font-medium">
-                  {item.label}
-                </span>
+                {item.label}
               </button>
             ))}
-            <button className="bg-white/20 backdrop-blur-xl border border-white/30 rounded-full px-6 py-2 text-white/80 hover:text-white hover:bg-white/30 transition-all duration-300 font-medium mt-4">
+            <button 
+              onClick={() => {
+                navigate("/home");
+                setIsMobileMenuOpen(false);
+              }}
+              className="mt-4 w-full bg-white text-black rounded-xl py-3 text-lg font-bold hover:bg-gray-200 transition-colors"
+            >
               Get Started
             </button>
           </div>
-        </div>
         )}
       </div>
       <style>{`

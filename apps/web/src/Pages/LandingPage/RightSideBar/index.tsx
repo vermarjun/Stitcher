@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { ScrollArea } from "@/Components/ui/scroll-area";
 import { socket } from "@/socket";
 import api from "@/api";
 import { toast } from "sonner";
@@ -220,26 +219,27 @@ export const LandingRightSideBar = ({
   };
 
   return (
-    <div className={`fixed inset-y-0 right-0 w-full md:w-[450px] bg-black/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
+    <div className={`fixed inset-y-0 right-0 w-full md:w-[450px] bg-neutral-950/95 backdrop-blur-2xl border-l border-white/5 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
       
       {/* Header */}
-      <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 bg-neutral-900/50">
+      <div className="h-16 shrink-0 flex items-center justify-between px-6 border-b border-white/5 bg-neutral-900/30">
         <div className="flex items-center gap-2">
             <span className="text-white font-semibold tracking-tight">Stitcher AI</span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-medium border border-emerald-500/30">TRIAL</span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-medium border border-emerald-500/20">TRIAL</span>
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
+        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-white/70 hover:text-white">
             <X size={20} />
         </button>
       </div>
 
-      <div className="flex flex-col h-[calc(100vh-64px)]">
-         <ScrollArea className="flex-1">
-             <div className="p-6 space-y-6">
+      {/* Messages - Native Scroll */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
+         <div className="flex flex-col min-h-full justify-end"> {/* Push messages to bottom if few, standard chat feel */}
+             <div className="p-6 space-y-8">
                  {messages.length === 0 && (
-                     <div className="flex flex-col items-center justify-center h-60 text-center gap-4 opacity-50">
-                         <div className="w-16 h-16 rounded-2xl bg-neutral-800 border border-white/5 animate-pulse" />
-                         <p className="text-neutral-500 text-sm">Enter a prompt to start generating...</p>
+                     <div className="flex flex-col items-center justify-center py-20 text-center gap-4 opacity-40">
+                         <div className="w-16 h-16 rounded-2xl bg-neutral-800/50 border border-white/5 animate-pulse" />
+                         <p className="text-neutral-500 text-sm font-medium">Enter a prompt to start generating...</p>
                      </div>
                  )}
                  
@@ -255,18 +255,34 @@ export const LandingRightSideBar = ({
                         onCopy={() => toast.success("Copied!")}
                      />
                  ))}
-                 <div ref={messagesEndRef} />
+                 <div ref={messagesEndRef} className="h-4" /> {/* Spacer at bottom */}
              </div>
-         </ScrollArea>
-         
-         <MessageInput 
-            input={input}
-            setInput={setInput}
-            onSubmit={handleSubmit}
-            isProcessing={isProcessing}
-            placeholder="Describe your animation..."
-         />
+         </div>
       </div>
+         
+      <MessageInput 
+        input={input}
+        setInput={setInput}
+        onSubmit={handleSubmit}
+        isProcessing={isProcessing}
+        placeholder="Describe your animation..."
+      />
+      
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(255, 255, 255, 0.2);
+        }
+      `}</style>
     </div>
   );
 };

@@ -1,43 +1,89 @@
-import { Timeline } from "@/Components/ui/timeline";
+import { Copy } from "lucide-react";
+import { Button } from "../../Components/ui/button";
 
-export function Examples() {
-  const data = [
+const data = [
   {
-    title: "Example 1",
     prompt: "This is the first prompt text that will appear in the box",
     mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
-    mediaType: 'gif'
+    mediaType: 'gif',
+    // Titles removed per instruction "no text" (title), only prompt remains in overlay
   },
   {
-    title: "Example 2",
     prompt: "This is the second prompt with different text content",
     mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006283/Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
-    mediaType: 'gif'
+    mediaType: 'gif',
   },
   {
-    title: "Example 1",
     prompt: "This is the first prompt text that will appear in the box",
     mediaSrc: "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
-    mediaType: 'gif'
+    mediaType: 'gif',
   },
   {
-    title: "Example 2",
     prompt: "This is the second prompt with different text content",
     mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
-    mediaType: 'gif'
+    mediaType: 'gif',
   },
   {
-    title: "Example 1",
     prompt: "This is the first prompt text that will appear in the box",
     mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997854/doublependulum_mbckjs.mp4",
-    mediaType: 'gif'
+    mediaType: 'gif',
   }
 ];
+
+export function Examples({ scrollRef }: { scrollRef?: React.RefObject<HTMLDivElement> }) {
+  
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
   return (
-    <section id="examples" className="relative w-full overflow-clip">
-      <Timeline data={data} />
-    </section>
+    <div ref={scrollRef} className="w-full max-w-7xl mx-auto py-24 px-4 sm:px-6 lg:px-8">
+      <div className="text-center mb-16">
+         <h2 className="text-3xl font-bold tracking-tight text-white mb-4 sm:text-5xl">
+            See What's Possible
+          </h2>
+          <p className="max-w-2xl mx-auto text-lg text-neutral-400">
+            From mathematical visualizations to physical simulations, create stunning animations with simple text prompts.
+          </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {data.map((item, idx) => (
+          <div key={idx} className="flex flex-col gap-3 group">
+            {/* Video Container */}
+            <div className="relative rounded-xl overflow-hidden aspect-video bg-neutral-900 ring-1 ring-white/10">
+               <video
+                src={item.mediaSrc}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            </div>
+            
+            {/* Content Below */}
+            <div className="flex items-start justify-between gap-4 px-1">
+               <p className="text-sm text-neutral-300 font-medium leading-relaxed">
+                 <span className="text-neutral-500 font-semibold select-none mr-1">Prompt:</span>
+                 {item.prompt}
+               </p>
+               
+               <Button 
+                 size="icon"
+                 variant="ghost"
+                 className="shrink-0 text-neutral-500 hover:text-white hover:bg-neutral-800"
+                 onClick={() => handleCopy(item.prompt)}
+               >
+                 <Copy className="w-4 h-4" />
+                 <span className="sr-only">Copy Prompt</span>
+               </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-export default Examples
+export default Examples;
