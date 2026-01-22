@@ -1,21 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShimmerButton } from "@/Components/magicui/shimmer-button";
-import { ArrowRightIcon, StarHalf } from "lucide-react";
+import { ArrowRightIcon, StarHalf, X, ArrowUp, RotateCw, Menu } from "lucide-react";
+import { LandingRightSideBar } from "./RightSideBar";
 import { useScroll, useTransform, MotionValue } from "motion/react";
+import { Marquee } from "@/Components/magicui/marquee";
 import Prism from "./Prism.landing.page";
-import ProductOfTheDay from "/ProductOfTheDay.png";
 import { Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
-import { AuroraText } from "@/Components/magicui/aurora-text";
-import { SparklesText } from "@/Components/magicui/sparkles-text";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 
 interface FlipWordsProps {
-  words: string[];          
-  duration?: number; 
-  className?: string;    
+  words: string[];
+  duration?: number;
+  className?: string;
 }
 
 // Aceternity FlipWords Component (exact implementation)
@@ -36,7 +35,7 @@ const FlipWords = ({ words, duration = 3000, className }: FlipWordsProps) => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => setIsVisible(entry.isIntersecting),
-      { threshold: 0.2 } // trigger when 20% visible
+      { threshold: 0.2 }, // trigger when 20% visible
     );
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -121,7 +120,7 @@ interface UserRatingCardProps {
   className?: string;
 }
 
-const UserRatingCard: React.FC<UserRatingCardProps> = ({ className = "" }) => {
+export const UserRatingCard: React.FC<UserRatingCardProps> = ({ className = "" }) => {
   const avatars = [
     {
       src: "https://github.com/shadcn.png",
@@ -157,7 +156,7 @@ const UserRatingCard: React.FC<UserRatingCardProps> = ({ className = "" }) => {
       if (i < 4) {
         // Full stars
         stars.push(
-          <Star key={i} className="w-7 h-7 fill-yellow-400 text-yellow-400" />
+          <Star key={i} className="w-7 h-7 fill-yellow-400 text-yellow-400" />,
         );
       } else {
         // 0.8 partial star (appears as full for simplicity)
@@ -165,7 +164,7 @@ const UserRatingCard: React.FC<UserRatingCardProps> = ({ className = "" }) => {
           <StarHalf
             key={i}
             className="w-7 h-7 fill-yellow-400 text-yellow-400"
-          />
+          />,
         );
       }
     }
@@ -253,14 +252,14 @@ export const ContainerScroll = ({
   );
 };
 
-const VideoElement: React.FC = () => {
+export const VideoElement: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => setIsVisible(entry.isIntersecting),
-      { threshold: 0.5 }
+      { threshold: 0.5 },
     );
     if (videoRef.current) observer.observe(videoRef.current);
     return () => observer.disconnect();
@@ -339,18 +338,98 @@ export const Card = ({
 };
 
 
+
+// Video Templates Data
+const templateVideos = [
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756994906/202509040734_h1ndhn.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997181/heartequation_bpcizy.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997561/pi_dqd5m6.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997854/doublependulum_mbckjs.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
+];
+
+
+const DraggableVideoCard = ({ vid }: { vid: string }) => {
+    return (
+      <div 
+        className="relative w-40 md:w-60 aspect-video rounded-lg overflow-hidden border border-neutral-800 cursor-grab active:cursor-grabbing group"
+        draggable="true"
+        onDragStart={(e) => {
+            e.dataTransfer.setData("video_url", vid);
+            e.dataTransfer.effectAllowed = "copy";
+        }}
+      >
+        <video
+          src={vid}
+          muted
+          loop
+          autoPlay
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+        />
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Drag Me</span>
+        </div>
+      </div>
+    );
+  };
+
 const Hero = () => {
   const navigate = useNavigate();
-  const words = ["Explain", "Visualize", "Present", "Illustrate", "Learn"];
+  const words = ["Explain?", "Visualize?", "Present?", "Illustrate?", "Learn?"];
+  const promptExamples = ["Explain Quantum Entanglement", "Visualize a sorting algorithm", "Show me the solar system"];
+  
+  const [prompt, setPrompt] = useState("");
+  const [dragActive, setDragActive] = useState(false);
+  const [attachedTemplate, setAttachedTemplate] = useState<string | null>(null);
+
+  /* Sidebar Logic */
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [chatStarted, setChatStarted] = useState(false);
+  const [sidebarInitialPrompt, setSidebarInitialPrompt] = useState("");
+
+  const handleHeroSubmit = () => {
+    if (!prompt.trim()) return;
+    setSidebarInitialPrompt(prompt);
+    setChatStarted(true);
+    setShowSidebar(true);
+    setPrompt(""); // Clear hero prompt
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    // Check for dragged string data (video url)
+    const videoUrl = e.dataTransfer.getData("video_url");
+    if (videoUrl) {
+        setAttachedTemplate(videoUrl);
+    }
+  };
+
 
   return (
-    <section id="home" className="relative w-full h-full z-10 px-4 rounded-b-2xl overflow-hidden">
+    <section
+      id="home"
+      className="relative w-full h-screen rounded-b-4xl overflow-hidden bg-black flex flex-col items-center justify-center pt-20"
+    >
       {/* Prism animated background */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 opacity-60">
         <Prism
-          animationType="hover"
-          height={3.5}
-          baseWidth={5.5}
+          animationType="rotate"
+          height={20}
+          baseWidth={7}
           scale={3.6}
           hueShift={0}
           colorFrequency={0.8}
@@ -360,92 +439,164 @@ const Hero = () => {
           // Chrome-specific settings (brighter)
           chromeGlow={1.2}
           chromeNoise={0.2}
-          // Mobile 
+          // Mobile
           mobileGlow={1.2}
           mobileNoise={0.2}
         />
       </div>
 
-      <div className="pt-20">
-        {/* Container Scroll Section */}
-        <ContainerScroll
-          titleComponent={
-            <>
-              {/* Content */}
-              <div className="relative text-center justify-center items-center">
-                <div className="flex justify-center items-center">
-                  <img
-                    loading="lazy"
-                    src={ProductOfTheDay}
-                    alt=""
-                    className="max-h-26"
-                  />
+      <div className="-mt-20 relative z-20 w-full flex flex-col items-center justify-between h-full pb-6 md:pb-10 pt-8 lg:pt-16">
+        
+        {/* Main Content Area - Centered Vertically available space */}
+        <div className="flex-1 flex flex-col items-center justify-center w-full px-4 gap-6 md:gap-8">
+            
+            {/* Headlines */}
+            <div className="flex flex-col items-center text-center">
+                <div className="flex flex-col md:flex-row items-center justify-center text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black text-white leading-tight tracking-tighter gap-3 md:gap-5">
+                    <span>Need to</span>
+                    <FlipWords words={words} className="text-neutral-400" />
                 </div>
-                <div className="mb-8 overflow-hidden">
-                  <div className="overflow-hidden flex flex-col justify-center items-center text-5xl md:text-7xl lg:text-8xl font-black text-white leading-tight tracking-tighter">
-                    <div className="flex items-center w-screen overflow-hidden">
-                      <div className="w-1/2 flex items-center justify-end">
-                        Need to
-                      </div>
-                      <div className="w-1/2 flex justify-start items-center overflow-hidden">
-                        <FlipWords words={words} className="text-neutral-400" />
-                      </div>
-                    </div>
-                    {/* <div className="flex justify-center items-center">
-                      Something?
-                    </div> */}
-                  </div>
-
-                  {/* Tagline */}
-                  <div className="mt-2 text-xl md:text-2xl text-neutral-400 font-bold">
-                    Try
-                    <span> </span>
-                    <AuroraText>VISUALLY</AuroraText>, Try
-                    <SparklesText sparklesCount={5}>
-                      <p className="text-white">STITCHER</p>
-                    </SparklesText>
-                  </div>
-                </div>
-
-                {/* Subheading - Fixed typography and presentation */}
-                <div className="md:mb-8 mb-14 max-w-4xl text-center mx-auto w-full">
-                  <p className="text-xl md:text-2xl text-neutral-400 leading-relaxed font-normal tracking-wide">
-                    Turn your prompts into animations.
-                    {/* <br className="md:flex hidden" />
-                    <span> </span>
-                    Just explain, Stitcher animates! Tough concepts or tricky
-                    questions, Stitcher transforms your words into visuals that
-                    make understanding easier. */}
-                  </p>
-                </div>
-
-                {/* CTA Buttons */}
-                <div onClick={()=>navigate("/home")} className="flex justify-center items-center md:mb-8 mb-14">
-                  <ShimmerButton
-                    background="black"
-                    className="shadow-2xl px-16 py-5"
-                  >
-                    <div className="whitespace-pre-wrap text-center text-sm font-medium leading-none tracking-tight text-white dark:from-white dark:to-slate-900/10 lg:text-lg">
-                      Start Creating Today
-                    </div>
-                    <ArrowRightIcon className="ml-4" />
-                  </ShimmerButton>
-                </div>
-                <div className="w-full flex justify-center items-center -mb-1 -z-20">
-                  <UserRatingCard />
-                </div>
-              </div>
-            </>
-          }
-        >
-          {/* This is where you'll add your video */}
-          <div className="flex items-center justify-center h-full w-full">
-            <div className="bg-black w-full h-full flex items-center justify-center rounded-2xl">
-              <VideoElement />
+                
+                <p className="mt-4 text-base sm:text-lg md:text-xl text-neutral-400 max-w-2xl leading-relaxed font-normal tracking-wide px-4">
+                  Turn your prompts into animations. Just explain, Stitcher animates!
+                </p>
             </div>
-          </div>
-        </ContainerScroll>
+
+            {/* CTA */}
+            <div
+                onClick={() => navigate("/home")}
+                className="flex justify-center items-center"
+            >
+                <ShimmerButton background="black" className="shadow-2xl px-8 py-3 md:px-12 md:py-4">
+                  <div className="whitespace-pre-wrap text-center text-sm font-medium leading-none tracking-tight text-white dark:from-white dark:to-slate-900/10 lg:text-base">
+                    Start Creating Today
+                  </div>
+                  <ArrowRightIcon className="ml-3 w-4 h-4 md:w-5 md:h-5" />
+                </ShimmerButton>
+            </div>
+
+            {/* Prompt Interface */}
+            <div className="w-full max-w-3xl flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-200">
+                
+                {/* Prompt Input Box */}
+                <div 
+                    className={cn(
+                        "relative w-full rounded-2xl md:rounded-3xl transition-all duration-300",
+                        dragActive ? "scale-[1.01] ring-2 ring-blue-500/50" : "hover:shadow-lg"
+                    )}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                >
+                    {/* Glassmorphism Background */}
+                    <div className="bg-neutral-900/40 backdrop-blur-xl border border-white/10 rounded-2xl md:rounded-3xl overflow-hidden flex flex-col w-full relative z-10 shadow-2xl">
+                        
+                        {/* Input Area */}
+                        <div className="relative w-full p-4 md:p-5 flex items-end gap-3 md:gap-4">
+                            
+                            {/* Inline Attachment Thumbnail */}
+                            {attachedTemplate && (
+                                <div className="relative group shrink-0 animate-in fade-in zoom-in duration-200 self-center">
+                                    <div className="h-9 w-16 md:h-12 md:w-20 rounded-lg overflow-hidden bg-black border border-white/10 relative shadow-sm">
+                                        <video src={attachedTemplate} className="w-full h-full object-cover opacity-90" />
+                                    </div>
+                                    <button 
+                                        onClick={() => setAttachedTemplate(null)}
+                                        className="absolute -top-2 -right-2 bg-neutral-800 text-white border border-neutral-700 rounded-full p-0.5 shadow-md hover:bg-neutral-600 transition-colors z-10"
+                                    >
+                                        <X size={10} />
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="relative flex-1 self-center">
+                                    {/* Disappearing Placeholder */}
+                                {!prompt && (
+                                    <div className="absolute inset-0 top-0 pointer-events-none opacity-40 flex items-start pt-1">
+                                        <span className="mr-2 text-neutral-500 text-lg md:text-xl font-light">Try:</span>
+                                        <FlipWords 
+                                            words={promptExamples} 
+                                            className="text-neutral-400 text-lg md:text-xl font-light -ml-2"
+                                            duration={2500}
+                                        />
+                                    </div>
+                                )}
+                                <textarea 
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    placeholder=""
+                                    className="w-full bg-transparent border-none outline-none text-white text-lg md:text-xl resize-none placeholder-transparent z-10 font-light leading-relaxed min-h-[40px] md:min-h-[50px] py-1"
+                                    autoComplete="off"
+                                    rows={Math.min(3, Math.max(2, (prompt.match(/\n/g) || []).length + 1))}
+                                    style={{ height: 'auto' }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleHeroSubmit();
+                                      }
+                                    }}
+                                />
+                            </div>
+                            
+                            {/* Send Button */}
+                            <button 
+                                onClick={handleHeroSubmit}
+                                className="h-10 w-10 md:h-12 md:w-12 bg-white text-black hover:bg-neutral-200 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg hover:scale-105 active:scale-95 shrink-0 ml-1 mb-1 self-end"
+                            >
+                                <ArrowRightIcon className="w-5 h-5 md:w-6 md:h-6" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Example Quick Prompts */}
+                <div className="w-full flex flex-wrap items-center justify-center sm:justify-start gap-2 px-2">
+                    {["Fantasy Landscape", "Pixar Style", "Cyberpunk City"].map((ex, i) => (
+                    <button key={i} onClick={() => setPrompt(ex)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 hover:border-white/10 text-neutral-400 hover:text-white text-xs md:text-sm transition-all group backdrop-blur-sm">
+                        <span>{ex}</span>
+                        <ArrowUp size={12} className="opacity-50 group-hover:opacity-100 rotate-45" />
+                    </button>
+                    ))}
+                    <button className="p-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 text-neutral-500 hover:text-white transition-all ml-auto md:ml-0 backdrop-blur-sm">
+                        <RotateCw size={14} />
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        {/* Marquee Footer - Stick to bottom */}
+        <div className="w-full max-w-3xl overflow-hidden mt-auto [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] pb-4 md:pb-6">
+            <Marquee pauseOnHover className="[--duration:40s]">
+                {templateVideos.map((vid, idx) => (
+                    <DraggableVideoCard key={idx} vid={vid} />
+                ))}
+            </Marquee>
+            <div className="w-full flex justify-center items-center mt-3 animate-pulse">
+                <p className="text-neutral-600 text-[10px] md:text-xs uppercase tracking-widest font-medium">Try editing these templates!</p>
+            </div>
+        </div>
       </div>
+
+
+      {chatStarted && (
+        <button 
+            onClick={() => setShowSidebar(true)} 
+            className="fixed top-6 right-6 z-40 p-3 bg-neutral-900/80 backdrop-blur-md rounded-full border border-white/10 text-white shadow-lg hover:bg-neutral-800 transition-all hover:scale-105 animate-in fade-in zoom-in duration-300"
+        >
+            <Menu className="w-6 h-6" />
+        </button>
+      )}
+
+      <LandingRightSideBar 
+        isOpen={showSidebar} 
+        onClose={() => setShowSidebar(false)}
+        initialPrompt={sidebarInitialPrompt}
+        onLimitReached={() => {
+            // Optional: could redirect or show modal here, but mostly handled in sidebar for now
+        }}
+      />
     </section>
   );
 };
