@@ -715,3 +715,149 @@ export const completeGeneration = async (req: Request, res: Response) => {
         });
     }
 }
+
+export const generateGuestChatResponse = async (req: Request, res: Response) => {
+    try {
+        const { prompt } = req.body;
+
+        if (!prompt?.trim()) {
+            res.status(400).json({
+                success: false,
+                message: 'Prompt is required'
+            });
+            return;
+        }
+
+        // 1. Find or create guest user
+        const guestEmail = 'guest@stitcher.com';
+        let guestUser = await User.findOne({ email: guestEmail });
+
+        if (!guestUser) {
+            guestUser = new User({
+                username: 'guest',
+                email: guestEmail,
+                password: 'guest_password_' + Date.now(), // Random password
+                role: 'user',
+                plan: 'free',
+                credits: { generation: 1000, editing: 1000, expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) }
+            });
+            await guestUser.save();
+        }
+
+        // 2. Find or create guest project
+        let guestProject: any;
+        if (guestUser.projects && guestUser.projects.length > 0) {
+            guestProject = await Project.findById(guestUser.projects[0]);
+        }
+
+        if (!guestProject) {
+            guestProject = new Project({
+                name: 'Guest Project',
+                status: 'draft',
+                bytes: 0
+            });
+            await guestProject.save();
+
+            // Link to user
+            guestUser.projects = guestUser.projects || [];
+            guestUser.projects.push(guestProject._id as Types.ObjectId);
+            await guestUser.save();
+        }
+
+        // 3. Get API Keys (Borrow from valid user)
+        let apiKeys: ApiKeyMapping;
+        try {
+            apiKeys = await fetchApiKeysForUser("68a89b21cbadb4fe13132d57");
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: error instanceof Error ? error.message : 'Failed to fetch API keys'
+            });
+            return;
+        }
+
+        // 4. Create Chat
+        const chat = new GenerateChat({
+            projectId: guestProject._id,
+            messages: [],
+            title: prompt.trim().substring(0, 50),
+            userId: guestUser._id
+        });
+
+        const userMessage: IGenerateChatMessage = {
+            role: 'user',
+            content: prompt,
+            timestamp: new Date(),
+            scenes: [],
+            projectDescription: "",
+            completed: false,
+            plannerOut: false,
+            generatorOutput: false,
+            error: "none",
+            requestType: "generate",
+            assetsToEdit: []
+        };
+        chat.messages.push(userMessage);
+
+        const assistantMessage: IGenerateChatMessage = {
+            role: 'assistant',
+            content: {
+                plannerOutput: "",
+                llmResponse: ""
+            },
+            timestamp: new Date(),
+            scenes: [],
+            projectDescription: "",
+            completed: false,
+            plannerOut: false,
+            generatorOutput: false,
+            error: "none",
+            requestType: undefined,
+            assetsToEdit: []
+        };
+        chat.messages.push(assistantMessage);
+
+        await chat.save();
+
+        if (!guestProject.edit_chat) {
+            guestProject.edit_chat = chat._id;
+            await guestProject.save();
+        }
+
+        // 5. Call Microservice
+        const microserviceResult = await callVideoGenerationMicroservice(
+            prompt,
+            "guest",
+            guestProject._id.toString(),
+            (guestUser._id as any).toString(),
+            (chat._id as Types.ObjectId).toString(),
+            apiKeys
+        );
+
+        if (microserviceResult.status === 'error') {
+            res.status(503).json({
+                success: false,
+                message: 'Microservice is not reachable'
+            });
+            return;
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                chatId: chat._id,
+                projectId: guestProject._id,
+                userId: guestUser._id,
+                message: 'Guest generation started'
+            }
+        });
+
+    } catch (error) {
+        console.error('Guest chat error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate guest chat',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+}

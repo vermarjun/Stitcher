@@ -7,6 +7,7 @@ import {
     getLatestAssistantMessage,
     stopGeneration,
     completeGeneration,
+    generateGuestChatResponse
 } from '../controller/generateChat.controller';
 import auth from "../middleware/auth.middleware";
 import { refreshCredits } from '../middleware/refreshCredits.middleware';
@@ -19,6 +20,7 @@ const router = Router();
  * @access  Private
  * @body    { projectId: string, prompt: string, chatId?: string }
  */
+router.post('/guest', generateGuestChatResponse);
 router.post('/', auth, refreshCredits, generateChatResponse);
 
 /**
