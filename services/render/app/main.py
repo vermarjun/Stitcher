@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from app import __version__
 from app.api import capabilities as capabilities_api
 from app.api import health as health_api
+from app.api import metrics as metrics_api
 from app.api import render as render_api
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(health_api.router)
     app.include_router(capabilities_api.router)
     app.include_router(render_api.router)
+    app.include_router(metrics_api.router)
 
     return app
 

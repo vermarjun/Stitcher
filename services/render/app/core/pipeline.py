@@ -15,6 +15,7 @@ from pathlib import Path
 from app import __version__ as _svc_version
 from app.config import get_settings
 from app.core.audio import AudioError, bake as bake_audio, decode_to_tempfile
+from app.core import metrics as m
 from app.core.classify import classify
 from app.core.manim_runner import build_invocation, resolve_artifact_on_host
 from app.core.sandbox import Sandbox, SandboxLimits
@@ -58,6 +59,8 @@ def _fail(req: RenderRequest, t0: float, phase: str, category: str, summary: str
           stderr: str = "", stdout: str = "", line: int | None = None,
           exit_code: int | None = None, killed_by: str | None = None,
           render_ms: int = 0, sandbox_ms: int = 0) -> RenderFailureResponse:
+    m.renders.labels(status="failure", category=category).inc()
+    m.render_seconds.labels(phase="total").observe((time.perf_counter() - t0))
     return RenderFailureResponse(
         error=ErrorInfo(
             phase=phase, category=category, summary=summary,  # type: ignore[arg-type]
@@ -197,6 +200,10 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
 
     total_ms = int((time.perf_counter() - t0) * 1000)
     log.info("pipeline.ok", total_ms=total_ms, size=size, url_host=url.split("/")[2] if "//" in url else "local")
+    m.renders.labels(status="success", category="ok").inc()
+    m.render_seconds.labels(phase="sandbox").observe(sandbox_ms / 1000)
+    m.render_seconds.labels(phase="upload").observe(upload_ms / 1000)
+    m.render_seconds.labels(phase="total").observe(total_ms / 1000)
 
     return RenderSuccessResponse(
         render=RenderOutput(

@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
 from app.config import get_settings
+from app.core import metrics as m
 
 
 class SaturatedError(RuntimeError):
@@ -69,6 +70,7 @@ async def acquire() -> AsyncIterator[None]:
     if settings.queue_full_policy == "reject":
         if sem.locked() and _active >= _max:
             # Be honest about the retry budget — caller uses this to set Retry-After.
+            m.saturated.inc()
             raise SaturatedError(_active, _max, retry_after_sec=5)
         await sem.acquire()
     else:
@@ -79,8 +81,10 @@ async def acquire() -> AsyncIterator[None]:
                                  retry_after_sec=settings.queue_wait_timeout_sec) from e
 
     _active += 1
+    m.active.set(_active)
     try:
         yield
     finally:
         _active -= 1
+        m.active.set(_active)
         sem.release()
