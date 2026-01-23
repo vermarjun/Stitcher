@@ -52,6 +52,43 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         "planner_summary": "I've created 1 beautiful scene, revealing sacred geometry. From a central circle, you'll see the Seed, then the wondrous Flower of Life bloom, merging into one elegant journey.",
         "final_summary": "I successfully created your 'flower of life' video! All three scenes, CentralCircle, SeedOfLife, and FlowerOfLife, rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     },
+    "Indian_gdp": {
+        "prompts": [
+            "Animate indian gdp growth between year 2020 to 2025, use modern minimal colors.",
+        ],
+        "planner_output": [
+            {
+                "SceneName": "GDP Growth 5years",
+                "Prompt": "",
+                "RequiredMObjects": ["Circle", "VGroup"],  # Example - replace with actual
+                "RequiredAnimations": ["Create", "FadeIn"]  # Example - replace with actual
+            },
+        ],
+        "scenes_with_code": [
+            {
+                "sceneName": "GDP Growth 5years",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
+            },
+        ],
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164126/IndiaGDP_a8oexw.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769171620/Screenshot_2026-01-23_at_6.03.31_PM_e0j7ja.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1567890,
+                "public_id": "IndiaGDP_a8oexw",
+            },
+        ],
+        
+        # Final summary response
+        "planner_summary": "I've created 1 beautiful scene, depicting India's gdp growth between year 2020 and 2025. I have used minimal colors as requested.",
+        "final_summary": "I successfully created your Animation! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
     
     "lissajous_curve": {
         "prompts": [
@@ -92,6 +129,45 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         "planner_summary": "I've crafted one scene, LissajousCurveScene, showcasing a beautiful Lissajous curve, its title, and equations. Expect a soothing animation revealing its elegant form.",
         "final_summary": "I successfully created your 'lissajous curve' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     },
+    "boolean_operations": {
+        "prompts": [
+            "Create a clean, visually striking Manim animation that demonstrates Boolean set operations using overlapping 2D shapes.",
+        ],
+        
+        "planner_output": [
+            {
+                "SceneName": "Boolean Operations",
+                "Prompt": "",
+                "RequiredMObjects": ["ParametricFunction", "Axes"],
+                "RequiredAnimations": ["Create", "Write"]
+            },
+        ],
+        
+        "scenes_with_code": [
+            {
+                "sceneName": "BooleanOperations",
+                "code": """""",
+                "description": "PLACEHOLDER - Replace with scene description",
+                "RequiredMObjects": ["ParametricFunction", "Axes"],
+                "RequiredAnimations": ["Create", "Write"]
+            },
+        ],
+        
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1761076391/BooleanOperations_bl9afi.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769189038/Screenshot_2026-01-23_at_10.51.57_PM_pfzsin.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1234567,
+                "public_id": "BooleanOperations_bl9afi.mp4",
+            },
+        ],
+        
+        "planner_summary": "I've crafted one scene, Boolean Operations, showcasing a beautiful Boolean Operations, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'Boolean Operations' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
     
     "golden_mandala": {
         "prompts": [
@@ -131,6 +207,165 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_summary": "I've crafted one scene, GoldenMandalaScene, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
         "final_summary": "I successfully created your 'Golden Mandala' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
+
+    "z=f(x,y)": {
+        "prompts": [
+            "Create a 3D animation for a smooth mathematical surface defined by a scalar function z=f(x,y)",
+        ],
+        
+        "planner_output": [
+            {
+                "SceneName": "Mathematical surface",
+                "Prompt": "",
+                "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
+                "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
+            },
+        ],
+        
+        "scenes_with_code": [
+            {
+                "sceneName": "Mathematical surface",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
+            },
+        ],
+        
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769189598/Screenshot_2026-01-23_at_10.56.45_PM_rz7ki0.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1234567,
+                "public_id": "v1756999225/3d_calculus_ziwjza.mp4",
+            },
+        ],
+        
+        "planner_summary": "I've crafted one scene, Mathematical surface, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'Mathematical surface' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
+
+    "Lorenz Attractor": {
+        "prompts": [
+            "Create a highly polished 3D Manim animation that visualizes the Lorenz Attractor in a cinematic and educational way.",
+        ],
+        
+        "planner_output": [
+            {
+                "SceneName": "Lorenz Attractor",
+                "Prompt": "",
+                "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
+                "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
+            },
+        ],
+        
+        "scenes_with_code": [
+            {
+                "sceneName": "LorenzAttractor",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
+            },
+        ],
+        
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006283/Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769189596/Screenshot_2026-01-23_at_10.56.54_PM_ieecpx.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1234567,
+                "public_id": "Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
+            },
+        ],
+        
+        "planner_summary": "I've crafted one scene, Lorenz Attractor, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'Lorenz Attractor' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
+
+    "Binary Search Tree": {
+        "prompts": [
+            "Create a highly polished animation to visualize a Binary Search Tree whose structure morphs smoothly.",
+        ],
+        
+        "planner_output": [
+            {
+                "SceneName": "Binary Search Tree",
+                "Prompt": "",
+                "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
+                "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
+            },
+        ],
+        
+        "scenes_with_code": [
+            {
+                "sceneName": "BinarySearchTree",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
+            },
+        ],
+        
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769189596/Screenshot_2026-01-23_at_10.56.59_PM_hklm3w.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1234567,
+                "public_id": "tree_yoifqz.mp4",
+            },
+        ],
+        
+        "planner_summary": "I've crafted one scene, Binary Search Tree, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'Binary Search Tree' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
+    "Convex surface": {
+        "prompts": [
+            "Create a clean, cinematic 3D animation that visualizes a convex mathematical surface emerging from the xy-plane.",
+        ],
+        
+        "planner_output": [
+            {
+                "SceneName": "Convex surface",
+                "Prompt": "",
+                "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
+                "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
+            },
+        ],
+        
+        "scenes_with_code": [
+            {
+                "sceneName": "ConvexSurface",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
+            },
+        ],
+        
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769189596/Screenshot_2026-01-23_at_10.57.06_PM_rm49ez.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1234567,
+                "public_id": "ezgif-1c22e6dbdda273_frao3j",
+            },
+        ],
+        
+        "planner_summary": "I've crafted one scene, Convex Surface, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'Convex Surface' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     }
 }
 
