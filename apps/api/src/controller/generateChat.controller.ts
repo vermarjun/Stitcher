@@ -718,7 +718,7 @@ export const completeGeneration = async (req: Request, res: Response) => {
 
 export const generateGuestChatResponse = async (req: Request, res: Response) => {
     try {
-        const { prompt } = req.body;
+        const { prompt, assetId }: { prompt: string; assetId?: string } = req.body;
 
         if (!prompt?.trim()) {
             res.status(400).json({
@@ -784,6 +784,10 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
             userId: guestUser._id
         });
 
+        // Determine request type based on assetId
+        const requestType = assetId ? "edit" : "generate";
+        const assetsToEdit = assetId ? [new mongoose.Types.ObjectId(assetId)] : [];
+
         const userMessage: IGenerateChatMessage = {
             role: 'user',
             content: prompt,
@@ -794,8 +798,8 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
             plannerOut: false,
             generatorOutput: false,
             error: "none",
-            requestType: "generate",
-            assetsToEdit: []
+            requestType: requestType,
+            assetsToEdit: assetsToEdit
         };
         chat.messages.push(userMessage);
 
@@ -824,15 +828,30 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
             await guestProject.save();
         }
 
-        // 5. Call Microservice
-        const microserviceResult = await callVideoGenerationMicroservice(
-            prompt,
-            "guest",
-            guestProject._id.toString(),
-            (guestUser._id as any).toString(),
-            (chat._id as Types.ObjectId).toString(),
-            apiKeys
-        );
+        // 5. Call appropriate microservice based on assetId
+        let microserviceResult;
+        if (assetId) {
+            // Edit mode
+            microserviceResult = await callVideoEditMicroservice(
+                prompt,
+                "guest",
+                guestProject._id.toString(),
+                (guestUser._id as any).toString(),
+                (chat._id as Types.ObjectId).toString(),
+                [assetId],
+                apiKeys
+            );
+        } else {
+            // Generate mode
+            microserviceResult = await callVideoGenerationMicroservice(
+                prompt,
+                "guest",
+                guestProject._id.toString(),
+                (guestUser._id as any).toString(),
+                (chat._id as Types.ObjectId).toString(),
+                apiKeys
+            );
+        }
 
         if (microserviceResult.status === 'error') {
             res.status(503).json({
@@ -848,7 +867,7 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
                 chatId: chat._id,
                 projectId: guestProject._id,
                 userId: guestUser._id,
-                message: 'Guest generation started'
+                message: assetId ? 'Guest editing started' : 'Guest generation started'
             }
         });
 
