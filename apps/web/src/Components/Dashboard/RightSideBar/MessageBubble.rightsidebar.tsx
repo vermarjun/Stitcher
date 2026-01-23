@@ -159,24 +159,24 @@ const MessageBubble = ({
   if (message.role === "user") {
     return (
       <div className="flex justify-end mb-4 group max-w-70">
-        <div className="w-[85%] bg-zinc-700 rounded-lg px-3 py-2">
-          <div className="text-sm text-neutral-200 leading-relaxed break-words">
+        <div className="w-[85%] bg-zinc-800 rounded-2xl rounded-tr-sm px-4 py-3 border border-zinc-700/50 shadow-sm">
+          <div className="text-sm text-neutral-200 leading-relaxed break-words font-light">
             {typeof message.content === "string" ? message.content : ""}
           </div>
           <div className="flex items-center justify-between mt-2 gap-2">
-            <span className="text-xs text-neutral-400">
+            <span className="text-[10px] text-zinc-500 font-medium">
               {formatTimestamp(message.timestamp)}
             </span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-6 h-6 p-0 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50"
+                className="w-5 h-5 p-0 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 h-auto"
                 onClick={handleCopy}
                 title="Copy message"
               >
                 {copied ? (
-                  <Check className="w-3 h-3" />
+                  <Check className="w-3 h-3 text-emerald-500" />
                 ) : (
                   <Copy className="w-3 h-3" />
                 )}

@@ -5,7 +5,7 @@ import { ShineBorder } from '@/Components/magicui/shine-border';
 
 import { useNavigate } from 'react-router-dom';
 
-import logo from "/logo.png"
+import { AuroraText } from '@/Components/magicui/aurora-text';
 
 const GlassyNavbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -44,9 +44,20 @@ const GlassyNavbar = () => {
         <div className="w-[95%] bg-white/10 backdrop-blur-xl border-b border-white/20 rounded-b-4xl px-8 py-2 shadow-2xl">
           <div className="flex items-center justify-between">
             {/* Logo on extreme left */}
-            <div className="flex items-center">
+            {/* <div className="flex items-center">
               <img src={logo} alt="Logo" className="h-10 w-auto" />
-            </div>
+            </div> */}
+            <div className="flex items-center gap-2">
+                          <AuroraText
+                            className="text-2xl"
+                            padding=""
+                            colors={["#19E5A1", "#02684D", "#10B981"]}
+                          >
+                            <span className="font-pacifico text-white tracking-tight">
+                              Stitcher
+                            </span>
+                          </AuroraText>
+                        </div>
 
             {/* Navigation buttons */}
             <div className="flex items-center space-x-8">

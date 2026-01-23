@@ -339,29 +339,28 @@ export const Card = ({
 
 
 
-// Video Templates Data
+// Video Templates Data with Asset IDs
 const templateVideos = [
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756994906/202509040734_h1ndhn.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997181/heartequation_bpcizy.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997561/pi_dqd5m6.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997854/doublependulum_mbckjs.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
+  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1762161983/68eefd7b0465a2d1f8576947_final_edit_1762161982.mp4", assetId: "6789abcd1234567890abcdef" }, //Arjun verma 
+  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164126/IndiaGDP_a8oexw.mp4", assetId: "6789abcd1234567890abcd01" },
+  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958348/MandalaPattern_vfemzi.mp4", assetId: "6789abcd1234567890abcd02" },
+  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768598046/68eefd7b0465a2d1f8576947_VisualizingAreaSum_1768598044.mp4", assetId: "6789abcd1234567890abcd03" },
 ];
 
 
-const DraggableVideoCard = ({ vid }: { vid: string }) => {
+const DraggableVideoCard = ({ template }: { template: { url: string; assetId: string } }) => {
     return (
       <div 
         className="relative w-40 md:w-60 aspect-video rounded-lg overflow-hidden border border-neutral-800 cursor-grab active:cursor-grabbing group"
         draggable="true"
         onDragStart={(e) => {
-            e.dataTransfer.setData("video_url", vid);
+            e.dataTransfer.setData("video_url", template.url);
+            e.dataTransfer.setData("asset_id", template.assetId);
             e.dataTransfer.effectAllowed = "copy";
         }}
       >
         <video
-          src={vid}
+          src={template.url}
           muted
           loop
           autoPlay
@@ -377,23 +376,50 @@ const DraggableVideoCard = ({ vid }: { vid: string }) => {
 const Hero = () => {
   const navigate = useNavigate();
   const words = ["Explain?", "Visualize?", "Present?", "Illustrate?", "Learn?"];
-  const promptExamples = ["Explain Quantum Entanglement", "Visualize a sorting algorithm", "Show me the solar system"];
+  const promptExamples = ["Create a lissajous curve.", "Explain Binary Search.", "Help me visualize a leetocde question."];
+  
+  // Map short labels to full prompts
+  const quickPrompts = [
+    { label: "Mandala pattern", fullPrompt: "Create a mandala pattern that draws itself from center outward with symmetrical petals and geometric patterns in gold and purple" },
+    { label: "Lissajous curve", fullPrompt: "Create a lissajous curve by plotting parametric equations with two different frequency sine waves" },
+    { label: "Boolean operations", fullPrompt: "Create a clean, visually striking Manim animation that demonstrates Boolean set operations using overlapping 2D shapes." },
+  ];
   
   const [prompt, setPrompt] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [attachedTemplate, setAttachedTemplate] = useState<string | null>(null);
+  const [attachedTemplate, setAttachedTemplate] = useState<{ url: string; assetId: string } | null>(null);
+  
+  // Responsive Prism dimensions
+  const [prismDimensions, setPrismDimensions] = useState({ height: 20, baseWidth: 7 });
+  
+  useEffect(() => {
+    const updatePrismDimensions = () => {
+      if (window.innerWidth < 768) {
+        setPrismDimensions({ height: 20, baseWidth: 4 });
+      } else {
+        setPrismDimensions({ height: 20, baseWidth: 7 });
+      }
+    };
+    
+    updatePrismDimensions();
+    window.addEventListener("resize", updatePrismDimensions);
+    return () => window.removeEventListener("resize", updatePrismDimensions);
+  }, []);
 
   /* Sidebar Logic */
   const [showSidebar, setShowSidebar] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
   const [sidebarInitialPrompt, setSidebarInitialPrompt] = useState("");
+  const [sidebarAssetId, setSidebarAssetId] = useState<string | undefined>(undefined);
 
   const handleHeroSubmit = () => {
     if (!prompt.trim()) return;
     setSidebarInitialPrompt(prompt);
+    setSidebarAssetId(attachedTemplate?.assetId);
     setChatStarted(true);
     setShowSidebar(true);
     setPrompt(""); // Clear hero prompt
+    setAttachedTemplate(null); // Clear attachment
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -411,10 +437,11 @@ const Hero = () => {
     e.stopPropagation();
     setDragActive(false);
     
-    // Check for dragged string data (video url)
+    // Check for dragged string data (video url and assetId)
     const videoUrl = e.dataTransfer.getData("video_url");
-    if (videoUrl) {
-        setAttachedTemplate(videoUrl);
+    const assetId = e.dataTransfer.getData("asset_id");
+    if (videoUrl && assetId) {
+        setAttachedTemplate({ url: videoUrl, assetId });
     }
   };
 
@@ -422,14 +449,14 @@ const Hero = () => {
   return (
     <section
       id="home"
-      className="relative w-full min-h-screen rounded-b-4xl overflow-hidden bg-black flex flex-col items-center justify-center pt-20"
+      className="relative w-full min-h-screen md:rounded-b-4xl overflow-hidden bg-black flex flex-col items-center justify-center pt-20"
     >
       {/* Prism animated background */}
       <div className="absolute inset-0 z-0 opacity-60">
         <Prism
           animationType="rotate"
-          height={20}
-          baseWidth={7}
+          height={prismDimensions.height}
+          baseWidth={prismDimensions.baseWidth}
           scale={3.6}
           hueShift={0}
           colorFrequency={0.8}
@@ -471,13 +498,13 @@ const Hero = () => {
         <div className="flex-1 flex flex-col items-center justify-center w-full px-4 gap-6 md:gap-8">
             
             {/* Headlines */}
-            <div className="flex flex-col items-center text-center">
-                <div className="flex flex-col md:flex-row items-center justify-center text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black text-white leading-tight tracking-tighter gap-3 md:gap-5">
+            <div className="flex flex-col items-center text-center gap-2 md:gap-0">
+                <div className="flex flex-col sm:flex-row items-center justify-center text-7xl sm:text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[1.1] tracking-tighter gap-2 md:gap-5 flex-wrap">
                     <span>Need to</span>
                     <FlipWords words={words} className="text-neutral-400" />
                 </div>
                 
-                <p className="mt-4 text-base sm:text-lg md:text-xl text-neutral-400 max-w-2xl leading-relaxed font-normal tracking-wide px-4">
+                <p className="mt-4 text-base sm:text-lg md:text-xl text-neutral-400 max-w-2xl leading-relaxed font-normal tracking-wide px-4 text-balance">
                   Turn your prompts into animations. Just explain, Stitcher animates!
                 </p>
             </div>
@@ -519,7 +546,7 @@ const Hero = () => {
                             {attachedTemplate && (
                                 <div className="relative group shrink-0 animate-in fade-in zoom-in duration-200 self-center">
                                     <div className="h-9 w-16 md:h-12 md:w-20 rounded-lg overflow-hidden bg-black border border-white/10 relative shadow-sm">
-                                        <video src={attachedTemplate} className="w-full h-full object-cover opacity-90" />
+                                        <video src={attachedTemplate.url} className="w-full h-full object-cover opacity-90" />
                                     </div>
                                     <button 
                                         onClick={() => setAttachedTemplate(null)}
@@ -534,7 +561,7 @@ const Hero = () => {
                                     {/* Disappearing Placeholder */}
                                 {!prompt && (
                                     <div className="absolute inset-0 top-0 pointer-events-none opacity-40 flex items-start pt-1">
-                                        <span className="mr-2 text-neutral-500 text-lg md:text-xl font-light">Try:</span>
+                                        <span className="mr-2 text-neutral-500 text-lg md:text-xl font-light whitespace-nowrap">Try:</span>
                                         <FlipWords 
                                             words={promptExamples} 
                                             className="text-neutral-400 text-lg md:text-xl font-light -ml-2"
@@ -570,17 +597,22 @@ const Hero = () => {
                     </div>
                 </div>
 
-                {/* Example Quick Prompts */}
-                <div className="w-full flex flex-wrap items-center justify-center sm:justify-start gap-2 px-2">
-                    {["Fantasy Landscape", "Pixar Style", "Cyberpunk City"].map((ex, i) => (
-                    <button key={i} onClick={() => setPrompt(ex)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 hover:border-white/10 text-neutral-400 hover:text-white text-xs md:text-sm transition-all group backdrop-blur-sm">
-                        <span>{ex}</span>
-                        <ArrowUp size={12} className="opacity-50 group-hover:opacity-100 rotate-45" />
-                    </button>
-                    ))}
-                    <button className="p-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 text-neutral-500 hover:text-white transition-all ml-auto md:ml-0 backdrop-blur-sm">
-                        <RotateCw size={14} />
-                    </button>
+                {/* Example Quick Prompts - Scrollable on mobile */}
+                <div className="w-full relative">
+                  <div className="flex flex-nowrap md:flex-wrap items-center gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:justify-center scroll-smooth -mx-4 md:mx-0 px-4 md:px-0">
+                      {quickPrompts.map((item, i) => (
+                      <button key={i} onClick={() => setPrompt(item.fullPrompt)} className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 hover:border-white/10 text-neutral-400 hover:text-white text-xs md:text-sm transition-all group backdrop-blur-sm whitespace-nowrap">
+                          <span>{item.label}</span>
+                          <ArrowUp size={12} className="opacity-50 group-hover:opacity-100 rotate-45" />
+                      </button>
+                      ))}
+                      <button className="flex-shrink-0 p-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 text-neutral-500 hover:text-white transition-all backdrop-blur-sm">
+                          <RotateCw size={14} />
+                      </button>
+                  </div>
+                  {/* Fade gradients for scroll indication on mobile */}
+                  <div className="md:hidden absolute left-0 top-0 bottom-2 w-4 bg-gradient-to-r from-black to-transparent pointer-events-none" />
+                  <div className="md:hidden absolute right-0 top-0 bottom-2 w-4 bg-gradient-to-l from-black to-transparent pointer-events-none" />
                 </div>
 
             </div>
@@ -589,8 +621,8 @@ const Hero = () => {
         {/* Marquee Footer - Stick to bottom */}
         <div className="w-full max-w-3xl overflow-hidden mt-auto [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] pb-4 md:pb-6">
             <Marquee pauseOnHover className="[--duration:40s]">
-                {templateVideos.map((vid, idx) => (
-                    <DraggableVideoCard key={idx} vid={vid} />
+                {templateVideos.map((template, idx) => (
+                    <DraggableVideoCard key={idx} template={template} />
                 ))}
             </Marquee>
             <div className="w-full flex justify-center items-center mt-3 animate-pulse">
@@ -613,6 +645,7 @@ const Hero = () => {
         isOpen={showSidebar} 
         onClose={() => setShowSidebar(false)}
         initialPrompt={sidebarInitialPrompt}
+        assetId={sidebarAssetId}
         onLimitReached={() => {
             // Optional: could redirect or show modal here, but mostly handled in sidebar for now
         }}

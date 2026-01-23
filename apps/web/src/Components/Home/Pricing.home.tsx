@@ -118,29 +118,40 @@ const UserCurrentPlan = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto mb-10">
-      <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-full px-6 py-3 flex flex-wrap items-center justify-between gap-4 shadow-lg shadow-black/20">
-        <div className="flex items-center gap-2">
+      <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-2xl sm:rounded-full p-5 sm:px-6 sm:py-3 flex flex-col sm:flex-row items-center sm:justify-between gap-y-4 sm:gap-4 shadow-lg shadow-black/20 w-full">
+        
+        {/* Plan Section */}
+        <div className="flex items-center justify-between w-full sm:w-auto gap-2">
           <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Current Plan</span>
           <span className="bg-zinc-800 text-white text-xs px-2 py-0.5 rounded border border-zinc-700 font-medium capitalize">
             {userData.plan}
           </span>
         </div>
         
+        {/* Divider */}
+        <div className="w-full h-px bg-zinc-800 sm:hidden" />
         <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
 
-        <div className="flex items-center gap-4 text-xs">
-          <span className="text-zinc-300">
-            <span className="text-white font-medium">{userData.credits.generation}</span> generations
-          </span>
-          <span className="text-[#19E5A1]">
-            <span className="font-medium">{userData.credits.editing}</span> edits left
-          </span>
+        {/* Credits Section */}
+        <div className="flex items-center justify-between w-full sm:w-auto gap-4 text-xs">
+          <span className="text-zinc-500 sm:hidden font-medium">Credits</span>
+          <div className="flex gap-4">
+            <span className="text-zinc-300">
+              <span className="text-white font-medium">{userData.credits.generation}</span> generations
+            </span>
+            <span className="text-[#19E5A1]">
+              <span className="font-medium">{userData.credits.editing}</span> edits left
+            </span>
+          </div>
         </div>
 
+        {/* Divider */}
+        <div className="w-full h-px bg-zinc-800 sm:hidden" />
         <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
 
-        <div className="flex items-center gap-2">
-          <span className="text-zinc-500 text-xs">Expires</span>
+        {/* Expiry Section */}
+        <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+          <span className="text-zinc-500 text-xs">Expires on</span>
           <span className="text-zinc-300 text-xs font-medium">
             {formatDate(userData.credits.expiresAt)}
           </span>

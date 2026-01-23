@@ -5,12 +5,13 @@ import api from "@/api";
 import { toast } from "sonner";
 import MessageInput from "./MessageInput";
 import MessageBubble from "./MessageBubble";
-import { messageActions, type Message } from "./types";
+import { messageActions, type Message, type GenerationStage } from "./types";
 
 interface LandingRightSideBarProps {
   isOpen: boolean;
   onClose: () => void;
   initialPrompt?: string;
+  assetId?: string;
   onLimitReached?: () => void;
 }
 
@@ -20,11 +21,13 @@ export const LandingRightSideBar = ({
   isOpen, 
   onClose, 
   initialPrompt,
+  assetId,
   onLimitReached 
 }: LandingRightSideBarProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [generationStage, setGenerationStage] = useState<GenerationStage>('idle');
   const [chatId, setChatId] = useState<string | null>(null);
   const [trialCount, setTrialCount] = useState(0);
   
@@ -68,9 +71,9 @@ export const LandingRightSideBar = ({
   useEffect(() => {
     if (initialPrompt && !initialPromptProcessed.current && !isProcessing) {
       initialPromptProcessed.current = true;
-      handleNewGuestChat(initialPrompt);
+      handleNewGuestChat(initialPrompt, assetId);
     }
-  }, [initialPrompt]);
+  }, [initialPrompt, assetId]);
 
   // Socket Connection
   useEffect(() => {
@@ -82,10 +85,12 @@ export const LandingRightSideBar = ({
         const { type, data } = event;
 
         if (type === 'PLANNING_START') {
+             setGenerationStage('planning');
              streamSummaryRef.current = true;
              plannerOutputRef.current = "";
              llmSummaryRef.current = "";
         } else if (type === 'GENERATING_CODE_COMPLETE') {
+             setGenerationStage('rendering');
              if (data.scenes) {
                  setMessages(prev => {
                      const updated = [...prev];
@@ -97,6 +102,7 @@ export const LandingRightSideBar = ({
                  });
              }
         } else if (type === 'RENDER_SUCCESS') {
+             // Still in rendering stage
             setMessages(prev => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -127,6 +133,7 @@ export const LandingRightSideBar = ({
                  return updated;
              });
         } else if (type === 'GENERATION_COMPLETE') {
+            setGenerationStage('complete');
              setMessages(prev => {
                  const updated = [...prev];
                  const last = updated[updated.length - 1];
@@ -143,10 +150,13 @@ export const LandingRightSideBar = ({
                  return updated;
              });
              setIsProcessing(false);
+             // Reset stage after a delay or keep as complete until next start
+             setTimeout(() => setGenerationStage('idle'), 3000); 
              setTrialCount(prev => prev + 1); // Increment trial on completion or start? User said "use feature more than 2 times". I'll count starts.
         } else if (type === 'RENDER_ERROR' || type === 'EDITING_ERROR') {
              toast.error("An error occurred during generation.");
              setIsProcessing(false);
+             setGenerationStage('idle');
         }
     };
 
@@ -156,7 +166,7 @@ export const LandingRightSideBar = ({
     };
   }, [chatId]);
 
-  const handleNewGuestChat = async (promptText: string) => {
+  const handleNewGuestChat = async (promptText: string, templateAssetId?: string) => {
       // Logic Check
       if (trialCount >= 2) {
           toast.error("Free trial limit reached. Please sign up to continue!");
@@ -166,25 +176,15 @@ export const LandingRightSideBar = ({
 
       setMessages(prev => [...prev, messageActions.createMessage(promptText, "user")]);
       setIsProcessing(true);
+      setGenerationStage('planning');
 
       try {
-          // Determine if we need to start a NEW chat or use existing? 
-          // For guest, we can keep appending to same chat if chatId exists, OR create new one.
-          // User said "all the messages in this chat should appear on this sidebar".
-          // If chatId exists, use it? BUT the backend `generateGuestChatResponse` currently creates a NEW chat every time.
-          // I should ideally modify backend to support `chatId` param.
-          // But for now, let's just create a new chat context and append to local messages.
-          // *Correction*: If I call `/guest` it creates a new `GenerateChat`.
-          // If I want to maintain context, I need to pass `chatId` to backend. 
-          // My backend implementation `generateGuestChatResponse` does NOT accept `chatId`. It creates new `GenerateChat` ("4. Create Chat").
-          // This means context is lost on backend each turn.
-          // This is acceptable for a simple "try" feature (usually one-shot).
-          // OR I should fix backend.
-          // Given the constraints and "mimic" requirement, users might expect multi-turn.
-          // But I'll stick to one-shot for now unless I fix backend.
+          const requestBody: any = { prompt: promptText };
+          if (templateAssetId) {
+              requestBody.assetId = templateAssetId;
+          }
           
-          
-          const res = await api.post('/generatechat/guest', { prompt: promptText });
+          const res = await api.post('/generatechat/guest', requestBody);
           
           if ((res.data as any).success) {
               const { chatId: newChatId } = (res.data as any).data;
@@ -249,6 +249,7 @@ export const LandingRightSideBar = ({
                         message={msg} 
                         isLastMessage={i === messages.length - 1}
                         isProcessing={isProcessing}
+                        generationStage={generationStage}
                         llmSummaryRef={llmSummaryRef}
                         plannerOutputRef={plannerOutputRef}
                         streamSummaryRef={streamSummaryRef}

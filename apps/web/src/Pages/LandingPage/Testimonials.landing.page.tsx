@@ -2,13 +2,13 @@ import React, { useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 const images = [
-  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013261/homepage_adu6yp.png",
-  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013258/AIchat_ew3k83.png",
-  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013264/dashboard_tnfxym.png",
-  "https://res.cloudinary.com/dloh4tkp5/image/upload/dpr_auto/v1757013262/timeline_cfnxyu.png",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1761081366/ThreeDSurfacePlot_mxotie.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1761076391/BooleanOperations_bl9afi.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164127/EulerIdentity_jbubvz.mp4",
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164455/RiemannZetaVisualization_gryhdk.mp4",
   "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756994906/202509040734_h1ndhn.mp4", //earth
   "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997181/heartequation_bpcizy.mp4", //heart
-  "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997561/pi_dqd5m6.mp4", //pi
+  "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958348/MandalaPattern_vfemzi.mp4", //mandala
   "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756997854/doublependulum_mbckjs.mp4", //doublependulum
   "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
   "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",

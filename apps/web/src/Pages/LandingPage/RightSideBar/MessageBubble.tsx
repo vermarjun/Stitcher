@@ -1,7 +1,7 @@
-import { Bot, Copy, Check } from "lucide-react";
+import { Copy, Check, Sparkles, Terminal } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { Button } from "@/Components/ui/button";
-import type { Message } from "./types";
+import type { Message, GenerationStage } from "./types";
 import LiveTextStream from "./LivestreamText";
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   llmSummaryRef: RefObject<string>;
   plannerOutputRef: RefObject<string>,
   isProcessing: boolean;
+  generationStage: GenerationStage;
   isLastMessage: boolean;
   streamSummaryRef: RefObject<boolean>;
   onStreamingComplete?: () => void;
@@ -98,6 +99,7 @@ const MessageBubble = ({
   plannerOutputRef,
   isLastMessage,
   isProcessing,
+  generationStage,
   streamSummaryRef,
   onStreamingComplete
 }: Props) => {
@@ -115,8 +117,6 @@ const MessageBubble = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-
-
   const formatTimestamp = (timestamp: string | Date) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString("en-US", {
@@ -127,16 +127,18 @@ const MessageBubble = ({
 
   if (message.role === "user") {
     return (
-      <div className="flex justify-end mb-6 group max-w-[85%] ml-auto pl-4">
-        <div className="bg-neutral-800/80 rounded-2xl rounded-tr-sm px-5 py-3.5 border border-white/10 shadow-sm backdrop-blur-sm">
-          <div className="text-sm text-neutral-200 leading-relaxed break-words font-light">
-            {typeof message.content === "string" ? message.content : ""}
-          </div>
-          <div className="flex items-center justify-end mt-1.5 gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-            <span className="text-[10px] text-neutral-500 font-medium">
-              {formatTimestamp(message.timestamp)}
-            </span>
-          </div>
+      <div className="flex justify-end mb-8 group ml-auto pl-12">
+        <div className="relative max-w-[85%]">
+            <div className="bg-[#1A1A1A] rounded-2xl rounded-tr-sm px-6 py-4 border border-white/10 shadow-lg backdrop-blur-md">
+            <div className="text-[15px] text-neutral-200 leading-relaxed font-light tracking-wide">
+                {typeof message.content === "string" ? message.content : ""}
+            </div>
+            </div>
+            <div className="flex items-center justify-end mt-2 gap-2 opacity-50 px-1">
+                <span className="text-[10px] text-neutral-500 font-medium tracking-wider uppercase">
+                {formatTimestamp(message.timestamp)}
+                </span>
+            </div>
         </div>
       </div>
     );
@@ -152,93 +154,137 @@ const MessageBubble = ({
     ? (message.content as { plannerOutput: string; llmResponse: string })
         .llmResponse
     : "";
-  const hasScenes = message.scenes && message.scenes.length > 0;
-
-  // Filter out scenes that don't have a valid assetId OR valid direct properties
-  // In Guest mode, we might get direct urls in scenes from backend if populated
+    
+  // Filter out scenes
   const validScenes =
     message.scenes?.filter((scene: any) => (scene.assetId && scene.assetId.url) || scene.url || scene.sceneName) || [];
 
-  const showBotIcon = plannerOutput || llmResponse || hasScenes || (typeof message.content === 'string' && message.content);
-
-  if (!showBotIcon && isProcessing) {
-      return null;
-  }
+    // Determine if we should show ANY content?
+    // If it's a new empty message (Thinking...), we show the granular progress instead.
+  const hasContent = plannerOutput || llmResponse || validScenes.length > 0 || (typeof message.content === 'string' && message.content);
+  
+  // Custom Granular Progress Display
+  const showProgress = isProcessing && isLastMessage && generationStage !== 'idle' && generationStage !== 'complete';
+  
+  // If no content yet and not processing, hide (err check)
+  if (!hasContent && !isProcessing) return null;
 
   return (
-    <div className="mb-6 fade-in animate-in duration-300 slide-in-from-bottom-2">
-      <div className="flex items-start gap-3 group">
-        <div className="w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0 bg-neutral-900 border-white/10 shadow-sm">
-          <Bot className="w-4 h-4 text-emerald-400" />
+    <div className="mb-10 w-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-forwards">
+      <div className="flex flex-col gap-4">
+        
+        {/* Assistant Header */}
+        <div className="flex items-center gap-3 px-1">
+             <div className="w-6 h-6 rounded-full bg-linear-to-br from-emerald-400/20 to-cyan-400/20 flex items-center justify-center border border-emerald-500/30">
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+             </div>
+             <span className="text-xs font-medium text-neutral-400 uppercase tracking-widest">Stitcher AI</span>
+             <span className="text-[10px] text-neutral-600 font-mono">{formatTimestamp(message.timestamp)}</span>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="bg-neutral-900/50 border border-white/5 rounded-2xl rounded-tl-sm p-4">
+        <div className="pl-0 md:pl-9 w-full">
             
-            {/* Planner Output */}
-            {plannerOutput && (
-                <div className="text-sm text-neutral-400 leading-relaxed mb-3 font-mono text-xs bg-black/30 p-2 rounded">
-                {(isProcessing && plannerOutputRef.current != plannerOutput && isLastMessage) ? (
-                    (plannerOutputRef.current = plannerOutput) && 
-                    <LiveTextStream
-                    text={plannerOutputRef.current}
-                    streamingSpeed={30}
-                    />
-                ) : ( 
-                    <p className="break-words">{plannerOutput}</p>
-                )}
+            {/* 1. GRANULAR PROGRESS INDICATOR (When Processing) */}
+            {showProgress && (
+                <div className="mb-6 p-1">
+                    <div className="inline-flex items-center gap-4 bg-neutral-900/50 pr-6 pl-2 py-2 rounded-full border border-emerald-500/10 shadow-[0_0_30px_-5px_rgba(16,185,129,0.1)]">
+                        <div className="relative w-8 h-8 flex items-center justify-center bg-black rounded-full overflow-hidden border border-emerald-500/20">
+                           <img 
+                                src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760610643/loading_animation_phpia7.gif" 
+                                alt="Loading"
+                                className="w-full h-full object-cover opacity-80"
+                            />
+                        </div>
+                        <div className="flex flex-col justify-center gap-0.5">
+                             <span className="text-sm font-medium text-emerald-400/90 tracking-wide animate-pulse">
+                                {generationStage === 'planning' && "Planning animation..."}
+                                {generationStage === 'generating' && "Writing Manim code..."}
+                                {generationStage === 'rendering' && "Rendering scenes..."}
+                             </span>
+                             <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">
+                                {generationStage === 'planning' ? "Analyzing request" : "Processing assets"}
+                             </span>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {/* Scenes */}
+          <div className="flex flex-col gap-4 w-full max-w-full overflow-hidden">
+            
+            {/* 2. PLANNER OUTPUT (Terminal Style) */}
+            {plannerOutput && (
+                <div className="w-full rounded-lg bg-[#0F0F0F] border border-white/5 overflow-hidden group/terminal">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border-b border-white/5">
+                        <Terminal className="w-3 h-3 text-neutral-500" />
+                        <span className="text-[10px] font-mono text-neutral-500 uppercase">Planner Logs</span>
+                    </div>
+                    <div className="p-4 font-mono text-xs text-neutral-400 leading-relaxed overflow-x-auto custom-scrollbar max-h-[300px]">
+                        {(isProcessing && plannerOutputRef.current != plannerOutput && isLastMessage) ? (
+                            (plannerOutputRef.current = plannerOutput) && 
+                            <LiveTextStream
+                                text={plannerOutputRef.current}
+                                streamingSpeed={5}
+                            />
+                        ) : ( 
+                            <div className="whitespace-pre-wrap">{plannerOutput}</div>
+                        )}
+                        {generationStage === 'planning' && (
+                             <span className="inline-block w-1.5 h-3 ml-1 bg-emerald-500/50 animate-pulse align-middle" />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 3. SCENES (Video Players) */}
             {validScenes.length > 0 && (
-                <div className="space-y-3 mb-3">
-                {validScenes.map((scene: any, index) => (
+                <div className="grid grid-cols-1 gap-4 mt-2">
+                {validScenes.map((scene: any, index: number) => (
                     <VideoPlayer key={index} scene={scene} />
                 ))}
                 </div>
             )}
 
-            {/* LLM Response */}
+            {/* 4. LLM RESPONSE (Final Text) */}
             {llmResponse && (
-                <div className="text-sm text-neutral-300 leading-relaxed mb-2 break-words">
+                <div className="text-[15px] font-light text-neutral-200 leading-7 tracking-wide break-words mt-2">
                 {(streamSummaryRef.current && llmSummaryRef.current != llmResponse && isLastMessage && isProcessing) ? (
                     (llmSummaryRef.current = llmResponse) && 
                     <LiveTextStream
                     text={llmSummaryRef.current}
-                    streamingSpeed={50}
+                    streamingSpeed={20}
                     onStreamingComplete={onStreamingComplete}
                     />
                 ) : (
-                    <p className="break-words">{llmResponse}</p>
+                    <p className="whitespace-pre-wrap">{llmResponse}</p>
                 )}
                 </div>
             )}
 
-            {!isContentObject && typeof message.content === "string" && (
-                <div className="text-sm text-neutral-300 leading-relaxed mb-2 break-words">
+            {/* 5. Fallback Text Content */}
+            {!isContentObject && typeof message.content === "string" && message.content && (
+                <div className="text-[15px] text-neutral-300 leading-relaxed">
                 {message.content}
                 </div>
             )}
-           </div>
+            
+            {/* Actions */}
+             {hasContent && !isProcessing && (
+                <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-neutral-500 hover:text-white hover:bg-white/5 gap-1.5 rounded-md"
+                        onClick={handleCopy}
+                    >
+                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copied ? "Copied" : "Copy"}
+                    </Button>
+                </div>
+            )}
 
-          {/* Footer */}
-          <div className="flex items-center gap-3 mt-2 px-1">
-            <span className="text-[10px] text-neutral-600">
-              {formatTimestamp(message.timestamp)}
-            </span>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-5 w-5 p-0 text-neutral-500 hover:text-white"
-                onClick={handleCopy}
-              >
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              </Button>
-            </div>
+           </div>
           </div>
-        </div>
+
       </div>
     </div>
   );

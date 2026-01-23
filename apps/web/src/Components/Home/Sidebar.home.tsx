@@ -182,7 +182,7 @@ const Sidebar: React.FC<Props> = ({
         lg:relative lg:translate-x-0
         ${
           collapsed
-            ? "w-[70px] lg:translate-x-0 "
+            ? "hidden lg:flex w-[70px] lg:translate-x-0 "
             : "w-72 translate-x-0 fixed left-0 top-0 z-50 "
         }`}
       >

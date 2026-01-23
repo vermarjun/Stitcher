@@ -43,3 +43,6 @@ export const messageActions = {
         generatorOutput: false,
     })
 };
+
+export type GenerationStage = 'idle' | 'planning' | 'generating' | 'rendering' | 'complete';
+

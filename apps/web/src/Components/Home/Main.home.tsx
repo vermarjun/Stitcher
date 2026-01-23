@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "./Sidebar.home";
+import MobileBottomNav from "./MobileBottomNav.home";
 import Dashboard from "./Dashboard/Dashboard.home";
 import api from "@/api";
 import { useNavigate } from "react-router-dom";
@@ -117,6 +118,17 @@ const Main = () => {
             activeItem={activeItem}
             onNavigate={handleNavigation}
             navigate={navigate}
+          />
+          
+          <MobileBottomNav
+             activeItem={activeItem} 
+             onNavigate={handleNavigation}
+             user={user}
+             onSignOut={() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+                navigate("/auth");
+             }}
           />
 
           {/* Main Content */}

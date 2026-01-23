@@ -3,6 +3,8 @@ import type { Project } from "@/State/Types";
 import RecentProjects from "./RecentProjects.home";
 import GettingStarted from "./GettingStarted.home";
 import QuickActions from "./QuickActions.home";
+import RecentNotifications from "./RecentNotifications.home";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
 // import ProfileProgress from "./ProfileCompleteProgressbar.home";
 
 interface Props {
@@ -64,17 +66,44 @@ const Dashboard = ({
       <div className="max-w-7xl mx-auto space-y-5">
         <TopDesign />
         <QuickActions navigate={navigate} onNavigate={onNavigate} />
+        
+        {/* Mobile: Upgrade Banner */}
+        <button 
+          onClick={() => onNavigate("pricing")}
+          className="w-full bg-emerald-900/10 border border-emerald-500/20 p-2.5 rounded-lg flex items-center justify-between group md:hidden active:scale-[0.98] transition-all"
+        >
+          <span className="text-xs font-medium text-emerald-400">Upgrade to premium and create unrestricted</span>
+          <ArrowUpRight size={14} className="text-emerald-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+        </button>
+
         <RecentProjects
           projectsToDisplay={recentProjects.slice(-2, recentProjects.length)}
           navigate={navigate}
           fecthRecentProjects={fecthRecentProjects}
         />
+
+        {/* Mobile: All Projects Button */}
+        <button
+          onClick={() => onNavigate("projects")}
+          className="flex items-center justify-center gap-2 w-full py-2 group md:hidden -mt-2 mb-2"
+        >
+            <div className="h-px bg-zinc-800 flex-1"></div>
+            <span className="text-xs text-zinc-500 group-hover:text-white transition-colors whitespace-nowrap">View All Projects</span>
+            <ChevronDown size={14} className="text-zinc-500 group-hover:text-white transition-colors group-hover:translate-y-0.5 transform" />
+            <div className="h-px bg-zinc-800 flex-1"></div>
+        </button>
+
+        <RecentNotifications onNavigate={onNavigate} />
+
         {/* <ProfileProgress
           progress={60}
           missingFields={["Add a profile photo", "Verify your email"]}
           onContinue={() => navigate("/settings")}
         /> */}
         <GettingStarted onNavigate={onNavigate} />
+        
+        {/* Bottom Nav Spacer */}
+        <div className="h-20 md:hidden"></div>
       </div>
     </div>
   );
