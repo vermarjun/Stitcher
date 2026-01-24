@@ -23,7 +23,8 @@ interface ApiKeyMapping {
     general: { keyValue: string; baseUrl: string; modelName: string };
 }
 
-// Fetches API keys for the user and fills missing ones with general agent credentials
+// Fetches API keys for the user and fills missing ones with placeholder credentials
+// Note: Microservice v3 uses Redis heap-based API key management and doesn't consume these headers
 async function fetchApiKeysForUser(userId: string): Promise<ApiKeyMapping> {
     const userApiKeys = await ApiKey.find({
         userId,
@@ -39,10 +40,12 @@ async function fetchApiKeysForUser(userId: string): Promise<ApiKeyMapping> {
         });
     });
 
-    const generalCreds = keyMap.get('general');
-    if (!generalCreds) {
-        throw new Error('General agent API key is required but not found');
-    }
+    // Use user's general credentials if available, otherwise use placeholders
+    const generalCreds = keyMap.get('general') || {
+        keyValue: 'placeholder-api-key',
+        baseUrl: 'https://api.openai.com/v1',
+        modelName: 'gpt-4'
+    };
 
     const apiKeyMapping: ApiKeyMapping = {
         planner: keyMap.get('planner') || generalCreds,
@@ -227,16 +230,21 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             return;
         }
 
-        // Fetch API keys for the user
+        // Fetch API keys for the user (uses placeholders if user doesn't have keys)
+        // Note: Microservice v3 doesn't consume these headers - it uses Redis heap-based key management
         let apiKeys: ApiKeyMapping;
         try {
             apiKeys = await fetchApiKeysForUser(userId);
         } catch (error) {
-            res.status(400).json({
-                success: false,
-                message: error instanceof Error ? error.message : 'Failed to fetch API keys'
-            });
-            return;
+            // This should not happen with the updated fetchApiKeysForUser, but keep as fallback
+            console.warn(`Warning: Failed to fetch API keys for user ${userId}, using placeholders:`, error);
+            apiKeys = {
+                planner: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+                coder: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+                reviewer: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+                debugger: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+                general: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' }
+            };
         }
 
         // Get or create chat
@@ -764,17 +772,14 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
             await guestUser.save();
         }
 
-        // 3. Get API Keys (Borrow from valid user)
-        let apiKeys: ApiKeyMapping;
-        try {
-            apiKeys = await fetchApiKeysForUser("68a89b21cbadb4fe13132d57");
-        } catch (error) {
-            res.status(400).json({
-                success: false,
-                message: error instanceof Error ? error.message : 'Failed to fetch API keys'
-            });
-            return;
-        }
+        // 3. Use placeholder API Keys (microservice doesn't consume headers anyway)
+        const apiKeys: ApiKeyMapping = {
+            planner: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+            coder: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+            reviewer: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+            debugger: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' },
+            general: { keyValue: 'placeholder-api-key', baseUrl: 'https://api.openai.com/v1', modelName: 'gpt-4' }
+        };
 
         // 4. Create Chat
         const chat = new GenerateChat({
