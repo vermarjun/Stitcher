@@ -1,0 +1,35 @@
+# Local-dev compose file. Production deployments should use their own orchestrator
+# (k8s, nomad, ECS) — this compose is for getting a working API on your laptop.
+#
+#   docker compose up --build            # local storage, no cloud SDKs
+#   STORAGE=cloudinary docker compose up # pass CLOUDINARY_URL via .env
+#
+# Note: bubblewrap requires kernel user-namespace support. On Docker Desktop for macOS
+# this is supplied by the Linux VM, so the sandbox works out of the box. Windows WSL2 is
+# the same. Bare Docker on a locked-down host may need --privileged or `--cap-add SYS_ADMIN`.
+
+services:
+  render:
+    build:
+      context: .
+      args:
+        STORAGE: ${STORAGE:-}
+    image: manim-render-service:local
+    container_name: manim-render-service
+    # bwrap needs to create new namespaces. This is the minimal cap set that lets it work
+    # WITHOUT --privileged.
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor=unconfined
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file: .env
+    tmpfs:
+      - /tmp:size=2g
+    volumes:
+      - renders:/tmp/renders
+    restart: unless-stopped
+
+volumes:
+  renders:
