@@ -97,7 +97,7 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_output": [
             {
-                "SceneName": "Lissajous curve",
+                "SceneName": "LissajousCurveScene",
                 "Prompt": "",
                 "RequiredMObjects": ["ParametricFunction", "Axes"],
                 "RequiredAnimations": ["Create", "Write"]
@@ -136,7 +136,7 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_output": [
             {
-                "SceneName": "Boolean Operations",
+                "SceneName": "BooleanOperations",
                 "Prompt": "",
                 "RequiredMObjects": ["ParametricFunction", "Axes"],
                 "RequiredAnimations": ["Create", "Write"]
@@ -176,7 +176,7 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_output": [
             {
-                "SceneName": "Golden Mandala",
+                "SceneName": "GoldenMandalaScene",
                 "Prompt": "",
                 "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
                 "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
@@ -256,7 +256,7 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_output": [
             {
-                "SceneName": "Lorenz Attractor",
+                "SceneName": "LorenzAttractor",
                 "Prompt": "",
                 "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
                 "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
@@ -296,7 +296,7 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_output": [
             {
-                "SceneName": "Binary Search Tree",
+                "SceneName": "BinarySearchTree",
                 "Prompt": "",
                 "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
                 "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
@@ -335,7 +335,7 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         
         "planner_output": [
             {
-                "SceneName": "Convex surface",
+                "SceneName": "ConvexSurface",
                 "Prompt": "",
                 "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
                 "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
