@@ -33,6 +33,7 @@ dependencies = [
   "structlog>=24.1",
   "python-multipart>=0.0.9",
   "prometheus-client>=0.20",
+  "manim>=0.18,<0.20",
 ]
 
 [project.optional-dependencies]
@@ -86,6 +87,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
   "e2e: end-to-end tests that hit real storage / sandboxes (run manually)",
+  "contract: HTTP-surface tests; need manim + ffmpeg installed",
   "security: sandbox escape attempt tests (require Linux + bubblewrap)",
 ]
 
