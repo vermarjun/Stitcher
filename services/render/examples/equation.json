@@ -1,0 +1,6 @@
+{
+  "code": "from manim import *\n\nclass Pythagoras(Scene):\n    def construct(self):\n        eq = MathTex('a^2 + b^2 = c^2', font_size=72)\n        self.play(Write(eq))\n        self.wait(0.5)\n        self.play(Transform(eq, MathTex('c = \\\\sqrt{a^2 + b^2}', font_size=72)))\n        self.wait(0.5)\n",
+  "sceneClass": "Pythagoras",
+  "render": { "quality": "medium", "format": "mp4" },
+  "storage": { "backend": "local", "folder": "examples", "generateThumbnail": true }
+}
