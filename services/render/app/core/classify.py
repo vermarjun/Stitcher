@@ -32,9 +32,8 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("AttributeError",    re.compile(r"(?m)^.*AttributeError: (.+)$")),
     ("TypeError",         re.compile(r"(?m)^.*TypeError: (.+)$")),
     ("ValueError",        re.compile(r"(?m)^.*ValueError: (.+)$")),
-    ("ImportError",       re.compile(r"(?m)^.*(?:Module)?(?:Not)?(?:Found)?Error: (.+)$")),
-    ("LaTeXError",        re.compile(r"(?m)LaTeX\s+compilation.*failed|latex error|! LaTeX Error: (.+)",
-                                     re.IGNORECASE)),
+    ("LaTeXError",        re.compile(r"(?mi)LaTeX\s+compilation.*failed|!\s*LaTeX Error:\s*(.+)|^\s*latex error")),
+    ("ImportError",       re.compile(r"(?m)^.*(?:ImportError|ModuleNotFoundError): (.+)$")),
 ]
 
 _LINE_RE = re.compile(r'File "[^"]*animation\.py", line (\d+)')
