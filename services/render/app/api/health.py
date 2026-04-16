@@ -65,7 +65,7 @@ def _check_storage() -> CheckResult:
         ok, detail = store.health()
         latency_ms = int((time.perf_counter() - t0) * 1000)
         return CheckResult(ok=ok, backend=settings.storage_backend, latency_ms=latency_ms, detail=detail)
-    except Exception as e:  # noqa: BLE001 — report everything
+    except Exception as e:
         return CheckResult(ok=False, backend=settings.storage_backend, detail=f"{type(e).__name__}: {e}")
 
 

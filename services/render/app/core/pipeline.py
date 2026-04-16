@@ -14,12 +14,14 @@ from pathlib import Path
 
 from app import __version__ as _svc_version
 from app.config import get_settings
-from app.core.audio import AudioError, bake as bake_audio, decode_to_tempfile
 from app.core import metrics as m
+from app.core.audio import AudioError, decode_to_tempfile
+from app.core.audio import bake as bake_audio
 from app.core.classify import classify
 from app.core.manim_runner import build_invocation, resolve_artifact_on_host
 from app.core.sandbox import Sandbox, SandboxLimits
-from app.core.thumbnail import ThumbnailError, extract as extract_thumbnail
+from app.core.thumbnail import ThumbnailError
+from app.core.thumbnail import extract as extract_thumbnail
 from app.core.validate import first_issue_as_error, validate
 from app.logging import get_logger
 from app.models import (
@@ -60,7 +62,7 @@ def _fail(req: RenderRequest, t0: float, phase: str, category: str, summary: str
           exit_code: int | None = None, killed_by: str | None = None,
           render_ms: int = 0, sandbox_ms: int = 0) -> RenderFailureResponse:
     m.renders.labels(status="failure", category=category).inc()
-    m.render_seconds.labels(phase="total").observe((time.perf_counter() - t0))
+    m.render_seconds.labels(phase="total").observe(time.perf_counter() - t0)
     return RenderFailureResponse(
         error=ErrorInfo(
             phase=phase, category=category, summary=summary,  # type: ignore[arg-type]

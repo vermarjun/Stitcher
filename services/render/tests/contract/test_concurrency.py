@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.config import reset_settings_for_testing
 from app.core import semaphore as sem_mod
 from app.main import create_app
-from app.models import RenderSuccessResponse, RenderOutput, ExecutionInfo
+from app.models import ExecutionInfo, RenderOutput, RenderSuccessResponse
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def reject_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     reset_settings_for_testing()
     sem_mod.reset_for_testing()
 
-    async def slow_run(req):  # noqa: ARG001
+    async def slow_run(req):
         await asyncio.sleep(0.5)
         return RenderSuccessResponse(
             render=RenderOutput(

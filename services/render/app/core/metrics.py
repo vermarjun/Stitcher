@@ -22,7 +22,7 @@ from app.config import get_settings
 
 
 class _NoOp:
-    def labels(self, **_kw: Any) -> "_NoOp": return self
+    def labels(self, **_kw: Any) -> _NoOp: return self
     def inc(self, *_a: Any, **_kw: Any) -> None: return None
     def dec(self, *_a: Any, **_kw: Any) -> None: return None
     def observe(self, *_a: Any, **_kw: Any) -> None: return None

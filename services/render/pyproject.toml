@@ -62,6 +62,10 @@ packages = ["app"]
 [tool.ruff]
 line-length = 110
 target-version = "py311"
+extend-exclude = [
+  "tests/fixtures/**",          # contains intentionally broken Python for contract tests
+  "tests/security/fixtures/**", # sandbox-escape attempts
+]
 
 [tool.ruff.lint]
 select = [
@@ -81,6 +85,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["B011", "SIM"]
+# Test fixtures are intentionally broken or use star imports — don't lint them.
+"tests/fixtures/**/*.py" = ["ALL"]
+"tests/security/fixtures/**/*.py" = ["ALL"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

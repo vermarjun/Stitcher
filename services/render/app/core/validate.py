@@ -84,13 +84,15 @@ def validate(code: str) -> list[ValidationIssue]:
                 issues.append(ValidationIssue(
                     node.lineno, f"call to '*.{callee.attr}' is not permitted"
                 ))
-        elif isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr.endswith("__"):
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr.startswith("__") and node.attr.endswith("__")
+            and node.attr not in {"__init__", "__name__", "__file__", "__doc__", "__main__"}
+        ):
             # Dunder attribute access is a classic escape vector (__class__.__bases__...).
-            # Allow a short whitelist of harmless ones.
-            if node.attr not in {"__init__", "__name__", "__file__", "__doc__", "__main__"}:
-                issues.append(ValidationIssue(
-                    node.lineno, f"dunder attribute access '.{node.attr}' is not permitted"
-                ))
+            issues.append(ValidationIssue(
+                node.lineno, f"dunder attribute access '.{node.attr}' is not permitted"
+            ))
 
     return issues
 

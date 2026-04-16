@@ -1,5 +1,5 @@
 """Tiny Manim scene used by contract tests — no MathTex so LaTeX isn't required."""
-from manim import *  # noqa: F401,F403
+from manim import *  # noqa: F403
 
 
 class Hello(Scene):

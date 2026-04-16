@@ -18,8 +18,8 @@ Why not a thread pool / process pool / queue with persistence?
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.core import metrics as m
@@ -76,7 +76,7 @@ async def acquire() -> AsyncIterator[None]:
     else:
         try:
             await asyncio.wait_for(sem.acquire(), timeout=settings.queue_wait_timeout_sec)
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise SaturatedError(_active, _max,
                                  retry_after_sec=settings.queue_wait_timeout_sec) from e
 

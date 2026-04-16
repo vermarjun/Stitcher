@@ -110,7 +110,7 @@ class Sandbox:
             stdout_b, stderr_b = await asyncio.wait_for(
                 proc.communicate(), timeout=limits.timeout_sec + 2,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             killed_by = "timeout"
             _kill_tree(proc.pid)
             stdout_b, stderr_b = await proc.communicate()
@@ -135,7 +135,7 @@ class Sandbox:
     def _build_cmd(self, workdir: Path, scene_class: str, limits: SandboxLimits) -> list[str]:
         settings = get_settings()
         inner = [
-            settings.manim_path, "-ql" if limits else "-ql",  # quality flag set by runner later
+            settings.manim_path, "-ql",  # quality flag overridden by pipeline via argv build
             str(Path("/work") / "animation.py"), scene_class,
             "--media_dir", "/work/media",
         ]
@@ -172,7 +172,7 @@ class Sandbox:
         if self.seccomp_path and Path(self.seccomp_path).exists():
             bwrap_args += ["--seccomp", "10"]  # fd 10, we'd pipe the bpf in via pass_fds
             # NB: wiring the seccomp fd is done in a later commit (needs custom subprocess dance)
-        return bwrap_args + ["--"] + inner
+        return [*bwrap_args, "--", *inner]
 
 
 def _apply_rlimits(limits: SandboxLimits):
@@ -194,10 +194,9 @@ def _apply_rlimits(limits: SandboxLimits):
 
 
 def _kill_tree(pid: int) -> None:
-    try:
+    import contextlib
+    with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(os.getpgid(pid), signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
 
 
 def _truncate(b: bytes, cap: int) -> str:

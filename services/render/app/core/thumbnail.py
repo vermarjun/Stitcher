@@ -44,10 +44,7 @@ def extract(video_path: Path, *, at_fraction: float = 0.5,
     ffmpeg = settings.ffmpeg_path
     ffprobe = ffmpeg.replace("ffmpeg", "ffprobe")
 
-    if duration_sec_hint is None:
-        duration = _probe_duration(ffprobe, video_path)
-    else:
-        duration = duration_sec_hint
+    duration = _probe_duration(ffprobe, video_path) if duration_sec_hint is None else duration_sec_hint
     seek = max(0.0, min(duration * at_fraction, max(duration - 0.05, 0.0)))
 
     out = Path(tempfile.mkstemp(prefix="thumb-", suffix=".jpg")[1])

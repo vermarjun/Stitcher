@@ -52,7 +52,7 @@ class CloudinaryStorage:
                 overwrite=False,
                 type="upload" if public else "private",
             )
-        except Exception as e:  # noqa: BLE001 — cloudinary raises a zoo of exception types
+        except Exception as e:
             raise StorageError(f"cloudinary upload failed: {e}") from e
 
         url = resp.get("secure_url") or resp.get("url")
@@ -65,5 +65,5 @@ class CloudinaryStorage:
         try:
             cloudinary.api.ping()
             return True, "cloudinary reachable"
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return False, f"{type(e).__name__}: {e}"

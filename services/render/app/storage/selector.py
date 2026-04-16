@@ -7,12 +7,12 @@ We only touch those modules when the deployment has actually opted in — so a
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from app.storage.base import Storage
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_storage(name: str) -> Storage:
     """Instantiate and cache the selected backend. One instance per process."""
     if name == "local":
