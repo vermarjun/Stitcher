@@ -45,12 +45,17 @@ Output as a JSON code block tagged `scene_plan`:
   {
     "index": 0,
     "prompt": "One sentence: what this scene shows",
+    "description": "A longer 1–3 sentence visual description suitable for retrieval — what the viewer SEES happen on screen",
+    "concepts": ["binary search", "array partitioning", "recursion"],
+    "visualElements": ["array of boxes", "highlighted pivot", "left/right pointers"],
     "durationSec": 8,
     "manimFeatures": ["MathTex", "Write", "FadeIn"],
     "requiredSymbols": ["Scene", "MathTex", "Write", "FadeIn"]
   }
 ]
 ```
+
+The `description`, `concepts`, and `visualElements` fields are consumed by an external RAG service to retrieve relevant Manim code examples. Make them specific and visual — they are the search query.
 
 ## Rules
 

@@ -28,6 +28,15 @@ export interface ScenePlan {
   durationSec: number;
   manimFeatures: string[];
   requiredSymbols: string[];
+  // RAG-friendly metadata — used by an external RAG service to build retrieval queries
+  description?: string;
+  concepts?: string[];
+  visualElements?: string[];
+}
+
+export interface CodeExample {
+  description: string;
+  code: string;
 }
 
 export interface ValidationReport {
@@ -140,6 +149,10 @@ export const GraphStateAnnotation = Annotation.Root({
   // Planner outputs
   styleManifest: Annotation<StyleManifest | undefined>({ reducer: (_prev, next) => next }),
   scenes: Annotation<ScenePlan[] | undefined>({ reducer: (_prev, next) => next }),
+
+  // Per-scene RAG payload — passed to /code by the orchestrator (e.g. stitcher).
+  // Each entry is a parent-doc description + its child code, retrieved upstream.
+  codeExamples: Annotation<CodeExample[] | undefined>({ reducer: (_prev, next) => next }),
 
   // Per-scene working state — keyed by scene index (stored as JSON string for LangGraph compat)
   sceneStates: Annotation<Record<number, SceneState>>({

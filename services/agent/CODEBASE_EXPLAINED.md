@@ -36,21 +36,29 @@ This service solves that by:
 
 ### How Stitcher uses it
 
+The recommended flow exposes each agent as an independent endpoint so the
+stitcher orchestrates, and RAG / rendering live in their own services:
+
 ```
 User types prompt
       ↓
 Stitcher backend (Python/FastAPI)
       ↓
-  RAG pipeline (finds relevant Manim examples) ← your existing code
+  POST /plan   →  scenes[] (each with description, concepts, visualElements)
       ↓
-  Calls this service with: prompt + examples  ← POST /generate
+  for each scene:
+      RAG service (separate)  →  codeExamples[] (parent NLP doc → child code)
       ↓
-  Gets back: [scene0.py, scene1.py, scene2.py]
+      POST /code  (scenePlan + styleManifest + codeExamples)  →  scene N code
       ↓
-  Render service runs each .py file with Manim
+      Renderer service (separate)  →  scene N MP4
       ↓
-User sees video
+  Stitch MP4s → User sees video
 ```
+
+The legacy `POST /generate` runs plan + code-per-scene end-to-end inside this
+service — kept for backwards compatibility but new integrations should call
+`/plan` and `/code` directly.
 
 ---
 

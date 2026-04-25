@@ -12,7 +12,7 @@
 
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { GraphState, ScenePlan, StyleManifest, SceneState } from "../graph/state.js";
+import { GraphState, ScenePlan, StyleManifest, SceneState, CodeExample } from "../graph/state.js";
 import { getModel } from "../models/factory.js";
 import { manimApiCheckTool } from "../tools/manimApiCheck.js";
 import { astPreviewTool } from "../tools/astPreview.js";
@@ -39,7 +39,7 @@ export async function codeGenNode(
   state: GraphState,
   sceneIndex: number
 ): Promise<Partial<GraphState>> {
-  const { jobId, styleManifest, scenes, retrievalContext, modelConfig } = state;
+  const { jobId, styleManifest, scenes, retrievalContext, codeExamples, modelConfig } = state;
   const scene = scenes?.[sceneIndex];
 
   if (!scene || !styleManifest) {
@@ -61,7 +61,7 @@ export async function codeGenNode(
   const tools = [manimApiCheckTool, astPreviewTool];
   const agent = createReactAgent({ llm: model, tools });
 
-  const userContent = buildUserMessage(scene, styleManifest, sceneIndex, retrievalContext);
+  const userContent = buildUserMessage(scene, styleManifest, sceneIndex, retrievalContext, codeExamples);
 
   const t0 = Date.now();
   try {
@@ -116,17 +116,28 @@ function buildUserMessage(
   scene: ScenePlan,
   manifest: StyleManifest,
   sceneIndex: number,
-  ctx?: GraphState["retrievalContext"]
+  ctx?: GraphState["retrievalContext"],
+  codeExamples?: CodeExample[]
 ): string {
   const className = `Scene${String(sceneIndex).padStart(2, "0")}`;
   const parts = [
     `Scene index: ${sceneIndex} — class name MUST be: ${className}`,
     `Scene prompt: ${scene.prompt}`,
+    scene.description ? `Scene description: ${scene.description}` : "",
+    scene.concepts?.length ? `Concepts: ${scene.concepts.join(", ")}` : "",
+    scene.visualElements?.length ? `Visual elements: ${scene.visualElements.join(", ")}` : "",
     `Duration: ${scene.durationSec} seconds`,
     `Required Manim features: ${scene.manimFeatures.join(", ")}`,
     `Required symbols (pre-verified): ${scene.requiredSymbols.join(", ")}`,
     `\nStyleManifest:\n${JSON.stringify(manifest, null, 2)}`,
-  ];
+  ].filter(Boolean);
+
+  if (codeExamples?.length) {
+    parts.push(
+      `\nRetrieved code examples from RAG (use these as ground truth — adapt their patterns to this scene):\n` +
+        codeExamples.map((e, i) => `Example ${i + 1} — ${e.description}:\n\`\`\`python\n${e.code}\n\`\`\``).join("\n\n")
+    );
+  }
 
   if (ctx?.apiExamples?.length) {
     parts.push(

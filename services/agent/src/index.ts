@@ -12,6 +12,8 @@ import { traceMiddleware } from "./middleware/trace.js";
 import { registerHealth } from "./api/health.js";
 import { registerCapabilities } from "./api/capabilities.js";
 import { registerGenerate } from "./api/generate.js";
+import { registerPlan } from "./api/plan.js";
+import { registerCode } from "./api/code.js";
 import { registerDebug } from "./api/debug.js";
 import { registerStream } from "./api/stream.js";
 import { registerJobs } from "./api/jobs.js";
@@ -49,6 +51,8 @@ async function build() {
   registerHealth(app);
   registerCapabilities(app);
   registerGenerate(app);
+  registerPlan(app);
+  registerCode(app);
   registerDebug(app);
   registerStream(app);
   registerJobs(app);

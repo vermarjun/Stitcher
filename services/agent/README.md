@@ -11,27 +11,37 @@ Zero rendering. Zero RAG. Zero database. Pure `(prompt | broken_code) → code`.
 
 ## Architecture
 
-```
-POST /generate
-    │
-    ▼
-Planner Agent ──── tools: manim_api_check, web_search (opt)
-    │
-    ├─── CodeGen 0 ──┐
-    ├─── CodeGen 1 ──┤  (parallel, up to MAX_PARALLEL_SCENES)
-    └─── CodeGen N ──┘
-          │
-    Validator (deterministic, no LLM)
-    ast → apiSurface → pyflakes → ruff → compile → manimLint → sceneClass
-          │         │
-         pass      fail → Refiner Agent → Validator (retry loop)
-          │
-    Aggregate → job_complete SSE event
+The agents are exposed as **independent endpoints** so an external orchestrator
+(e.g. the stitcher) can run RAG / rendering as separate services.
 
-POST /debug
-    │
-    Debugger Agent → Validator → (retry loop) → fixed code
 ```
+POST /plan                  ──→  Planner Agent  ──→ scenes[] + styleManifest
+POST /code  (per scene)     ──→  Coder + Validator + Refiner loop  ──→ final code
+POST /debug                 ──→  Debugger + Validator loop  ──→ fixed code
+
+POST /generate              ──→  legacy convenience: plan → code-per-scene end-to-end
+```
+
+Recommended orchestration (the service does NOT do RAG itself):
+
+```
+prompt
+  │
+  ▼
+POST /plan ──→ scenes[] (each with description, concepts, visualElements)
+  │
+  ▼  for each scene
+RAG service (separate) ──→ codeExamples[]   (parent NLP doc → child code)
+  │
+  ▼
+POST /code  (scenePlan + styleManifest + codeExamples)
+  │
+  ▼
+Renderer service (separate) ──→ MP4
+```
+
+Validator pipeline (deterministic, no LLM):
+`ast → apiSurface → pyflakes → ruff → compile → manimLint → sceneClass`
 
 **Tech stack:** TypeScript + Fastify + LangGraph + LangChain (OpenAI/Anthropic/Gemini adapters) + Redis + Python subprocess for validation
 
@@ -52,7 +62,89 @@ Service runs on port 4000.
 
 ## API
 
-### `POST /generate`
+### `POST /plan`
+
+Runs the planner agent only. Returns a list of scene plans + a style manifest.
+Each scene plan exposes `description`, `concepts`, and `visualElements` for an
+external RAG service to use as retrieval queries.
+
+```bash
+curl -X POST http://localhost:4000/plan \
+  -H "X-Api-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Explain binary search on a sorted array",
+    "modelConfig": {
+      "planner": { "provider": "openai", "model": "gpt-4o", "apiKey": "sk-..." }
+    },
+    "constraints": { "maxScenes": 3 }
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "jobId": "...",
+  "output": {
+    "scenes": [
+      {
+        "index": 0,
+        "prompt": "Show a sorted array with markers at left, mid, right",
+        "description": "An array of boxes appears, each labeled with a number...",
+        "concepts": ["binary search", "sorted array", "pointers"],
+        "visualElements": ["row of boxes", "left/right pointers", "highlighted mid"],
+        "durationSec": 8,
+        "manimFeatures": ["Rectangle", "Text", "FadeIn"],
+        "requiredSymbols": ["Scene", "Rectangle", "Text", "FadeIn"]
+      }
+    ],
+    "styleManifest": { "...": "..." }
+  }
+}
+```
+
+### `POST /code`
+
+Runs the coder + validator/refiner loop for ONE scene. The orchestrator passes
+the scene plan from `/plan`, the style manifest, and code examples that an
+external RAG service has already retrieved.
+
+```bash
+curl -X POST http://localhost:4000/code \
+  -H "X-Api-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenePlan": { "index": 0, "prompt": "...", "durationSec": 8, "manimFeatures": [...], "requiredSymbols": [...] },
+    "styleManifest": { "...": "..." },
+    "codeExamples": [
+      { "description": "Draw a row of squares", "code": "from manim import *\n..." }
+    ],
+    "modelConfig": {
+      "coder": { "provider": "openai", "model": "gpt-4o", "apiKey": "sk-..." }
+    },
+    "limits": { "maxValidationRetries": 3 }
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "jobId": "...",
+  "output": {
+    "sceneIndex": 0,
+    "sceneClass": "Scene00",
+    "code": "from manim import *\nclass Scene00(Scene):\n    ...",
+    "status": "done",
+    "attempts": [...]
+  }
+}
+```
+
+### `POST /generate` (legacy convenience)
 
 ```bash
 curl -X POST http://localhost:4000/generate \
@@ -134,18 +226,23 @@ Returns service health including Redis connectivity.
 
 ## Injecting RAG context
 
-The service has no built-in RAG. If your upstream pipeline (e.g. Stitcher) does retrieval, inject results via `context.retrievalContext`:
+The service has **no built-in RAG**. RAG is expected to be a separate service.
 
-```json
-"context": {
-  "retrievalContext": {
-    "apiExamples": [{ "symbol": "ValueTracker", "snippet": "..." }],
-    "similarScripts": [{ "prompt": "...", "code": "..." }],
-    "styleRecommendations": ["use MathTex for equations"],
-    "pitfalls": ["avoid ThreeDAxes at low quality"]
-  }
-}
-```
+**Recommended flow** (per scene):
+
+1. Call `POST /plan` with the user prompt → get scenes[] + styleManifest.
+2. For each scene, build a RAG query from `scene.description` + `scene.concepts`
+   + `scene.visualElements` and ask your RAG service for relevant code
+   examples. The recommended store shape is parent–child: parent doc is an NLP
+   description (e.g. *"Draw red circle animation"*), child is the corresponding
+   Manim code.
+3. Call `POST /code` with `scenePlan`, `styleManifest`, and `codeExamples` —
+   an array of `{ description, code }` from RAG. The coder uses these as
+   ground-truth templates.
+
+**Legacy** `POST /generate` also accepts a `context.retrievalContext` blob
+(`apiExamples`, `similarScripts`, `styleRecommendations`, `pitfalls`) for
+backwards compatibility, but new integrations should use `/plan` + `/code`.
 
 ---
 
