@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { JWT_CONFIG } from '../config';
+import logger from '../util/logger.util';
 
 declare global {
   namespace Express {
@@ -27,6 +28,7 @@ try {
     req.userId = decoded.userId;
     next();
   } catch (err) {
+    logger.warn({ message: 'Invalid JWT token', error: String(err) });
     return res.status(401).json({ message: 'Invalid token.' });
   }
 };

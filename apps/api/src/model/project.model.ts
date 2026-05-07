@@ -1,4 +1,4 @@
-import {Schema, Document, Types, ObjectId, Model, model} from "mongoose";
+import {Schema, Document, Types, Model, model} from "mongoose";
 
 // Interface representing a Project document in MongoDB
 export interface IProject extends Document {

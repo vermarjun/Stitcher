@@ -1,7 +1,15 @@
 {
   "name": "api",
-  "version": "1.0.0",
+  "version": "0.1.0",
+  "description": "Stitcher backend API — orchestrates RAG, agent, and render services for Manim-based video generation.",
   "main": "index.js",
+  "author": "vermarjun <vermarjun.work@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vermarjun/Stitcher.git"
+  },
+  "keywords": ["manim", "video-generation", "ai", "saas"],
   "scripts": {
     "build": "npx tsc -b",
     "start": "node dist/index.js",
@@ -9,10 +17,6 @@
     "migrate:aura": "ts-node src/scripts/aura.migration.ts",
     "migrate:stats": "ts-node src/scripts/userstats.migration.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
@@ -22,6 +26,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-async-errors": "^3.1.1",
+    "express-rate-limit": "^8.5.1",
     "googleapis": "^164.1.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
@@ -32,7 +37,8 @@
     "razorpay": "^2.9.6",
     "redis": "^4.6.10",
     "socket.io": "^4.8.1",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.x",

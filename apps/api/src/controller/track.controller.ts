@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import Track, { ITrack, TrackType } from '../model/track.model';
+import Track, { TrackType } from '../model/track.model';
 import TimelineItem, { ITimelineItem, IVideoTimelineItem, IAudioTimelineItem, ITextTimelineItem, TextAnimationType } from '../model/timelineitem.model';
-import Asset, { IAsset, AssetType } from '../model/asset.model';
+import Asset, { AssetType } from '../model/asset.model';
 import Timeline from '../model/timeline.model';
 
 // Interface for request bodies

@@ -1,4 +1,4 @@
-import nodemailer, { Transporter, SendMailOptions }  from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { EMAIL_CONFIG } from '../config';
 
 interface MailOptions {

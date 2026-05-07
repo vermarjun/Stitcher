@@ -1,9 +1,8 @@
 import { Schema, Document, Types, Model, model } from "mongoose";
-import { 
-  incrementUserLikeCount, 
+import {
+  incrementUserLikeCount,
   decrementUserLikeCount,
   incrementUserCommentCount,
-  decrementUserCommentCount,
   incrementUserViewCount
 } from '../util/auraupdate.util';
 

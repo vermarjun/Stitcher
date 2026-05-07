@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { NotificationService } from './notificationservice.util';
+import logger from './logger.util';
 
 /**
  * Scheduled job to clean up old notifications
@@ -10,19 +11,19 @@ import { NotificationService } from './notificationservice.util';
 export function startNotificationCleanupJob() {
   // Run every day at 2:00 AM
   cron.schedule('0 2 * * *', async () => {
-    console.log('[Notification Cleanup] Starting cleanup job...');
-    
+    logger.info('[Notification Cleanup] Starting cleanup job...');
+
     try {
       // Delete read notifications older than 90 days
       const deletedCount = await NotificationService.cleanupOldNotifications(90);
-      
-      console.log(`[Notification Cleanup] Successfully deleted ${deletedCount} old notifications`);
+
+      logger.info({ message: '[Notification Cleanup] Cleanup complete', deletedCount });
     } catch (error) {
-      console.error('[Notification Cleanup] Error during cleanup:', error);
+      logger.error({ message: '[Notification Cleanup] Error during cleanup', error: String(error) });
     }
   });
 
-  console.log('[Notification Cleanup] Cleanup job scheduled (daily at 2:00 AM)');
+  logger.info('[Notification Cleanup] Cleanup job scheduled (daily at 2:00 AM)');
 }
 
 /**
@@ -31,18 +32,18 @@ export function startNotificationCleanupJob() {
  */
 export async function manualNotificationCleanup(daysOld: number = 90) {
   try {
-    console.log(`[Manual Cleanup] Deleting notifications older than ${daysOld} days...`);
-    
+    logger.info({ message: '[Manual Cleanup] Starting', daysOld });
+
     const deletedCount = await NotificationService.cleanupOldNotifications(daysOld);
-    
-    console.log(`[Manual Cleanup] Successfully deleted ${deletedCount} notifications`);
-    
+
+    logger.info({ message: '[Manual Cleanup] Complete', deletedCount });
+
     return {
       success: true,
       deletedCount
     };
   } catch (error) {
-    console.error('[Manual Cleanup] Error:', error);
+    logger.error({ message: '[Manual Cleanup] Error', error: String(error) });
     throw error;
   }
 }

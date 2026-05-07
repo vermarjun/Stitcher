@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ObjectId, Types } from 'mongoose';
+import { Types } from 'mongoose';
 import CommunityPost, { ICommentMedia } from '../model/communityPost.model';
 import Asset from '../model/asset.model';
 import User from '../model/user.model';

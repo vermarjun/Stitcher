@@ -643,7 +643,7 @@ export const stopGeneration = async (req: Request, res: Response) => {
 
 export const completeGeneration = async (req: Request, res: Response) => {
     try {
-        const { chatId, userId, projectId, isEdited } = req.body;
+        const { chatId, userId, projectId: _projectId, isEdited } = req.body;
 
         if (!chatId || !userId) {
             res.status(400).json({

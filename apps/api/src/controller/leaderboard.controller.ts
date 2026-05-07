@@ -153,7 +153,7 @@ export async function getMyRank(req: Request, res: Response): Promise<void> {
  * Get leaderboard statistics
  * GET /api/leaderboard/stats
  */
-export async function getLeaderboardStats(req: Request, res: Response): Promise<void> {
+export async function getLeaderboardStats(_req: Request, res: Response): Promise<void> {
   try {
     const [totalUsers, totalAura, topUser] = await Promise.all([
       User.countDocuments({ isActive: true }),

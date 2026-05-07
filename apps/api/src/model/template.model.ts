@@ -1,4 +1,4 @@
-import {Schema, Document, Model, model, Types} from "mongoose";
+import {Schema, Document, Model, model} from "mongoose";
 
 export enum TemplateType {
   VIDEO = 'video',

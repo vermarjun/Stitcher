@@ -1,5 +1,5 @@
-import {Schema, Document, Types, Model, model} from "mongoose";
-import { ITimeline } from "./timeline.model";
+import {Schema, Document, Model, model} from "mongoose";
+// ITimeline import removed — was unused
 
 // Interface for individual messages in a chat
 export interface IChatMessage {
