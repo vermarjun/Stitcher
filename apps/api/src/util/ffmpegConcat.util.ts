@@ -28,7 +28,9 @@ import logger from "./logger.util";
 
 // ─── URL validation ───────────────────────────────────────────────────────────
 
-function assertHttpUrl(url: string): void {
+// Exported for unit testing in ffmpegConcat.util.test.ts.
+// It is a pure validator with no side-effects; exporting it is safe.
+export function assertHttpUrl(url: string): void {
     let parsed: URL;
     try {
         parsed = new URL(url);

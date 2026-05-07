@@ -402,7 +402,9 @@ class AgentClient {
  *   data: <json or string>\n
  *   \n        ← blank line dispatches the event
  */
-async function* parseSseStream(
+// Exported for unit testing (parseSseStream.test in agentClient.test.ts).
+// It is a pure stream transformer with no side-effects; exporting it is safe.
+export async function* parseSseStream(
     stream: Readable,
     service: string,
     traceId?: string
@@ -454,6 +456,19 @@ async function* parseSseStream(
                     dataLines.push(raw.slice(5).trimStart());
                 }
                 // ignore `retry:` and comment lines (`:`)
+            }
+        }
+
+        // Process any remaining un-newline-terminated content in the buffer.
+        // This handles the case where the stream ends mid-line (no trailing \n).
+        if (buffer.length > 0) {
+            const raw = buffer.replace(/\r$/, "");
+            if (raw.startsWith("event:")) {
+                eventType = raw.slice(6).trim();
+            } else if (raw.startsWith("id:")) {
+                eventId = raw.slice(3).trim();
+            } else if (raw.startsWith("data:")) {
+                dataLines.push(raw.slice(5).trimStart());
             }
         }
 

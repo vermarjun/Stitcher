@@ -13,5 +13,12 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "vitest.config.ts",
+    "src/**/*.test.ts",
+    "src/__tests__/**"
+  ]
 }

@@ -19,6 +19,7 @@ import ApiKey from "../model/userapikeys.model";
 import type { LlmRoleConfig } from "../services/agentClient";
 import type { ResolvedModelConfig } from "./types";
 import logger from "../util/logger.util";
+import { decrypt } from "../util/crypto.util";
 
 // ─── Env defaults ─────────────────────────────────────────────────────────────
 
@@ -87,10 +88,6 @@ export async function resolveModelConfig(
             // We already trust the schema pre-save encrypts keyValue, so decrypt here.
             let plainKey: string;
             try {
-                // Dynamic require avoids importing at top level which would trigger
-                // config validation at module load time if used in tests.
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { decrypt } = require("../util/crypto.util") as { decrypt: (s: string) => string };
                 plainKey = decrypt(key.keyValue);
             } catch {
                 // If decryption fails, skip this key and fall back to default
