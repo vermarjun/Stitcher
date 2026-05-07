@@ -51,14 +51,33 @@ def get_example_context(required_mobjects: List[str], required_animations: List[
 
 code_generator_agent = Agent(
     name="Manim Code Generator",
-    instructions = ("""
-                You are an expert Python developer specializing in manim-community v0.19.0.
-                Always generate valid Python code that is compatible with manim-community v0.19.0. 
-                Always make sure that you do not use deprecated APIs or features from older versions of manim. 
-                You have to write simplest possible Python Manim v0.19.0 code which does what user says in minimum lines of code with simplest possible approach
-                Do not add comments in the code you write, No comments at all 
-                Keep the scenes simple and small, try to do what user wants with minimum complexity for smaller codes and faster renders with manim community v0.19.0
-"""),
+    instructions=(
+        """
+# ROLE & TASK
+You are a senior Python engineer with deep expertise in manim-community v0.19.0. \
+Your sole task is to write clean, minimal, fully-executable Manim scene code based on the description provided. \
+The output will be rendered directly by an automated pipeline — there is zero tolerance for broken code.
+
+# CONTEXT
+- Target library : manim-community v0.19.0 (NOT ManimGL, NOT older CE versions)
+- Execution environment : headless render server; no user interaction, no manual fixes
+- Downstream constraint : render time and file size are tightly bounded, so code complexity \
+  must be kept to the absolute minimum needed to fulfil the scene description
+- Audience for the video : general viewers who need clear, visually clean animations
+
+# CONSTRAINTS (non-negotiable)
+1. Use ONLY manim-community v0.19.0 APIs — never deprecated or ManimGL-only constructs
+2. Background color MUST be BLACK (config.background_color = BLACK or equivalent)
+3. Every scene MUST end with: self.wait(2) followed by self.play(FadeOut(*self.mobjects))
+4. Zero code comments — none whatsoever
+5. Minimum lines of code — do not add helper classes, extra methods, or any boilerplate \
+   beyond what the scene strictly requires
+6. Output is a single self-contained Python file — all imports from `manim` must be explicit
+
+# OUTPUT FORMAT
+Return a single Python code block. No prose, no markdown fences, no explanation — just the code.
+"""
+    ),
     output_type=OutputSchema
 )
 
@@ -66,15 +85,44 @@ async def codeGenerator_agent_function(Scene: Scene):
     # Get relevant examples based on required lists
     knowledge_base = get_example_context(Scene.RequiredMObjects, Scene.RequiredAnimations)
     
-    prompt = (
-        f"You have to write the simplest possible code which keeps things minimal, does not break and does what is asked with minimum possible lines of code. Do not include comments in the output code."
-        f"Generate python code for manim-community version v0.19.0 to implement this: {Scene.Prompt}. "
-        f"Name the Scene class as: {Scene.SceneName}. "
-        f"Use Black as the background color. "
-        f"End the scene with a Fade transition. Ex: self.wait(2)\n self.play(FadeOut(*self.mobjects)). "
-        f"\n\nHere is the KNOWLEDGE BASE containing relevant parameters and examples for the MObjects and Animations used in this scene. USE THIS KNOWLEDGE BASE to ensure correct usage and avoid hallucinations:\n"
-        f"{knowledge_base}"
-    )
+    prompt = f"""
+## SCENE SPECIFICATION
+
+<scene_description>
+{Scene.Prompt}
+</scene_description>
+
+<scene_class_name>
+{Scene.SceneName}
+</scene_class_name>
+
+---
+
+## RETRIEVED KNOWLEDGE BASE
+The following reference material was retrieved from the Stitcher knowledge base \
+specifically for the MObjects and Animations required by this scene. \
+Treat these as the authoritative source for parameter names, defaults, and usage patterns. \
+Do NOT guess signatures — if a parameter is not listed here, do not use it.
+
+<knowledge_base>
+{knowledge_base}
+</knowledge_base>
+
+---
+
+## SELF-EVALUATION CHECKLIST
+Before producing the final output, silently verify each item:
+- [ ] Scene class is named exactly `{Scene.SceneName}`
+- [ ] Every MObject and Animation used is present in the knowledge base above OR is a \
+      well-known core primitive (Circle, Square, Text, Tex, VGroup, Arrow, Line, Dot)
+- [ ] No deprecated APIs (e.g. ShowCreation → Create, DrawBorderThenFill is fine)
+- [ ] Scene ends with `self.wait(2)` then `self.play(FadeOut(*self.mobjects))`
+- [ ] Background is BLACK
+- [ ] Zero comments in the code
+- [ ] No extraneous imports beyond `from manim import *`
+
+Only output the code once all checks pass.
+"""
 
     # Get least used API key from Coder Heap (big models)
     coder_heap_manager = get_coder_heap_manager()

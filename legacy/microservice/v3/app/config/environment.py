@@ -80,6 +80,20 @@ INITIAL_CONFIGS = [
         'heap_type': 'coder'  # Big model for code generation
     },
     {
+        'email': "vermarjun26@gmail.com",
+        'api_key': VERMARJUN_API_KEY,
+        'model': VERMARJUN_MODEL_NAME,
+        'base_url': VERMARJUN_BASE_URL,
+        'heap_type': 'planner'  # Big model for code generation
+    },
+    {
+        'email': "vermarjun26@gmail.com",
+        'api_key': VERMARJUN_API_KEY,
+        'model': VERMARJUN_MODEL_NAME,
+        'base_url': VERMARJUN_BASE_URL,
+        'heap_type': 'summarizer'  # Big model for code generation
+    },
+    {
         'email': "rancor26av@gmail.com",
         'api_key': RANCOR_API_KEY,
         'model': RANCOR_MODEL_NAME,

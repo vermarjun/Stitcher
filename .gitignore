@@ -3,3 +3,5 @@ node_modules
 microservice_venv
 Test
 manimDocs
+Plan/
+.DS_Store

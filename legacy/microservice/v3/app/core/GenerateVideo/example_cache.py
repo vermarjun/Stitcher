@@ -288,6 +288,45 @@ EXAMPLE_CACHE: Dict[str, Dict[str, Any]] = {
         "planner_summary": "I've crafted one scene, Lorenz Attractor, showcasing a Golden Mandala Pattern, its title, and equations. Expect a soothing animation revealing its elegant form.",
         "final_summary": "I successfully created your 'Lorenz Attractor' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
     },
+    "Kalman Filter": {
+        "prompts": [
+            "Create a highly polished 3D Manim animation that visualizes the Kalmna Filter in a cinematic and educational way.",
+        ],
+        
+        "planner_output": [
+            {
+                "SceneName": "KalmanFilter",
+                "Prompt": "",
+                "RequiredMObjects": ["Circle", "Polygon", "VGroup"],
+                "RequiredAnimations": ["Create", "Rotate", "FadeIn"]
+            },
+        ],
+        
+        "scenes_with_code": [
+            {
+                "sceneName": "KalmanFilter",
+                "code": """""",
+                "description": "",
+                "RequiredMObjects": [],
+                "RequiredAnimations": []
+            },
+        ],
+        
+        "cloudinary_metadata": [
+            {
+                "url": "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769684999/KalmanFilterDemo_ci3kwx.mp4",
+                "thumbnail": "https://res.cloudinary.com/dloh4tkp5/image/upload/v1769685131/Screenshot_2026-01-29_at_4.42.05_PM_j9awyn.png",
+                "width": 1920,
+                "height": 1080,
+                "duration": 5,
+                "bytes": 1234567,
+                "public_id": "KalmanFilterDemo_ci3kwx.mp4",
+            },
+        ],
+        
+        "planner_summary": "I've crafted one scene, KalmanFilter, showcasing a KalmanFilter Animation, its title, and equations. Expect a soothing animation revealing its elegant form.",
+        "final_summary": "I successfully created your 'KalmanFilter' video! The scene rendered beautifully without any issues. I'm thrilled with the result and hope you are too!"
+    },
 
     "Binary Search Tree": {
         "prompts": [
