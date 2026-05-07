@@ -23,7 +23,9 @@
     "migrate:stats": "ts-node src/scripts/userstats.migration.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:mock": "tsx scripts/smoke.ts --mock"
   },
   "dependencies": {
     "axios": "^1.11.0",
@@ -61,11 +63,14 @@
     "@types/multer": "^2.0.0",
     "@types/node": "^20.x",
     "@types/nodemailer": "^6.4.17",
+    "@types/socket.io-client": "^1.4.36",
     "@typescript-eslint/eslint-plugin": "^6.x",
     "@typescript-eslint/parser": "^6.x",
     "@vitest/ui": "^4.1.5",
     "nock": "^14.0.15",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.x",
+    "tsx": "^4.21.0",
     "typescript": "^5.x",
     "vitest": "^4.1.5"
   }

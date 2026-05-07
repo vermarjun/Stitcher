@@ -56,3 +56,41 @@ Copy `.env.example` to `.env` and set every value. The server will exit at boot 
 | `AGENT_API_KEY` | API key for Manim agent service |
 | `RENDER_SERVICE_URL` | URL of the Manim render service |
 | `RENDER_API_KEY` | API key for Manim render service |
+
+## Smoke test
+
+`scripts/smoke.ts` is an end-to-end test that exercises the full generation pipeline from HTTP request through BullMQ worker, RAG/Agent/Render service calls, ffmpeg concat, and Cloudinary upload — verifying a `job_complete` Socket.IO event with a valid `finalUrl` is received within the timeout window.
+
+### Prerequisites
+
+The smoke test checks all of these before doing anything else:
+
+- MongoDB reachable at `MONGODB_URL`
+- Redis reachable at `REDIS_HOST:REDIS_PORT`
+- RAG service responding at `RAG_SERVICE_URL/health`
+- Agent service responding at `AGENT_SERVICE_URL/health`
+- Render service responding at `RENDER_SERVICE_URL/health`
+- Cloudinary credentials present (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`)
+- `ffmpeg` available in `PATH`
+- `JWT_SECRET` set in env
+
+### Running
+
+```bash
+# Pre-flight only — confirms all dependencies are reachable; no LLM credits consumed
+npm run smoke:mock
+
+# Full end-to-end run — generates a real video (takes a few minutes)
+npm run smoke
+
+# Target a remote dev instance instead of localhost
+SMOKE_API_BASE_URL=https://api.dev.stitcher.app npm run smoke
+
+# Extend the timeout (default 300 s) for slow render services
+SMOKE_TIMEOUT_SEC=600 npm run smoke
+```
+
+`smoke:mock` completes in seconds.  
+`smoke` (live) takes 1–5 minutes depending on render service speed.
+
+On failure the script prints a copy-pasteable fix command for each broken dependency and exits with code 1.
