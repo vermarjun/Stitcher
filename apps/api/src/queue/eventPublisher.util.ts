@@ -25,7 +25,11 @@ export type ProgressEventType =
     | "scene_failed"
     | "concat_started"
     | "job_complete"
-    | "job_failed";
+    | "job_failed"
+    | "edit_started"
+    | "edit_render_complete"
+    | "edit_complete"
+    | "edit_failed";
 
 export interface ProgressEvent {
     type: ProgressEventType;
