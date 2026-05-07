@@ -4,6 +4,7 @@ import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
 import { TemplateLike } from '../model/templateLike.model';
 import { Types } from 'mongoose';
 import Backpack from '../model/backpack.model';
+import { escapeRegex } from '../util/escapeRegex.util';
 
 // GET /templates - Fetch all templates with optional filtering, likes, and project status
 const fetchAllTemplates = async (req: Request, res: Response) => {
@@ -28,11 +29,12 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
     }
     
     if (search) {
+      const safeSearch = escapeRegex(String(search));
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { post_description: { $regex: search, $options: 'i' } },
-        { scene_name: { $regex: search, $options: 'i' } },
-        { scene_description: { $regex: search, $options: 'i' } }
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { post_description: { $regex: safeSearch, $options: 'i' } },
+        { scene_name: { $regex: safeSearch, $options: 'i' } },
+        { scene_description: { $regex: safeSearch, $options: 'i' } }
       ];
     }
     

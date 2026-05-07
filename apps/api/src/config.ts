@@ -39,6 +39,11 @@ const envSchema = z.object({
     AGENT_API_KEY: z.string().min(1),
     RENDER_SERVICE_URL: z.string().min(1),
     RENDER_API_KEY: z.string().min(1),
+
+    KEYS_ENCRYPTION_KEY: z
+        .string()
+        .length(64, 'KEYS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
+        .regex(/^[0-9a-fA-F]{64}$/, 'KEYS_ENCRYPTION_KEY must be a 64-character hex string'),
 });
 
 const parsed = envSchema.safeParse(process.env);

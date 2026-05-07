@@ -1,10 +1,10 @@
 import express, { Router } from 'express';
 import {
     deleteTemplate,
-    updateTemplate, 
-    createNewTemplate, 
-    getTemplateById, 
-    addTemplateToProject, 
+    updateTemplate,
+    createNewTemplate,
+    getTemplateById,
+    addTemplateToProject,
     fetchAllTemplates,
     toggleTemplateLike
 } from '../controller/templates.controller';
@@ -12,15 +12,15 @@ import auth from '../middleware/auth.middleware';
 
 const router: Router = express.Router();
 
-// User routes
+// Public-read routes (already auth-gated for user-specific data)
 router.get('/', auth, fetchAllTemplates);
 router.get('/:id', auth, getTemplateById);
-router.post('/:id/add-to-project', auth, addTemplateToProject)
-router.post('/:id/like', auth, toggleTemplateLike)
+router.post('/:id/add-to-project', auth, addTemplateToProject);
+router.post('/:id/like', auth, toggleTemplateLike);
 
-// Admin only functionality
-router.post('/', createNewTemplate);
-router.put('/:id', updateTemplate);
-router.delete('/:id', deleteTemplate);
+// Write routes — require authentication (admin-only by convention; no per-user ownership field on Template)
+router.post('/', auth, createNewTemplate);
+router.put('/:id', auth, updateTemplate);
+router.delete('/:id', auth, deleteTemplate);
 
 export default router;

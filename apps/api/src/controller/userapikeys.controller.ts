@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import ApiKey from "../model/userapikeys.model";
 import { Types } from 'mongoose';
+import { encrypt, isEncrypted } from '../util/crypto.util';
 
 interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -29,11 +30,12 @@ export const getUserApiKeys = async (req: AuthenticatedRequest, res: Response) =
     const keysData: Record<string, { keyValue: string; baseUrl: string; modelName: string }> = {};
     apiKeys.forEach(key => {
       if (key.isActive) {
-        // Mask the API key for security - show first 4 chars, ****, last 2 chars
-        const maskedKey = key.keyValue.length > 10 
-          ? `${key.keyValue.substring(0, 5)}*********************************${key.keyValue.substring(key.keyValue.length - 5)}`
+        // Decrypt before masking so the visible portion is from the real key
+        const plainKey = key.getDecryptedKey();
+        const maskedKey = plainKey.length > 10
+          ? `${plainKey.substring(0, 5)}*********************************${plainKey.substring(plainKey.length - 5)}`
           : '****'; // Fallback for very short keys
-        
+
         keysData[key.agentId] = {
           keyValue: maskedKey,
           baseUrl: key.baseUrl,
@@ -73,12 +75,14 @@ export const saveApiKeys = async (req: AuthenticatedRequest, res: Response) => {
         if (keyValue && typeof keyValue === 'string' && keyValue.trim() !== '' &&
             baseUrl && typeof baseUrl === 'string' && baseUrl.trim() !== '' &&
             modelName && typeof modelName === 'string' && modelName.trim() !== '') {
+          const trimmedKey = keyValue.trim();
+          const storedKey = isEncrypted(trimmedKey) ? trimmedKey : encrypt(trimmedKey);
           operations.push({
             updateOne: {
               filter: { userId: new Types.ObjectId(userId), agentId },
               update: {
                 $set: {
-                  keyValue: keyValue.trim(),
+                  keyValue: storedKey,
                   baseUrl: baseUrl.trim(),
                   modelName: modelName.trim(),
                   agentName: AGENT_DEFINITIONS[agentId as keyof typeof AGENT_DEFINITIONS],
@@ -135,7 +139,7 @@ export const getApiKeyForAgent = async (userId: string, agentId: string): Promis
 
     if (apiKey) {
       return {
-        keyValue: apiKey.keyValue,
+        keyValue: apiKey.getDecryptedKey(),
         baseUrl: apiKey.baseUrl,
         modelName: apiKey.modelName
       };
@@ -143,13 +147,13 @@ export const getApiKeyForAgent = async (userId: string, agentId: string): Promis
 
     // If specific agent key not found, try to get general key as fallback
     if (agentId !== 'general') {
-      const generalKey = await ApiKey.findOne({ 
-        userId: new Types.ObjectId(userId), 
+      const generalKey = await ApiKey.findOne({
+        userId: new Types.ObjectId(userId),
         agentId: 'general',
-        isActive: true 
+        isActive: true
       });
       return generalKey ? {
-        keyValue: generalKey.keyValue,
+        keyValue: generalKey.getDecryptedKey(),
         baseUrl: generalKey.baseUrl,
         modelName: generalKey.modelName
       } : null;
@@ -184,7 +188,7 @@ export const getApiKeyDetails = async (req: AuthenticatedRequest, res: Response)
     res.json({
       agentId: apiKey.agentId,
       agentName: apiKey.agentName,
-      keyValue: apiKey.isActive ? apiKey.keyValue : '',
+      keyValue: apiKey.isActive ? apiKey.getDecryptedKey() : '',
       baseUrl: apiKey.isActive ? apiKey.baseUrl : '',
       modelName: apiKey.isActive ? apiKey.modelName : '',
       isActive: apiKey.isActive,
@@ -214,11 +218,14 @@ export const updateApiKey = async (req: AuthenticatedRequest, res: Response) => 
       return res.status(400).json({ message: 'API key, base URL, and model name are required' });
     }
 
+    const trimmedKey = keyValue.trim();
+    const storedKey = isEncrypted(trimmedKey) ? trimmedKey : encrypt(trimmedKey);
+
     const apiKey = await ApiKey.findOneAndUpdate(
       { userId: new Types.ObjectId(userId), agentId },
       {
         $set: {
-          keyValue: keyValue.trim(),
+          keyValue: storedKey,
           baseUrl: baseUrl.trim(),
           modelName: modelName.trim(),
           agentName: AGENT_DEFINITIONS[agentId as keyof typeof AGENT_DEFINITIONS],

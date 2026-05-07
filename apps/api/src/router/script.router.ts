@@ -5,13 +5,18 @@ import {
   updateProjectScript,
   editProjectScript
 } from '../controller/script.controller';
+import auth from '../middleware/auth.middleware';
+import { requireProjectOwnership } from '../middleware/ownership.middleware';
 
 const router: Router = Router();
 
-router.get('/:projectId', getProjectScript);
+// All script routes require authentication + project ownership
+router.use(auth);
 
-router.put('/:projectId', updateProjectScript);
+router.get('/:projectId', requireProjectOwnership('params', 'projectId'), getProjectScript);
 
-router.patch('/:projectId', editProjectScript);
+router.put('/:projectId', requireProjectOwnership('params', 'projectId'), updateProjectScript);
+
+router.patch('/:projectId', requireProjectOwnership('params', 'projectId'), editProjectScript);
 
 export default router;

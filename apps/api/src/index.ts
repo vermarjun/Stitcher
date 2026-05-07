@@ -10,12 +10,16 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 
 // Config & logger — must be imported before anything that reads config
-import { API_PREFIX, PORT, config } from "./config";
+import { API_PREFIX, PORT, config, JWT_CONFIG } from "./config";
 import logger from "./util/logger.util";
+import jwt from "jsonwebtoken";
 
 // DB & Redis
 import connectDB from "./util/database.util";
 import { initRedisSubscriber, redisSubscriber } from "./util/redis.util";
+import GenerateChat from "./model/generateChat.model";
+import User from "./model/user.model";
+import { Types } from "mongoose";
 
 // Middleware
 import { globalErrorHandler } from "./middleware/error.middleware";
@@ -97,14 +101,69 @@ const authLimiter = rateLimit({
 app.use(`${API_PREFIX}/users/login`, authLimiter);
 app.use(`${API_PREFIX}/users/signup`, authLimiter);
 
+// ─── Socket.IO auth middleware ────────────────────────────────────────────────
+io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+
+    if (!token) {
+        return next(new Error("Authentication required"));
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_CONFIG.secret);
+        if (typeof decoded === "string" || !("userId" in decoded)) {
+            return next(new Error("Invalid token structure"));
+        }
+        socket.data.userId = (decoded as { userId: string }).userId;
+        next();
+    } catch (err) {
+        logger.warn({ message: "Socket auth failed", error: String(err) });
+        next(new Error("Invalid token"));
+    }
+});
+
 // ─── Socket.IO connection logic ───────────────────────────────────────────────
 io.on("connection", (socket) => {
     logger.debug({ message: "Socket connected", socketId: socket.id });
 
-    socket.on("join_chat", (chatId: unknown) => {
-        if (chatId && typeof chatId === "string") {
+    socket.on("join_chat", async (chatId: unknown) => {
+        if (!chatId || typeof chatId !== "string") return;
+
+        const userId = socket.data.userId as string | undefined;
+        if (!userId) {
+            logger.warn({ message: "Socket join_chat denied: no userId on socket", socketId: socket.id });
+            return;
+        }
+
+        try {
+            const chat = await GenerateChat.findById(chatId).select("userId projectId").lean();
+            if (!chat) {
+                logger.warn({ message: "Socket join_chat denied: chat not found", chatId, socketId: socket.id });
+                return;
+            }
+
+            // Check ownership: direct chat.userId match or project membership
+            let authorized = false;
+
+            if (chat.userId && chat.userId.toString() === userId) {
+                authorized = true;
+            } else {
+                const owner = await User.exists({
+                    _id: new Types.ObjectId(userId),
+                    projects: chat.projectId,
+                });
+                authorized = !!owner;
+            }
+
+            if (!authorized) {
+                logger.warn({ message: "Socket join_chat denied: ownership check failed", chatId, socketId: socket.id, userId });
+                return;
+            }
+
             socket.join(chatId);
             logger.debug({ message: "Socket joined chat", socketId: socket.id, chatId });
+        } catch (err) {
+            logger.error({ message: "Socket join_chat error", error: String(err), socketId: socket.id });
         }
     });
 
