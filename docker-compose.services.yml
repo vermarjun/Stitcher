@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Stitcher — external services override
+#
+#  This file extends docker-compose.yml to add the three external services.
+#  It assumes the sibling repos are cloned at the paths below (relative to
+#  this file at Stitcher_new/Stitcher/):
+#
+#    ../../Manim-Agent-Service/      → Desktop/Manim-Agent-Service/
+#    ../../manim-render-service/     → Desktop/manim-render-service/
+#    ../../ManimRAG/pipeline/        → Desktop/ManimRAG/pipeline/
+#
+#  Run the full stack:
+#    docker compose -f docker-compose.yml -f docker-compose.services.yml up
+#
+#  macOS / Windows note: the render service's bubblewrap sandbox is Linux-only.
+#  Set SANDBOX_ENABLED=false in .env.docker (already the default in the example)
+#  when running on Docker Desktop.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Manim Agent Service ───────────────────────────────────────────────────
+  agent-service:
+    build:
+      context: ../../Manim-Agent-Service
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./API/.env.docker
+    environment:
+      # Point the agent at the compose Redis instance (overrides any value in env_file)
+      CHECKPOINT_REDIS_URL: "redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379"
+      NODE_ENV: production
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Manim Render Service ──────────────────────────────────────────────────
+  render-service:
+    build:
+      context: ../../manim-render-service
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./API/.env.docker
+    environment:
+      # bubblewrap sandbox is Linux-only; disable on macOS / Windows Docker Desktop
+      SANDBOX_ENABLED: "${SANDBOX_ENABLED:-false}"
+    # bubblewrap / user-namespaces require elevated capabilities
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    tmpfs:
+      - /tmp:size=2g
+    restart: unless-stopped
+
+  # ── ManimRAG Service ───────────────────────────────────────────────────────
+  rag-service:
+    build:
+      context: ../../ManimRAG/pipeline
+    ports:
+      - "7000:7000"
+    env_file:
+      - ./API/.env.docker
+    environment:
+      # Use local Qdrant when running in compose
+      VECTOR_STORE: "${VECTOR_STORE:-qdrant}"
+      QDRANT_URL: "http://qdrant:6333"
+    depends_on:
+      - qdrant
+    restart: unless-stopped

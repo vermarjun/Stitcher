@@ -95,32 +95,48 @@ the full environment variable reference.
 
 ### B. Full stack via Docker Compose
 
-**Prerequisites:** Docker.
+**Prerequisites:** Docker Desktop 4.x+ (or Docker Engine + Compose v2 on Linux).
 
 Clone all four repos as siblings in the same parent directory:
 
 ```
-parent-dir/
-├── Stitcher/                  # this repo (Backend API)
+Desktop/
+├── Stitcher_new/Stitcher/     # this repo (Backend API)
 ├── ManimRAG/                  # RAG service
 ├── Manim-Agent-Service/       # Agent service
 └── manim-render-service/      # Render service
 ```
 
-Then from the `Stitcher/` root:
+**Step 1 — create your env file:**
+
+```bash
+cp .env.docker.example API/.env.docker
+# Edit API/.env.docker — fill in JWT_SECRET, Cloudinary keys, LLM keys, etc.
+```
+
+**Step 2 — choose what to run:**
+
+Infra + API only (most common dev case — no sibling repos needed):
+
+```bash
+docker compose up
+```
+
+Full stack (all four services — requires sibling repos cloned as above):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.services.yml up
 ```
 
-> **Note:** The Docker Compose files for multi-service orchestration are being added as part of
-> the ongoing `stitcher_relaunch`. If they are not yet present in the repo, run each service
-> manually per its own README until the files land.
+| Compose file | Services started |
+|---|---|
+| `docker-compose.yml` | `mongo`, `redis`, `qdrant`, `api` (port 3000) |
+| `docker-compose.services.yml` (override) | `agent-service` (4000), `render-service` (8000), `rag-service` (7000) |
 
-> **Linux only:** The render service uses `bubblewrap` for sandboxing. On Linux hosts the
-> Docker container needs `--privileged` or the appropriate `seccomp` profile to allow the
-> `unshare` syscall. The compose file will handle this; see `manim-render-service/README.md`
-> for manual setup.
+> **macOS / Windows note:** The render service's bubblewrap sandbox is Linux-only. The env
+> example sets `SANDBOX_ENABLED=false` by default so the container starts on Docker Desktop
+> without error. Rendering still works; only the seccomp isolation layer is bypassed. On a
+> Linux host set `SANDBOX_ENABLED=true`.
 
 ---
 
@@ -128,11 +144,15 @@ docker compose -f docker-compose.yml -f docker-compose.services.yml up
 
 ```
 Stitcher/
-├── API/                  # Express/TypeScript backend (primary codebase)
-├── Client/               # Frontend source (not the active client — kept for reference)
+├── API/                          # Express/TypeScript backend (primary codebase)
+│   ├── Dockerfile                # Multi-stage Node 20 build
+│   └── .env.docker               # Docker Compose env (copy from .env.docker.example)
+├── Client/                       # Frontend source (not the active client — kept for reference)
+├── docker-compose.yml            # Infra + API (mongo, redis, qdrant, api)
+├── docker-compose.services.yml   # External services override (agent, render, rag)
+├── .env.docker.example           # Template for API/.env.docker
 ├── LICENSE
 ├── CONTRIBUTING.md
-├── docker-compose.yml    # (coming with stitcher_relaunch)
 └── README.md
 ```
 
@@ -197,7 +217,7 @@ Optional vars (OAuth, payments, email) are documented in [`API/.env.example`](AP
 - Comprehensive RAG pipeline (HyDE, BM25, reciprocal rank fusion) — Phase 1 retrieval only for now.
 - Multi-scene timeline edits beyond single-scene regeneration.
 - Narration / TTS integration.
-- Docker Compose orchestration for the full four-service stack.
+- Multi-scene timeline edits beyond single-scene regeneration (currently only single-scene regeneration is handled in the edit endpoint).
 
 Pull requests and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening one.
 
