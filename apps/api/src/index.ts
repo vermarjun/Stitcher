@@ -24,6 +24,9 @@ import { Types } from "mongoose";
 // Middleware
 import { globalErrorHandler } from "./middleware/error.middleware";
 
+// Queue worker — import after express setup so the worker boots with the server
+import { generationWorker } from "./queue/generationWorker";
+
 // Import Routes
 import userRoutes from "./router/user.router";
 import projectRoutes from "./router/project.router";
@@ -260,6 +263,9 @@ async function shutdown(signal: string) {
         forceExit.unref();
 
         try {
+            await generationWorker.close();
+            logger.info("BullMQ worker closed");
+
             await mongoose.connection.close();
             logger.info("MongoDB connection closed");
 
