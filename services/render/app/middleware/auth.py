@@ -16,6 +16,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import get_settings
 
 EXEMPT_PATHS = frozenset({"/health", "/capabilities", "/metrics", "/", "/docs", "/openapi.json", "/redoc"})
+# Prefix-exempt paths: locally-served storage URLs (only mounted when STORAGE_BACKEND=local).
+EXEMPT_PREFIXES: tuple[str, ...] = ("/files/",)
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -24,7 +26,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if request.url.path in EXEMPT_PATHS:
+        path = request.url.path
+        if path in EXEMPT_PATHS or path.startswith(EXEMPT_PREFIXES):
             return await call_next(request)
 
         provided = request.headers.get("x-api-key", "")

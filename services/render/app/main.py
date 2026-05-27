@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api import capabilities as capabilities_api
@@ -58,6 +59,19 @@ def create_app() -> FastAPI:
     app.include_router(capabilities_api.router)
     app.include_router(render_api.router)
     app.include_router(metrics_api.router)
+
+    # When STORAGE_BACKEND=local, expose the storage dir at /files/ so the
+    # public URLs returned by LocalStorage are actually fetchable.
+    settings = get_settings()
+    if settings.storage_backend == "local":
+        from pathlib import Path
+        storage_path = Path(settings.local_storage_path)
+        storage_path.mkdir(parents=True, exist_ok=True)
+        app.mount(
+            "/files",
+            StaticFiles(directory=str(storage_path), check_dir=False),
+            name="files",
+        )
 
     return app
 
