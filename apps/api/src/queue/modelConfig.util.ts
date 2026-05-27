@@ -4,8 +4,8 @@
  * Priority:
  *   1. Caller-supplied overrides (already-resolved partial config)
  *   2. User's stored API keys (decrypted via getDecryptedKey())
- *   3. Environment defaults — provider openrouter, no apiKeyOverride so the
- *      agent service falls back to its own env-level keys.
+ *   3. Environment defaults — provider opencodego, no apiKeyOverride so the
+ *      agent service falls back to its own OPENCODE_GO_API_KEY env var.
  *
  * Design: never throws. If anything goes wrong reading the database, fall back
  * silently to the env defaults.  The job should still run — just using shared
@@ -24,24 +24,25 @@ import { decrypt } from "../util/crypto.util";
 // ─── Env defaults ─────────────────────────────────────────────────────────────
 
 const DEFAULT_MODEL_CONFIG: ResolvedModelConfig = {
-    // Planner and coder get a smarter model; it does heavy reasoning.
+    // OpenCode Go is the canonical LLM backend for this project.
+    // glm-5.1 is a good default for planner/coder/debugger/validator — fast,
+    // OpenAI-completions compatible, and the OPENCODE_GO_API_KEY single key
+    // covers all roles. Per-user BYOK keys override this when present.
     planner: {
-        provider: "openrouter",
-        model: "anthropic/claude-sonnet-4-6",
+        provider: "opencodego",
+        model: "glm-5.1",
     },
     coder: {
-        provider: "openrouter",
-        model: "anthropic/claude-sonnet-4-6",
+        provider: "opencodego",
+        model: "glm-5.1",
     },
-    // Debugger only needs to fix small errors; Haiku is faster and cheaper.
     debugger: {
-        provider: "openrouter",
-        model: "anthropic/claude-haiku-4-5",
+        provider: "opencodego",
+        model: "glm-5.1",
     },
-    // Validator is optional; the agent service decides whether to use it.
     validator: {
-        provider: "openrouter",
-        model: "anthropic/claude-haiku-4-5",
+        provider: "opencodego",
+        model: "glm-5.1",
     },
 };
 
@@ -60,6 +61,9 @@ function buildRoleConfig(
     modelName: string
 ): LlmRoleConfig {
     return {
+        // User-supplied keys still flow through openrouter — the UI accepts
+        // OpenAI/Anthropic/Cohere/Mistral/Gemini keys, and OpenRouter is the
+        // unified gateway that accepts all of them.
         provider: "openrouter",
         model: modelName,
         apiKeyOverride: keyValue,

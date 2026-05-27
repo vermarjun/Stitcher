@@ -151,7 +151,8 @@ async function checkServiceHealth(name: string, envVarName: string, url: string)
     }
     const healthUrl = url.replace(/\/$/, "") + "/health";
     try {
-        const res = await axios.get(healthUrl, { timeout: 5000 });
+        // 15s — RAG does live embedder/LLM pings in /health on cold start.
+        const res = await axios.get(healthUrl, { timeout: 15000 });
         if (res.status < 200 || res.status >= 300) {
             return `${name} health check at ${healthUrl} returned HTTP ${res.status}`;
         }

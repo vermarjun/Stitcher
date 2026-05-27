@@ -194,7 +194,9 @@ async function processEditJob(
                 generateThumbnail: true,
                 thumbnailAt: 1,
             },
-            limits: {},
+            // 300s sandbox cap per scene; render service default is 120s
+            // which is too aggressive for LaTeX-heavy scenes.
+            limits: { timeoutSec: 300 },
             meta: { traceId },
         });
 

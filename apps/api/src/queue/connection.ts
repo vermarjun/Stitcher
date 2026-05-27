@@ -21,7 +21,7 @@ import { config } from "../config";
 const SHARED_OPTIONS = {
     host: config.REDIS_HOST,
     port: config.REDIS_PORT,
-    password: config.REDIS_PASSWORD,
+    ...(config.REDIS_PASSWORD ? { password: config.REDIS_PASSWORD } : {}),
     // BullMQ requirements:
     maxRetriesPerRequest: null as null,
     enableReadyCheck: false,

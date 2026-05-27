@@ -17,6 +17,7 @@ import jwt from "jsonwebtoken";
 // DB & Redis
 import connectDB from "./util/database.util";
 import { initRedisSubscriber, redisSubscriber } from "./util/redis.util";
+import { pubClient } from "./queue/connection";
 import GenerateChat from "./model/generateChat.model";
 import User from "./model/user.model";
 import { Types } from "mongoose";
@@ -191,7 +192,9 @@ app.get(`${API_PREFIX}/health`, async (_req: Request, res: Response) => {
     }
 
     try {
-        const pong = await redisSubscriber.ping();
+        // node-redis subscriber is in pSubscribe mode and can't ping;
+        // use the ioredis pubClient (also used by BullMQ) as the health probe.
+        const pong = await pubClient.ping();
         redisStatus = pong === "PONG" ? "ok" : "fail";
     } catch (_err) {
         redisStatus = "fail";

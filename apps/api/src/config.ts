@@ -31,7 +31,7 @@ const envSchema = z.object({
         .string()
         .optional()
         .transform((val) => (val ? parseInt(val, 10) : 6379)),
-    REDIS_PASSWORD: z.string().min(1),
+    REDIS_PASSWORD: z.string().optional().default(""),
 
     RAG_SERVICE_URL: z.string().min(1),
     RAG_API_KEY: z.string().min(1),

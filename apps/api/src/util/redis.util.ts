@@ -3,7 +3,9 @@ import { Server } from 'socket.io';
 import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from '../config';
 import logger from './logger.util';
 
-const redisUrl = `redis://default:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}`;
+const redisUrl = REDIS_PASSWORD
+    ? `redis://default:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}`
+    : `redis://${REDIS_HOST}:${REDIS_PORT}`;
 
 export const redisSubscriber = createClient({
     url: redisUrl

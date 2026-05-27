@@ -241,13 +241,18 @@ async function processGenerationJob(
                 sceneClass: state.sceneClass,
                 render: { quality: renderQuality },
                 storage: {
-                    backend: "cloudinary",
+                    // Render service returns a local HTTP URL per scene.
+                    // Final upload to Cloudinary happens in the API via
+                    // uploadConcatToCloudinary() after ffmpeg concat.
+                    backend: "local",
                     folder: `stitcher/scenes/${projectId ?? userId}`,
                     public: false,
                     generateThumbnail: true,
                     thumbnailAt: 1,
                 },
-                limits: {},
+                // 300s sandbox cap per scene; render service default is 120s
+                // which is too aggressive for first-render LaTeX cache warm-up.
+                limits: { timeoutSec: 300 },
                 meta: { traceId },
             });
 
