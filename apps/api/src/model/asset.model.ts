@@ -28,6 +28,7 @@ export interface IAsset extends Document {
     projectId: Types.ObjectId;
     isOnTimeline: boolean;
     originalTemplateId?: Types.ObjectId;
+    waveformPeaks?: number[] | null;
 }
 
 const AssetSchema = new Schema<IAsset>({
@@ -46,7 +47,8 @@ const AssetSchema = new Schema<IAsset>({
     metadata: { type: Schema.Types.Mixed, default: {} },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
     isOnTimeline: {type: Boolean, default: false},
-    originalTemplateId: { type: Schema.Types.ObjectId, ref: 'Template' }
+    originalTemplateId: { type: Schema.Types.ObjectId, ref: 'Template' },
+    waveformPeaks: { type: [Number], default: null },
 }, { timestamps: true });
 
 AssetSchema.index({ projectId: 1, origin: 1 });

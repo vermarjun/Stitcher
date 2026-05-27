@@ -198,7 +198,7 @@ const MessageInput = ({
 
       {/* Compact Drag & Drop Zone - Shows when no items are attached */}
        {/* Enhanced Drag & Drop Zone */}
-      {droppedItems.length === 0 && mode === "generate" && (
+      {droppedItems.length === 0 && (
         <div
           className={cn(
             "mb-3 rounded-xl border-2 border-dashed transition-all duration-300",
@@ -225,9 +225,11 @@ const MessageInput = ({
             <div className="text-left">
               <p className={cn(
                 "text-xs font-medium transition-colors duration-300",
-                isDragging ? "text-emerald-400" : "text-neutral-300 group-hover:text-neutral-200"
+                isDragging
+                  ? mode === 'edit' ? "text-blue-400" : "text-emerald-400"
+                  : "text-neutral-300 group-hover:text-neutral-200"
               )}>
-                Drop assets to edit
+                {mode === 'edit' ? 'Drop asset to edit' : 'Drop assets to reference'}
               </p>
             </div>
           </div>
@@ -243,7 +245,7 @@ const MessageInput = ({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          disabled={isProcessing || mode == "edit"}
+          disabled={isProcessing}
           className={cn(
             "min-h-[40px] max-h-[80px] bg-neutral-900/60 border-neutral-700/60 text-neutral-200 text-sm",
             "placeholder-neutral-500 resize-none pr-16 py-2",

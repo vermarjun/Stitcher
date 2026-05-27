@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { lazy } from 'react';
 import ErrorPage from '../Pages/Error.page';
+import ErrorBoundary from '../Components/ErrorBoundary';
 
 import AuthRoute from './ProtectedRoute.tsx';
 import PublicRoute from './PublicRoute.tsx';
@@ -20,7 +21,11 @@ const router = createBrowserRouter([
 // LANDING PAGE
   {
     path: '/',
-    element: <LandingPage />
+    element: (
+      <ErrorBoundary>
+        <LandingPage />
+      </ErrorBoundary>
+    ),
   },
   {
     path: '/home',
@@ -29,9 +34,11 @@ const router = createBrowserRouter([
       {
         index: true,
         element: (
-          <AuthRoute>
-            <HomePage />
-          </AuthRoute>
+          <ErrorBoundary>
+            <AuthRoute>
+              <HomePage />
+            </AuthRoute>
+          </ErrorBoundary>
         ),
       },
     ],
@@ -39,31 +46,36 @@ const router = createBrowserRouter([
 // DASHBOARD
   {
     path: '/dashboard/:projectId',
-    // element: <DashboardLayout />,
     errorElement: <ErrorPage />,
     children: [
       {
         index: true,
         element: (
-          <AuthRoute>
-            <DashboardLayout />
-          </AuthRoute>
+          <ErrorBoundary>
+            <AuthRoute>
+              <DashboardLayout />
+            </AuthRoute>
+          </ErrorBoundary>
         ),
       },
       {
         path: 'profile',
         element: (
-          <AuthRoute>
-            <ProfilePage />
-          </AuthRoute>
+          <ErrorBoundary>
+            <AuthRoute>
+              <ProfilePage />
+            </AuthRoute>
+          </ErrorBoundary>
         ),
       },
       {
         path: 'settings',
         element: (
-          <AuthRoute>
-            <SettingsPage />
-          </AuthRoute>
+          <ErrorBoundary>
+            <AuthRoute>
+              <SettingsPage />
+            </AuthRoute>
+          </ErrorBoundary>
         ),
       },
     ],
@@ -72,10 +84,12 @@ const router = createBrowserRouter([
   {
     path: '/auth',
     element: (
-      <PublicRoute>
-        <AuthPage />
-      </PublicRoute>
-    )
+      <ErrorBoundary>
+        <PublicRoute>
+          <AuthPage />
+        </PublicRoute>
+      </ErrorBoundary>
+    ),
   },
   {
     path: '/privacypolicy',

@@ -3,6 +3,66 @@ import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
 import Backpack from '../model/backpack.model';
 import { Types } from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
+import { spawn } from 'child_process';
+
+/**
+ * Extract ~200 amplitude peaks from an audio URL using ffmpeg.
+ * Returns null if ffmpeg is unavailable or the URL is not reachable.
+ */
+async function extractWaveformPeaks(audioUrl: string, targetPoints = 200): Promise<number[] | null> {
+  return new Promise((resolve) => {
+    try {
+      // Resample to mono 8 kHz, output raw float32-le on stdout
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', audioUrl,
+        '-ac', '1',
+        '-ar', '8000',
+        '-map', '0:a',
+        '-f', 'f32le',
+        '-',
+      ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+      const chunks: Buffer[] = [];
+
+      ffmpeg.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+      ffmpeg.on('error', () => resolve(null));
+
+      ffmpeg.on('close', (code) => {
+        if (code !== 0) { resolve(null); return; }
+        try {
+          const raw = Buffer.concat(chunks);
+          // raw is a sequence of float32le samples
+          const totalSamples = Math.floor(raw.length / 4);
+          if (totalSamples === 0) { resolve(null); return; }
+
+          const blockSize = Math.max(1, Math.floor(totalSamples / targetPoints));
+          const peaks: number[] = [];
+
+          for (let i = 0; i < targetPoints; i++) {
+            const start = i * blockSize * 4;
+            const end = Math.min(start + blockSize * 4, raw.length);
+            let maxAbs = 0;
+            for (let j = start; j < end; j += 4) {
+              const sample = Math.abs(raw.readFloatLE(j));
+              if (sample > maxAbs) maxAbs = sample;
+            }
+            peaks.push(maxAbs);
+          }
+
+          resolve(peaks);
+        } catch {
+          resolve(null);
+        }
+      });
+
+      // Safety timeout — don't block asset saving for more than 30 s
+      setTimeout(() => { ffmpeg.kill(); resolve(null); }, 30_000);
+    } catch {
+      resolve(null);
+    }
+  });
+}
 
 // Create a new asset
 export const createAsset = async (req: Request, res: Response): Promise<void> => {
@@ -644,6 +704,12 @@ export const saveAssetMetadata = async (req: Request<{}, {}, SaveAssetMetadataRe
       return res.status(400).json({ error: 'Invalid project ID format' });
     }
 
+    // Extract waveform peaks for audio assets (best-effort — never fails the upload)
+    let waveformPeaks: number[] | null = null;
+    if (type === AssetType.AUDIO && url) {
+      waveformPeaks = await extractWaveformPeaks(url);
+    }
+
     // Create new asset document
     const asset = new Asset({
       name,
@@ -660,6 +726,7 @@ export const saveAssetMetadata = async (req: Request<{}, {}, SaveAssetMetadataRe
         cloudinaryPublicId,
       },
       projectId: new Types.ObjectId(projectId),
+      waveformPeaks,
     });
 
     // Save to database

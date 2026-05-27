@@ -106,9 +106,10 @@ const AISidebar = ({
   const [generateIsProcessing, setGenerateIsProcessing] = useState(false);
   
   const [editMessages, setEditMessages] = useState<Message[]>([]);
-  const [, setEditInput] = useState('');
-  const [, setEditIsProcessing] = useState(false);
-  
+  const [editInput, setEditInput] = useState('');
+  const [editIsProcessing, setEditIsProcessing] = useState(false);
+  const [currentEditChatId, setCurrentEditChatId] = useState<string | null>(null);
+
   const [currentGenerateChatId, setCurrentGenerateChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -146,12 +147,15 @@ const AISidebar = ({
   // Fetch edit chat history
   async function fetchEditChatHistory() {
     if (!currentProject?._id) return;
-    
+
     try {
-      const editChatHistory = await api.get<{ success: boolean; messages: Message[] }>(`/editchat/history/${currentProject._id}`);
-      
+      const editChatHistory = await api.get<{ success: boolean; messages: Message[]; chatId: string | null }>(`/editchat/history/${currentProject._id}`);
+
       if (editChatHistory?.data.success) {
         setEditMessages(editChatHistory.data.messages || []);
+        if (editChatHistory.data.chatId) {
+          setCurrentEditChatId(editChatHistory.data.chatId);
+        }
       }
     } catch (error) {
       console.error('Error fetching edit chat history:', error);
@@ -195,6 +199,7 @@ const AISidebar = ({
       setEditMessages([]);
       setEditInput('');
       setEditIsProcessing(false);
+      setCurrentEditChatId(null);
     }
     setShowConfirmation(false);
   };
@@ -280,8 +285,23 @@ const AISidebar = ({
                 droppedItems={droppedItems}
                 onRemoveItem={onRemoveItem}
               />
-              : 
-              <EditComponent/>
+              :
+              <EditComponent
+                ref={editRef}
+                currentProject={currentProject}
+                user={user}
+                messages={editMessages}
+                setMessages={setEditMessages}
+                input={editInput}
+                setInput={setEditInput}
+                isProcessing={editIsProcessing}
+                setIsProcessing={setEditIsProcessing}
+                currentChatId={currentEditChatId}
+                setCurrentChatId={setCurrentEditChatId}
+                onAssetDrop={onAssetDrop}
+                droppedItems={droppedItems}
+                onRemoveItem={onRemoveItem}
+              />
             }
           </>
         )}

@@ -72,17 +72,17 @@ export const sidebarExpandedState = atom<boolean>({
 
 export const expandedFoldersState = atom<Set<string>>({
   key: 'expandedFoldersState',
-  default: new Set(['folder_123', 'folder_456']),
+  default: new Set<string>(),
 });
 
 export const selectedItemState = atom<string | null>({
   key: 'selectedItemState',
-  default: 'project_789',
+  default: null,
 });
 
 export const searchQueryState = atom<string>({
   key: 'searchQueryState',
-  default: 'marketing video',
+  default: '',
 });
 
 export const currentViewState = atom<'projects' | 'templates' | 'videos'>({
@@ -126,140 +126,27 @@ export const apiKeysLoadingState = atom<boolean>({
 // Data State
 export const userState = atom<User | null>({
   key: 'userState',
-  default: {
-    id: 'user_12345',
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-    plan: 'pro',
-    usage: {
-      videosGenerated: 12,
-      storageUsed: 4.7,
-      monthlyLimit: 20
-    }
-  },
+  default: null,
 });
 
 export const projectsState = atom<Project[]>({
   key: 'projectsState',
-  default: [
-    {
-      id: 'project_789',
-      name: 'Marketing Campaign',
-      description: 'Summer product launch video',
-      createdAt: new Date('2023-05-15'),
-      updatedAt: new Date('2023-05-20'),
-      status: 'completed',
-      videoUrl: 'https://example.com/videos/marketing_campaign.mp4',
-      thumbnailUrl: 'https://example.com/thumbnails/marketing_campaign.jpg'
-    },
-    {
-      id: 'project_101',
-      name: 'Training Video',
-      description: 'New employee onboarding',
-      createdAt: new Date('2023-06-01'),
-      updatedAt: new Date('2023-06-10'),
-      status: 'processing'
-    },
-    {
-      id: 'project_202',
-      name: 'Product Demo',
-      createdAt: new Date('2023-06-15'),
-      updatedAt: new Date('2023-06-15'),
-      status: 'draft'
-    }
-  ],
+  default: [],
 });
 
 export const currentProjectState = atom<Project | null>({
   key: 'currentProjectState',
-  default: {
-    id: 'project_789',
-    name: 'Marketing Campaign',
-    description: 'Summer product launch video',
-    createdAt: new Date('2023-05-15'),
-    updatedAt: new Date('2023-05-20'),
-    status: 'completed',
-    videoUrl: 'https://example.com/videos/marketing_campaign.mp4',
-    thumbnailUrl: 'https://example.com/thumbnails/marketing_campaign.jpg'
-  },
+  default: null,
 });
 
 export const explorerItemsState = atom<ExplorerItem[]>({
   key: 'explorerItemsState',
-  default: [
-    {
-      id: 'folder_123',
-      name: 'Assets',
-      type: 'folder',
-      children: [
-        {
-          id: 'file_456',
-          name: 'background_music.mp3',
-          type: 'file',
-          size: 3.2,
-          createdAt: new Date('2023-05-16')
-        },
-        {
-          id: 'file_789',
-          name: 'logo.png',
-          type: 'file',
-          size: 0.5,
-          createdAt: new Date('2023-05-16')
-        }
-      ]
-    },
-    {
-      id: 'folder_456',
-      name: 'Videos',
-      type: 'folder',
-      children: [
-        {
-          id: 'video_101',
-          name: 'first_draft.mp4',
-          type: 'video',
-          size: 45.7,
-          createdAt: new Date('2023-05-17'),
-          projectId: 'project_789'
-        }
-      ]
-    },
-    {
-      id: 'file_202',
-      name: 'script.docx',
-      type: 'file',
-      size: 0.8,
-      createdAt: new Date('2023-05-15')
-    }
-  ],
+  default: [],
 });
 
 export const chatMessagesState = atom<Message[]>({
   key: 'chatMessagesState',
-  default: [
-    {
-      id: 'msg_1685123456789_abc123',
-      content: 'Can you create a 30-second video about our new product?',
-      role: 'user',
-      timestamp: new Date('2023-05-25T10:15:00'),
-      metadata: {
-        tokens: 15,
-        model: 'gpt-4',
-        processingTime: 1200
-      }
-    },
-    {
-      id: 'msg_1685123467890_def456',
-      content: 'Sure! I can generate a product demo video. What key features would you like to highlight?',
-      role: 'assistant',
-      timestamp: new Date('2023-05-25T10:16:00'),
-      metadata: {
-        tokens: 22,
-        model: 'gpt-4',
-        processingTime: 1800
-      }
-    }
-  ],
+  default: [],
 });
 
 export const videoGenerationQueueState = atom<VideoGenerationRequest[]>({

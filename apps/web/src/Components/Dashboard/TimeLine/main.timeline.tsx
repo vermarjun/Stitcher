@@ -34,81 +34,55 @@ const formatTime = (seconds: number): string => {
 };
 
 // Waveform visualization component for audio items
-const AudioWaveform = ({ 
-  audioUrl, 
+const AudioWaveform = ({
   width,
-  duration 
-}: { 
+  waveformPeaks,
+}: {
   audioUrl: string;
   width: number;
   duration?: number;
+  waveformPeaks?: number[] | null;
 }) => {
-  const [waveformData, setWaveformData] = useState<number[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // If backend provided peaks, normalise to bar heights (max 40px)
+  if (waveformPeaks && waveformPeaks.length > 0) {
+    const max = Math.max(...waveformPeaks, 0.001);
+    const normalized = waveformPeaks.map((v) => (v / max) * 40 + 5);
 
-  useEffect(() => {
-    const generateWaveform = async () => {
-      if (!audioUrl) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        //---------------- REMEBER BC------------------
-        // Abhi ke liye dummy waveforms daal raha hun, baad me backend se generate karni padegi
-        const simulatedData = Array.from({ length: Math.floor(width / 3) }, () => 
-          Math.random() * 40 + 10
-        );
-        setWaveformData(simulatedData);
-      } catch (error) {
-        console.error('Error generating waveform:', error);
-        // Fallback to empty waveform
-        setWaveformData([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    generateWaveform();
-  }, [audioUrl, width, duration]);
-
-  if (isLoading) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="animate-pulse text-emerald-400 text-xs">Loading waveform...</div>
+      <div className="absolute inset-0 flex items-center justify-center px-2">
+        <svg
+          width={width - 16}
+          height="100%"
+          viewBox={`0 0 ${normalized.length} 50`}
+          preserveAspectRatio="none"
+          className="opacity-80"
+        >
+          {normalized.map((amplitude, index) => (
+            <rect
+              key={index}
+              x={index}
+              y={25 - amplitude / 2}
+              width="1"
+              height={amplitude}
+              fill="currentColor"
+              className="text-emerald-400"
+            />
+          ))}
+        </svg>
       </div>
     );
   }
 
-  if (waveformData.length === 0) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-emerald-600 text-xs">Audio Track</div>
-      </div>
-    );
-  }
-
+  // No peaks available — show a shimmer placeholder (not random bars)
   return (
-    <div className="absolute inset-0 flex items-center justify-center px-2">
-      <svg
-        width={width - 16}
-        height="100%"
-        viewBox={`0 0 ${waveformData.length} 50`}
-        preserveAspectRatio="none"
-        className="opacity-80"
-      >
-        {waveformData.map((amplitude, index) => (
-          <rect
-            key={index}
-            x={index}
-            y={25 - amplitude / 2}
-            width="1"
-            height={amplitude}
-            fill="currentColor"
-            className="text-emerald-400"
-          />
-        ))}
-      </svg>
+    <div className="absolute inset-0 flex items-center px-2 gap-px overflow-hidden">
+      {Array.from({ length: Math.floor((width - 16) / 4) }).map((_, i) => (
+        <div
+          key={i}
+          className="flex-shrink-0 w-px bg-emerald-600/40 animate-pulse rounded-full"
+          style={{ height: `${30 + (i % 5) * 8}%` }}
+        />
+      ))}
     </div>
   );
 };
@@ -842,12 +816,13 @@ const TimelineEditor = ({
                           />
                         )}
 
-                        {/* Audio waveform visualization - NEW FUNCTIONALITY */}
+                        {/* Audio waveform visualization */}
                         {item.type === "audio" && (item as IAudioTimelineItem).assetId?.url && (
                           <AudioWaveform
                             audioUrl={(item as IAudioTimelineItem).assetId!.url}
                             width={widthPx}
                             duration={(item as IAudioTimelineItem).assetId!.duration}
+                            waveformPeaks={(item as IAudioTimelineItem).assetId?.waveformPeaks}
                           />
                         )}
 

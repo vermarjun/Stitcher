@@ -137,6 +137,7 @@ export interface Asset {
   updatedAt: string;
   isOnTimeline?: boolean;
   isAddedToBackpack?: boolean;
+  waveformPeaks?: number[] | null;
 }
 
 export interface ITimelineItemBase {
