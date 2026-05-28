@@ -1,9 +1,10 @@
 import { Types } from 'mongoose';
 import Notification, { NotificationType, INotificationMetadata } from '../model/notifications.model';
 import User from '../model/user.model';
+import { FEATURES } from '../config';
 
 export class NotificationService {
-  
+
   /**
    * Create a notification with deduplication logic
    */
@@ -16,6 +17,12 @@ export class NotificationService {
     actionUrl?: string,
     expiresInDays?: number
   ) {
+    // Notifications are part of the community surface — dormant for v1.
+    // No-op so nothing gets written while the flag is off.
+    if (!FEATURES.community) {
+      return null;
+    }
+
     // Don't send notification to self
     if (recipientId.toString() === senderId.toString()) {
       return null;

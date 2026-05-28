@@ -7,6 +7,7 @@ import {
   BookOpen
 } from "lucide-react";
 import { ExternalLink } from "lucide-react";
+import { FEATURES } from "@/config/features";
 
 interface ActionCardProps {
   icon: React.ReactNode;
@@ -55,13 +56,15 @@ export const ActionButtons = ({ onNavigate }: { onNavigate: (key: string) => voi
         buttonLabel="Explore"
         onClick={() => onNavigate("templates")}
       />
-      <ActionCard
-        icon={<Users size={18} />}
-        title="Join Community"
-        description="Connect with other creators"
-        buttonLabel="Join"
-        onClick={() => onNavigate("community")}
-      />
+      {FEATURES.community && (
+        <ActionCard
+          icon={<Users size={18} />}
+          title="Join Community"
+          description="Connect with other creators"
+          buttonLabel="Join"
+          onClick={() => onNavigate("community")}
+        />
+      )}
       <ActionCard
         icon={<BookOpen size={18} />}
         title="Documentation"

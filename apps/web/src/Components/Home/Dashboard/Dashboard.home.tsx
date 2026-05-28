@@ -5,6 +5,7 @@ import GettingStarted from "./GettingStarted.home";
 import QuickActions from "./QuickActions.home";
 import RecentNotifications from "./RecentNotifications.home";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
+import { FEATURES } from "@/config/features";
 // import ProfileProgress from "./ProfileCompleteProgressbar.home";
 
 interface Props {
@@ -93,7 +94,7 @@ const Dashboard = ({
             <div className="h-px bg-zinc-800 flex-1"></div>
         </button>
 
-        <RecentNotifications onNavigate={onNavigate} />
+        {FEATURES.community && <RecentNotifications onNavigate={onNavigate} />}
 
         {/* <ProfileProgress
           progress={60}

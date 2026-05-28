@@ -8,6 +8,7 @@ import PublicRoute from './PublicRoute.tsx';
 
 import TermsAndConditions from '@/Pages/TermsConditions.page.tsx';
 import PrivacyPolicy from '@/Pages/PrivacyPolicy.page.tsx';
+import { FEATURES } from '@/config/features';
 
 // Lazy-loaded pages
 const LandingPage = lazy(() => import('../Pages/LandingPage/Main.landing.page.tsx'));
@@ -61,12 +62,14 @@ const router = createBrowserRouter([
       },
       {
         path: 'profile',
-        element: (
+        element: FEATURES.community ? (
           <ErrorBoundary>
             <AuthRoute>
               <ProfilePage />
             </AuthRoute>
           </ErrorBoundary>
+        ) : (
+          <Navigate to="/home" replace />
         ),
       },
       {

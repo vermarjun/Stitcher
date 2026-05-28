@@ -8,6 +8,7 @@ import {
   LogOut,
 } from "lucide-react";
 import type { IUser } from "@/State/Types";
+import { FEATURES } from "@/config/features";
 
 interface Props {
   activeItem: string;
@@ -42,8 +43,10 @@ const MobileBottomNav: React.FC<Props> = ({
 
   const navItems = [
     { icon: Home, label: "Home", key: "home" },
-    { icon: Users, label: "Community", key: "community" },
-    { icon: Backpack, label: "Backpack", key: "backpack" },
+    ...(FEATURES.community ? [
+      { icon: Users, label: "Community", key: "community" },
+      { icon: Backpack, label: "Backpack", key: "backpack" },
+    ] : []),
     { icon: LayoutTemplate, label: "Templates", key: "templates" },
   ];
 

@@ -20,6 +20,7 @@ import NotificationsComponent from "./Dashboard/Notifications.home";
 import PricingPage from "./Pricing.home";
 import type { IUser } from "@/State/Types";
 import { useNav } from "@/Context/HomeNavigation.context";
+import { FEATURES } from "@/config/features";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -75,11 +76,17 @@ const Main = () => {
       case "projects":
         return <AllProjects userId={user._id}/>;
       case "teams":
-        return <Teams />;
+        return FEATURES.community ? <Teams /> : (
+          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
+        );
       case "community":
-        return <AnimationCommunity currentUser={user}/>
+        return FEATURES.community ? <AnimationCommunity currentUser={user}/> : (
+          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
+        );
       case "backpack":
-        return <Backpack/>
+        return FEATURES.community ? <Backpack/> : (
+          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
+        );
       case "api-keys":
         return <ApiKeys />;
       case "templates":
@@ -89,7 +96,9 @@ const Main = () => {
       case "settings":
         return <SettingsPage currentUser={user}/>;
       case "notifications":
-        return <NotificationsComponent />;
+        return FEATURES.community ? <NotificationsComponent /> : (
+          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
+        );
       case "pricing":
         return <PricingPage />;
 

@@ -6,8 +6,9 @@ import {
   LayoutTemplate,
   Sparkles,
 } from "lucide-react";
+import { FEATURES } from "@/config/features";
 
-const features = [
+const allFeatures = [
   {
     Icon: Wand2,
     name: "AI Animation Editing",
@@ -15,10 +16,11 @@ const features = [
     href: "/home",
     cta: "Try AI Edit",
     className: "col-span-3 lg:col-span-2 lg:row-span-2",
+    community: false,
     background: (
-      <img 
-        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769086787/pika-1769086763115-1x_uwl8fu.png" 
-        alt="" 
+      <img
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769086787/pika-1769086763115-1x_uwl8fu.png"
+        alt=""
         className="h-full w-full object-cover object-center"
       />
     ),
@@ -30,10 +32,11 @@ const features = [
     href: "/home",
     cta: "Experience Speed",
     className: "col-span-3 lg:col-span-1",
+    community: false,
     background: (
-      <img 
-        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769087348/pika-1769087012923-1x_qe6ki9.png" 
-        alt="" 
+      <img
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769087348/pika-1769087012923-1x_qe6ki9.png"
+        alt=""
          className="h-full w-full object-cover object-center"
       />
     ),
@@ -45,10 +48,11 @@ const features = [
     href: "/home",
     cta: "Join Community",
     className: "col-span-3 lg:col-span-1",
+    community: true,
     background: (
-      <img 
-        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769073837/pika-1769073815887-1x_h7urtv.png" 
-        alt="" 
+      <img
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769073837/pika-1769073815887-1x_h7urtv.png"
+        alt=""
         className="h-full w-full object-cover object-center"
       />
     ),
@@ -60,10 +64,11 @@ const features = [
     href: "/home",
     cta: "Open Editor",
     className: "col-span-3 lg:col-span-1",
+    community: false,
     background: (
-      <img 
-        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769073749/pika-1769073701395-1x_goiqwz.png" 
-        alt="" 
+      <img
+        src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769073749/pika-1769073701395-1x_goiqwz.png"
+        alt=""
         className="h-full w-full object-cover object-center"
       />
     ),
@@ -75,15 +80,18 @@ const features = [
     href: "/home",
     cta: "Start Generating",
     className: "col-span-3 lg:col-span-2",
+    community: false,
     background: (
-        <img 
-            src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769087579/pika-1769087553128-1x_mrpyeh.png" 
-            alt="" 
+        <img
+            src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1769087579/pika-1769087553128-1x_mrpyeh.png"
+            alt=""
             className="h-full w-full object-cover object-center"
         />
     ),
   },
 ];
+
+const features = allFeatures.filter(f => FEATURES.community || !f.community);
 
 const Features = () => {
   return (

@@ -18,6 +18,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { AuroraText } from "../magicui/aurora-text";
 import api from "@/api";
 import { Card, CardContent } from "@/Components/ui/card";
+import { FEATURES } from "@/config/features";
 
 const UserSidebarInfo = () => {
   const [tier, setTier] = useState("free");
@@ -119,6 +120,7 @@ const Sidebar: React.FC<Props> = ({
   }, [collapsed]);
 
   const fetchUnread = async () => {
+    if (!FEATURES.community) return;
     try {
       const res = await api.get<any>("/notifications/unread-count");
       const count = res.data?.data?.count ?? 0;
@@ -129,6 +131,7 @@ const Sidebar: React.FC<Props> = ({
   };
 
   useEffect(() => {
+    if (!FEATURES.community) return;
     fetchUnread();
     const handler = () => fetchUnread();
     window.addEventListener("notifications-updated", handler as EventListener);
@@ -146,9 +149,11 @@ const Sidebar: React.FC<Props> = ({
     create: [
       { icon: Home, label: "Home", key: "home" },
       { icon: FolderOpen, label: "All Projects", key: "projects" },
-      { icon: Users, label: "Community", key: "community" },
-      { icon: Backpack, label: "Backpack", key: "backpack" },
-      { icon: BellIcon, label: "Notifications", key: "notifications" },
+      ...(FEATURES.community ? [
+        { icon: Users, label: "Community", key: "community" },
+        { icon: Backpack, label: "Backpack", key: "backpack" },
+        { icon: BellIcon, label: "Notifications", key: "notifications" },
+      ] : []),
     ],
     api_keys: [
       { icon: CreditCard, label: "Pricing", key: "pricing" },

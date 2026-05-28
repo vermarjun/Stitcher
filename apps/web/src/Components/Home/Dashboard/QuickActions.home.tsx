@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { type NavigateFunction } from "react-router-dom";
 import api from "@/api";
 import { ShineBorder } from "../../magicui/shine-border";
+import { FEATURES } from "@/config/features";
 
 interface Props3 {
   navigate: NavigateFunction;
@@ -202,7 +203,8 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
             </DialogContent>
           </Dialog>
 
-          <Card 
+          {FEATURES.community && (
+          <Card
             onClick={()=>{onNavigate("backpack")}}
             className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full">
@@ -221,6 +223,7 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
               </div>
             </CardContent>
           </Card>
+          )}
           
           <Card 
             onClick={()=>{onNavigate("api-keys")}}

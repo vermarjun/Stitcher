@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Mail, Save, Calendar, UserPlus, Camera } from "lucide-react";
+import { FEATURES } from "@/config/features";
 import { Card, CardContent } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
@@ -346,27 +347,30 @@ const ProfileTab: React.FC = () => {
               </div>
             </div>
 
+            {FEATURES.community && (
             <div className="flex gap-3 mb-3 w-full md:w-auto">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="flex-1 md:flex-none border-zinc-700 bg-zinc-900/50 text-zinc-300 hover:bg-zinc-800 hover:text-white"
                 onClick={() => handleOpenModal("followers")}
               >
                 <span className="font-bold text-white mr-1.5">{followersCount}</span> Followers
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="flex-1 md:flex-none border-zinc-700 bg-zinc-900/50 text-zinc-300 hover:bg-zinc-800 hover:text-white"
                 onClick={() => handleOpenModal("following")}
               >
                  <span className="font-bold text-white mr-1.5">{followingCount}</span> Following
               </Button>
             </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid — community stats only shown when feature is on */}
+      {FEATURES.community && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Posts", value: user?.stats?.totalPosts ?? 0 },
@@ -382,6 +386,7 @@ const ProfileTab: React.FC = () => {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Edit Form */}
       <Card className="bg-zinc-900 border-zinc-800 overflow-hidden">
@@ -456,8 +461,8 @@ const ProfileTab: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Followers / Following Modal */}
-      <Dialog open={!!modalOpen} onOpenChange={() => setModalOpen(null)}>
+      {/* Followers / Following Modal — community only */}
+      <Dialog open={FEATURES.community && !!modalOpen} onOpenChange={() => setModalOpen(null)}>
         <DialogContent className="bg-zinc-950 border-zinc-800 text-white sm:max-w-md p-0 overflow-hidden gap-0">
           <DialogHeader className="p-4 border-b border-zinc-800">
             <DialogTitle className="text-white capitalize text-center text-lg">
