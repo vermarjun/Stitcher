@@ -8,6 +8,12 @@
  *   - Seed Y.Doc from Mongo Timeline/Track/Item on first load (empty ydoc).
  *   - Materialize Y.Doc → Mongo (debounced 1.5s + on last-participant-leaves).
  *   - Guard against double-seeding via a seeded-set.
+ *
+ * Phase 5 additions:
+ *   - getYjsDoc() — expose in-memory Y.Doc for a project so REST controllers
+ *     can write asset additions directly into the shared doc (mutation completeness).
+ *   - disconnectProjectUser() — kick a specific user from all Yjs sockets for a
+ *     project immediately when their collaborator record is deleted (revocation).
  */
 
 import * as Y from 'yjs';
@@ -37,8 +43,68 @@ const MATERIALIZE_DEBOUNCE_MS = 1_500;
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Pending Mongoose materialization timers */
 const materializeTimers = new Map<string, ReturnType<typeof setTimeout>>();
-/** Projects whose doc has already been seeded this server lifetime */
-const seededDocs = new Set<string>();
+/**
+ * Docs (by object identity) that have already been seeded/restored this
+ * server lifetime.  Keyed by the Y.Doc instance — NOT by projectId — so that
+ * when YSocketIO destroys a doc and creates a new one for the same project
+ * (after all clients disconnect), the new doc gets seeded correctly even if
+ * the async `all-document-connections-closed` handler hasn't yet cleaned up.
+ */
+const seededDocs = new WeakSet<Y.Doc>();
+/** In-memory Y.Doc store, keyed by projectId (populated by YSocketIO internally) */
+const yjsDocs = new Map<string, Y.Doc>();
+/** The Socket.IO Server instance (set during initYjsServer) */
+let ioInstance: Server | null = null;
+/** The YSocketIO instance — used as the authoritative source of live docs */
+let ysocketioInstance: YSocketIO | null = null;
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Return the live in-memory Y.Doc for a project, or null if no client is
+ * currently connected (the doc hasn't been loaded yet).
+ *
+ * REST controllers use this to inject mutations (e.g. add-asset) directly
+ * into the shared doc so collaborators see the change without a page refresh.
+ *
+ * Uses the YSocketIO documents map as the authoritative source (avoids the
+ * yjsDocs cache race condition where async cleanup can clear the cache entry
+ * while a fresh doc for the same project is already live).
+ */
+export function getYjsDoc(projectId: string): Y.Doc | null {
+  // Prefer ysocketioInstance.documents (always up-to-date) over our own cache
+  if (ysocketioInstance) {
+    const doc = (ysocketioInstance as any).documents?.get(projectId) as Y.Doc | undefined;
+    if (doc) return doc;
+  }
+  // Fallback to our cache (for the brief window before initialize() runs)
+  return yjsDocs.get(projectId) ?? null;
+}
+
+/**
+ * Disconnect a specific user from ALL Yjs namespace sockets for a given project.
+ * Called immediately after a collaborator record is deleted so the revoked user
+ * cannot continue syncing edits in the current session.
+ *
+ * The revoked socket is disconnected with reason 'access_revoked', which the
+ * client provider will surface as a connection error / disconnect event.
+ */
+export async function disconnectProjectUser(projectId: string, userId: string): Promise<void> {
+  if (!ioInstance) return;
+  const nspName = `/yjs|${projectId}`;
+  const nsp = ioInstance.of(nspName);
+
+  const sockets = await nsp.fetchSockets();
+  let kicked = 0;
+  for (const s of sockets) {
+    if ((s.data as any)?.userId === userId) {
+      s.emit('collab:revoked', { reason: 'access_revoked' });
+      s.disconnect(true);
+      kicked++;
+    }
+  }
+  logger.info({ message: 'Yjs: revoked user disconnected from project', projectId, userId, kicked });
+}
 
 // ─── Binary persistence ───────────────────────────────────────────────────────
 
@@ -368,6 +434,9 @@ async function yjsAuthMiddleware(socket: Socket, next: (err?: Error) => void): P
       return next(new Error('Unauthorized'));
     }
 
+    // Store userId on socket.data so disconnectProjectUser can match by userId
+    socket.data.userId = userId;
+
     logger.debug({ message: 'Yjs auth: OK', userId, projectId });
     next();
   } catch (err) {
@@ -383,20 +452,29 @@ async function yjsAuthMiddleware(socket: Socket, next: (err?: Error) => void): P
  * Attaches the YSocketIO namespace handler to the existing `io` instance.
  */
 export function initYjsServer(io: Server): void {
+  ioInstance = io;
+
   const ysocketio = new YSocketIO(io, {
     gcEnabled: true,
   });
+  ysocketioInstance = ysocketio;
 
   // document-loaded: restore binary state OR seed from Mongo (first-ever session).
   ysocketio.on('document-loaded', async (doc: Y.Doc & { name: string }) => {
     const projectId = doc.name;
 
-    // Guard: only seed once per server lifetime
-    if (seededDocs.has(projectId)) {
+    // Track the live doc so REST controllers can access it
+    yjsDocs.set(projectId, doc);
+
+    // Guard: only seed this specific doc instance once.
+    // Using WeakSet keyed by doc object avoids the race condition where a new
+    // doc for the same project is created before the old doc's async cleanup
+    // handler has run seededDocs.delete(projectId).
+    if (seededDocs.has(doc)) {
       logger.debug({ message: 'Yjs doc already seeded this session', projectId });
       return;
     }
-    seededDocs.add(projectId);
+    seededDocs.add(doc);
 
     const hadBlob = await restoreFromMongo(projectId, doc);
     if (!hadBlob) {
@@ -438,8 +516,13 @@ export function initYjsServer(io: Server): void {
       })(),
     ]);
 
-    // Remove from seeded set so a fresh server restart re-seeds correctly
-    seededDocs.delete(projectId);
+    // Only evict from yjsDocs if the doc instance in the cache is still the
+    // one that just closed.  A new client may have connected during the async
+    // materialization window and already replaced the cache entry with a fresh doc.
+    // (seededDocs is a WeakSet keyed by doc instance, so no cleanup needed here.)
+    if (yjsDocs.get(projectId) === doc) {
+      yjsDocs.delete(projectId);
+    }
   });
 
   ysocketio.initialize();

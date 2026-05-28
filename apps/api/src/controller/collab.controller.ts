@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import User from '../model/user.model';
 import ProjectCollaborator from '../model/projectCollaborator.model';
+import { disconnectProjectUser } from '../collab/yjs.server';
 
 // ─── POST /api/project/:projectId/invite ──────────────────────────────────────
 // Owner-only (guarded by requireProjectOwnership upstream)
@@ -106,6 +107,12 @@ export const removeCollaborator = async (req: Request, res: Response) => {
   await ProjectCollaborator.deleteOne({
     projectId: new Types.ObjectId(projectId),
     userId: new Types.ObjectId(collabUserId),
+  });
+
+  // Phase 5: immediately disconnect any active Yjs sockets for this user+project.
+  // Fire-and-forget — we don't want to block the HTTP response on socket teardown.
+  disconnectProjectUser(projectId, collabUserId).catch((err) => {
+    console.error('disconnectProjectUser error (non-fatal):', err);
   });
 
   return res.json({ success: true });
