@@ -3,7 +3,7 @@ import Timeline from '../model/timeline.model';
 import Track from '../model/track.model';
 import TimelineItem from '../model/timelineitem.model';
 import { Types } from 'mongoose';
-import { exportTimeline, type ExportVideoClip, type ExportAudioClip } from '../util/exportTimeline.util';
+import { exportTimeline, type ExportVideoClip, type ExportAudioClip, type ExportTextClip } from '../util/exportTimeline.util';
 import logger from '../util/logger.util';
 
 // Get timeline by project ID
@@ -159,6 +159,7 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
     const tracks = (timeline.tracks ?? []) as any[];
     const videoTrack = tracks.find((t) => t.type === 'video');
     const audioTrack = tracks.find((t) => t.type === 'audio');
+    const textTrack = tracks.find((t) => t.type === 'text');
 
     const videoClips: ExportVideoClip[] = ((videoTrack?.items ?? []) as any[])
       .filter((it) => it.assetId?.url)
@@ -185,9 +186,21 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
         sourceEndTime: it.sourceEndTime ?? it.assetId.duration ?? 0,
       }));
 
-    logger.info({ message: '[export] starting timeline export', projectId, videoClips: videoClips.length, audioClips: audioClips.length });
+    const textClips: ExportTextClip[] = ((textTrack?.items ?? []) as any[])
+      .filter((it) => (it.content ?? '').trim().length > 0)
+      .map((it) => ({
+        content: it.content as string,
+        startTime: it.startTime ?? 0,
+        endTime: it.endTime ?? 0,
+        x: it.x ?? 50,
+        y: it.y ?? 50,
+        fontSize: it.fontSize ?? 24,
+        color: it.color ?? '#ffffff',
+      }));
 
-    const result = await exportTimeline(videoClips, audioClips, `stitcher/exports/${projectId}`);
+    logger.info({ message: '[export] starting timeline export', projectId, videoClips: videoClips.length, audioClips: audioClips.length, textClips: textClips.length });
+
+    const result = await exportTimeline(videoClips, audioClips, `stitcher/exports/${projectId}`, textClips);
 
     logger.info({ message: '[export] complete', projectId, url: result.url, durationSec: result.durationSec });
 

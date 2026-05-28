@@ -40,15 +40,119 @@ export interface ExportAudioClip {
     sourceEndTime: number;
 }
 
+export interface ExportTextClip {
+    content: string;
+    startTime: number;
+    endTime: number;
+    /** 0–100 percent of frame, center-anchored (matches the player). */
+    x: number;
+    y: number;
+    /** Font size in player-preview px; scaled to output height below. */
+    fontSize: number;
+    color: string;
+}
+
 export interface ExportResult {
     url: string;
     thumbnailUrl?: string;
     durationSec: number;
+    warnings?: string[];
+}
+
+// drawtext needs libfreetype. Detect once and cache; some minimal ffmpeg
+// builds (e.g. certain Homebrew bottles) omit it. Production Alpine ffmpeg
+// includes it, so text overlays render there.
+let _drawTextSupported: boolean | null = null;
+function hasDrawText(): Promise<boolean> {
+    if (_drawTextSupported !== null) return Promise.resolve(_drawTextSupported);
+    return new Promise((resolve) => {
+        const proc = spawn("ffmpeg", ["-hide_banner", "-filters"], { stdio: ["ignore", "pipe", "ignore"] });
+        const out: Buffer[] = [];
+        proc.stdout?.on("data", (c: Buffer) => out.push(c));
+        proc.on("close", () => {
+            _drawTextSupported = Buffer.concat(out).toString("utf8").includes("drawtext");
+            resolve(_drawTextSupported);
+        });
+        proc.on("error", () => { _drawTextSupported = false; resolve(false); });
+    });
 }
 
 const OUT_W = 1920;
 const OUT_H = 1080;
 const OUT_FPS = 30;
+
+// The player previews at roughly this height; text fontSize is authored
+// against it, so scale fontSize to the 1080p export by this ratio.
+const PREVIEW_REF_HEIGHT = 405;
+const FONT_SCALE = OUT_H / PREVIEW_REF_HEIGHT;
+
+// First existing font wins. Override with EXPORT_FONT_PATH.
+function resolveFontFile(): string | null {
+    const candidates = [
+        process.env["EXPORT_FONT_PATH"],
+        "/System/Library/Fonts/Supplemental/Arial.ttf",      // macOS
+        "/Library/Fonts/Arial.ttf",                          // macOS (user)
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",   // Debian/Ubuntu
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",            // Alpine/Fedora
+    ].filter(Boolean) as string[];
+    for (const p of candidates) {
+        try { if (fs.existsSync(p)) return p; } catch { /* ignore */ }
+    }
+    return null;
+}
+
+// Escape a string for the ffmpeg drawtext `text=` value.
+// drawtext treats : \ ' % specially and needs newlines stripped.
+function escapeDrawText(s: string): string {
+    return s
+        .replace(/\\/g, "\\\\")
+        .replace(/:/g, "\\:")
+        .replace(/'/g, "’") // curly apostrophe — avoids quoting hell
+        .replace(/%/g, "\\%")
+        .replace(/[\r\n]+/g, " ")
+        .trim();
+}
+
+// Normalize a CSS color to ffmpeg-friendly form (#rrggbb → 0xRRGGBB; names pass through).
+function normalizeColor(c: string | undefined): string {
+    if (!c) return "white";
+    const hex = c.trim();
+    if (/^#([0-9a-fA-F]{6})$/.test(hex)) return "0x" + hex.slice(1);
+    if (/^#([0-9a-fA-F]{3})$/.test(hex)) {
+        const r = hex[1], g = hex[2], b = hex[3];
+        return "0x" + r + r + g + g + b + b;
+    }
+    return hex; // named color (white, red, …)
+}
+
+// Build a drawtext filter chain for the text overlays. Empty string if none.
+function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null): string {
+    if (textClips.length === 0) return "";
+    const filters = textClips
+        .filter((t) => (t.content ?? "").trim().length > 0)
+        .map((t) => {
+            const text = escapeDrawText(t.content);
+            const fontsize = Math.max(8, Math.round((t.fontSize || 24) * FONT_SCALE));
+            const color = normalizeColor(t.color);
+            const xFrac = Math.min(1, Math.max(0, (t.x ?? 50) / 100));
+            const yFrac = Math.min(1, Math.max(0, (t.y ?? 50) / 100));
+            const parts = [
+                fontFile ? `fontfile='${fontFile}'` : null,
+                `text='${text}'`,
+                `fontsize=${fontsize}`,
+                `fontcolor=${color}`,
+                // center the text box on (x%, y%)
+                `x=(w*${xFrac.toFixed(4)})-(text_w/2)`,
+                `y=(h*${yFrac.toFixed(4)})-(text_h/2)`,
+                // subtle shadow for legibility on any background
+                `shadowcolor=black@0.6`, `shadowx=2`, `shadowy=2`,
+                `enable='between(t,${t.startTime.toFixed(3)},${t.endTime.toFixed(3)})'`,
+            ].filter(Boolean);
+            return `drawtext=${parts.join(":")}`;
+        });
+    return filters.join(",");
+}
 
 function downloadFile(url: string, destPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -94,7 +198,8 @@ function runFfmpeg(args: string[]): Promise<void> {
 export async function exportTimeline(
     videoClips: ExportVideoClip[],
     audioClips: ExportAudioClip[],
-    cloudinaryFolder: string
+    cloudinaryFolder: string,
+    textClips: ExportTextClip[] = []
 ): Promise<ExportResult> {
     if (videoClips.length === 0) {
         throw new AppError(400, "Nothing to export — the video track has no clips", "empty_timeline");
@@ -144,8 +249,31 @@ export async function exportTimeline(
         const concatPath = path.join(tmpDir, "concat.mp4");
         await runFfmpeg(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath]);
 
+        // 2b. Burn in text overlays (drawtext), timed to the timeline.
+        const warnings: string[] = [];
+        let videoPath = concatPath;
+        const drawChain = buildDrawTextChain(textClips, resolveFontFile());
+        if (drawChain) {
+            if (await hasDrawText()) {
+                const titled = path.join(tmpDir, "titled.mp4");
+                await runFfmpeg([
+                    "-y",
+                    "-i", concatPath,
+                    "-vf", drawChain,
+                    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                    "-an",
+                    titled,
+                ]);
+                videoPath = titled;
+            } else {
+                const msg = "Text overlays were skipped: this ffmpeg build lacks the drawtext filter (libfreetype). Production renders text correctly.";
+                logger.warn({ message: "[export] " + msg });
+                warnings.push(msg);
+            }
+        }
+
         // 3. Mux the first audio clip over the video, trimmed to video length.
-        let finalPath = concatPath;
+        let finalPath = videoPath;
         if (audioClips.length > 0) {
             const audio = audioClips[0];
             const araw = path.join(tmpDir, "audio.src");
@@ -154,7 +282,7 @@ export async function exportTimeline(
             const aStart = Math.max(0, audio.sourceStartTime || 0);
             await runFfmpeg([
                 "-y",
-                "-i", concatPath,
+                "-i", videoPath,
                 "-ss", String(aStart), "-i", araw,
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
@@ -179,6 +307,7 @@ export async function exportTimeline(
             url: uploaded.secure_url,
             thumbnailUrl,
             durationSec: Number(uploaded.duration ?? totalDuration ?? 0),
+            warnings: warnings.length ? warnings : undefined,
         };
     } finally {
         await cleanup();

@@ -495,16 +495,29 @@ const VideoPlayer = ({
       const sourceTime = activeVideo.sourceStartTime + timeInClip;
 
       // Track video transition
+      const isNewClip = prevActiveVideoRef.current?._id !== activeVideo._id;
       prevActiveVideoRef.current = activeVideo;
 
       if (video.src !== activeVideo.assetId.url) {
         video.src = activeVideo.assetId.url;
-        video.currentTime = sourceTime;
-      } else if (Math.abs(video.currentTime - sourceTime) > 0.1) {
-        video.currentTime = sourceTime;
+        video.currentTime = Math.max(0, sourceTime);
+      } else if (isNewClip && Math.abs(video.currentTime - sourceTime) > 0.1) {
+        // Only hard-seek when switching clips or scrubbing; during normal
+        // playback let the element advance itself to avoid stutter.
+        video.currentTime = Math.max(0, sourceTime);
       }
 
-      if (isPlaying && video.paused) {
+      // If the timeline slot is longer than the actual source video, the
+      // playhead can move past the clip's content. Don't seek past the end
+      // or re-issue play() — that made the <video> thrash (seek-past-end →
+      // play → instant-end → repeat every frame). Just hold the last frame;
+      // the rAF loop keeps the marker moving until the next clip begins.
+      const dur = isFinite(video.duration) ? video.duration : Infinity;
+      const pastEnd = sourceTime >= dur - 0.05;
+
+      if (pastEnd) {
+        if (!video.paused) video.pause();
+      } else if (isPlaying && video.paused) {
         void video.play().catch(() => {});
       } else if (!isPlaying && !video.paused) {
         video.pause();
@@ -676,26 +689,12 @@ const VideoPlayer = ({
         <video
           ref={videoRef}
           className="w-full h-full object-contain"
-          onTimeUpdate={(e) => {
-            if (isPlaying) {
-              const activeVideo = getActiveVideo();
-              if (activeVideo) {
-                const sourceTime = e.currentTarget.currentTime;
-                const timelineTime =
-                  activeVideo.startTime +
-                  (sourceTime - activeVideo.sourceStartTime);
-                
-                // CRITICAL FIX: Only update if we're within bounds AND not going backwards
-                // This prevents looping back to the start when the video ends
-                if (timelineTime <= activeVideo.endTime && timelineTime >= activeVideo.startTime) {
-                  // Additional check: don't let video element updates move timeline backwards
-                  if (timelineTime >= currentTime - 0.5) { // Allow small backward tolerance for seek operations
-                    onTimeUpdate(timelineTime);
-                  }
-                }
-              }
-            }
-          }}
+          // Note: we deliberately do NOT drive the timeline playhead from the
+          // video element's timeupdate. The requestAnimationFrame loop in
+          // VideoEditor is the single source of truth for `currentTime`; the
+          // <video> is a slave that seeks to match. Driving time from both
+          // produced a tug-of-war that made the marker stutter/stick,
+          // especially when a clip's source was shorter than its timeline slot.
           onEnded={() => {
             // Intentionally a no-op. The requestAnimationFrame playback loop in
             // VideoEditor is the single source of truth for the playhead and

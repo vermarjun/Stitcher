@@ -583,13 +583,15 @@ const TimelineEditor = ({
       // Persist current edits first so the server exports what the user sees.
       try { await onSync(timeline); } catch { /* sync best-effort; export reads DB */ }
 
-      const res = await api.post<{ success: boolean; data?: { url: string }; message?: string }>(
+      const res = await api.post<{ success: boolean; data?: { url: string; warnings?: string[] }; message?: string }>(
         `/timeline/project/${projectId}/export`
       );
       if (!res.data.success || !res.data.data?.url) {
         throw new Error(res.data.message || "Export failed");
       }
       const url = res.data.data.url;
+      const warnings = res.data.data.warnings ?? [];
+      warnings.forEach((w) => toast.warning(w, { duration: 8000 }));
       // Force-download via an anchor (Cloudinary serves with a filename).
       const a = document.createElement("a");
       a.href = url;
