@@ -6,6 +6,9 @@ import LogoSection from "./LogoAppName.header";
 import { FileMenuSection } from "./FileMenu.header";
 import UserSection from "./UserComponents.header";
 import CollaboratorsDialog from "@/Components/Dashboard/Collaborators.dialog";
+import PresenceAvatars from "@/Components/Dashboard/Presence/PresenceAvatars";
+import { useCollabAwareness } from "@/Components/Dashboard/context";
+import { usePresence } from "@/collab/usePresence";
 
 interface Props {
   currentProject?: Project;
@@ -14,6 +17,8 @@ interface Props {
 
 function Header({ currentProject, user }: Props) {
   const [collabOpen, setCollabOpen] = useState(false);
+  const { awareness } = useCollabAwareness();
+  const others = usePresence(awareness);
 
   return (
     <>
@@ -38,6 +43,11 @@ function Header({ currentProject, user }: Props) {
         {/* Right */}
         <div className="ml-auto flex items-center gap-2">
           {/* Collaborators button — only when a project is loaded */}
+          {/* Live presence avatars — shown when collaborators are connected */}
+          {others.length > 0 && (
+            <PresenceAvatars others={others} />
+          )}
+
           {currentProject?._id && (
             <button
               onClick={() => setCollabOpen(true)}

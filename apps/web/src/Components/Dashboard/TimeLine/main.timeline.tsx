@@ -27,6 +27,9 @@ import api from "@/api";
 import { toast } from "sonner";
 import type { CollabDoc } from "@/collab/useCollabDoc";
 import { newObjectIdHex } from "@/collab/yjsTimeline";
+import type { Awareness } from "y-protocols/awareness";
+import { usePresence } from "@/collab/usePresence";
+import TimelineCursors from "@/Components/Dashboard/Presence/TimelineCursors";
 
 import { useRefreshTracks } from "../RefreshContextProvider";
 
@@ -157,6 +160,9 @@ const TimelineEditor = ({
   onAddTextItem,
   collabDoc: _collabDoc,
   localOrigin: _localOrigin,
+  awareness,
+  setAwarenessCursor,
+  setAwarenessSelection,
 }: {
   timeline: Timeline;
   currentTime: number;
@@ -169,6 +175,10 @@ const TimelineEditor = ({
   onAddTextItem?: (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => void;
   collabDoc?: CollabDoc | null;
   localOrigin?: string;
+  /** Phase 4: awareness for presence cursors / selections */
+  awareness?: Awareness | null;
+  setAwarenessCursor?: ((xPx: number, ts: number) => void) | null;
+  setAwarenessSelection?: ((itemId: string | null) => void) | null;
 }) => {
   const [selectedItem, setSelectedItem] = useState<ITimelineItemBase | null>(
     null
@@ -191,6 +201,51 @@ const TimelineEditor = ({
   const [shareLink, setShareLink] = useState<string>("");
   const [shareBusy, setShareBusy] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ─── Phase 4: Presence ───────────────────────────────────────────────────────
+  const others = usePresence(awareness);
+  // Throttle cursor awareness writes — keep a ref to the last timeout id
+  const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCursorRef = useRef<{ xPx: number; ts: number } | null>(null);
+
+  const handleTimelineMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!setAwarenessCursor) return;
+      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+      const xPx = e.clientX - rect.left;
+      const ts = (xPx / rect.width) * Number(timeline.duration);
+      pendingCursorRef.current = { xPx, ts };
+
+      if (!cursorThrottleRef.current) {
+        cursorThrottleRef.current = setTimeout(() => {
+          cursorThrottleRef.current = null;
+          const pending = pendingCursorRef.current;
+          if (pending) {
+            setAwarenessCursor(pending.xPx, pending.ts);
+            pendingCursorRef.current = null;
+          }
+        }, 40); // ~25fps throttle
+      }
+    },
+    [setAwarenessCursor, timeline.duration],
+  );
+
+  const handleTimelineMouseLeave = useCallback(() => {
+    if (!setAwarenessCursor) return;
+    // Clear cursor so remote users don't see a stale caret
+    if (cursorThrottleRef.current) {
+      clearTimeout(cursorThrottleRef.current);
+      cursorThrottleRef.current = null;
+    }
+    pendingCursorRef.current = null;
+    // We intentionally don't clear the awareness cursor field here —
+    // it expires automatically when the awareness connection drops.
+  }, [setAwarenessCursor]);
+
+  // When local selectedItem changes, write to awareness
+  useEffect(() => {
+    setAwarenessSelection?.(selectedItem?._id ?? null);
+  }, [selectedItem, setAwarenessSelection]);
 
   // Get trigger to refresh Tracks
   const { triggerRefresh: triggerTracksRefresh } = useRefreshTracks();
@@ -941,7 +996,15 @@ const TimelineEditor = ({
             </div>
 
             {/* Enhanced Tracks */}
-            <div ref={timelineRef} className="flex flex-col gap-2 p-2">
+            <div
+              ref={timelineRef}
+              className="flex flex-col gap-2 p-2 relative"
+              onMouseMove={handleTimelineMouseMove}
+              onMouseLeave={handleTimelineMouseLeave}
+            >
+              {/* Phase 4: other users' live cursors */}
+              <TimelineCursors others={others} pixelsPerSecond={pixelsPerSecond} />
+
               {tracks.map((track) => (
                 <div
                   key={track._id}
@@ -1006,6 +1069,11 @@ const TimelineEditor = ({
                       return "Unknown";
                     };
 
+                    // Phase 4: find remote users who have selected this item
+                    const remoteSelectors = others.filter(
+                      (p) => p.selection?.itemId === item._id && p.user,
+                    );
+
                     return (
                       <div
                         key={item._id}
@@ -1014,6 +1082,12 @@ const TimelineEditor = ({
                           left: `${leftPx}px`,
                           width: `${widthPx}px`,
                           cursor: tool === "move" ? "move" : "default",
+                          // Layered box-shadow for remote selections
+                          boxShadow: remoteSelectors.length > 0
+                            ? remoteSelectors
+                                .map((p, i) => `0 0 0 ${(i + 2) * 2}px ${p.user!.color}`)
+                                .join(', ')
+                            : undefined,
                         }}
                         onClick={(e) => handleItemClick(item, e)}
                         onMouseDown={(e) =>
@@ -1085,6 +1159,21 @@ const TimelineEditor = ({
                               <div className="w-0.5 h-4 bg-black/50 rounded" />
                             </div>
                           </>
+                        )}
+
+                        {/* Phase 4: remote selection name tags */}
+                        {remoteSelectors.length > 0 && (
+                          <div className="absolute -top-5 left-0 flex gap-1 pointer-events-none z-30">
+                            {remoteSelectors.map((p) => (
+                              <span
+                                key={p.user!.id}
+                                className="text-[9px] font-semibold text-white px-1 py-0.5 rounded whitespace-nowrap"
+                                style={{ background: p.user!.color }}
+                              >
+                                {p.user!.name}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     );

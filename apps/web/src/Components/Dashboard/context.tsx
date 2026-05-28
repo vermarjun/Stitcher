@@ -1,4 +1,5 @@
 import { createContext, useContext, useRef, useState } from "react";
+import type { Awareness } from "y-protocols/awareness";
 
 const PollingContext = createContext<{
   pollingIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>;
@@ -37,4 +38,24 @@ export const RefreshHeaderProvider = ({ children }: any) => {
 };
 
 export const useRefreshHeader = () => useContext(RefreshHeaderContext);
+
+// ─── Collab Awareness Context ─────────────────────────────────────────────────
+// Lets VideoEditor (which owns the collab doc) share its awareness instance
+// with sibling components (Header) without prop-drilling through DashboardLayout.
+
+const CollabAwarenessContext = createContext<{
+  awareness: Awareness | null;
+  setAwareness: (a: Awareness | null) => void;
+}>({ awareness: null, setAwareness: () => {} });
+
+export const CollabAwarenessProvider = ({ children }: { children: React.ReactNode }) => {
+  const [awareness, setAwareness] = useState<Awareness | null>(null);
+  return (
+    <CollabAwarenessContext.Provider value={{ awareness, setAwareness }}>
+      {children}
+    </CollabAwarenessContext.Provider>
+  );
+};
+
+export const useCollabAwareness = () => useContext(CollabAwarenessContext);
 

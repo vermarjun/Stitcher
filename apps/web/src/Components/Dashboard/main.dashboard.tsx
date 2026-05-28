@@ -14,7 +14,7 @@ import {
   RefreshProviderTimeline,
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
-import { PollingProvider, RefreshHeaderProvider } from "./context";
+import { PollingProvider, RefreshHeaderProvider, CollabAwarenessProvider } from "./context";
 
 import type { Project, IUser, Asset } from "@/State/Types";
 
@@ -89,6 +89,7 @@ const DashboardLayout = () => {
 
   return (
     <RefreshHeaderProvider>
+      <CollabAwarenessProvider>
       <PollingProvider>
         <div>
           {isLoading ? (
@@ -152,6 +153,7 @@ const DashboardLayout = () => {
           )}
         </div>
       </PollingProvider>
+      </CollabAwarenessProvider>
     </RefreshHeaderProvider>
   );
 };

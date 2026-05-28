@@ -21,6 +21,7 @@ import {
   deleteYItem,
   addYItem,
 } from "@/collab/yjsTimeline";
+import { useCollabAwareness } from "./context";
 
 interface Props {
   currentProject?: Project;
@@ -48,6 +49,14 @@ const VideoEditor = ({ currentProject }: Props) => {
 
   // ─── Collab doc ──────────────────────────────────────────────────────────
   const collabDoc = useCollabDoc(currentProject?._id ?? null, token);
+
+  // ─── Publish awareness to context so Header can access it ────────────────
+  const { setAwareness } = useCollabAwareness();
+  useEffect(() => {
+    setAwareness(collabDoc?.awareness ?? null);
+    return () => { setAwareness(null); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collabDoc?.awareness]);
 
   // ─── Fetch timeline (used as base; Y.Doc is authoritative once synced) ──
   const fetchTimeline = async () => {
@@ -321,6 +330,9 @@ const VideoEditor = ({ currentProject }: Props) => {
             onAddTextItem={handleAddTextItem}
             collabDoc={collabDoc}
             localOrigin={LOCAL_ORIGIN}
+            awareness={collabDoc?.awareness ?? null}
+            setAwarenessCursor={collabDoc?.setAwarenessCursor ?? null}
+            setAwarenessSelection={collabDoc?.setAwarenessSelection ?? null}
             key={timelineRefreshKey}
           />
         )}
