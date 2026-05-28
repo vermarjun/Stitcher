@@ -21,6 +21,7 @@ import { YSocketIO } from 'y-socket.io/dist/server';
 import type { Server, Namespace, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
+import { removeAwarenessStates } from 'y-protocols/awareness';
 
 import { JWT_CONFIG } from '../config';
 import { canAccessProject } from '../util/projectAccess.util';
@@ -530,6 +531,87 @@ export function initYjsServer(io: Server): void {
   const nsp = ysocketio.nsp as Namespace | null;
   if (nsp) {
     nsp.use(yjsAuthMiddleware);
+
+    // ── Awareness ghost-client fix ──────────────────────────────────────────
+    // y-socket.io never removes awareness states when a socket disconnects
+    // (it only fires all-document-connections-closed when ALL sockets leave).
+    // Ghost presence lingers for ~30 s until the awareness timeout fires.
+    //
+    // Fix: track which awareness clientIDs each socket has advertised, then
+    // on disconnect explicitly remove them from the document's Awareness and
+    // broadcast the removal to remaining room members.
+    nsp.on('connection', (socket: Socket) => {
+      const projectId = socket.nsp.name.replace(/^\/yjs\|/, '');
+      // Set of awareness clientIDs owned by this socket connection
+      const socketClientIds = new Set<number>();
+
+      // Sniff incoming awareness-update messages to record clientIDs
+      socket.on('awareness-update', (update: ArrayBuffer | Uint8Array) => {
+        try {
+          const buf = update instanceof Uint8Array ? update : new Uint8Array(update);
+          // Decode the varint-packed clientIDs from the awareness update wire format:
+          // [numClients: varint] ([clientID: varint] [clock: varint] [state: varstring])*
+          let pos = 0;
+
+          // Decode a single varint from buf at pos, returning [value, newPos]
+          function readVarUint(): number {
+            let value = 0;
+            let shift = 0;
+            while (true) {
+              const byte = buf[pos++];
+              value |= (byte & 0x7f) << shift;
+              if ((byte & 0x80) === 0) break;
+              shift += 7;
+            }
+            return value >>> 0;
+          }
+
+          const numClients = readVarUint();
+          for (let i = 0; i < numClients; i++) {
+            const clientID = readVarUint();
+            socketClientIds.add(clientID);
+            // Skip clock (varint) and state (varstring = varint length + bytes)
+            readVarUint(); // clock
+            const strLen = readVarUint();
+            pos += strLen; // skip state JSON bytes
+          }
+        } catch {
+          // Malformed update — ignore; awareness protocol will handle it
+        }
+      });
+
+      // On disconnect: remove this socket's awareness clientIDs from the doc
+      socket.on('disconnect', () => {
+        if (socketClientIds.size === 0) return;
+        try {
+          const doc = (ysocketioInstance as any)?.documents?.get(projectId);
+          if (!doc?.awareness) return;
+
+          const awareness = doc.awareness;
+          const clientIdsToRemove = [...socketClientIds].filter((id) =>
+            awareness.states.has(id),
+          );
+          if (clientIdsToRemove.length === 0) return;
+
+          // removeAwarenessStates triggers awareness 'update' → document.onUpdateAwareness
+          // → namespace.emit('awareness-update') automatically.  No extra emit needed.
+          removeAwarenessStates(awareness, clientIdsToRemove, 'socket-disconnect');
+
+          logger.debug({
+            message: 'Yjs: awareness states removed on socket disconnect',
+            projectId,
+            socketId: socket.id,
+            removedClientIds: clientIdsToRemove,
+          });
+        } catch (err) {
+          logger.warn({
+            message: 'Yjs: error removing awareness on disconnect',
+            projectId,
+            error: String(err),
+          });
+        }
+      });
+    });
   } else {
     logger.error({ message: 'Yjs nsp is null after initialize — auth NOT applied' });
   }
