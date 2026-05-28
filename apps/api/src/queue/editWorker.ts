@@ -268,7 +268,7 @@ async function processEditJob(
         scene_description: sceneDescription,
         origin: AssetOrigin.GENERATED_VIDEO,
         url: renderUrl,
-        thumbnail: "",
+        thumbnail: renderUrl,
         duration: renderDurationSec,
         bytes: 0,
         metadata: {

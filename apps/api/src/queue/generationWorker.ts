@@ -95,6 +95,7 @@ interface SceneState {
     attempts: number; // render + debug-retry counter (max 2)
     status: "pending" | "success" | "failed";
     renderUrl?: string;
+    thumbnailUrl?: string;
     assetId?: string;
     durationSec?: number;
     error?: string;
@@ -258,6 +259,7 @@ async function processGenerationJob(
 
             if (renderResponse.success) {
                 state.renderUrl = renderResponse.render.url;
+                state.thumbnailUrl = renderResponse.render.thumbnailUrl;
                 state.durationSec = renderResponse.render.durationSec;
                 state.status = "success";
                 progress("scene_render_complete", "scene", {
@@ -339,7 +341,7 @@ async function processGenerationJob(
                 scene_description: sceneSpec.description ?? sceneSpec.prompt.slice(0, 200),
                 origin: AssetOrigin.GENERATED_VIDEO,
                 url: state.renderUrl!,
-                thumbnail: "",
+                thumbnail: state.thumbnailUrl ?? state.renderUrl!,
                 durationSec: state.durationSec,
                 bytes: 0,
                 metadata: { traceId, sceneIndex: state.sceneIndex },

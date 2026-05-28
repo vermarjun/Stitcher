@@ -111,8 +111,33 @@ const GenerateComponent = ({
   const { triggerRefresh } = useRefreshAssetStash();
   // Socket-based status management instead of polling
   const [pollingStatus, setPollingStatus] = useState<
-    "generating" | "planning" | "generating-scenes" | null
+    "generating" | "planning" | "generating-scenes" | "concat" | null
   >(null);
+  // Rich live progress: stable log of step events shown beneath the spinner.
+  type ProgressStep = {
+    id: string;
+    label: string;
+    state: "active" | "done" | "failed";
+  };
+  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
+  const [totalScenes, setTotalScenes] = useState<number | null>(null);
+  const [completedScenes, setCompletedScenes] = useState<number>(0);
+
+  const resetProgress = () => {
+    setProgressSteps([]);
+    setTotalScenes(null);
+    setCompletedScenes(0);
+  };
+  // Insert / promote / fail steps without producing duplicates.
+  const upsertStep = (id: string, label: string, state: ProgressStep["state"]) => {
+    setProgressSteps((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx === -1) return [...prev, { id, label, state }];
+      const next = [...prev];
+      next[idx] = { id, label, state };
+      return next;
+    });
+  };
   useImperativeHandle(ref, () => ({
     handleNewChat: () => {},
     handleExportChat,
@@ -139,6 +164,7 @@ const GenerateComponent = ({
       console.log("Streaming complete - removing progress bar"); // Log to verify
       setPollingStatus(null);
       setIsProcessing(false);
+      resetProgress();
       triggerRefresh();
       triggerHeaderRefresh();
   };
@@ -152,166 +178,185 @@ const GenerateComponent = ({
 
   const handleUpdate = (event: any) => {
     console.log("Socket Event:", event);
-    const { type, data } = event;
+    const { type, phase, data } = event ?? {};
 
-    if (type === 'PLANNING_START' || type === 'EDITING_START') {
-         setPollingStatus("planning");
-         streamSummaryRef.current = true; // Enable streaming for this session
-         // Reset refs for new generation
-         plannerOutputRef.current = "";
-         llmSummaryRef.current = "";
-    } else if (type === 'PLANNING_COMPLETE') {
-         setPollingStatus("generating");
-         // Optional: update message content with "Planned X scenes"
-    } else if (type === 'GENERATING_CODE_START' || type === 'EDITING_CODE_START') {
-         setPollingStatus("generating");
-    } else if (type === 'GENERATING_CODE_COMPLETE' || type === 'EDITING_CODE_COMPLETE') {
-         setPollingStatus("generating-scenes");
-         // Update scenes in the last assistant message
-         if (data.scenes && Array.isArray(data.scenes)) {
-             setMessages((prevMessages) => {
-                const updated = [...prevMessages];
-                const lastIdx = updated.length - 1;
-                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                    // Map structure if needed, or assume cleaner contract
-                    updated[lastIdx] = {
-                        ...updated[lastIdx],
-                        scenes: data.scenes,
-                        generatorOutput: true,
-                        plannerOut: true
-                    };
-                }
-                return updated;
-             });
-         } else if (data.sceneName) {
-             // For edit flow, create a single scene entry
-             setMessages((prevMessages) => {
-                const updated = [...prevMessages];
-                const lastIdx = updated.length - 1;
-                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                    updated[lastIdx] = {
-                        ...updated[lastIdx],
-                        scenes: [{
-                            sceneName: data.sceneName,
-                            prompt: "",
-                            summary: "",
-                            code: "",
-                            assetId: null,
-                            error: null
-                        }],
-                        generatorOutput: true,
-                        plannerOut: true
-                    };
-                }
-                return updated;
-             });
-         }
-    } else if (type === 'ENQUEUED_FOR_RENDERING') {
-         setPollingStatus("generating-scenes");
-    } else if (type === 'RENDER_SUCCESS') {
-         // Update specific scene
-         setMessages((prevMessages) => {
-            const updated = [...prevMessages];
-            const lastIdx = updated.length - 1;
-            if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                const currentScenes = updated[lastIdx].scenes || [];
-                const sceneIdx = currentScenes.findIndex((s: any) => s.sceneName === data.sceneName);
-                
-                if (sceneIdx !== -1) {
-                     const updatedScenes = [...currentScenes];
-                     updatedScenes[sceneIdx] = { 
-                         ...updatedScenes[sceneIdx], 
-                         ...data.metadata,
-                         completed: true 
-                     };
-                     
-                     updated[lastIdx] = {
-                        ...updated[lastIdx],
-                        scenes: updatedScenes,
-                        // Do NOT mark entire message as completed yet, wait for final summary
-                     };
-                }
-            }
-            return updated;
-         });
-    } else if (type === "RENDER_ERROR") {
-         toast.error(`Error rendering ${data.sceneName}: ${data.error}`);
-    } else if (type === 'SUMMARY_COMPLETE') {
-         // Planner summary is ready - Update full text and let LiveTextStream animate it
-         setMessages((prevMessages) => {
-             const updated = [...prevMessages];
-             const lastIdx = updated.length - 1;
-             
-             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                 updated[lastIdx] = {
-                     ...updated[lastIdx],
-                     content: {
-                         plannerOutput: data.summary || '', // Set FULL text
-                         llmResponse: typeof updated[lastIdx].content === 'object'
-                             ? updated[lastIdx].content?.llmResponse || ''
-                             : ''
-                     },
-                     plannerOut: true
-                 };
-             }
-             return updated;
-         });
-         
-         // Update status to show code generation is starting
-         setPollingStatus("generating");
-    } else if (type === 'GENERATION_COMPLETE' || type === 'EDITING_COMPLETE') {
-         // KEEP isProcessing = true to continue showing progress bar until streaming finishes
-         // setPollingStatus(null); // Don't nullify yet
-         
-         // Update last assistant message with final summary
-         setMessages((prevMessages) => {
-             const updated = [...prevMessages];
-             const lastIdx = updated.length - 1;
-             
-             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                 updated[lastIdx] = {
-                     ...updated[lastIdx],
-                     content: {
-                         plannerOutput: typeof updated[lastIdx].content === 'object' 
-                             ? updated[lastIdx].content?.plannerOutput || '' 
-                             : '',
-                         llmResponse: data.summary // Set FULL text, LiveTextStream will animate
-                     },
-                     completed: true
-                 };
-             }
-             
-             return updated;
-         });
-         
-         // Show success toast
-         const successMessage = type === 'EDITING_COMPLETE' 
-             ? 'Video edited successfully!' 
-             : `Video generated! ${data.scenesCompleted}/${data.totalScenes} scenes completed`;
-         toast.success(successMessage);
-    } else if (type === 'EDITING_ERROR') {
-         // Handle editing errors
-         toast.error(`Editing error: ${data.error || data.message}`);
-         setMessages((prevMessages) => {
-             const updated = [...prevMessages];
-             const lastIdx = updated.length - 1;
-             
-             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                 updated[lastIdx] = {
-                     ...updated[lastIdx],
-                     content: {
-                         plannerOutput: '',
-                         llmResponse: data.message || `Error: ${data.error}`
-                     },
-                     completed: true
-                 };
-             }
-             
-             return updated;
-         });
-         setIsProcessing(false);
-         setPollingStatus(null);
+    // ─── Backend event vocabulary (eventPublisher.util.ts) ─────────────
+    //   planning            (phase: rag_enhance | agent_plan)
+    //   plan_complete       (data: { sceneCount })
+    //   scene_started       (data: { index })
+    //   scene_code_complete (data: { index, sceneClass })
+    //   scene_render_complete (data: { index, url, attempt })
+    //   scene_failed        (data: { index, error })
+    //   concat_started
+    //   job_complete        (data: result with finalUrl)
+    //   job_failed          (data: { error, retryable, jobId })
+    //   edit_started, edit_render_complete, edit_complete, edit_failed
+    // ───────────────────────────────────────────────────────────────────
+
+    if (type === "planning") {
+      setPollingStatus("planning");
+      streamSummaryRef.current = true;
+      plannerOutputRef.current = "";
+      llmSummaryRef.current = "";
+      if (phase === "rag_enhance") {
+        upsertStep("rag", "Looking up relevant Manim examples…", "active");
+      } else if (phase === "agent_plan") {
+        upsertStep("rag", "Looked up relevant Manim examples", "done");
+        upsertStep("plan", "Planning scenes…", "active");
+      } else {
+        upsertStep("plan", "Planning scenes…", "active");
+      }
+      return;
     }
+
+    if (type === "plan_complete") {
+      const n = data?.sceneCount ?? 0;
+      setTotalScenes(n);
+      setPollingStatus("generating");
+      upsertStep("plan", `Planned ${n} scene${n === 1 ? "" : "s"}`, "done");
+      return;
+    }
+
+    if (type === "scene_started") {
+      const i = (data?.index ?? 0) as number;
+      const total = totalScenes ?? "?";
+      setPollingStatus("generating-scenes");
+      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: writing code…`, "active");
+      return;
+    }
+
+    if (type === "scene_code_complete") {
+      const i = (data?.index ?? 0) as number;
+      const total = totalScenes ?? "?";
+      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: code ready, rendering…`, "active");
+      return;
+    }
+
+    if (type === "scene_render_complete") {
+      const i = (data?.index ?? 0) as number;
+      const total = totalScenes ?? "?";
+      setCompletedScenes((c) => c + 1);
+      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: rendered ✓`, "done");
+      return;
+    }
+
+    if (type === "scene_failed") {
+      const i = (data?.index ?? 0) as number;
+      const total = totalScenes ?? "?";
+      const err = data?.error ?? "unknown error";
+      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: failed — ${err}`, "failed");
+      toast.error(`Scene ${i + 1} failed: ${err}`);
+      return;
+    }
+
+    if (type === "concat_started") {
+      setPollingStatus("concat");
+      upsertStep("concat", "Stitching scenes together…", "active");
+      return;
+    }
+
+    if (type === "job_complete") {
+      upsertStep("concat", "Stitched final video", "done");
+      upsertStep("done", "Generation complete ✓", "done");
+
+      const finalUrl: string | undefined = data?.finalUrl ?? data?.cloudinaryUrl;
+      setMessages((prevMessages) => {
+        const updated = [...prevMessages];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: {
+              plannerOutput:
+                typeof updated[lastIdx].content === "object"
+                  ? updated[lastIdx].content?.plannerOutput || ""
+                  : "",
+              llmResponse: finalUrl || "Video ready.",
+            },
+            completed: true,
+          };
+        }
+        return updated;
+      });
+      toast.success(
+        totalScenes
+          ? `Video generated! ${completedScenes + 1}/${totalScenes} scenes`
+          : "Video generated!"
+      );
+      // The progress UI clears via handleStreamingComplete after LiveTextStream
+      // finishes typing the final URL.
+      return;
+    }
+
+    if (type === "job_failed") {
+      const err = data?.error ?? "unknown error";
+      upsertStep("failed", `Generation failed: ${err}`, "failed");
+      toast.error(`Generation failed: ${err}`);
+      setMessages((prevMessages) => {
+        const updated = [...prevMessages];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: {
+              plannerOutput: "",
+              llmResponse: `error: ${err}`,
+            },
+            completed: true,
+          };
+        }
+        return updated;
+      });
+      setIsProcessing(false);
+      setPollingStatus(null);
+      return;
+    }
+
+    // ─── Edit-flow events (different vocabulary on backend) ────────────
+    if (type === "edit_started") {
+      setPollingStatus("planning");
+      upsertStep("edit", "Editing video…", "active");
+      return;
+    }
+    if (type === "edit_render_complete") {
+      upsertStep("edit", "Re-rendered ✓", "done");
+      return;
+    }
+    if (type === "edit_complete") {
+      upsertStep("edit", "Edit complete ✓", "done");
+      const finalUrl: string | undefined = data?.url ?? data?.finalUrl;
+      setMessages((prevMessages) => {
+        const updated = [...prevMessages];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: {
+              plannerOutput:
+                typeof updated[lastIdx].content === "object"
+                  ? updated[lastIdx].content?.plannerOutput || ""
+                  : "",
+              llmResponse: finalUrl || "Edit applied.",
+            },
+            completed: true,
+          };
+        }
+        return updated;
+      });
+      toast.success("Video edited successfully!");
+      return;
+    }
+    if (type === "edit_failed") {
+      const err = data?.error ?? "unknown error";
+      upsertStep("edit", `Edit failed: ${err}`, "failed");
+      toast.error(`Edit failed: ${err}`);
+      setIsProcessing(false);
+      setPollingStatus(null);
+      return;
+    }
+
+    // Unknown event — log so we don't drop it silently.
+    console.warn("[chat_update] unhandled event type:", type, event);
   };
 
     socket.on('chat_update', handleUpdate);
@@ -333,8 +378,10 @@ const GenerateComponent = ({
     const userInput = input.trim();
     setInput("");
     setIsProcessing(true);
-    // processing request, means backend + MS ko request send ho rahi hai
-    setPollingStatus("generating");
+    // processing request — show immediate feedback before first socket event lands
+    setPollingStatus("planning");
+    resetProgress();
+    upsertStep("submit", "Submitting prompt…", "active");
 
     const assetsAttached = [];
     for (const asset of droppedItems || []){
@@ -608,21 +655,43 @@ const GenerateComponent = ({
     }
   };
 
-  // Get loading text and progress based on polling status
+  // Headline + percent for the spinner bar. The detailed per-step log
+  // below the bar comes from `progressSteps`.
   const getLoadingStatus = () => {
+    // Compute a smooth percent from real progress when we have scene info.
+    const stagePct = {
+      planning: 15,
+      generating: 30,
+      "generating-scenes": 50,
+      concat: 90,
+    } as const;
+
+    let progress: number = (pollingStatus && stagePct[pollingStatus]) ?? 0;
+    let text = "Processing…";
+
     switch (pollingStatus) {
-      // Scene 1 => MS plans each scene
       case "planning":
-        return { text: "Planning...", progress: 25 };
-      // Scene 2 => MS generates code for each scene
+        text = "Planning…";
+        break;
       case "generating":
-        return { text: "Generating...", progress: 10 };
-      // Scene 3 => MS renders each generated code
+        text = totalScenes
+          ? `Generating code (${completedScenes}/${totalScenes})…`
+          : "Generating code…";
+        break;
       case "generating-scenes":
-        return { text: "Rendering...", progress: 60 };
-      default:
-        return { text: "Processing...", progress: 0 };
+        text = totalScenes
+          ? `Rendering scenes (${completedScenes}/${totalScenes})…`
+          : "Rendering scenes…";
+        if (totalScenes && totalScenes > 0) {
+          // 30 → 90 across all scenes.
+          progress = 30 + Math.floor((completedScenes / totalScenes) * 60);
+        }
+        break;
+      case "concat":
+        text = "Stitching final video…";
+        break;
     }
+    return { text, progress };
   };
 
   return (
@@ -656,7 +725,7 @@ const GenerateComponent = ({
                   isLastMessage &&
                   message.role === "assistant" &&
                   isProcessing &&
-                  getLoadingStatus().text === "Planning...";
+                  pollingStatus === "planning";
 
                 if (isAssistantProcessing) {
                   return null; // Don't render the last assistant message while processing
@@ -685,7 +754,7 @@ const GenerateComponent = ({
               })}
 
               {isProcessing && (
-                <div className="flex items-center w-full gap-3 text-sm">
+                <div className="flex w-full gap-3 text-sm">
                   <div className="flex-shrink-0">
                     <img
                       src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760610643/loading_animation_phpia7.gif"
@@ -700,14 +769,11 @@ const GenerateComponent = ({
                     </span>
 
                     {/* Enhanced Progress Bar */}
-                    <div className="w-full bg-zinc-700 rounded-full h-1.5 relative overflow-hidden">
-                      {/* Main Progress Bar */}
+                    <div className="w-full bg-zinc-700 rounded-full h-1.5 relative overflow-hidden mb-3">
                       <div
                         className="bg-white h-1.5 rounded-full transition-all duration-300 ease-in-out absolute top-0 left-0 z-10"
                         style={{ width: `${getLoadingStatus().progress}%` }}
                       ></div>
-
-                      {/* Moving Shimmer Effect */}
                       <div
                         className="h-1.5 rounded-full absolute top-0 left-0 animate-pulse"
                         style={{
@@ -721,6 +787,43 @@ const GenerateComponent = ({
                         }}
                       ></div>
                     </div>
+
+                    {/* Step-by-step live log driven by Socket.IO chat_update events */}
+                    {progressSteps.length > 0 && (
+                      <ul className="space-y-1 text-xs text-zinc-400">
+                        {progressSteps.map((s) => (
+                          <li key={s.id} className="flex items-center gap-2">
+                            <span
+                              className={
+                                s.state === "done"
+                                  ? "text-emerald-400"
+                                  : s.state === "failed"
+                                  ? "text-rose-400"
+                                  : "text-zinc-300 animate-pulse"
+                              }
+                              aria-hidden
+                            >
+                              {s.state === "done"
+                                ? "✓"
+                                : s.state === "failed"
+                                ? "✗"
+                                : "•"}
+                            </span>
+                            <span
+                              className={
+                                s.state === "failed"
+                                  ? "text-rose-300"
+                                  : s.state === "done"
+                                  ? "text-zinc-300"
+                                  : "text-zinc-200"
+                              }
+                            >
+                              {s.label}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               )}

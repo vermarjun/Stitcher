@@ -167,15 +167,21 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
             startTime = lastItem.endTime;
         }
         
-        // Calculate end time based on asset duration
-        const assetDuration = asset.duration || 0;
+        // Calculate end time based on asset duration.
+        // Fall back to a 5s default when the asset has no usable duration
+        // (e.g. older generated assets predating ffprobe duration, or assets
+        // whose duration was never populated) so the timeline item still has
+        // a visible, draggable width instead of collapsing to zero.
+        const DEFAULT_CLIP_SEC = 5;
+        const assetDuration = asset.duration && asset.duration > 0 ? asset.duration : DEFAULT_CLIP_SEC;
         const sourceStartTime = requestBody.sourceStartTime ?? 0;
-        const sourceEndTime = requestBody.sourceEndTime ?? assetDuration;
+        const requestedEnd = requestBody.sourceEndTime ?? assetDuration;
+        const sourceEndTime = requestedEnd > sourceStartTime ? requestedEnd : sourceStartTime + assetDuration;
         const speed = requestBody.speed ?? 1;
-        
+
         // Calculate the actual duration considering source trim and speed
         const sourceDuration = sourceEndTime - sourceStartTime;
-        const playbackDuration = sourceDuration / speed;
+        const playbackDuration = Math.max(sourceDuration / speed, 0.5);
         const endTime = startTime + playbackDuration;
         
         // Create timeline item based on track type

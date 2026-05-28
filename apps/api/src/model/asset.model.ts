@@ -39,7 +39,7 @@ const AssetSchema = new Schema<IAsset>({
     scene_description: { type: String, required: false },
     origin: {type: String, enum: Object.values(AssetOrigin), required: true, default: AssetOrigin.GENERATED_VIDEO},
     url: { type: String, required: true },
-    thumbnail: {type: String, required: true, default: ""},
+    thumbnail: { type: String, default: "" },
     duration: { type: Number },
     width: { type: Number },
     height: { type: Number },

@@ -5,6 +5,25 @@ const URL = import.meta.env.VITE_BACKEND_URL
     : 'http://localhost:3000';
 
 export const socket = io(URL, {
-    autoConnect: true,
-    transports: ['websocket', 'polling']
+    // Don't connect at module-import time; we don't have the JWT yet then.
+    // Auth.page sets the token, then calls socket.connect() (see below).
+    autoConnect: false,
+    transports: ['websocket', 'polling'],
+    // The API's io.use() middleware reads socket.handshake.auth.token. This
+    // callback re-reads localStorage on every reconnect so a fresh login
+    // produces a fresh handshake without manual socket re-creation.
+    auth: (cb) => cb({ token: localStorage.getItem('token') ?? '' }),
+});
+
+// Connect once at app boot if a token is already present (e.g. page refresh
+// of an already-logged-in user). Auth.page calls socket.connect() right after
+// it writes the token to localStorage on fresh login.
+if (typeof window !== 'undefined' && localStorage.getItem('token')) {
+    socket.connect();
+}
+
+// Surface connection errors so they're not silent.
+socket.on('connect_error', (err) => {
+    // eslint-disable-next-line no-console
+    console.warn('[socket] connect_error:', err.message);
 });

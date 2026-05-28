@@ -3,6 +3,8 @@ import Timeline from '../model/timeline.model';
 import Track from '../model/track.model';
 import TimelineItem from '../model/timelineitem.model';
 import { Types } from 'mongoose';
+import { exportTimeline, type ExportVideoClip, type ExportAudioClip } from '../util/exportTimeline.util';
+import logger from '../util/logger.util';
 
 // Get timeline by project ID
 export const getTimelineByProjectId = async (req: Request, res: Response) => {
@@ -121,10 +123,81 @@ export const updateTimeline = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error updating timeline:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error 
+      error: error
+    });
+  }
+};
+
+// Export the current timeline state to a single downloadable mp4.
+// Trims + concatenates video clips in order and muxes the first audio clip,
+// then uploads the result to Cloudinary and returns the URL.
+export const exportTimelineVideo = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project ID is required' });
+    }
+
+    const timeline = await Timeline.findOne({ projectId })
+      .populate({
+        path: 'tracks',
+        populate: {
+          path: 'items',
+          model: 'TimelineItem',
+          populate: { path: 'assetId', model: 'Asset', select: 'url type duration' },
+        },
+      })
+      .exec();
+
+    if (!timeline) {
+      return res.status(404).json({ success: false, message: 'Timeline not found for this project' });
+    }
+
+    const tracks = (timeline.tracks ?? []) as any[];
+    const videoTrack = tracks.find((t) => t.type === 'video');
+    const audioTrack = tracks.find((t) => t.type === 'audio');
+
+    const videoClips: ExportVideoClip[] = ((videoTrack?.items ?? []) as any[])
+      .filter((it) => it.assetId?.url)
+      .sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0))
+      .map((it) => ({
+        url: it.assetId.url as string,
+        sourceStartTime: it.sourceStartTime ?? 0,
+        sourceEndTime: it.sourceEndTime ?? it.assetId.duration ?? 0,
+      }));
+
+    if (videoClips.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nothing to export — add at least one video clip to the timeline first',
+      });
+    }
+
+    const audioClips: ExportAudioClip[] = ((audioTrack?.items ?? []) as any[])
+      .filter((it) => it.assetId?.url && !it.muted)
+      .sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0))
+      .map((it) => ({
+        url: it.assetId.url as string,
+        sourceStartTime: it.sourceStartTime ?? 0,
+        sourceEndTime: it.sourceEndTime ?? it.assetId.duration ?? 0,
+      }));
+
+    logger.info({ message: '[export] starting timeline export', projectId, videoClips: videoClips.length, audioClips: audioClips.length });
+
+    const result = await exportTimeline(videoClips, audioClips, `stitcher/exports/${projectId}`);
+
+    logger.info({ message: '[export] complete', projectId, url: result.url, durationSec: result.durationSec });
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error({ message: '[export] failed', error: String(error?.message ?? error) });
+    const status = typeof error?.status === 'number' ? error.status : 500;
+    return res.status(status).json({
+      success: false,
+      message: error?.message ?? 'Export failed',
     });
   }
 };

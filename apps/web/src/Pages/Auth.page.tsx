@@ -7,6 +7,7 @@ import React, {
 import { Eye, EyeOff, Mail, Lock, User2Icon, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/api";
+import { socket } from "@/socket";
 import { toast } from "sonner";
 import type { IUser } from "@/State/Types";
 import { FlickeringGrid } from "@/Components/ui/flickering-grid";
@@ -141,6 +142,9 @@ const AuthPage: React.FC = () => {
 
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
+        // Reconnect socket so the new JWT lands in the handshake.auth.token
+        if (socket.connected) socket.disconnect();
+        socket.connect();
         toast.success("Welcome back!");
         navigate("/home", { replace: true });
       } else {
@@ -193,6 +197,8 @@ const AuthPage: React.FC = () => {
         localStorage.setItem("token", loginResponse.data.token);
         localStorage.setItem("user", JSON.stringify(normalizedUser));
 
+        if (socket.connected) socket.disconnect();
+        socket.connect();
         toast.success("Registered Successfully!");
         navigate("/home");
       }
@@ -271,6 +277,8 @@ const AuthPage: React.FC = () => {
 
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
+        if (socket.connected) socket.disconnect();
+        socket.connect();
         toast.success(`Welcome ${user.username}! Let's get some Stitching Done.`);
         navigate("/home", { replace: true });
 			} else {

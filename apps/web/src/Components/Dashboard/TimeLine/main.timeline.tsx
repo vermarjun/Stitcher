@@ -8,7 +8,8 @@ import {
   Play,
   Music,
   Trash2,
-  X
+  X,
+  Download
 } from "lucide-react";
 import { Button } from "@/Components/ui/button";
 import type {
@@ -170,6 +171,7 @@ const TimelineEditor = ({
     Math.max(50, Number(timeline.duration) + 1)
   );
   const [isLoading, setLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Get trigger to refresh Tracks
@@ -567,6 +569,45 @@ const TimelineEditor = ({
     }
   };
 
+  // Render the current timeline state into one mp4 (server-side ffmpeg),
+  // then trigger a browser download of the resulting Cloudinary URL.
+  const handleExportClick = async () => {
+    const projectId = String(timeline.projectId);
+    if (!projectId) {
+      toast.error("Missing project id — cannot export");
+      return;
+    }
+    setIsExporting(true);
+    const pending = toast.loading("Exporting video… this can take a minute");
+    try {
+      // Persist current edits first so the server exports what the user sees.
+      try { await onSync(timeline); } catch { /* sync best-effort; export reads DB */ }
+
+      const res = await api.post<{ success: boolean; data?: { url: string }; message?: string }>(
+        `/timeline/project/${projectId}/export`
+      );
+      if (!res.data.success || !res.data.data?.url) {
+        throw new Error(res.data.message || "Export failed");
+      }
+      const url = res.data.data.url;
+      // Force-download via an anchor (Cloudinary serves with a filename).
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `stitcher-export-${projectId}.mp4`;
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success("Export ready — download started", { id: pending });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || "Export failed", { id: pending });
+      console.error("export error", e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleCancelAddTextOrDelete = () => {
     setIsAddingText(false);
     setIsDeleting(false);
@@ -682,6 +723,25 @@ const TimelineEditor = ({
               <Save className="w-4 h-4" />
             )}
             <span>{isLoading ? "Syncing..." : "Sync"}</span>
+          </Button>
+
+          {/* Export Icon Button — renders the timeline to mp4 and downloads it */}
+          <Button
+            onClick={handleExportClick}
+            disabled={isExporting || isLoading}
+            className={`p-2 rounded-lg transition-all duration-200 shadow-md flex items-center gap-1 ${
+              isExporting
+                ? "bg-emerald-700 text-white shadow-emerald-700/25 animate-pulse cursor-not-allowed"
+                : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/25"
+            } border border-opacity-20 border-emerald-400`}
+            title={isExporting ? "Rendering & exporting…" : "Export timeline to MP4 and download"}
+          >
+            {isExporting ? (
+              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span>{isExporting ? "Exporting..." : "Export"}</span>
           </Button>
         </div>
       </div>

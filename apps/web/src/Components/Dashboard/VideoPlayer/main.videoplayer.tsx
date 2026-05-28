@@ -697,14 +697,14 @@ const VideoPlayer = ({
             }
           }}
           onEnded={() => {
-            // When video ends, advance timeline past the current video item
-            const activeVideo = getActiveVideo();
-            if (activeVideo) {
-              // Add small offset (0.016s ≈ 1 frame at 60fps) to move past junction
-              // This ensures we transition to next video smoothly
-              const nextTime = activeVideo.endTime + 0.016;
-              onTimeUpdate(Math.min(nextTime, Number(timeline.duration)));
-            }
+            // Intentionally a no-op. The requestAnimationFrame playback loop in
+            // VideoEditor is the single source of truth for the playhead and
+            // advances time continuously. Previously this handler snapped the
+            // playhead to activeVideo.endTime + 0.016 when the *source file*
+            // ended — but if a clip's source is shorter than its timeline span
+            // (e.g. duration metadata drift), that produced a visible "jump"
+            // that skipped a few seconds. Letting the rAF loop drive avoids it;
+            // the last frame simply holds until the loop reaches the next clip.
           }}
         />
 
