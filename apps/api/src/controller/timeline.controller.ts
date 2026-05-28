@@ -5,6 +5,24 @@ import TimelineItem from '../model/timelineitem.model';
 import { Types } from 'mongoose';
 import { exportTimeline, type ExportVideoClip, type ExportAudioClip, type ExportTextClip } from '../util/exportTimeline.util';
 import logger from '../util/logger.util';
+import { nanoid } from 'nanoid';
+import SharedVideo from '../model/sharedVideo.model';
+import Project from '../model/project.model';
+import { PUBLIC_APP_URL } from '../config';
+
+// Inject Cloudinary's fl_attachment flag so the browser force-downloads the
+// file (Content-Disposition: attachment) instead of opening it inline.
+function toForcedDownloadUrl(cloudinaryUrl: string, filename: string): string {
+  const marker = '/upload/';
+  const idx = cloudinaryUrl.indexOf(marker);
+  if (idx === -1) return cloudinaryUrl; // not a cloudinary upload URL — return as-is
+  const safe = filename.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'stitcher-export';
+  return (
+    cloudinaryUrl.slice(0, idx + marker.length) +
+    `fl_attachment:${safe}/` +
+    cloudinaryUrl.slice(idx + marker.length)
+  );
+}
 
 // Get timeline by project ID
 export const getTimelineByProjectId = async (req: Request, res: Response) => {
@@ -198,13 +216,54 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
         color: it.color ?? '#ffffff',
       }));
 
-    logger.info({ message: '[export] starting timeline export', projectId, videoClips: videoClips.length, audioClips: audioClips.length, textClips: textClips.length });
+    const mode: 'download' | 'share' = req.body?.mode === 'download' ? 'download' : 'share';
+
+    logger.info({ message: '[export] starting timeline export', projectId, mode, videoClips: videoClips.length, audioClips: audioClips.length, textClips: textClips.length });
 
     const result = await exportTimeline(videoClips, audioClips, `stitcher/exports/${projectId}`, textClips);
 
-    logger.info({ message: '[export] complete', projectId, url: result.url, durationSec: result.durationSec });
+    logger.info({ message: '[export] complete', projectId, mode, url: result.url, durationSec: result.durationSec });
 
-    return res.status(200).json({ success: true, data: result });
+    const project = await Project.findById(projectId).select('name').lean<{ name?: string }>();
+    const projectName = project?.name ?? 'Stitcher video';
+
+    if (mode === 'download') {
+      // Force a real file download — never expose a "link" to the user.
+      return res.status(200).json({
+        success: true,
+        data: {
+          mode: 'download',
+          downloadUrl: toForcedDownloadUrl(result.url, projectName),
+          durationSec: result.durationSec,
+          warnings: result.warnings,
+        },
+      });
+    }
+
+    // mode === 'share' — persist an opaque mapping and return a Stitcher link,
+    // NOT the raw Cloudinary URL.
+    const shareId = nanoid(10);
+    await SharedVideo.create({
+      shareId,
+      projectId,
+      userId: req.userId,
+      videoUrl: result.url,
+      thumbnailUrl: result.thumbnailUrl ?? '',
+      durationSec: result.durationSec,
+      projectName,
+    });
+
+    const base = PUBLIC_APP_URL.replace(/\/$/, '');
+    return res.status(200).json({
+      success: true,
+      data: {
+        mode: 'share',
+        shareId,
+        shareUrl: `${base}/v/${shareId}`,
+        durationSec: result.durationSec,
+        warnings: result.warnings,
+      },
+    });
   } catch (error: any) {
     logger.error({ message: '[export] failed', error: String(error?.message ?? error) });
     const status = typeof error?.status === 'number' ? error.status : 500;
@@ -212,5 +271,40 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
       success: false,
       message: error?.message ?? 'Export failed',
     });
+  }
+};
+
+// Public (no-auth) resolver for a shared video. Returns the metadata the watch
+// page needs to play the video. Increments a view counter.
+export const getSharedVideo = async (req: Request, res: Response) => {
+  try {
+    const { shareId } = req.params;
+    if (!shareId) {
+      return res.status(400).json({ success: false, message: 'shareId is required' });
+    }
+    const shared = await SharedVideo.findOneAndUpdate(
+      { shareId },
+      { $inc: { views: 1 } },
+      { new: true }
+    ).lean();
+
+    if (!shared) {
+      return res.status(404).json({ success: false, message: 'This shared video does not exist or was removed' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        videoUrl: shared.videoUrl,
+        thumbnailUrl: shared.thumbnailUrl,
+        durationSec: shared.durationSec,
+        projectName: shared.projectName,
+        views: shared.views,
+        createdAt: shared.createdAt,
+      },
+    });
+  } catch (error: any) {
+    logger.error({ message: '[share] resolve failed', error: String(error?.message ?? error) });
+    return res.status(500).json({ success: false, message: 'Failed to load shared video' });
   }
 };

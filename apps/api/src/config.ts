@@ -8,6 +8,9 @@ const envSchema = z.object({
     PORT: z.string().min(1),
     API_PREFIX: z.string().default(""),
     ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
+    // Public-facing frontend base URL used to build share links (/v/:shareId).
+    // Falls back to the first ALLOWED_ORIGINS entry when unset.
+    PUBLIC_APP_URL: z.string().optional(),
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 
     MONGODB_URL: z.string().min(1),
@@ -75,6 +78,8 @@ export const PORT = config.PORT;
 export const JWT_SECRET = config.JWT_SECRET;
 export const MONGODB_URL = config.MONGODB_URL;
 export const API_PREFIX = config.API_PREFIX;
+export const PUBLIC_APP_URL =
+    config.PUBLIC_APP_URL || config.ALLOWED_ORIGINS.split(",")[0].trim();
 export const EMAIL_USER = config.EMAIL_USER;
 export const EMAIL_APP_PASSWORD = config.EMAIL_APP_PASSWORD;
 export const CLOUDINARY_API_KEY = config.CLOUDINARY_API_KEY;

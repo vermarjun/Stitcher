@@ -16,6 +16,7 @@ const HomePage = lazy(() => import('../Components/Home/Main.home.tsx'));
 const DashboardLayout = lazy(() => import('../Components/Dashboard/main.dashboard.tsx'));
 const ProfilePage = lazy(() => import('../Pages/ProfilePage.page'));
 const SettingsPage = lazy(() => import('../Pages/SettingsPage.page'));
+const WatchPage = lazy(() => import('../Pages/Watch.page.tsx'));
 
 const router = createBrowserRouter([
 // LANDING PAGE
@@ -88,6 +89,15 @@ const router = createBrowserRouter([
         <PublicRoute>
           <AuthPage />
         </PublicRoute>
+      </ErrorBoundary>
+    ),
+  },
+// PUBLIC SHARE / WATCH PAGE — no auth, anyone with the link can view
+  {
+    path: '/v/:shareId',
+    element: (
+      <ErrorBoundary>
+        <WatchPage />
       </ErrorBoundary>
     ),
   },

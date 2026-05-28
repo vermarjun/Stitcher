@@ -9,7 +9,10 @@ import {
   Music,
   Trash2,
   X,
-  Download
+  Download,
+  Share2,
+  Link as LinkIcon,
+  Copy
 } from "lucide-react";
 import { Button } from "@/Components/ui/button";
 import type {
@@ -171,7 +174,11 @@ const TimelineEditor = ({
     Math.max(50, Number(timeline.duration) + 1)
   );
   const [isLoading, setLoading] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  // Share/export dialog state machine.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharePhase, setSharePhase] = useState<"choose" | "working" | "link">("choose");
+  const [shareLink, setShareLink] = useState<string>("");
+  const [shareBusy, setShareBusy] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Get trigger to refresh Tracks
@@ -569,44 +576,74 @@ const TimelineEditor = ({
     }
   };
 
-  // Render the current timeline state into one mp4 (server-side ffmpeg),
-  // then trigger a browser download of the resulting Cloudinary URL.
-  const handleExportClick = async () => {
+  // Open the Share dialog (choose download vs shareable link).
+  const openShareDialog = () => {
+    setShareLink("");
+    setSharePhase("choose");
+    setShareOpen(true);
+  };
+
+  // Render the current timeline server-side, then either force a real file
+  // download or produce a Stitcher share link — never expose Cloudinary URLs.
+  const runExport = async (mode: "download" | "share") => {
     const projectId = String(timeline.projectId);
     if (!projectId) {
       toast.error("Missing project id — cannot export");
       return;
     }
-    setIsExporting(true);
-    const pending = toast.loading("Exporting video… this can take a minute");
+    setShareBusy(true);
+    setSharePhase("working");
+    const pending = toast.loading(
+      mode === "download" ? "Rendering your video…" : "Creating a shareable link…"
+    );
     try {
       // Persist current edits first so the server exports what the user sees.
-      try { await onSync(timeline); } catch { /* sync best-effort; export reads DB */ }
+      try { await onSync(timeline); } catch { /* best-effort; export reads DB */ }
 
-      const res = await api.post<{ success: boolean; data?: { url: string; warnings?: string[] }; message?: string }>(
-        `/timeline/project/${projectId}/export`
-      );
-      if (!res.data.success || !res.data.data?.url) {
+      const res = await api.post<{
+        success: boolean;
+        data?: { mode: string; downloadUrl?: string; shareUrl?: string; warnings?: string[] };
+        message?: string;
+      }>(`/timeline/project/${projectId}/export`, { mode });
+
+      if (!res.data.success || !res.data.data) {
         throw new Error(res.data.message || "Export failed");
       }
-      const url = res.data.data.url;
-      const warnings = res.data.data.warnings ?? [];
-      warnings.forEach((w) => toast.warning(w, { duration: 8000 }));
-      // Force-download via an anchor (Cloudinary serves with a filename).
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `stitcher-export-${projectId}.mp4`;
-      a.target = "_blank";
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      toast.success("Export ready — download started", { id: pending });
+      (res.data.data.warnings ?? []).forEach((w) => toast.warning(w, { duration: 8000 }));
+
+      if (mode === "download") {
+        const dl = res.data.data.downloadUrl!;
+        // fl_attachment makes Cloudinary serve Content-Disposition: attachment,
+        // so this downloads the file directly rather than opening a tab.
+        const a = document.createElement("a");
+        a.href = dl;
+        a.download = `stitcher-video-${projectId}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast.success("Download started", { id: pending });
+        setShareOpen(false);
+      } else {
+        const link = res.data.data.shareUrl!;
+        setShareLink(link);
+        setSharePhase("link");
+        toast.success("Share link ready", { id: pending });
+      }
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || "Export failed", { id: pending });
       console.error("export error", e);
+      setSharePhase("choose");
     } finally {
-      setIsExporting(false);
+      setShareBusy(false);
+    }
+  };
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toast.success("Link copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — select and copy manually");
     }
   };
 
@@ -727,26 +764,123 @@ const TimelineEditor = ({
             <span>{isLoading ? "Syncing..." : "Sync"}</span>
           </Button>
 
-          {/* Export Icon Button — renders the timeline to mp4 and downloads it */}
+          {/* Share Button — opens a dialog to download or get a shareable link */}
           <Button
-            onClick={handleExportClick}
-            disabled={isExporting || isLoading}
+            onClick={openShareDialog}
+            disabled={shareBusy || isLoading}
             className={`p-2 rounded-lg transition-all duration-200 shadow-md flex items-center gap-1 ${
-              isExporting
+              shareBusy
                 ? "bg-emerald-700 text-white shadow-emerald-700/25 animate-pulse cursor-not-allowed"
                 : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/25"
             } border border-opacity-20 border-emerald-400`}
-            title={isExporting ? "Rendering & exporting…" : "Export timeline to MP4 and download"}
+            title="Share or download this video"
           >
-            {isExporting ? (
+            {shareBusy ? (
               <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
             ) : (
-              <Download className="w-4 h-4" />
+              <Share2 className="w-4 h-4" />
             )}
-            <span>{isExporting ? "Exporting..." : "Export"}</span>
+            <span>{shareBusy ? "Working..." : "Share"}</span>
           </Button>
         </div>
       </div>
+
+      {/* ── Share dialog ──────────────────────────────────────────────── */}
+      {shareOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => !shareBusy && setShareOpen(false)}
+        >
+          <div
+            className="w-full max-w-md mx-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-zinc-100">Share video</h3>
+              <button
+                onClick={() => !shareBusy && setShareOpen(false)}
+                className="text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
+                disabled={shareBusy}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {sharePhase === "choose" && (
+              <div className="space-y-3">
+                <p className="text-sm text-zinc-400 mb-1">
+                  How do you want to share this video?
+                </p>
+                <button
+                  onClick={() => runExport("download")}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors text-left"
+                >
+                  <Download className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <div className="font-medium text-zinc-100">Download</div>
+                    <div className="text-xs text-zinc-400">Save the MP4 to your computer</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => runExport("share")}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors text-left"
+                >
+                  <LinkIcon className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <div className="font-medium text-zinc-100">Get a shareable link</div>
+                    <div className="text-xs text-zinc-400">A Stitcher link anyone can open</div>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {sharePhase === "working" && (
+              <div className="flex flex-col items-center gap-3 py-8 text-zinc-400">
+                <div className="animate-spin w-8 h-8 border-2 border-zinc-600 border-t-emerald-400 rounded-full" />
+                <span className="text-sm">Rendering your video… this can take a minute.</span>
+              </div>
+            )}
+
+            {sharePhase === "link" && (
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-400">
+                  Your video is ready. Share this link — it opens on Stitcher.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={shareLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="flex-1 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-700 text-sm text-zinc-200 truncate"
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-sm"
+                  >
+                    <Copy className="w-4 h-4" /> Copy
+                  </button>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <a
+                    href={shareLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-emerald-400 hover:underline"
+                  >
+                    Open link →
+                  </a>
+                  <button
+                    onClick={() => setShareOpen(false)}
+                    className="text-sm text-zinc-400 hover:text-zinc-200"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Timeline content with improved visual depth */}
       <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-black to-zinc-950">

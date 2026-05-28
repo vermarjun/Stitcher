@@ -38,6 +38,7 @@ import trackRoutes from "./router/track.router";
 import editChatRoutes from "./router/editChat.router";
 import generateChatRoutes from "./router/generateChat.router";
 import timelineRoutes from "./router/timeline.router";
+import shareRoutes from "./router/share.router";
 import userApiKeyRoutes from "./router/userapikeys.router";
 import projectScriptRoutes from "./router/script.router";
 import communityPostRoutes from "./router/communityPost.router";
@@ -223,6 +224,7 @@ app.use(`${API_PREFIX}/track`, trackRoutes);
 app.use(`${API_PREFIX}/editchat`, editChatRoutes);
 app.use(`${API_PREFIX}/generatechat`, generateChatRoutes);
 app.use(`${API_PREFIX}/timeline`, timelineRoutes);
+app.use(`${API_PREFIX}/share`, shareRoutes); // public — no auth
 app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
 app.use(`${API_PREFIX}/community`, communityPostRoutes);
