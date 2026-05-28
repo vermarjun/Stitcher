@@ -9,3 +9,7 @@ manimDocs
 Plan/
 .DS_Store
 API/vitest.config.js
+
+# Secrets / local backups — never commit (contain API keys + DB creds)
+OPENCODE_GO.md
+*.bak

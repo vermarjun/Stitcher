@@ -11,6 +11,9 @@ const envSchema = z.object({
     // Public-facing frontend base URL used to build share links (/v/:shareId).
     // Falls back to the first ALLOWED_ORIGINS entry when unset.
     PUBLIC_APP_URL: z.string().optional(),
+    // v1 relaunch keeps the community surface (feed, posts, follows,
+    // leaderboard, backpack, notifications) dormant. Set "true" to re-enable.
+    FEATURE_COMMUNITY: z.string().optional().default("false"),
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 
     MONGODB_URL: z.string().min(1),
@@ -42,6 +45,12 @@ const envSchema = z.object({
     AGENT_API_KEY: z.string().min(1),
     RENDER_SERVICE_URL: z.string().min(1),
     RENDER_API_KEY: z.string().min(1),
+
+    // OpenCode Go — OpenAI-completions-compatible LLM backend, used directly by
+    // the API for lightweight calls (e.g. memory reflection). Optional so the
+    // app still boots without it; memory reflection no-ops when the key is absent.
+    OPENCODE_GO_API_KEY: z.string().optional().default(""),
+    OPENCODE_GO_DEFAULT_MODEL: z.string().optional().default("glm-5.1"),
 
     KEYS_ENCRYPTION_KEY: z
         .string()
@@ -80,6 +89,11 @@ export const MONGODB_URL = config.MONGODB_URL;
 export const API_PREFIX = config.API_PREFIX;
 export const PUBLIC_APP_URL =
     config.PUBLIC_APP_URL || config.ALLOWED_ORIGINS.split(",")[0].trim();
+
+// Feature flags. community gates the entire social surface for the v1 relaunch.
+export const FEATURES = {
+    community: config.FEATURE_COMMUNITY === "true",
+};
 export const EMAIL_USER = config.EMAIL_USER;
 export const EMAIL_APP_PASSWORD = config.EMAIL_APP_PASSWORD;
 export const CLOUDINARY_API_KEY = config.CLOUDINARY_API_KEY;

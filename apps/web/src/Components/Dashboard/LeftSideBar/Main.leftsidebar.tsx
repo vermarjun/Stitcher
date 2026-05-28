@@ -7,16 +7,19 @@ import {
   Layout,
   Backpack,
   Edit,
+  Brain,
 } from "lucide-react";
 import AssetStash from "./AssetStash/main.assetstash";
 import TemplatesComponent from "./Template.leftsidebar";
 import ProjectDescriptionComponent from "./Script.leftsidebar";
 import CollaboratorsComponent from "./Collaborators.leftsidebar";
 import TimelineTracksSidebar from "./Tracks.leftsidebar";
+import MemoryComponent from "./Memory.leftsidebar";
 import type { Project, IUser } from "@/State/Types";
 // import BackpackComponent from "@/Components/Dashboard/LeftSideBar/Backpack.leftsidebar";
 import BackpackComponent from "./BackPack/main.backpack";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/Components/ui/drawer";
+import { FEATURES } from "@/config/features";
 
 interface Props {
   currentProject?: Project;
@@ -30,9 +33,10 @@ const MainSidebar = ({ currentProject }: Props) => {
   const sidebarTabs = [
     { id: "assetstash", icon: FolderOpen, label: "Asset Stash" },
     { id: "tracks", icon: Scissors, label: "Tracks" },
-    { id: "backpack", icon: Backpack, label: "Backpack" },
+    ...(FEATURES.community ? [{ id: "backpack", icon: Backpack, label: "Backpack" }] : []),
     { id: "templates", icon: Layout, label: "Templates" },
     { id: "description", icon: Edit, label: "Project Script" },
+    { id: "memory", icon: Brain, label: "Memory" },
     { id: "collaborators", icon: Users, label: "Add Collaborators" },
   ];
 
@@ -47,6 +51,8 @@ const MainSidebar = ({ currentProject }: Props) => {
         return <TemplatesComponent currentProject={currentProject} />;
       case "description":
         return <ProjectDescriptionComponent currentProject={currentProject} />;
+      case "memory":
+        return <MemoryComponent />;
       case "collaborators":
         return <CollaboratorsComponent />;
       case "backpack":

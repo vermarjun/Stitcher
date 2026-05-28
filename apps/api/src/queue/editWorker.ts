@@ -26,6 +26,7 @@ import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
 import { resolveModelConfig } from "./modelConfig.util";
 import { publishProgress } from "./eventPublisher.util";
+import { recall, reflect } from "../services/memoryService";
 import EditChat from "../model/editChat.model";
 import Asset, { AssetType, AssetOrigin } from "../model/asset.model";
 import TimelineItem from "../model/timelineitem.model";
@@ -138,6 +139,16 @@ async function processEditJob(
         ragCodeExamples = [ragCodeExamples[0], ...apiExamples];
     } catch (ragErr) {
         logger.warn({ message: "[editWorker] RAG enhance failed; using raw prompt", traceId, error: String(ragErr) });
+    }
+
+    // ── Step 5b: Inject long-term user memory (preferences) ──────────────────
+    try {
+        const userMemory = await recall(userId);
+        if (userMemory) {
+            groundedPrompt = `User preferences to honor (learned over time):\n${userMemory}\n\n${groundedPrompt}`;
+        }
+    } catch (memErr) {
+        logger.warn({ message: "[editWorker] memory recall failed; proceeding without it", traceId, error: String(memErr) });
     }
 
     // ── Step 6: Agent /code ──────────────────────────────────────────────────
@@ -341,6 +352,14 @@ async function processEditJob(
     } catch (ragErr) {
         logger.warn({ message: "[editWorker] RAG corpusAdd failed (non-fatal)", traceId, error: String(ragErr) });
     }
+
+    // ── Step 13: Memory reflection (fire-and-forget; never blocks the result) ─
+    reflect(userId, {
+        userMessage: editPrompt,
+        assistantMessage: "Applied the requested edit to a video scene.",
+    }).catch((memErr) => {
+        logger.warn({ message: "[editWorker] memory reflect failed (non-fatal)", traceId, error: String(memErr) });
+    });
 
     progress("edit_complete", "done", { newAssetId, newAssetUrl: renderUrl });
 

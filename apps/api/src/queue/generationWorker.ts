@@ -40,6 +40,7 @@ import { ServiceError } from "../services/ServiceError";
 import { resolveModelConfig } from "./modelConfig.util";
 import { publishProgress } from "./eventPublisher.util";
 import { concatVideos, uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
+import { recall, reflect } from "../services/memoryService";
 import GenerateChat from "../model/generateChat.model";
 import Asset, { AssetType, AssetOrigin } from "../model/asset.model";
 import User from "../model/user.model";
@@ -140,6 +141,16 @@ async function processGenerationJob(
     } catch (err) {
         // RAG is best-effort at planning stage; proceed with raw prompt
         logger.warn({ message: "[worker] RAG enhance (top-level) failed; using raw prompt", traceId, error: String(err) });
+    }
+
+    // ── Step 3b: Inject long-term user memory (preferences) ──────────────────
+    try {
+        const userMemory = await recall(userId);
+        if (userMemory) {
+            groundedPrompt = `User preferences to honor (learned over time):\n${userMemory}\n\n${groundedPrompt}`;
+        }
+    } catch (err) {
+        logger.warn({ message: "[worker] memory recall failed; proceeding without it", traceId, error: String(err) });
     }
 
     // ── Step 4: Agent plan ───────────────────────────────────────────────────
@@ -439,6 +450,15 @@ async function processGenerationJob(
     } catch (ragErr) {
         logger.warn({ message: "[worker] RAG corpusAdd failed (non-fatal)", traceId, error: String(ragErr) });
     }
+
+    // ── Step 10: Memory reflection (fire-and-forget; never blocks the result) ─
+    // Ask the cheap LLM whether this turn reveals any durable user preference.
+    reflect(userId, {
+        userMessage: prompt,
+        assistantMessage: `Generated a ${scenes.length}-scene video.`,
+    }).catch((err) => {
+        logger.warn({ message: "[worker] memory reflect failed (non-fatal)", traceId, error: String(err) });
+    });
 
     // ── Build result ─────────────────────────────────────────────────────────
     const sceneAssets = sceneStates.map((s) => ({

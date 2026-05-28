@@ -24,6 +24,16 @@ export interface IPayment {
   },
 }
 
+// A single long-term memory point — a free-form preference the system has
+// learned about the user (e.g. "prefers a white background"). Each point has a
+// stable id so the reflect() agent can target it for update/forget.
+export interface IMemoryPoint {
+  id: string;
+  text: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Interface representing a User document in MongoDB
 export interface IUser extends Document {
   username: string;
@@ -61,6 +71,7 @@ export interface IUser extends Document {
   stats: IUserStats;
   followers: Types.ObjectId[];
   following: Types.ObjectId[];
+  memory: IMemoryPoint[];
 }
 
 const UserStatsSchema = new Schema<IUserStats>({
@@ -71,6 +82,13 @@ const UserStatsSchema = new Schema<IUserStats>({
   followersCount: { type: Number, default: 0, min: 0 },
   followingCount: { type: Number, default: 0, min: 0 },
   lastUpdated: { type: Date, default: Date.now }
+}, { _id: false });
+
+const MemoryPointSchema = new Schema<IMemoryPoint>({
+  id: { type: String, required: true },
+  text: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
 const UserSchema = new Schema<IUser>({
@@ -188,7 +206,11 @@ const UserSchema = new Schema<IUser>({
     type: Schema.Types.ObjectId,
     ref: 'User',
     default: []
-  }]
+  }],
+  memory: {
+    type: [MemoryPointSchema],
+    default: []
+  }
 }, { timestamps: true });
 
 // Indexes for efficient leaderboard queries

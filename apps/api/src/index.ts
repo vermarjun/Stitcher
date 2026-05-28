@@ -24,6 +24,7 @@ import { Types } from "mongoose";
 
 // Middleware
 import { globalErrorHandler } from "./middleware/error.middleware";
+import { requireFeature } from "./middleware/feature.middleware";
 
 // Queue workers — import after express setup so workers boot with the server
 import { generationWorker } from "./queue/generationWorker";
@@ -46,6 +47,7 @@ import backpackRoutes from "./router/backpack.router";
 import leaderboardRoutes from "./router/leaderboard.router";
 import notificationRoutes from "./router/notification.router";
 import paymentRoutes from "./router/payment.router";
+import memoryRoutes from "./router/memory.router";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
 const allowedOrigins = config.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
@@ -227,11 +229,14 @@ app.use(`${API_PREFIX}/timeline`, timelineRoutes);
 app.use(`${API_PREFIX}/share`, shareRoutes); // public — no auth
 app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
-app.use(`${API_PREFIX}/community`, communityPostRoutes);
-app.use(`${API_PREFIX}/backpack`, backpackRoutes);
-app.use(`${API_PREFIX}/leaderboard`, leaderboardRoutes);
-app.use(`${API_PREFIX}/notifications`, notificationRoutes);
+// Community surface — gated behind FEATURE_COMMUNITY (off for v1 relaunch).
+// When disabled, requireFeature("community") makes every route here 404.
+app.use(`${API_PREFIX}/community`, requireFeature("community"), communityPostRoutes);
+app.use(`${API_PREFIX}/backpack`, requireFeature("community"), backpackRoutes);
+app.use(`${API_PREFIX}/leaderboard`, requireFeature("community"), leaderboardRoutes);
+app.use(`${API_PREFIX}/notifications`, requireFeature("community"), notificationRoutes);
 app.use(`${API_PREFIX}/payments`, paymentRoutes);
+app.use(`${API_PREFIX}/memory`, memoryRoutes);
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
