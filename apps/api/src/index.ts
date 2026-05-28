@@ -13,6 +13,7 @@ import crypto from "crypto";
 import { API_PREFIX, PORT, config, JWT_CONFIG } from "./config";
 import logger from "./util/logger.util";
 import jwt from "jsonwebtoken";
+import { canAccessProject } from "./util/projectAccess.util";
 
 // DB & Redis
 import connectDB from "./util/database.util";
@@ -48,6 +49,7 @@ import leaderboardRoutes from "./router/leaderboard.router";
 import notificationRoutes from "./router/notification.router";
 import paymentRoutes from "./router/payment.router";
 import memoryRoutes from "./router/memory.router";
+import collabRoutes from "./router/collab.router";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
 const allowedOrigins = config.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
@@ -175,6 +177,32 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("join_project", async (projectId: unknown) => {
+        if (!projectId || typeof projectId !== "string") return;
+
+        const userId = socket.data.userId as string | undefined;
+        if (!userId) {
+            logger.warn({ message: "Socket join_project denied: no userId on socket", socketId: socket.id });
+            socket.emit("error", { message: "unauthorized" });
+            return;
+        }
+
+        try {
+            const ok = await canAccessProject(userId, projectId);
+            if (!ok) {
+                logger.warn({ message: "Socket join_project denied: access check failed", projectId, socketId: socket.id, userId });
+                socket.emit("error", { message: "forbidden" });
+                return;
+            }
+
+            socket.join(`project:${projectId}`);
+            logger.debug({ message: "Socket joined project", socketId: socket.id, projectId });
+        } catch (err) {
+            logger.error({ message: "Socket join_project error", error: String(err), socketId: socket.id });
+            socket.emit("error", { message: "internal error" });
+        }
+    });
+
     socket.on("disconnect", () => {
         logger.debug({ message: "Socket disconnected", socketId: socket.id });
     });
@@ -237,6 +265,7 @@ app.use(`${API_PREFIX}/leaderboard`, requireFeature("community"), leaderboardRou
 app.use(`${API_PREFIX}/notifications`, requireFeature("community"), notificationRoutes);
 app.use(`${API_PREFIX}/payments`, paymentRoutes);
 app.use(`${API_PREFIX}/memory`, memoryRoutes);
+app.use(`${API_PREFIX}/collab`, collabRoutes);
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

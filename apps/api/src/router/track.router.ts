@@ -7,11 +7,8 @@ import {
     deleteTimelineItem
 } from '../controller/track.controller';
 import auth from '../middleware/auth.middleware';
-import {
-    requireTimelineOwnership,
-    requireTrackOwnership,
-    requireTimelineItemOwnership
-} from '../middleware/ownership.middleware';
+import { requireTimelineOwnership, requireTimelineItemOwnership } from '../middleware/ownership.middleware';
+import { requireTrackAccess, requireTimelineItemAccess } from '../middleware/access.middleware';
 
 const router = express.Router();
 
@@ -28,19 +25,19 @@ router.get('/timeline/:timelineId', requireTimelineOwnership('params', 'timeline
  * @desc    Add an asset to a track (creates timeline item)
  * @param   trackId - The ID of the track to add asset to
  */
-router.post('/:trackId/asset', requireTrackOwnership('params', 'trackId'), addAssetToTrack);
+router.post('/:trackId/asset', requireTrackAccess('params', 'trackId'), addAssetToTrack);
 
 /**
  * @desc    Add text to a track (creates text timeline item)
  * @param   trackId - The ID of the track to add text to
  */
-router.post('/:trackId/text', requireTrackOwnership('params', 'trackId'), addTextToTrack);
+router.post('/:trackId/text', requireTrackAccess('params', 'trackId'), addTextToTrack);
 
 /**
  * @desc    Update a timeline item
  * @param   itemId - The ID of the timeline item to update
  */
-router.put('/items/:itemId', requireTimelineItemOwnership('params', 'itemId'), updateTimelineItem);
+router.put('/items/:itemId', requireTimelineItemAccess('params', 'itemId'), updateTimelineItem);
 
 /**
  * @desc    Delete a timeline item and remove from track
