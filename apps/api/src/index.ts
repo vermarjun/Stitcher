@@ -50,6 +50,7 @@ import notificationRoutes from "./router/notification.router";
 import paymentRoutes from "./router/payment.router";
 import memoryRoutes from "./router/memory.router";
 import collabRoutes from "./router/collab.router";
+import { initYjsServer } from "./collab/yjs.server";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
 const allowedOrigins = config.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
@@ -77,6 +78,9 @@ export const io = new Server(httpServer, {
         methods: ["GET", "POST"],
     },
 });
+
+// ─── Yjs real-time collaboration (attaches /yjs|<projectId> namespaces) ──────
+initYjsServer(io);
 
 // ─── Request ID middleware ────────────────────────────────────────────────────
 app.use((req: Request & { id?: string }, _res: Response, next: NextFunction) => {
