@@ -1,17 +1,20 @@
 /**
  * useCollabDoc.ts
  *
- * Minimal hook that creates a Y.Doc and attaches a SocketIOProvider pointed
+ * Hook that creates a Y.Doc and attaches a SocketIOProvider pointed
  * at the API Yjs namespace (/yjs|<projectId>).
  *
- * Usage:
- *   const { doc, synced, destroy } = useCollabDoc(projectId, token);
- *
- * Returns null values until the socket connects (or if token is absent).
+ * Returns null until the socket connects (or if token is absent).
  * Gate collab features behind `synced` to avoid flash of stale state.
  *
- * This is a VERTICAL SLICE — only one Y.Map named "timeline" is used.
- * Phase 3 will expand coverage to the full timeline model.
+ * Y.Doc schema (Phase 3):
+ *   doc.getMap('timeline'):
+ *     'meta'   → Y.Map { resolution:{width,height}, duration, fps }
+ *     'tracks' → Y.Array<Y.Map>
+ *          track Y.Map: { id, type, locked, muted, items: Y.Array<Y.Map> }
+ *            item Y.Map: { id, type, startTime, endTime, assetId?, sourceStartTime?,
+ *                          sourceEndTime?, x?, y?, content?, fontFamily?, fontSize?,
+ *                          color?, volume? }
  */
 
 import { useEffect, useRef, useState } from 'react';

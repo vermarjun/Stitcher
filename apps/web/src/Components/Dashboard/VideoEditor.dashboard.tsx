@@ -9,14 +9,25 @@ import {
   ResizablePanelGroup,
   ResizableHandle,
 } from "@/Components/ui/resizable";
-import type { Project, Timeline, ITimelineItemBase } from "@/State/Types";
+import type { Project, Timeline, ITrack, ITimelineItemBase } from "@/State/Types";
 import { toast } from "sonner";
+import * as Y from "yjs";
 
-import { useRefreshTimeline } from "./RefreshContextProvider"; 
+import { useRefreshTimeline } from "./RefreshContextProvider";
+import { useCollabDoc } from "@/collab/useCollabDoc";
+import {
+  yDocToReactTimeline,
+  applyItemUpdate,
+  deleteYItem,
+  addYItem,
+} from "@/collab/yjsTimeline";
 
 interface Props {
   currentProject?: Project;
 }
+
+/** Unique local-origin tag so observeDeep can skip our own writes. */
+const LOCAL_ORIGIN = "local-edit";
 
 const VideoEditor = ({ currentProject }: Props) => {
   const [currentTime, setCurrentTime] = useState(0);
@@ -26,17 +37,31 @@ const VideoEditor = ({ currentProject }: Props) => {
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [isLoading, setLoading] = useState<boolean>(false);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
+  // Snapshot of the timeline as fetched from HTTP (used as base for Y.Doc hydration)
+  const baseTimelineRef = useRef<Timeline | null>(null);
 
   const { refreshKey: timelineRefreshKey } = useRefreshTimeline();
 
+  // ─── Auth token ─────────────────────────────────────────────────────────
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  // ─── Collab doc ──────────────────────────────────────────────────────────
+  const collabDoc = useCollabDoc(currentProject?._id ?? null, token);
+
+  // ─── Fetch timeline (used as base; Y.Doc is authoritative once synced) ──
   const fetchTimeline = async () => {
     try {
       setLoading(true);
       const projectId = currentProject?._id;
       if (!projectId) return;
       const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
-      console.log("Timeline Object: ", response.data);
-      setTimeline(response.data);
+      const tl = response.data;
+      baseTimelineRef.current = tl;
+      // Only set React timeline from HTTP if Y.Doc isn't synced yet
+      if (!collabDoc?.synced) {
+        setTimeline(tl);
+      }
     } catch (err) {
       console.error("Error fetching timeline:", err);
       toast.error("Error fetching timeline");
@@ -47,49 +72,67 @@ const VideoEditor = ({ currentProject }: Props) => {
 
   useEffect(() => {
     fetchTimeline();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineRefreshKey]);
-  
-  // useEffect(()=>{
-  //   console.log("updated hogyi!!!: ",timeline);
-  // }, [timeline]);
 
-  // playback loop
+  // ─── Seed React state from Y.Doc once synced ─────────────────────────────
+  useEffect(() => {
+    if (!collabDoc?.synced || !baseTimelineRef.current) return;
+    const derived = yDocToReactTimeline(
+      collabDoc.timelineMap,
+      baseTimelineRef.current
+    );
+    setTimeline(derived);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collabDoc?.synced]);
+
+  // ─── Observe Y.Doc for remote edits ──────────────────────────────────────
+  useEffect(() => {
+    if (!collabDoc) return;
+    const { timelineMap } = collabDoc;
+
+    const handler = (_events: Y.YEvent<any>[], txn: Y.Transaction) => {
+      // Skip echoes from our own local writes
+      if (txn.origin === LOCAL_ORIGIN) return;
+      // Apply remote changes to React state
+      if (!baseTimelineRef.current) return;
+      const derived = yDocToReactTimeline(timelineMap, baseTimelineRef.current);
+      setTimeline(derived);
+    };
+
+    timelineMap.observeDeep(handler);
+    return () => {
+      timelineMap.unobserveDeep(handler);
+    };
+  }, [collabDoc]);
+
+  // ─── Playback loop ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!timeline) return;
     if (isPlaying) {
-      // Reset the lastTimeRef when starting playback to avoid stale values
       lastTimeRef.current = 0;
-      
+
       const animate = (ts: number) => {
         if (lastTimeRef.current === 0) {
-          // First frame: just record timestamp, don't update time
           lastTimeRef.current = ts;
         } else {
           const delta = (ts - lastTimeRef.current) / 1000;
           lastTimeRef.current = ts;
-          
+
           setCurrentTime((prev) => {
             const nt = prev + delta;
-            
-            // Safety check: prevent timeline from going backwards
-            if (nt < prev) {
-              console.warn('Timeline tried to go backwards, prevented');
-              return prev;
-            }
-            
-            // Check if we've reached the end
+            if (nt < prev) return prev;
             if (nt >= Number(timeline.duration)) {
               setIsPlaying(false);
               return Number(timeline.duration);
             }
-            
             return nt;
           });
         }
-        
+
         animationFrameRef.current = requestAnimationFrame(animate);
       };
-      
+
       animationFrameRef.current = requestAnimationFrame(animate);
     } else {
       if (animationFrameRef.current)
@@ -105,18 +148,37 @@ const VideoEditor = ({ currentProject }: Props) => {
   const handlePlayPause = () => setIsPlaying((p) => !p);
   const handleTimeUpdate = (t: number) => setCurrentTime(t);
 
+  // ─── Text item update (video player inline edit) ──────────────────────────
   const handleUpdateTextItem = (
     itemId: string,
     updates: Partial<ITimelineItemBase>
   ) => {
     if (!timeline) return;
-    console.log("TEXT ITEM UPDATED: ", itemId, updates);
-    console.log(timeline);
+
+    // Write to Y.Doc (the observeDeep handler skips LOCAL_ORIGIN echoes)
+    if (collabDoc?.synced) {
+      const tracksArray = collabDoc.timelineMap.get("tracks") as
+        | Y.Array<Y.Map<unknown>>
+        | undefined;
+      if (tracksArray) {
+        const tracks = timeline.tracks as ITrack[];
+        const track = tracks.find((t: ITrack) =>
+          t.items.some((it) => it._id === itemId)
+        );
+        if (track) {
+          collabDoc.doc.transact(() => {
+            applyItemUpdate(tracksArray, track._id, itemId, updates as Record<string, unknown>);
+          }, LOCAL_ORIGIN);
+        }
+      }
+    }
+
+    // Optimistic React update
     setTimeline((prev) =>
       prev
         ? {
             ...prev,
-            tracks: prev.tracks.map((track: any) =>
+            tracks: (prev.tracks as ITrack[]).map((track: ITrack) =>
               track.type === "text"
                 ? {
                     ...track,
@@ -129,30 +191,105 @@ const VideoEditor = ({ currentProject }: Props) => {
           }
         : prev
     );
-    console.log(timeline);
   };
 
-  // FIXED: Backend sync with useCallback and timeline dependency
+  // ─── onTimelineUpdate: called by TimelineEditor on every drag/resize ──────
+  /**
+   * For collab-aware updates we receive the full updated React timeline from
+   * the editor, diff it against the previous state, and write the delta to Y.Doc.
+   *
+   * This approach is intentionally conservative: only startTime/endTime/
+   * sourceStartTime/sourceEndTime changes are diffed (drag/resize). Track-level
+   * changes (mute/lock) and item deletion/addition go through dedicated handlers.
+   */
+  const handleTimelineUpdate = useCallback(
+    (updated: Timeline) => {
+      setTimeline(updated);
+
+      if (!collabDoc?.synced) return;
+      const tracksArray = collabDoc.timelineMap.get("tracks") as
+        | Y.Array<Y.Map<unknown>>
+        | undefined;
+      if (!tracksArray) return;
+
+      collabDoc.doc.transact(() => {
+        const updatedTracks = updated.tracks as ITrack[];
+        for (const track of updatedTracks) {
+          for (const item of track.items) {
+            applyItemUpdate(tracksArray, track._id, item._id, {
+              startTime: item.startTime,
+              endTime: item.endTime,
+              ...(item.type === "video" || item.type === "audio"
+                ? {
+                    sourceStartTime: (item as any).sourceStartTime,
+                    sourceEndTime: (item as any).sourceEndTime,
+                  }
+                : {}),
+            });
+          }
+        }
+      }, LOCAL_ORIGIN);
+    },
+    [collabDoc]
+  );
+
+  // ─── Sync (force-save) ────────────────────────────────────────────────────
+  /**
+   * Persistence is now automatic via Y.Doc materialization.
+   * The "Sync" button remains as a best-effort HTTP save for safety.
+   */
   const syncToBackend = useCallback(
     async (tl: Timeline) => {
-      console.log("Syncing timeline:", tl); // Debug log
-      const res = await api.put<{ success: boolean; message: string }>(`/timeline/${tl._id}`, tl);
+      const res = await api.put<{ success: boolean; message: string }>(
+        `/timeline/${tl._id}`,
+        tl
+      );
       if (!res.data.success) throw new Error("Failed to sync");
     },
-    [timeline]
-  ); // Add timeline as dependency
+    []
+  );
 
-  // Initialize default layout based on screen size
+  // ─── Delete item (called from TimelineEditor) ─────────────────────────────
+  const handleDeleteItem = useCallback(
+    (itemId: string, trackId: string) => {
+      if (!collabDoc?.synced) return;
+      const tracksArray = collabDoc.timelineMap.get("tracks") as
+        | Y.Array<Y.Map<unknown>>
+        | undefined;
+      if (!tracksArray) return;
+
+      collabDoc.doc.transact(() => {
+        deleteYItem(tracksArray, trackId, itemId);
+      }, LOCAL_ORIGIN);
+    },
+    [collabDoc]
+  );
+
+  // ─── Add text item (called from TimelineEditor) ───────────────────────────
+  const handleAddTextItem = useCallback(
+    (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
+      if (!collabDoc?.synced) return;
+      const tracksArray = collabDoc.timelineMap.get("tracks") as
+        | Y.Array<Y.Map<unknown>>
+        | undefined;
+      if (!tracksArray) return;
+
+      collabDoc.doc.transact(() => {
+        addYItem(tracksArray, trackId, item);
+      }, LOCAL_ORIGIN);
+    },
+    [collabDoc]
+  );
+
   const [defaultLayout] = useState(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 1024) {
-      return { video: 62, timeline: 38 }; // Large screens (Laptop)
+      return { video: 62, timeline: 38 };
     }
-    return { video: 58, timeline: 42 }; // Small screens (Mobile/Tablet)
+    return { video: 58, timeline: 42 };
   });
 
   return (
     <ResizablePanelGroup direction="vertical" className="h-full w-full">
-      {/* Video Player Resizable */}
       <ResizablePanel defaultSize={defaultLayout.video}>
         {isLoading || !timeline ? (
           <VideoPlayerLoading />
@@ -170,7 +307,6 @@ const VideoEditor = ({ currentProject }: Props) => {
         )}
       </ResizablePanel>
       <ResizableHandle withHandle />
-      {/* Timeline Resizable */}
       <ResizablePanel defaultSize={defaultLayout.timeline}>
         {isLoading || !timeline ? (
           <TimelineEditorLoading />
@@ -179,8 +315,12 @@ const VideoEditor = ({ currentProject }: Props) => {
             timeline={timeline}
             currentTime={currentTime}
             onTimeUpdate={handleTimeUpdate}
-            onTimelineUpdate={(tl) => setTimeline(tl)}
+            onTimelineUpdate={handleTimelineUpdate}
             onSync={syncToBackend}
+            onDeleteItem={handleDeleteItem}
+            onAddTextItem={handleAddTextItem}
+            collabDoc={collabDoc}
+            localOrigin={LOCAL_ORIGIN}
             key={timelineRefreshKey}
           />
         )}

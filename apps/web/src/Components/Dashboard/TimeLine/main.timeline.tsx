@@ -25,7 +25,8 @@ import type {
 } from "@/State/Types";
 import api from "@/api";
 import { toast } from "sonner";
-
+import type { CollabDoc } from "@/collab/useCollabDoc";
+import { newObjectIdHex } from "@/collab/yjsTimeline";
 
 import { useRefreshTracks } from "../RefreshContextProvider";
 
@@ -152,12 +153,22 @@ const TimelineEditor = ({
   onTimeUpdate,
   onTimelineUpdate,
   onSync,
+  onDeleteItem,
+  onAddTextItem,
+  collabDoc: _collabDoc,
+  localOrigin: _localOrigin,
 }: {
   timeline: Timeline;
   currentTime: number;
   onTimeUpdate: (time: number) => void;
   onTimelineUpdate: (timeline: Timeline) => void;
   onSync: (timeline: Timeline) => Promise<void>;
+  /** Called after HTTP delete succeeds — writes removal to Y.Doc */
+  onDeleteItem?: (itemId: string, trackId: string) => void;
+  /** Called after HTTP add-text succeeds — writes new item to Y.Doc */
+  onAddTextItem?: (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => void;
+  collabDoc?: CollabDoc | null;
+  localOrigin?: string;
 }) => {
   const [selectedItem, setSelectedItem] = useState<ITimelineItemBase | null>(
     null
@@ -190,7 +201,9 @@ const TimelineEditor = ({
     try {
       const response = await api.delete(`/track/items/${selectedItem._id}`);
       if ((response.data as any).success) {
-        // Remove the item from the timeline
+        // Write deletion to Y.Doc (collab-aware)
+        onDeleteItem?.(selectedItem._id, selectedItem.trackId);
+        // Remove the item from React state
         const updatedTimeline = {
           ...timeline,
           tracks: (timeline.tracks as ITrack[]).map((track) => {
@@ -205,7 +218,6 @@ const TimelineEditor = ({
             return track;
           }),
         };
-        // Use onTimelineUpdate instead of setTimeline
         onTimelineUpdate(updatedTimeline);
         setSelectedItem(null);
         triggerTracksRefresh();
@@ -509,8 +521,11 @@ const TimelineEditor = ({
     const textTrack = tracks.find((t) => t.type === "text");
     if (!textTrack) return;
 
+    // Use a client-generated 24-hex ObjectId so the Y.Doc id and Mongo _id match
+    const clientId = newObjectIdHex();
+
     let newTextItem: ITextTimelineItem = {
-      _id: `text-${Date.now()}`,
+      _id: clientId,
       type: "text",
       trackId: textTrack._id,
       startTime: clickTime,
@@ -527,7 +542,7 @@ const TimelineEditor = ({
     try {
       const response = await api.post(
         `/track/${textTrack._id}/text`,
-        newTextItem
+        { ...newTextItem, _id: clientId }
       );
       if (!(response.data as any).success) {
         throw Error(
@@ -536,6 +551,11 @@ const TimelineEditor = ({
         );
       } else {
         newTextItem = (response.data as any).data.timelineItem;
+        // Write new item to Y.Doc (collab-aware) using the server-confirmed _id
+        onAddTextItem?.(textTrack._id, {
+          ...newTextItem,
+          id: newTextItem._id,
+        } as ITimelineItemBase & Record<string, unknown>);
         const updated: Timeline = {
           ...timeline,
           tracks: tracks.map((t) =>
@@ -544,7 +564,6 @@ const TimelineEditor = ({
               : t
           ),
         };
-        // Use onTimelineUpdate instead of setTimeline
         onTimelineUpdate(updated);
         setIsAddingText(false);
       }
