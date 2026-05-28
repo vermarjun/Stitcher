@@ -4,6 +4,7 @@ import RecentProjects from "./RecentProjects.home";
 import GettingStarted from "./GettingStarted.home";
 import QuickActions from "./QuickActions.home";
 import RecentNotifications from "./RecentNotifications.home";
+import CollabSections from "./CollabSections.home";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { FEATURES } from "@/config/features";
 // import ProfileProgress from "./ProfileCompleteProgressbar.home";
@@ -95,6 +96,9 @@ const Dashboard = ({
         </button>
 
         {FEATURES.community && <RecentNotifications onNavigate={onNavigate} />}
+
+        {/* Collaboration: invitations + shared-with-me (not gated by FEATURES.community) */}
+        <CollabSections />
 
         {/* <ProfileProgress
           progress={60}

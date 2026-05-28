@@ -1,16 +1,19 @@
+import { useState } from "react";
 import type { Project, IUser } from "@/State/Types";
+import { Users } from "lucide-react";
 
 import LogoSection from "./LogoAppName.header";
 import { FileMenuSection } from "./FileMenu.header";
 import UserSection from "./UserComponents.header";
+import CollaboratorsDialog from "@/Components/Dashboard/Collaborators.dialog";
 
 interface Props {
   currentProject?: Project;
   user?: IUser;
 }
 
-function Header({ user }: Props) {
-  // const [searchQuery, setSearchQuery] = useRecoilState(searchQueryState);
+function Header({ currentProject, user }: Props) {
+  const [collabOpen, setCollabOpen] = useState(false);
 
   return (
     <>
@@ -33,10 +36,30 @@ function Header({ user }: Props) {
         </div> */}
 
         {/* Right */}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {/* Collaborators button — only when a project is loaded */}
+          {currentProject?._id && (
+            <button
+              onClick={() => setCollabOpen(true)}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
+              title="Manage collaborators"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Collaborators</span>
+            </button>
+          )}
           <UserSection user={user} />
         </div>
       </header>
+
+      {/* Collaborators dialog */}
+      {collabOpen && currentProject?._id && (
+        <CollaboratorsDialog
+          projectId={currentProject._id}
+          currentUser={user}
+          onClose={() => setCollabOpen(false)}
+        />
+      )}
     </>
   );
 }
