@@ -196,6 +196,7 @@ io.on("connection", (socket) => {
             }
 
             socket.join(`project:${projectId}`);
+            socket.emit("project_joined", { projectId });
             logger.debug({ message: "Socket joined project", socketId: socket.id, projectId });
         } catch (err) {
             logger.error({ message: "Socket join_project error", error: String(err), socketId: socket.id });
