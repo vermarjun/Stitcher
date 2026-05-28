@@ -66,7 +66,7 @@ let _drawTextSupported: boolean | null = null;
 function hasDrawText(): Promise<boolean> {
     if (_drawTextSupported !== null) return Promise.resolve(_drawTextSupported);
     return new Promise((resolve) => {
-        const proc = spawn("ffmpeg", ["-hide_banner", "-filters"], { stdio: ["ignore", "pipe", "ignore"] });
+        const proc = spawn(FFMPEG_BIN, ["-hide_banner", "-filters"], { stdio: ["ignore", "pipe", "ignore"] });
         const out: Buffer[] = [];
         proc.stdout?.on("data", (c: Buffer) => out.push(c));
         proc.on("close", () => {
@@ -80,6 +80,11 @@ function hasDrawText(): Promise<boolean> {
 const OUT_W = 1920;
 const OUT_H = 1080;
 const OUT_FPS = 30;
+
+// Which ffmpeg binary to use for export. Defaults to PATH's `ffmpeg`, but can
+// point at a freetype-enabled build (for drawtext) via EXPORT_FFMPEG_PATH —
+// useful on dev machines whose system ffmpeg is a minimal build.
+const FFMPEG_BIN = process.env["EXPORT_FFMPEG_PATH"] || "ffmpeg";
 
 // The player previews at roughly this height; text fontSize is authored
 // against it, so scale fontSize to the 1080p export by this ratio.
@@ -179,7 +184,7 @@ function downloadFile(url: string, destPath: string): Promise<void> {
 function runFfmpeg(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
         logger.debug({ message: "ffmpeg(export) spawn", args });
-        const proc = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+        const proc = spawn(FFMPEG_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
         const stderr: Buffer[] = [];
         proc.stderr?.on("data", (c: Buffer) => stderr.push(c));
         proc.on("close", (code) => {
