@@ -79,6 +79,16 @@ def _probe_duration(ffprobe: str, path: Path) -> float:
         return 0.0
 
 
+def probe_duration(path: Path) -> float:
+    """Public: measure a media file's duration in seconds via ffprobe.
+
+    Returns 0.0 on any failure (best-effort; callers treat 0 as 'unknown').
+    """
+    settings = get_settings()
+    ffprobe = settings.ffmpeg_path.replace("ffmpeg", "ffprobe")
+    return _probe_duration(ffprobe, path)
+
+
 def _probe_dimensions(ffprobe: str, path: Path) -> tuple[int, int]:
     cmd = [
         ffprobe, "-v", "error", "-select_streams", "v:0",

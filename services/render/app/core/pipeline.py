@@ -22,6 +22,7 @@ from app.core.manim_runner import build_invocation, resolve_artifact_on_host
 from app.core.sandbox import Sandbox, SandboxLimits
 from app.core.thumbnail import ThumbnailError
 from app.core.thumbnail import extract as extract_thumbnail
+from app.core.thumbnail import probe_duration
 from app.core.validate import first_issue_as_error, validate
 from app.logging import get_logger
 from app.models import (
@@ -85,8 +86,12 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
     first = first_issue_as_error(issues)
     if first is not None:
         line, summary = first
-        log.info("pipeline.rejected", reason="validation", summary=summary, line=line)
-        return _fail(req, t0, "validation", "Rejected", summary, line=line)
+        # SyntaxError comes back through the AST pre-guard too — preserve the label so
+        # clients can distinguish "your code doesn't parse" from "your code uses a banned API".
+        category = "SyntaxError" if summary.startswith("SyntaxError") else "Rejected"
+        log.info("pipeline.rejected", reason="validation", summary=summary, line=line,
+                 category=category)
+        return _fail(req, t0, "validation", category, summary, line=line)
 
     # --- 2. Sandbox + manim ---
     limits = SandboxLimits(
@@ -95,11 +100,34 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
         cpu_count=req.limits.cpu_count or settings.sandbox_cpu_default,
     )
 
-    # Build the manim argv ahead of time; the sandbox's default cmd is just `manim -ql`
-    # and we need to override it with the full invocation for this specific request.
+    # Background color has no direct CLI flag in Manim 0.19 — inject via config API.
+    render_code = req.code
+    if req.render.background:
+        render_code = (
+            f'from manim import config as _mc\n_mc.background_color = "{req.render.background}"\n'
+            + render_code
+        )
+
+    # Build the full invocation before running so the sandbox uses the correct
+    # quality/format/fps/resolution/background/transparent flags.
+    inv = build_invocation(
+        script_in_sandbox=Path("/work/animation.py"),
+        scene_class=req.scene_class,
+        quality=req.render.quality,
+        video_format=req.render.format,
+        backend=req.render.backend,
+        fps_override=req.render.fps,
+        resolution_override=req.render.resolution,
+        transparent=req.render.transparent,
+        background=req.render.background,
+        frame_range=req.render.frame_range,
+        media_dir_in_sandbox=Path("/work/media"),
+        manim_binary=settings.manim_path,
+    )
+
     sandbox = Sandbox()
     sandbox_t0 = time.perf_counter()
-    result = await sandbox.run(req.code, req.scene_class, limits)
+    result = await sandbox.run(render_code, req.scene_class, limits, manim_argv=inv.argv)
     sandbox_ms = int((time.perf_counter() - sandbox_t0) * 1000)
 
     if result.killed_by == "timeout":
@@ -131,20 +159,6 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
                      sandbox_ms=sandbox_ms)
 
     # --- 3. Find the artifact ---
-    inv = build_invocation(
-        script_in_sandbox=Path("/work/animation.py"),
-        scene_class=req.scene_class,
-        quality=req.render.quality,
-        video_format=req.render.format,
-        backend=req.render.backend,
-        fps_override=req.render.fps,
-        resolution_override=req.render.resolution,
-        transparent=req.render.transparent,
-        background=req.render.background,
-        frame_range=req.render.frame_range,
-        media_dir_in_sandbox=Path("/work/media"),
-        manim_binary=settings.manim_path,
-    )
     host_artifact = resolve_artifact_on_host(
         inv, host_media_dir=result.workdir / "media",
         sandbox_media_dir=Path("/work/media"),
@@ -197,6 +211,14 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
         except (ThumbnailError, StorageError) as e:
             log.warning("pipeline.thumbnail_failed", error=str(e))
 
+    # --- 4c. Probe real video duration (best-effort; 0.0 if it fails) ---
+    duration_sec = 0.0
+    if req.render.format in {"mp4", "webm", "mov", "gif"}:
+        try:
+            duration_sec = probe_duration(host_artifact)
+        except Exception as e:  # noqa: BLE001 — duration is non-critical metadata
+            log.warning("pipeline.duration_probe_failed", error=str(e))
+
     # --- 5. Clean up workdir ---
     shutil.rmtree(result.workdir, ignore_errors=True)
 
@@ -210,7 +232,7 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
     return RenderSuccessResponse(
         render=RenderOutput(
             url=url, thumbnailUrl=thumbnail_url, format=req.render.format,
-            durationSec=0.0,  # TODO(jan-17): probe with ffprobe
+            durationSec=duration_sec,
             width=inv.width, height=inv.height, fps=inv.fps, bytes=size,
             codec=None, hasAudio=req.audio is not None,
         ),
