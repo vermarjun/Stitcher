@@ -1,0 +1,90 @@
+{
+  "pitfalls": [
+    {
+      "id": "transform-vs-replacement",
+      "apis": ["Transform", "ReplacementTransform"],
+      "text": "Transform(a, b) morphs `a` into `b` but keeps `a` on screen (b is discarded); use ReplacementTransform(a, b) when you want `b` to be the mobject that remains. Mixing them up leaves stale mobjects on screen."
+    },
+    {
+      "id": "mathtex-latex",
+      "apis": ["MathTex", "Tex"],
+      "text": "MathTex/Tex require a working LaTeX install at render time and use math mode by default. Escape backslashes in Python strings (use raw strings r\"\\frac{a}{b}\") and prefer Text() for plain (non-math) labels to avoid LaTeX failures."
+    },
+    {
+      "id": "valuetracker-redraw",
+      "apis": ["ValueTracker", "always_redraw", "add_updater"],
+      "text": "A mobject does not follow a ValueTracker automatically. Wrap it in always_redraw(lambda: ...) or attach add_updater(); animate the value with tracker.animate.set_value(x), and read it with tracker.get_value()."
+    },
+    {
+      "id": "threed-scene",
+      "apis": ["ThreeDScene", "ThreeDAxes", "Surface", "Sphere", "Cube"],
+      "text": "3D mobjects (ThreeDAxes, Surface, Sphere…) must live in a ThreeDScene, not a plain Scene. Set the camera with self.set_camera_orientation(phi=..., theta=...) and use self.begin_ambient_camera_rotation() for spin."
+    },
+    {
+      "id": "vgroup-arrange",
+      "apis": ["VGroup", "arrange", "arrange_in_grid"],
+      "text": "VGroup(*mobjects).arrange(RIGHT, buff=0.5) lays children out; arrange() mutates positions, so add the group to the scene AFTER arranging. Use arrange_in_grid(rows=, cols=) for tables/matrices of cells."
+    },
+    {
+      "id": "play-vs-add",
+      "apis": ["play", "add", "wait"],
+      "text": "self.play(...) animates a transition; self.add(...) places a mobject instantly with no animation. Build static setup with add(), animate changes with play(), and hold a frame with self.wait(seconds)."
+    },
+    {
+      "id": "animate-syntax",
+      "apis": ["animate", "ApplyMethod"],
+      "text": "Prefer the .animate syntax: self.play(mob.animate.shift(RIGHT).scale(2)). It chains method calls into one animation. ApplyMethod still works but is more verbose; never call the mutating method directly inside play()."
+    },
+    {
+      "id": "updater-leak",
+      "apis": ["add_updater", "remove_updater"],
+      "text": "Updaters keep firing every frame. Remove them with mob.clear_updaters() or mob.remove_updater(fn) once the relevant animation is done, or later transforms will jitter or fight the updater."
+    },
+    {
+      "id": "coords-to-point",
+      "apis": ["Axes", "NumberPlane", "coords_to_point", "plot"],
+      "text": "On Axes/NumberPlane, convert data coordinates to screen points with axes.coords_to_point(x, y) (alias c2p). Plot functions with axes.plot(lambda x: ..., x_range=[a, b]); don't place graph mobjects with raw screen coordinates."
+    },
+    {
+      "id": "fadein-shift",
+      "apis": ["FadeIn", "FadeOut", "GrowFromCenter"],
+      "text": "FadeIn(mob, shift=UP) and FadeOut(mob, shift=DOWN) add directional motion to the fade. Passing run_time and rate_func to self.play() controls pacing for any of these intro/outro animations."
+    }
+  ],
+  "style": [
+    {
+      "id": "axes-labels",
+      "apis": ["Axes", "NumberPlane"],
+      "text": "Label axes with axes.get_axis_labels() and graphs with axes.get_graph_label(graph, label) for readable plots."
+    },
+    {
+      "id": "lagged-reveal",
+      "apis": ["LaggedStart", "AnimationGroup", "Succession"],
+      "text": "Reveal groups of mobjects with LaggedStart(*anims, lag_ratio=0.1) for a staggered, polished entrance rather than one big simultaneous play()."
+    },
+    {
+      "id": "cs-arrays",
+      "domains": ["cs"],
+      "text": "For data-structure/algorithm scenes, represent elements as a VGroup of Square/Rectangle cells with centered Text, and use Indicate or SurroundingRectangle to highlight the active element each step."
+    },
+    {
+      "id": "math-emphasis",
+      "domains": ["math", "physics"],
+      "text": "Build equations with MathTex and emphasize sub-expressions by indexing into the mobject (eq[0][2:5]) to color or Circumscribe individual terms."
+    }
+  ],
+  "general": {
+    "pitfalls": [
+      "Start every file with `from manim import *` and define exactly one Scene subclass whose construct(self) method builds the animation.",
+      "Every visible change should go through self.play(...) or self.add(...); end with self.wait() so the final frame is held.",
+      "Keep mobjects on screen consistent — remove or FadeOut anything you no longer need so the frame doesn't accumulate clutter.",
+      "Use relative positioning (.next_to, .to_edge, .arrange, .move_to) instead of hard-coded pixel coordinates so the layout scales with the frame."
+    ],
+    "style": [
+      "Set a dark, consistent background (e.g. self.camera.background_color = \"#1a1a2e\") and a small, cohesive color palette.",
+      "Use Text() for labels and titles with a sensible font_size; reserve MathTex for actual mathematics.",
+      "Give animations deliberate run_time and rate_func (smooth, there_and_back) so motion reads clearly rather than snapping.",
+      "Group related mobjects in VGroups so they can be moved, scaled, and animated together."
+    ]
+  }
+}

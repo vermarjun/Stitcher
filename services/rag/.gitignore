@@ -1,0 +1,16 @@
+# Environment — never commit real secrets
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
