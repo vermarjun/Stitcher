@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.core import metrics as m
+from app.observability import add_active_render
 
 
 class SaturatedError(RuntimeError):
@@ -82,9 +83,11 @@ async def acquire() -> AsyncIterator[None]:
 
     _active += 1
     m.active.set(_active)
+    add_active_render(1)  # OTel §3d: stitcher.render.active (live concurrency)
     try:
         yield
     finally:
         _active -= 1
         m.active.set(_active)
+        add_active_render(-1)
         sem.release()

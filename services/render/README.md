@@ -118,6 +118,38 @@ Test battery at `tests/security/test_sandbox_escape.py` covers network exfil, fs
 
 Full threat model: [docs/SANDBOX.md](docs/SANDBOX.md).
 
+## Observability
+
+Two independent layers, both optional and both fail-soft:
+
+- **Prometheus** (`GET /metrics`) — flat counters/histograms, opt-out via `METRICS_ENABLED=false`.
+- **OpenTelemetry** — distributed traces + OTLP metrics exported over **HTTP/protobuf** to a
+  collector on port 4318. The incoming `traceparent` header (sent by the API) is extracted
+  automatically, so each render is a child span of the API's trace. The human-facing
+  `X-Trace-Id` is attached as the `stitcher.trace_id` span attribute.
+
+Tracing is initialised **programmatically** in the app factory (`app/observability.py`), so it
+works no matter how uvicorn is launched. If the collector is unreachable the batch exporter
+silently drops data — nothing escapes into the request path.
+
+```bash
+# default launch — OTel inits itself from the env (no collector required)
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# ALTERNATIVE: the auto-instrumentation CLI wrapper (also works, not required)
+opentelemetry-instrument uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+| Env var                       | Default                 | Notes                                  |
+| ----------------------------- | ----------------------- | -------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | Collector base URL (OTLP/HTTP)         |
+| `OTEL_SERVICE_NAME`           | `stitcher-render`       | `service.name` resource attribute      |
+| `OTEL_SDK_DISABLED`           | unset                   | Set `true` to skip OTel init entirely  |
+
+Spans: `render.ast_guard`, `render.manim` (`scene_class`, `quality`, `timeout`, `exit_code`),
+`render.ffmpeg_thumbnail`, `render.upload` (`backend`). Metrics: `stitcher.render.duration`
+(histogram, ms, attrs `{quality, success}`) and `stitcher.render.active` (live concurrency).
+
 ## Testing
 
 ```bash

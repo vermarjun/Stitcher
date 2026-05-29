@@ -20,9 +20,8 @@ from app.core.audio import bake as bake_audio
 from app.core.classify import classify
 from app.core.manim_runner import build_invocation, resolve_artifact_on_host
 from app.core.sandbox import Sandbox, SandboxLimits
-from app.core.thumbnail import ThumbnailError
+from app.core.thumbnail import ThumbnailError, probe_duration
 from app.core.thumbnail import extract as extract_thumbnail
-from app.core.thumbnail import probe_duration
 from app.core.validate import first_issue_as_error, validate
 from app.logging import get_logger
 from app.models import (
@@ -34,6 +33,7 @@ from app.models import (
     RenderRequest,
     RenderSuccessResponse,
 )
+from app.observability import record_render_duration, set_span_error, span
 from app.storage.base import StorageError
 from app.storage.selector import get_storage
 
@@ -82,16 +82,18 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
     t0 = time.perf_counter()
 
     # --- 1. AST pre-guard ---
-    issues = validate(req.code)
-    first = first_issue_as_error(issues)
-    if first is not None:
-        line, summary = first
-        # SyntaxError comes back through the AST pre-guard too — preserve the label so
-        # clients can distinguish "your code doesn't parse" from "your code uses a banned API".
-        category = "SyntaxError" if summary.startswith("SyntaxError") else "Rejected"
-        log.info("pipeline.rejected", reason="validation", summary=summary, line=line,
-                 category=category)
-        return _fail(req, t0, "validation", category, summary, line=line)
+    with span("render.ast_guard") as ast_span:
+        issues = validate(req.code)
+        first = first_issue_as_error(issues)
+        if first is not None:
+            line, summary = first
+            # SyntaxError comes back through the AST pre-guard too — preserve the label so
+            # clients can distinguish "your code doesn't parse" from "your code uses a banned API".
+            category = "SyntaxError" if summary.startswith("SyntaxError") else "Rejected"
+            log.info("pipeline.rejected", reason="validation", summary=summary, line=line,
+                     category=category)
+            set_span_error(ast_span, f"{category}: {summary}")
+            return _fail(req, t0, "validation", category, summary, line=line)
 
     # --- 2. Sandbox + manim ---
     limits = SandboxLimits(
@@ -127,36 +129,55 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
 
     sandbox = Sandbox()
     sandbox_t0 = time.perf_counter()
-    result = await sandbox.run(render_code, req.scene_class, limits, manim_argv=inv.argv)
-    sandbox_ms = int((time.perf_counter() - sandbox_t0) * 1000)
+    with span(
+        "render.manim",
+        scene_class=req.scene_class,
+        quality=req.render.quality,
+        timeout=limits.timeout_sec,
+    ) as manim_span:
+        result = await sandbox.run(render_code, req.scene_class, limits, manim_argv=inv.argv)
+        sandbox_ms = int((time.perf_counter() - sandbox_t0) * 1000)
+        if manim_span is not None:
+            manim_span.set_attribute("exit_code", result.exit_code)
+            if result.killed_by != "exit":
+                manim_span.set_attribute("killed_by", result.killed_by)
 
-    if result.killed_by == "timeout":
-        log.warning("pipeline.timeout", timeout_sec=limits.timeout_sec)
-        return _fail(req, t0, "timeout", "Timeout",
-                     f"render exceeded {limits.timeout_sec}s wall-clock",
-                     stderr=result.stderr, stdout=result.stdout,
-                     killed_by="timeout", render_ms=result.duration_ms,
-                     sandbox_ms=sandbox_ms)
-    if result.killed_by == "oom":
-        log.warning("pipeline.oom", memory_mb=limits.memory_mb)
-        return _fail(req, t0, "oom", "OutOfMemory",
-                     f"render exceeded {limits.memory_mb}MB",
-                     stderr=result.stderr, stdout=result.stdout,
-                     killed_by="oom", render_ms=result.duration_ms,
-                     sandbox_ms=sandbox_ms)
-    if result.killed_by == "startup":
-        log.error("pipeline.sandbox_setup_failed", stderr=result.stderr)
-        return _fail(req, t0, "sandbox_setup", "SandboxSetup",
-                     "could not start sandbox", stderr=result.stderr,
-                     render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
+        # §3d: histogram around the manim render. success = exited 0 (not killed).
+        manim_ok = result.killed_by == "exit" and result.exit_code == 0
+        record_render_duration(result.duration_ms, quality=req.render.quality,
+                               success=manim_ok)
 
-    if result.exit_code != 0:
-        c = classify(result.stderr, result.stdout)
-        log.info("pipeline.manim_failed", category=c.category, line=c.line)
-        return _fail(req, t0, c.phase, c.category, c.summary,
-                     stderr=result.stderr, stdout=result.stdout, line=c.line,
-                     exit_code=result.exit_code, render_ms=result.duration_ms,
-                     sandbox_ms=sandbox_ms)
+        if result.killed_by == "timeout":
+            log.warning("pipeline.timeout", timeout_sec=limits.timeout_sec)
+            set_span_error(manim_span, f"timeout after {limits.timeout_sec}s")
+            return _fail(req, t0, "timeout", "Timeout",
+                         f"render exceeded {limits.timeout_sec}s wall-clock",
+                         stderr=result.stderr, stdout=result.stdout,
+                         killed_by="timeout", render_ms=result.duration_ms,
+                         sandbox_ms=sandbox_ms)
+        if result.killed_by == "oom":
+            log.warning("pipeline.oom", memory_mb=limits.memory_mb)
+            set_span_error(manim_span, f"oom over {limits.memory_mb}MB")
+            return _fail(req, t0, "oom", "OutOfMemory",
+                         f"render exceeded {limits.memory_mb}MB",
+                         stderr=result.stderr, stdout=result.stdout,
+                         killed_by="oom", render_ms=result.duration_ms,
+                         sandbox_ms=sandbox_ms)
+        if result.killed_by == "startup":
+            log.error("pipeline.sandbox_setup_failed", stderr=result.stderr)
+            set_span_error(manim_span, "sandbox failed to start")
+            return _fail(req, t0, "sandbox_setup", "SandboxSetup",
+                         "could not start sandbox", stderr=result.stderr,
+                         render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
+
+        if result.exit_code != 0:
+            c = classify(result.stderr, result.stdout)
+            log.info("pipeline.manim_failed", category=c.category, line=c.line)
+            set_span_error(manim_span, f"{c.category}: exit {result.exit_code}")
+            return _fail(req, t0, c.phase, c.category, c.summary,
+                         stderr=result.stderr, stdout=result.stdout, line=c.line,
+                         exit_code=result.exit_code, render_ms=result.duration_ms,
+                         sandbox_ms=sandbox_ms)
 
     # --- 3. Find the artifact ---
     host_artifact = resolve_artifact_on_host(
@@ -185,31 +206,36 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
 
     # --- 4. Upload ---
     upload_t0 = time.perf_counter()
-    try:
-        store = get_storage(req.storage.backend)
-        url, size = store.put(
-            host_artifact, folder=req.storage.folder, public=req.storage.public,
-            content_type=_CONTENT_TYPES.get(req.render.format),
-        )
-    except StorageError as e:
-        log.error("pipeline.upload_failed", error=str(e))
-        return _fail(req, t0, "upload", "StorageError", str(e),
-                     render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
+    with span("render.upload", backend=req.storage.backend) as upload_span:
+        try:
+            store = get_storage(req.storage.backend)
+            url, size = store.put(
+                host_artifact, folder=req.storage.folder, public=req.storage.public,
+                content_type=_CONTENT_TYPES.get(req.render.format),
+            )
+        except StorageError as e:
+            log.error("pipeline.upload_failed", error=str(e))
+            set_span_error(upload_span, f"StorageError: {e}")
+            return _fail(req, t0, "upload", "StorageError", str(e),
+                         render_ms=result.duration_ms, sandbox_ms=sandbox_ms)
     upload_ms = int((time.perf_counter() - upload_t0) * 1000)
 
     # --- 4b. Thumbnail (best-effort — failure here is non-fatal) ---
     thumbnail_url: str | None = None
     if req.storage.generate_thumbnail and req.render.format in {"mp4", "webm", "mov", "gif"}:
-        try:
-            thumb = extract_thumbnail(host_artifact, at_fraction=req.storage.thumbnail_at)
-            t_url, _ = store.put(
-                thumb.path, folder=f"{req.storage.folder}/thumbs",
-                public=req.storage.public, content_type="image/jpeg",
-            )
-            thumbnail_url = t_url
-            thumb.path.unlink(missing_ok=True)
-        except (ThumbnailError, StorageError) as e:
-            log.warning("pipeline.thumbnail_failed", error=str(e))
+        with span("render.ffmpeg_thumbnail", backend=req.storage.backend) as thumb_span:
+            try:
+                thumb = extract_thumbnail(host_artifact, at_fraction=req.storage.thumbnail_at)
+                t_url, _ = store.put(
+                    thumb.path, folder=f"{req.storage.folder}/thumbs",
+                    public=req.storage.public, content_type="image/jpeg",
+                )
+                thumbnail_url = t_url
+                thumb.path.unlink(missing_ok=True)
+            except (ThumbnailError, StorageError) as e:
+                # Non-fatal: mark the span ERROR but don't change pipeline flow.
+                log.warning("pipeline.thumbnail_failed", error=str(e))
+                set_span_error(thumb_span, str(e))
 
     # --- 4c. Probe real video duration (best-effort; 0.0 if it fails) ---
     duration_sec = 0.0

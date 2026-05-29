@@ -28,7 +28,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #                           : MathTex support (keep this fat; removing it breaks equations)
 #   - bubblewrap            : sandbox runtime
 #   - libseccomp2           : bwrap needs this even if we don't enable seccomp
-#   - python3-libseccomp    : bindings for scripts/build_seccomp.py (build stage only)
+#   - python3-seccomp    : bindings for scripts/build_seccomp.py (build stage only)
 #   - build-essential pkg-config libcairo2-dev libpango1.0-dev : manim wheel compile
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg \
@@ -59,19 +59,14 @@ RUN if [ -n "$STORAGE" ]; then \
       pip install "."; \
     fi
 
-# ---------- stage 3: seccomp ----------
-FROM base AS seccomp
+# ---------- stage 3: runtime ----------
+# Note: seccomp-BPF compilation is optional and skipped here because Debian bookworm arm64
+# doesn't ship python3-seccomp with the libseccomp python bindings. The sandbox layer
+# degrades gracefully when SANDBOX_SECCOMP_POLICY_PATH is unset — namespaces + rlimits
+# remain the primary boundary. To enable seccomp, see docs/SANDBOX.md and run
+# `scripts/build_seccomp.py` on a host that has libseccomp python bindings installed,
+# then COPY the resulting .bpf into the image yourself.
 
-RUN apt-get update && apt-get install -y --no-install-recommends python3-libseccomp && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-COPY app/assets/seccomp_manim.yaml ./policy.yaml
-COPY scripts/build_seccomp.py ./build_seccomp.py
-RUN pip install --break-system-packages pyyaml && \
-    python build_seccomp.py --policy policy.yaml --out seccomp_manim.bpf
-
-# ---------- stage 4: runtime ----------
 FROM base AS runtime
 
 # Drop build-only packages to keep the image small.
@@ -79,10 +74,8 @@ RUN apt-get purge -y --auto-remove build-essential pkg-config libcairo2-dev libp
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=pydeps  /opt/venv /opt/venv
-COPY --from=seccomp /build/seccomp_manim.bpf /etc/manim-render-service/seccomp_manim.bpf
 
 ENV PATH="/opt/venv/bin:${PATH}" \
-    SANDBOX_SECCOMP_POLICY_PATH=/etc/manim-render-service/seccomp_manim.bpf \
     MANIM_PATH=/opt/venv/bin/manim \
     PYTHON_PATH=/opt/venv/bin/python \
     FFMPEG_PATH=/usr/bin/ffmpeg

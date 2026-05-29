@@ -25,7 +25,7 @@ def _load_libseccomp():
     except ImportError:
         print(
             "ERROR: `seccomp` Python bindings not installed.\n"
-            "  apt-get install -y python3-seccomp   (Debian/Ubuntu)\n"
+            "  apt-get install -y python3-seccomp   (Debian bookworm)\n"
             "  dnf install -y libseccomp-python     (Fedora/RHEL)\n"
             "Or skip seccomp by not setting SANDBOX_SECCOMP_POLICY_PATH.",
             file=sys.stderr,

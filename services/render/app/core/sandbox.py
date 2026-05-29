@@ -80,13 +80,14 @@ class Sandbox:
                 "Install bubblewrap or set SANDBOX_ENABLED=false (dev only)."
             )
 
-    async def run(self, code: str, scene_class: str, limits: SandboxLimits) -> SandboxResult:
+    async def run(self, code: str, scene_class: str, limits: SandboxLimits,
+                  manim_argv: list[str] | None = None) -> SandboxResult:
         workdir = Path(tempfile.mkdtemp(prefix="mrs-", dir="/tmp"))
         script = workdir / "animation.py"
         script.write_text(code, encoding="utf-8")
         (workdir / "media").mkdir(exist_ok=True)
 
-        cmd = self._build_cmd(workdir, scene_class, limits)
+        cmd = self._build_cmd(workdir, scene_class, limits, manim_argv=manim_argv)
         log.debug("sandbox.exec", cmd=cmd, workdir=str(workdir), limits=limits.__dict__)
 
         t0 = time.perf_counter()
@@ -132,19 +133,27 @@ class Sandbox:
             duration_ms=duration_ms, killed_by=killed_by, workdir=workdir,
         )
 
-    def _build_cmd(self, workdir: Path, scene_class: str, limits: SandboxLimits) -> list[str]:
+    def _build_cmd(self, workdir: Path, scene_class: str, limits: SandboxLimits,
+                   manim_argv: list[str] | None = None) -> list[str]:
         settings = get_settings()
-        inner = [
-            settings.manim_path, "-ql",  # quality flag overridden by pipeline via argv build
-            str(Path("/work") / "animation.py"), scene_class,
-            "--media_dir", "/work/media",
-        ]
+        if manim_argv is not None:
+            inner = list(manim_argv)
+        else:
+            inner = [
+                settings.manim_path, "-ql",
+                str(Path("/work") / "animation.py"), scene_class,
+                "--media_dir", "/work/media",
+            ]
         if not self.enabled:
-            # Unsandboxed fallback — dev only. Use host paths directly.
-            inner[0] = settings.manim_path
-            inner[2] = str(workdir / "animation.py")
-            inner[5] = str(workdir / "media")
-            return inner
+            # Unsandboxed fallback — dev only. Translate in-sandbox paths to host paths.
+            sandbox_script = str(Path("/work") / "animation.py")
+            sandbox_media = str(Path("/work") / "media")
+            host_script = str(workdir / "animation.py")
+            host_media = str(workdir / "media")
+            return [
+                arg.replace(sandbox_script, host_script).replace(sandbox_media, host_media)
+                for arg in inner
+            ]
 
         assert self.bwrap is not None
         bwrap_args: list[str] = [
@@ -159,8 +168,11 @@ class Sandbox:
             "--ro-bind", "/usr", "/usr",
             "--ro-bind", "/etc", "/etc",
             "--ro-bind", "/lib", "/lib",
+            "--symlink", "usr/bin", "/bin",
+            "--symlink", "usr/sbin", "/sbin",
             "--symlink", "usr/lib64", "/lib64",
             "--ro-bind", "/opt", "/opt",
+            "--ro-bind", "/var/lib/texmf", "/var/lib/texmf",
             "--bind", str(workdir), "/work",
             "--chdir", "/work",
             "--setenv", "HOME", "/work",
@@ -182,13 +194,15 @@ def _apply_rlimits(limits: SandboxLimits):
     for the sandboxed path — rlimits are defence in depth, not the primary boundary.
     """
     def _inner() -> None:
-        mem_bytes = limits.memory_mb * 1024 * 1024
         cpu_sec = int(limits.timeout_sec * max(limits.cpu_count, 1.0)) + 5
-        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+        # RLIMIT_AS (virtual address space) is intentionally omitted: Python + ffmpeg + Cairo
+        # map several GB of virtual space even when physical usage is low, so any 2GB cap
+        # silently kills the ffmpeg gif-combining step.  In production, memory is bounded by
+        # bubblewrap cgroup limits, not rlimits.
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_sec, cpu_sec))
         resource.setrlimit(resource.RLIMIT_FSIZE, (512 * 1024 * 1024, 512 * 1024 * 1024))
-        resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
-        resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+        # RLIMIT_NPROC is user-level (not per-process) — setting it in preexec_fn would cap
+        # the entire renderer user's thread count, breaking concurrent renders.
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     return _inner
 

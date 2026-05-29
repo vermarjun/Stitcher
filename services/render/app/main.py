@@ -24,6 +24,7 @@ from app.config import get_settings
 from app.logging import configure_logging, get_logger
 from app.middleware.auth import ApiKeyMiddleware
 from app.middleware.trace import TraceMiddleware
+from app.observability import configure_observability
 
 
 @asynccontextmanager
@@ -50,6 +51,12 @@ def create_app() -> FastAPI:
         description="Stateless HTTP renderer for Manim code.",
         lifespan=_lifespan,
     )
+
+    # OpenTelemetry tracing + metrics. Programmatic init so it works regardless of
+    # how uvicorn is launched (additive; fail-soft if the collector is down).
+    # FastAPIInstrumentor.instrument_app() extracts incoming W3C `traceparent`, so
+    # render spans become children of the API's trace. See app/observability.py.
+    configure_observability(app)
 
     # middleware is applied bottom-up, so Trace wraps Auth (runs first)
     app.add_middleware(ApiKeyMiddleware)

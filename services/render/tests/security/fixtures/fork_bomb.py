@@ -1,8 +1,12 @@
 """Should be killed by RLIMIT_NPROC + --unshare-pid."""
-import os
+from manim import Scene
 
-while True:
-    try:
-        os.fork()
-    except OSError:
-        pass
+
+class ForkBomb(Scene):
+    def construct(self):
+        import os
+        while True:
+            try:
+                os.fork()
+            except OSError:
+                pass

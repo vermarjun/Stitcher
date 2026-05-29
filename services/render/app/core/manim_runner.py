@@ -47,12 +47,17 @@ _QUALITY_DIR: dict[Quality, str] = {
 
 _STILL_FORMATS: frozenset[VideoFormat] = frozenset({"png", "svg"})
 
+# In Manim 0.19+, gif and png output filenames include a version suffix
+# (e.g. SceneName_ManimCE_v0.19.2.gif).  Video formats (mp4/webm/mov) do not.
+_VERSION_SUFFIX_FORMATS: frozenset[VideoFormat] = frozenset({"png", "gif"})
+
 
 @dataclass(frozen=True)
 class ManimInvocation:
     """Everything the sandbox runner needs to actually execute manim."""
     argv: list[str]
-    expected_output: Path
+    expected_output: Path      # exact path or glob-parent dir for version-suffixed formats
+    expected_glob: str | None  # glob pattern relative to expected_output.parent, or None
     width: int
     height: int
     fps: int
@@ -92,8 +97,6 @@ def build_invocation(
     ]
     if transparent:
         argv += ["-t"]
-    if background is not None:
-        argv += ["--background_color", background]
     if frame_range is not None:
         a, b = frame_range
         argv += ["--from_animation_number", str(a), "--upto_animation_number", str(b)]
@@ -101,16 +104,31 @@ def build_invocation(
     argv += [str(script_in_sandbox), scene_class]
 
     script_stem = script_in_sandbox.stem
+    # Quality dir is derived from actual height + fps (not just the preset name) so that
+    # fps/resolution overrides are reflected in the path manim actually writes to.
+    quality_dir = f"{height}p{fps}"
+
+    expected_glob: str | None = None
     if video_format in _STILL_FORMATS:
-        expected = media_dir_in_sandbox / "images" / script_stem / f"{scene_class}.{video_format}"
+        dir_path = media_dir_in_sandbox / "images" / script_stem
+        if video_format in _VERSION_SUFFIX_FORMATS:
+            expected = dir_path / f"{scene_class}.{video_format}"  # placeholder
+            expected_glob = f"{scene_class}*.{video_format}"
+        else:
+            expected = dir_path / f"{scene_class}.{video_format}"
+    elif video_format in _VERSION_SUFFIX_FORMATS:
+        dir_path = media_dir_in_sandbox / "videos" / script_stem / quality_dir
+        expected = dir_path / f"{scene_class}.{video_format}"  # placeholder
+        expected_glob = f"{scene_class}*.{video_format}"
     else:
         expected = (
             media_dir_in_sandbox / "videos" / script_stem /
-            _QUALITY_DIR[quality] / f"{scene_class}.{video_format}"
+            quality_dir / f"{scene_class}.{video_format}"
         )
 
     return ManimInvocation(
-        argv=argv, expected_output=expected, width=width, height=height, fps=fps,
+        argv=argv, expected_output=expected, expected_glob=expected_glob,
+        width=width, height=height, fps=fps,
     )
 
 
@@ -118,10 +136,8 @@ def resolve_artifact_on_host(invocation: ManimInvocation, host_media_dir: Path,
                              sandbox_media_dir: Path) -> Path:
     """Translate the in-sandbox expected path to the host filesystem.
 
-    The sandbox bind-mounts host `<workdir>` at `/work`, so media files written to
-    `/work/media/...` by Manim appear on the host at `<workdir>/media/...`. This function
-    does that prefix swap and nothing else — keeping the translation explicit makes it
-    easier to change the sandbox bind layout later without rummaging through path logic.
+    For formats with a version-suffix (gif, png), globs for the actual file because
+    Manim appends `_ManimCE_v{version}` to those filenames.
     """
     try:
         relative = invocation.expected_output.relative_to(sandbox_media_dir)
@@ -130,4 +146,11 @@ def resolve_artifact_on_host(invocation: ManimInvocation, host_media_dir: Path,
             f"expected_output {invocation.expected_output} is not under sandbox media dir "
             f"{sandbox_media_dir}"
         ) from e
-    return host_media_dir / relative
+    host_dir = host_media_dir / relative.parent
+    if invocation.expected_glob is not None:
+        matches = sorted(host_dir.glob(invocation.expected_glob))
+        if matches:
+            return matches[0]
+        # Return placeholder so the caller's existence check produces the right error message.
+        return host_dir / invocation.expected_output.name
+    return host_dir / relative.name

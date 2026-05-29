@@ -16,12 +16,7 @@ services:
         STORAGE: ${STORAGE:-}
     image: manim-render-service:local
     container_name: manim-render-service
-    # bwrap needs to create new namespaces. This is the minimal cap set that lets it work
-    # WITHOUT --privileged.
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - apparmor=unconfined
+    privileged: true
     ports:
       - "${PORT:-8000}:8000"
     env_file: .env
