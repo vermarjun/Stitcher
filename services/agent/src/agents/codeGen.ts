@@ -20,6 +20,7 @@ import { getPrompt } from "../prompts/registry.js";
 import { publishEvent } from "../events/emitter.js";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
+import { withGenAiSpan, getLangfuseCallbacks, takeLastUsage } from "../observability/llm.js";
 
 const log = getLogger("codeGen");
 
@@ -65,9 +66,13 @@ export async function codeGenNode(
 
   const t0 = Date.now();
   try {
-    const result = await agent.invoke({
-      messages: [new SystemMessage(systemPrompt), new HumanMessage(userContent)],
-    });
+    const result = await withGenAiSpan("coder", coderCfg, () =>
+      agent.invoke(
+        { messages: [new SystemMessage(systemPrompt), new HumanMessage(userContent)] },
+        { callbacks: getLangfuseCallbacks("coder", { traceId: state.traceId, jobId }) }
+      )
+    );
+    const usage = takeLastUsage();
 
     const lastMessage = result.messages[result.messages.length - 1];
     const responseText =
@@ -87,7 +92,7 @@ export async function codeGenNode(
           status: "failed",
         },
       };
-      return { sceneStates };
+      return { sceneStates, ...(usage ? { llmCallLog: [usage] } : {}) };
     }
 
     publishEvent(jobId, "codegen_complete", { sceneIndex, codeLength: code.length });
@@ -100,7 +105,7 @@ export async function codeGenNode(
       finalCode: code,
     };
 
-    return { sceneStates: { [sceneIndex]: sceneState } };
+    return { sceneStates: { [sceneIndex]: sceneState }, ...(usage ? { llmCallLog: [usage] } : {}) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ jobId, sceneIndex, err: msg }, "CodeGen error");

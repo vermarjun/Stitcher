@@ -17,6 +17,8 @@ import { publishEvent } from "../events/emitter.js";
 import { validate } from "../validation/pipeline.js";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
+import { withGenAiSpan, getLangfuseCallbacks, takeLastUsage } from "../observability/llm.js";
+import type { LlmCallLog } from "../graph/state.js";
 
 const log = getLogger("debugger");
 
@@ -64,12 +66,23 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
   let lastValidation: ValidationReport | null = null;
   let changeSummary = "";
   let diffOutput = "";
+  const llmCallLog: LlmCallLog[] = [];
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const result = await agent.invoke({
-        messages: [new SystemMessage(systemPrompt), new HumanMessage(attempt === 0 ? userContent : `Attempt ${attempt} also failed validation:\n${JSON.stringify(lastValidation)}\n\nPrevious code:\n\`\`\`python\n${lastCode}\n\`\`\`\nTry a different approach.`)],
-      });
+      const result = await withGenAiSpan("debugger", debugCfg, () =>
+        agent.invoke(
+          {
+            messages: [
+              new SystemMessage(systemPrompt),
+              new HumanMessage(attempt === 0 ? userContent : `Attempt ${attempt} also failed validation:\n${JSON.stringify(lastValidation)}\n\nPrevious code:\n\`\`\`python\n${lastCode}\n\`\`\`\nTry a different approach.`),
+            ],
+          },
+          { callbacks: getLangfuseCallbacks("debugger", { traceId: state.traceId, jobId }) }
+        )
+      );
+      const usage = takeLastUsage();
+      if (usage) llmCallLog.push(usage);
 
       const lastMessage = result.messages[result.messages.length - 1];
       const responseText =
@@ -101,6 +114,7 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
           fixedValidation: report,
           changeSummary,
           diff: diffOutput,
+          ...(llmCallLog.length ? { llmCallLog } : {}),
         };
       }
     } catch (err) {
@@ -114,5 +128,6 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
     fixedValidation: lastValidation ?? undefined,
     changeSummary: "Max retries exhausted — partial fix only",
     error: { summary: "Debugger could not produce passing code after max retries" },
+    ...(llmCallLog.length ? { llmCallLog } : {}),
   };
 }

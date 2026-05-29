@@ -4,6 +4,11 @@
  * Boots Fastify, registers all routes, and starts listening.
  */
 
+// OTel instrumentation MUST be the first import so auto-instrumentation patches
+// http/Fastify before they are loaded (OBSERVABILITY.md §3). When started via the
+// `-r ./dist/instrumentation.js` pre-require this is a redundant no-op (guarded).
+import "./instrumentation.js";
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { config } from "./config.js";

@@ -18,6 +18,7 @@ import { getPrompt } from "../prompts/registry.js";
 import { publishEvent } from "../events/emitter.js";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
+import { withGenAiSpan, getLangfuseCallbacks, takeLastUsage } from "../observability/llm.js";
 
 const log = getLogger("planner");
 
@@ -72,9 +73,13 @@ export async function plannerNode(state: GraphState): Promise<Partial<GraphState
     .join("\n\n");
 
   try {
-    const result = await agent.invoke({
-      messages: [new SystemMessage(systemPrompt), new HumanMessage(userContent)],
-    });
+    const result = await withGenAiSpan("planner", plannerCfg, () =>
+      agent.invoke(
+        { messages: [new SystemMessage(systemPrompt), new HumanMessage(userContent)] },
+        { callbacks: getLangfuseCallbacks("planner", { traceId: state.traceId, jobId }) }
+      )
+    );
+    const usage = takeLastUsage();
 
     const lastMessage = result.messages[result.messages.length - 1];
     const responseText =
@@ -110,7 +115,7 @@ export async function plannerNode(state: GraphState): Promise<Partial<GraphState
 
     log.info({ jobId, sceneCount: scenes.length }, "Planner complete");
 
-    return { styleManifest, scenes };
+    return { styleManifest, scenes, ...(usage ? { llmCallLog: [usage] } : {}) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ jobId, err: msg }, "Planner error");

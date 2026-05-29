@@ -105,6 +105,7 @@ export function registerCode(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "generate" as const,
+        traceId: body.meta?.traceId ?? req.traceId,
         scenes: [normalisedPlan],
         styleManifest: body.styleManifest,
         codeExamples: body.codeExamples,

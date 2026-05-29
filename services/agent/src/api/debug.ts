@@ -73,6 +73,7 @@ export function registerDebug(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "debug" as const,
+        traceId: body.meta?.traceId ?? req.traceId,
         brokenCode: body.brokenCode,
         sceneClass: body.sceneClass,
         brokenError: body.error,

@@ -23,7 +23,7 @@ export async function authMiddleware(
 ): Promise<void> {
   const key = request.headers["x-api-key"];
   if (!key || typeof key !== "string" || !constantTimeEqual(key, config.agentApiKey)) {
-    reply.status(401).send({ error: "Unauthorised. Supply X-Api-Key header." });
+    return reply.status(401).send({ error: "Unauthorised. Supply X-Api-Key header." });
   }
 }
 

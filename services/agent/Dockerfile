@@ -38,21 +38,16 @@ WORKDIR /build
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# ── stage 4: build ────────────────────────────────────────────────────────────
-FROM nodedeps AS builder
+# ── stage 4: assets ────────────────────────────────────────────────────────────
+# Use pre-built dist to avoid tsc OOM on large @langchain type graphs in ARM64 containers.
+# Run `npm run build` on the host before `docker compose up --build`.
+# src/assets/manim_api_index.json is pre-generated; copy it directly.
+FROM scratch AS builder
 
-COPY package*.json tsconfig.json ./
-RUN npm ci  # includes devDeps for tsc
-
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-
-# Compile TypeScript
-RUN npm run build
-
-# Build manim API index
-RUN python scripts/build_manim_api_index.py --out dist/assets/manim_api_index.json && \
-    cp src/assets/ruff_manim.toml dist/assets/ruff_manim.toml
+WORKDIR /build
+COPY dist/ ./dist/
+COPY src/assets/manim_api_index.json ./dist/assets/manim_api_index.json
+COPY src/assets/ruff_manim.toml ./dist/assets/ruff_manim.toml
 
 # ── stage 5: runtime ──────────────────────────────────────────────────────────
 FROM pydeps AS runtime
@@ -61,9 +56,8 @@ WORKDIR /srv
 
 # Node modules (prod only)
 COPY --from=nodedeps /build/node_modules ./node_modules
-# Compiled JS
+# Compiled JS + assets
 COPY --from=builder /build/dist ./dist
-COPY --from=builder /build/dist/assets ./dist/assets
 
 ENV NODE_ENV=production \
     MANIM_API_INDEX_PATH=/srv/dist/assets/manim_api_index.json \

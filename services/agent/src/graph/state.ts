@@ -124,6 +124,8 @@ export const GraphStateAnnotation = Annotation.Root({
   // Core identity
   jobId: Annotation<string>({ reducer: (_prev, next) => next }),
   mode: Annotation<"generate" | "debug">({ reducer: (_prev, next) => next }),
+  // Human-facing distributed trace id (X-Trace-Id) — propagated for Langfuse correlation.
+  traceId: Annotation<string | undefined>({ reducer: (_prev, next) => next }),
 
   // Input — generate mode
   prompt: Annotation<string | undefined>({ reducer: (_prev, next) => next }),

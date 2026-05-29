@@ -108,6 +108,7 @@ export function registerGenerate(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "generate" as const,
+        traceId: body.meta?.traceId ?? req.traceId,
         prompt: body.prompt,
         modelConfig: body.modelConfig,
         retrievalContext: body.context?.retrievalContext,

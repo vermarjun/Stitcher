@@ -67,7 +67,16 @@ export const config = {
   llmIoLocalPath: opt("LLM_IO_LOCAL_PATH", "./llm_captures"),
   langfuseSecretKey: process.env["LANGFUSE_SECRET_KEY"],
   langfusePublicKey: process.env["LANGFUSE_PUBLIC_KEY"],
-  langfuseHost: opt("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+  // `LANGFUSE_BASEURL` is the name used by the rest of the Stitcher stack; accept
+  // it as an alias for the repo's existing `LANGFUSE_HOST`. Both are optional.
+  langfuseHost: opt(
+    "LANGFUSE_HOST",
+    process.env["LANGFUSE_BASEURL"] ?? "https://cloud.langfuse.com"
+  ),
+
+  // ── OpenTelemetry (optional — consumed by src/instrumentation.ts) ──────────
+  otelServiceName: opt("OTEL_SERVICE_NAME", "stitcher-agent"),
+  otelExporterEndpoint: opt("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"),
 
   manimApiIndexPath: opt(
     "MANIM_API_INDEX_PATH",
