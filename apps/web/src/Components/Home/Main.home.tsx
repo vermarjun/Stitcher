@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { Project } from "@/State/Types";
 import AllProjects from "./AllProjects.home";
+import Generations from "./Generations.home";
 import Teams from "./Teams.home";
 // import Pricing from "./Pricing.home";
 import ApiKeys from "./ApiKeys.home";
@@ -75,6 +76,8 @@ const Main = () => {
         );
       case "projects":
         return <AllProjects userId={user._id}/>;
+      case "generations":
+        return <Generations />;
       case "teams":
         return FEATURES.community ? <Teams /> : (
           <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />

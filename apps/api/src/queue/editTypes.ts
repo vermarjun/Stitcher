@@ -11,6 +11,12 @@ export interface EditJobData {
     timelineItemId?: string;// optional — if we want to replace an existing timeline item
     editPrompt: string;     // user's instruction
     traceId: string;
+    /**
+     * W3C Trace Context carrier injected at enqueue time so the edit worker can
+     * continue the originating request's distributed trace across the BullMQ
+     * boundary. See Plan/OBSERVABILITY.md §3a. Optional for back-compat.
+     */
+    otelCarrier?: Record<string, string>;
 }
 
 export interface EditJobResult {

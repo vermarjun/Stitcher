@@ -10,7 +10,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 
 // Config & logger — must be imported before anything that reads config
-import { API_PREFIX, PORT, config, JWT_CONFIG } from "./config";
+import { API_PREFIX, PORT, config, JWT_CONFIG, ADMIN_DASHBOARD_ENABLED } from "./config";
 import logger from "./util/logger.util";
 import jwt from "jsonwebtoken";
 import { canAccessProject } from "./util/projectAccess.util";
@@ -19,6 +19,15 @@ import { canAccessProject } from "./util/projectAccess.util";
 import connectDB from "./util/database.util";
 import { initRedisSubscriber, redisSubscriber } from "./util/redis.util";
 import { pubClient } from "./queue/connection";
+
+// Observability: queue dashboard + queue-depth metrics sampler
+import { createBullBoard } from "@bull-board/api";
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
+import { ExpressAdapter } from "@bull-board/express";
+import { generationQueue } from "./queue/generationQueue";
+import { editQueue } from "./queue/editQueue";
+import { startQueueDepthSampler, stopQueueDepthSampler } from "./util/metrics.util";
+import auth from "./middleware/auth.middleware";
 import GenerateChat from "./model/generateChat.model";
 import User from "./model/user.model";
 import { Types } from "mongoose";
@@ -50,6 +59,8 @@ import notificationRoutes from "./router/notification.router";
 import paymentRoutes from "./router/payment.router";
 import memoryRoutes from "./router/memory.router";
 import collabRoutes from "./router/collab.router";
+import adminLiveRoutes from "./router/adminLive.router";
+import { isAdminUser } from "./middleware/admin.middleware";
 import { initYjsServer } from "./collab/yjs.server";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
@@ -208,6 +219,25 @@ io.on("connection", (socket) => {
         }
     });
 
+    // ── Admin live "god view" firehose (OBSERVABILITY §5) ───────────────────
+    // An admin joins the `admin:live` room to receive `admin_update` events for
+    // EVERY in-flight job (relayed in redis.util.ts). Gated with the SAME policy
+    // as bull-board: ADMIN_DASHBOARD_ENABLED + valid JWT + admin role. The
+    // socket already passed the io.use() JWT middleware, so socket.data.userId
+    // is trustworthy here.
+    socket.on("join_admin_live", async () => {
+        const userId = socket.data.userId as string | undefined;
+        const ok = await isAdminUser(userId);
+        if (!ok) {
+            logger.warn({ message: "join_admin_live denied", socketId: socket.id, userId });
+            socket.emit("admin_live_denied", { message: "Admin access required" });
+            return;
+        }
+        socket.join("admin:live");
+        socket.emit("admin_live_joined");
+        logger.info({ message: "Socket joined admin:live", socketId: socket.id, userId });
+    });
+
     socket.on("disconnect", () => {
         logger.debug({ message: "Socket disconnected", socketId: socket.id });
     });
@@ -271,6 +301,33 @@ app.use(`${API_PREFIX}/notifications`, requireFeature("community"), notification
 app.use(`${API_PREFIX}/payments`, paymentRoutes);
 app.use(`${API_PREFIX}/memory`, memoryRoutes);
 app.use(`${API_PREFIX}/collab`, collabRoutes);
+// Admin live "god view" (OBSERVABILITY §5) — internal ops surface, NOT a
+// community feature, so it is intentionally outside the requireFeature("community")
+// block above. Each route is gated by auth + requireAdmin (see the router); when
+// ADMIN_DASHBOARD_ENABLED=false every route here 404s.
+app.use(`${API_PREFIX}/admin/live`, adminLiveRoutes);
+
+// ─── bull-board queue dashboard (OBSERVABILITY §6) ───────────────────────────
+// Instant queue/job/step visibility at ${API_PREFIX}/admin/queues.
+//
+// Gating: this surface exposes job payloads and controls, so it is only mounted
+// when ADMIN_DASHBOARD_ENABLED=true AND the request passes JWT auth.
+// TODO (RBAC): the env flag + plain JWT auth is a stopgap. Replace with a proper
+// admin role check (e.g. user.role === "admin") once an admin/RBAC concept
+// exists, so any authenticated user can no longer reach the dashboard.
+if (ADMIN_DASHBOARD_ENABLED) {
+    const bullBoardPath = `${API_PREFIX}/admin/queues`;
+    const serverAdapter = new ExpressAdapter();
+    serverAdapter.setBasePath(bullBoardPath);
+
+    createBullBoard({
+        queues: [new BullMQAdapter(generationQueue), new BullMQAdapter(editQueue)],
+        serverAdapter,
+    });
+
+    app.use(bullBoardPath, auth, serverAdapter.getRouter());
+    logger.info({ message: "bull-board mounted (auth-gated)", path: bullBoardPath });
+}
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
@@ -286,6 +343,13 @@ const server = httpServer.listen(PORT, async () => {
         await connectDB();
         logger.info({ message: `Server running`, port: PORT });
         await initRedisSubscriber(io);
+
+        // OBSERVABILITY §3d: periodically sample BullMQ job counts into the
+        // stitcher.queue.depth{queue,state} gauge. Best-effort; never throws.
+        startQueueDepthSampler([
+            { queue: generationQueue, label: "video-generation" },
+            { queue: editQueue, label: "video-edit" },
+        ]);
     } catch (error) {
         logger.error({ message: "Failed to start services", error: String(error) });
     }
@@ -308,6 +372,8 @@ async function shutdown(signal: string) {
         forceExit.unref();
 
         try {
+            stopQueueDepthSampler();
+
             await generationWorker.close();
             await editWorker.close();
             logger.info("BullMQ workers closed");

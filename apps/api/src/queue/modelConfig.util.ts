@@ -4,15 +4,18 @@
  * Priority:
  *   1. Caller-supplied overrides (already-resolved partial config)
  *   2. User's stored API keys (decrypted via getDecryptedKey())
- *   3. Environment defaults — provider opencodego, no apiKeyOverride so the
+ *   3. Environment defaults — provider opencodego, no apiKey so the
  *      agent service falls back to its own OPENCODE_GO_API_KEY env var.
  *
  * Design: never throws. If anything goes wrong reading the database, fall back
  * silently to the env defaults.  The job should still run — just using shared
  * default keys instead of the user's BYOK keys.
  *
- * Note: apiKeyOverride is intentionally omitted from DEFAULT_MODEL_CONFIG so
- * the agent service applies its own default key; no secrets are hardcoded here.
+ * Note: apiKey is intentionally omitted from DEFAULT_MODEL_CONFIG so the agent
+ * service applies its own default key; no secrets are hardcoded here. The field
+ * names here (apiKey / baseURL) match exactly what the agent service's
+ * ModelConfigSchema accepts and what its model factory's getModel() reads, so
+ * a user's BYOK key flows end-to-end to the provider.
  */
 
 import ApiKey from "../model/userapikeys.model";
@@ -66,8 +69,8 @@ function buildRoleConfig(
         // unified gateway that accepts all of them.
         provider: "openrouter",
         model: modelName,
-        apiKeyOverride: keyValue,
-        baseUrlOverride: baseUrl,
+        apiKey: keyValue,
+        baseURL: baseUrl,
     };
 }
 
@@ -115,4 +118,27 @@ export async function resolveModelConfig(
     }
 
     return resolved;
+}
+
+/**
+ * Decide whether a resolved model config is funded by the user's OWN keys for
+ * the role(s) that will actually be billed by the LLM provider.
+ *
+ * Used by the generation/edit workers to grant a credit-exhaust path: a user
+ * with zero credits may keep running ONLY when they supplied their own keys
+ * (BYOT). We must be conservative — never hand out free shared-key generations.
+ *
+ * A role counts as user-funded only when its config carries a non-empty
+ * `apiKey` (the field the agent service actually consumes). The env defaults
+ * deliberately omit `apiKey`, so the shared OPENCODE_GO_API_KEY path returns
+ * false here and continues to require credits.
+ *
+ * The coder role is the primary cost driver and is invoked in BOTH pipelines
+ * (generation per-scene, edit once), so it is the gate. If the coder is on the
+ * user's own key, the run will not consume the shared default key for the
+ * billable work, and we allow it without decrementing credits.
+ */
+export function hasOwnKeys(config: ResolvedModelConfig): boolean {
+    const key = config.coder?.apiKey;
+    return typeof key === "string" && key.trim().length > 0;
 }

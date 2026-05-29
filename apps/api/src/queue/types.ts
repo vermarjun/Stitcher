@@ -33,6 +33,13 @@ export interface VideoGenerationJobData {
     };
     /** UUID propagated from the originating HTTP request (req.id). */
     traceId: string;
+    /**
+     * W3C Trace Context carrier injected at enqueue time so the worker can
+     * continue the originating request's distributed trace across the BullMQ
+     * process/time boundary. See Plan/OBSERVABILITY.md §3a. Optional so older
+     * queued jobs (without it) still process.
+     */
+    otelCarrier?: Record<string, string>;
 }
 
 // ─── Job result ──────────────────────────────────────────────────────────────

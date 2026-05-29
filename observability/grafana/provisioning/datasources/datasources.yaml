@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Grafana datasource provisioning — Stitcher observability
+#
+#  Provisions Tempo, Prometheus and Loki, and wires trace↔logs correlation:
+#    - Tempo "Trace to logs"  → jumps to Loki filtered by trace_id
+#    - Loki  derived field    → turns a trace_id in a log line into a Tempo link
+#    - Tempo "Trace to metrics" + service-map use the Prometheus datasource
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: 1
+
+datasources:
+  # ── Prometheus (metrics) ───────────────────────────────────────────────────
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+
+  # ── Tempo (traces) ─────────────────────────────────────────────────────────
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # Trace → Logs: open Loki, filtered to the same trace within ±1h.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+        filterByTraceID: true
+        filterBySpanID: false
+        tags:
+          - key: service.name
+            value: service_name
+        customQuery: false
+      # Trace → Metrics: link spans to RED metrics in Prometheus.
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+
+  # ── Loki (logs) ────────────────────────────────────────────────────────────
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      # Derived field: detect a trace_id in log lines/structured metadata and
+      # render a clickable link straight into the Tempo trace view.
+      derivedFields:
+        - name: TraceID
+          # matches trace_id / traceID / traceId in the log body
+          matcherType: regex
+          matcherRegex: '(?:trace[_]?[iI]d)["=:\s]+([a-fA-F0-9]{16,32})'
+          url: "$${__value.raw}"
+          datasourceUid: tempo
+        # Loki promotes OTLP trace context to structured metadata as `trace_id`.
+        - name: TraceIDLabel
+          matcherType: label
+          matcherRegex: trace_id
+          url: "$${__value.raw}"
+          datasourceUid: tempo

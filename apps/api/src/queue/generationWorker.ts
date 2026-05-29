@@ -32,13 +32,23 @@
 
 import { Worker, Job } from "bullmq";
 import { Types } from "mongoose";
+import {
+    trace,
+    context,
+    propagation,
+    SpanStatusCode,
+    type Span,
+    type Context,
+} from "@opentelemetry/api";
 import { redisConnection } from "./connection";
+import { pipelineStepDuration } from "../util/metrics.util";
 import { ragClient } from "../services/ragClient";
 import { agentClient } from "../services/agentClient";
 import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
-import { resolveModelConfig } from "./modelConfig.util";
+import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
 import { publishProgress } from "./eventPublisher.util";
+import { setJobStatus, setJobSceneTotal, incrementJobScene } from "./jobTracker.util";
 import { concatVideos, uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
 import { recall, reflect } from "../services/memoryService";
 import GenerateChat from "../model/generateChat.model";
@@ -86,6 +96,41 @@ function makeLimiter(maxConcurrent: number) {
     };
 }
 
+// ─── OTel tracing helper ──────────────────────────────────────────────────────
+// All pipeline spans are created from this tracer. See OBSERVABILITY §3b.
+
+const tracer = trace.getTracer("stitcher-api/generation");
+
+/**
+ * Run `fn` inside a child span of `parentCtx`, named `pipeline.<step>` per the
+ * contract, with the supplied attributes. Records the exception + ERROR status
+ * on throw, and records the step duration into the histogram tagged
+ * { step, success }. Re-throws so control flow is unchanged.
+ */
+async function withStep<T>(
+    parentCtx: Context,
+    step: string,
+    attrs: Record<string, string | number | boolean>,
+    fn: () => Promise<T>
+): Promise<T> {
+    const span = tracer.startSpan(`pipeline.${step}`, { attributes: attrs }, parentCtx);
+    const spanCtx = trace.setSpan(parentCtx, span);
+    const start = Date.now();
+    let success = false;
+    try {
+        const result = await context.with(spanCtx, fn);
+        success = true;
+        return result;
+    } catch (err) {
+        span.recordException(err as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
+        throw err;
+    } finally {
+        span.end();
+        pipelineStepDuration.record(Date.now() - start, { step, success });
+    }
+}
+
 // ─── Per-scene state ──────────────────────────────────────────────────────────
 
 interface SceneState {
@@ -107,36 +152,104 @@ interface SceneState {
 const SCENE_CONCURRENCY = parseInt(process.env["WORKER_SCENE_CONCURRENCY"] ?? "3", 10);
 const MAX_RENDER_ATTEMPTS = 2;
 
+/**
+ * BullMQ processor entrypoint.
+ *
+ * OBSERVABILITY §3a/§3b: extract the W3C trace context injected at enqueue time,
+ * open the root `generation.job` span as a child of the originating request
+ * trace, then run the pipeline inside that active context so every child span
+ * and every auto-instrumented HTTP call (agent/rag/render) joins the trace.
+ */
 async function processGenerationJob(
     job: Job<VideoGenerationJobData, VideoGenerationJobResult>
+): Promise<VideoGenerationJobResult> {
+    const { chatId, userId, projectId, traceId } = job.data;
+
+    const parentCtx = propagation.extract(context.active(), job.data.otelCarrier ?? {});
+    const rootSpan = tracer.startSpan(
+        "generation.job",
+        {
+            attributes: {
+                "stitcher.chat_id": chatId,
+                "stitcher.user_id": userId,
+                "stitcher.project_id": projectId ?? "",
+                "stitcher.trace_id": traceId,
+            },
+        },
+        parentCtx
+    );
+    const jobCtx = trace.setSpan(parentCtx, rootSpan);
+
+    try {
+        const result = await context.with(jobCtx, () =>
+            runGenerationPipeline(job, jobCtx, rootSpan)
+        );
+        rootSpan.setStatus({ code: SpanStatusCode.OK });
+        return result;
+    } catch (err) {
+        rootSpan.recordException(err as Error);
+        rootSpan.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
+        throw err;
+    } finally {
+        rootSpan.end();
+    }
+}
+
+async function runGenerationPipeline(
+    job: Job<VideoGenerationJobData, VideoGenerationJobResult>,
+    jobCtx: Context,
+    rootSpan: Span
 ): Promise<VideoGenerationJobResult> {
     const { chatId, userId, projectId, prompt, traceId, modelConfigOverride, generationOptions } =
         job.data;
 
+    // F2.4: BullMQ job id correlates the persisted GenerationJob history row.
+    const jobId = job.id;
+
     // ── Step 0: Update job progress helper ──────────────────────────────────
+    // Also advances the persisted GenerationJob status on the coarse phase
+    // transitions (non-fatal; jobTracker swallows DB errors).
     const progress = (type: Parameters<typeof publishProgress>[1]["type"], phase: string, data?: unknown) => {
         publishProgress(chatId, { type, phase, data });
         logger.debug({ message: `[worker] ${type}`, chatId, traceId, phase });
     };
 
-    // ── Step 1: Credit check ─────────────────────────────────────────────────
+    // ── Step 1: Load user (credit gate applied after model config resolves) ──
     const user = await User.findById(userId).select("credits isTestAccount").lean();
     if (!user) {
         throw new AppError(404, `User ${userId} not found`, "user_not_found");
     }
-    if (!user.isTestAccount && user.credits.generation <= 0) {
-        throw new AppError(402, "Insufficient generation credits", "insufficient_credits");
-    }
 
     // ── Step 2: Resolve model config ─────────────────────────────────────────
+    // Resolved first so the credit gate can grant a BYOT (bring-your-own-token)
+    // exhaust path when the user supplied their own provider keys.
     const modelConfig: ResolvedModelConfig = await resolveModelConfig(userId, modelConfigOverride);
+
+    // ── Step 2b: Credit gate ─────────────────────────────────────────────────
+    // Allow the run when ANY of:
+    //   - test account                        (never billed)
+    //   - generation credits remaining        (credit-funded path; unchanged)
+    //   - user supplied their own keys (BYOT)  (zero-credit exhaust path)
+    // Otherwise block. Conservative: if hasOwnKeys can't be confirmed we fall
+    // through to the credit requirement and block keyless, credit-less users.
+    const usingOwnKeys = hasOwnKeys(modelConfig);
+    const hasCredits = user.credits.generation > 0;
+    if (!user.isTestAccount && !hasCredits && !usingOwnKeys) {
+        throw new AppError(402, "Insufficient generation credits", "insufficient_credits");
+    }
+    // True only when the run proceeds purely on the user's own keys (no credits
+    // to spend) — in that case we must NOT decrement credits below.
+    const runOnOwnKeys = !user.isTestAccount && !hasCredits && usingOwnKeys;
 
     // ── Step 3: RAG enhance (top-level prompt) ───────────────────────────────
     progress("planning", "rag_enhance");
+    void setJobStatus(jobId, "planning");
     let groundedPrompt = prompt;
 
     try {
-        const ragResult = await ragClient.enhance({ prompt }, traceId);
+        const ragResult = await withStep(jobCtx, "rag_enhance", { "scene.index": -1 }, () =>
+            ragClient.enhance({ prompt }, traceId)
+        );
         groundedPrompt = ragResult.groundedPrompt;
     } catch (err) {
         // RAG is best-effort at planning stage; proceed with raw prompt
@@ -155,19 +268,25 @@ async function processGenerationJob(
 
     // ── Step 4: Agent plan ───────────────────────────────────────────────────
     progress("planning", "agent_plan");
-    const planResponse = await agentClient.plan(
-        {
-            prompt: groundedPrompt,
-            modelConfig: { planner: modelConfig.planner },
-            constraints: {
-                minScenes: generationOptions?.minScenes,
-                maxScenes: generationOptions?.maxScenes,
-                targetTotalDurationSec: generationOptions?.targetTotalDurationSec,
-                renderQualityHint: generationOptions?.quality,
-            },
-            meta: { traceId },
-        },
-        traceId
+    const planResponse = await withStep(
+        jobCtx,
+        "agent_plan",
+        { model: modelConfig.planner.model },
+        () =>
+            agentClient.plan(
+                {
+                    prompt: groundedPrompt,
+                    modelConfig: { planner: modelConfig.planner },
+                    constraints: {
+                        minScenes: generationOptions?.minScenes,
+                        maxScenes: generationOptions?.maxScenes,
+                        targetTotalDurationSec: generationOptions?.targetTotalDurationSec,
+                        renderQualityHint: generationOptions?.quality,
+                    },
+                    meta: { traceId },
+                },
+                traceId
+            )
     );
 
     if (!planResponse.success || !planResponse.output) {
@@ -182,6 +301,8 @@ async function processGenerationJob(
         planResponse.output;
 
     progress("plan_complete", "agent_plan", { sceneCount: scenes.length });
+    void setJobSceneTotal(jobId, scenes.length);
+    rootSpan.setAttribute("scene.count", scenes.length);
 
     // ── Step 5: Per-scene processing ─────────────────────────────────────────
     const limit = makeLimiter(SCENE_CONCURRENCY);
@@ -197,7 +318,26 @@ async function processGenerationJob(
 
     const renderQuality = generationOptions?.quality ?? "medium";
 
+    // OBSERVABILITY §3b: each scene gets a `pipeline.scene` span (attr scene.index)
+    // wrapping its agent_code / render / agent_debug child spans.
     async function processScene(state: SceneState): Promise<void> {
+        const sceneSpan = tracer.startSpan(
+            "pipeline.scene",
+            { attributes: { "scene.index": state.sceneIndex } },
+            jobCtx
+        );
+        const sceneCtx = trace.setSpan(jobCtx, sceneSpan);
+        try {
+            await context.with(sceneCtx, () => processSceneInner(state, sceneCtx));
+            if (state.status !== "success") {
+                sceneSpan.setStatus({ code: SpanStatusCode.ERROR, message: state.error ?? "scene failed" });
+            }
+        } finally {
+            sceneSpan.end();
+        }
+    }
+
+    async function processSceneInner(state: SceneState, sceneCtx: Context): Promise<void> {
         const { sceneSpec } = state;
         progress("scene_started", "scene", { index: state.sceneIndex });
 
@@ -206,7 +346,9 @@ async function processGenerationJob(
         let sceneRagContext: Parameters<typeof agentClient.code>[0]["codeExamples"] = undefined;
 
         try {
-            const sceneRag = await ragClient.enhance({ prompt: scenePrompt }, traceId);
+            const sceneRag = await withStep(sceneCtx, "rag_enhance", { "scene.index": state.sceneIndex }, () =>
+                ragClient.enhance({ prompt: scenePrompt }, traceId)
+            );
             scenePrompt = sceneRag.groundedPrompt;
             sceneRagContext = sceneRag.structuredContext.apiExamples.map((e) => ({
                 description: e.docstring ?? e.symbol,
@@ -217,18 +359,24 @@ async function processGenerationJob(
         }
 
         // b. Agent code
-        const codeResponse = await agentClient.code(
-            {
-                scenePlan: { ...sceneSpec, prompt: scenePrompt },
-                styleManifest,
-                codeExamples: sceneRagContext,
-                modelConfig: {
-                    coder: modelConfig.coder,
-                    validator: modelConfig.validator,
-                },
-                meta: { traceId },
-            },
-            traceId
+        const codeResponse = await withStep(
+            sceneCtx,
+            "agent_code",
+            { "scene.index": state.sceneIndex, model: modelConfig.coder.model },
+            () =>
+                agentClient.code(
+                    {
+                        scenePlan: { ...sceneSpec, prompt: scenePrompt },
+                        styleManifest,
+                        codeExamples: sceneRagContext,
+                        modelConfig: {
+                            coder: modelConfig.coder,
+                            validator: modelConfig.validator,
+                        },
+                        meta: { traceId },
+                    },
+                    traceId
+                )
         );
 
         if (!codeResponse.success || !codeResponse.output?.code) {
@@ -247,26 +395,33 @@ async function processGenerationJob(
 
         while (state.attempts < MAX_RENDER_ATTEMPTS) {
             state.attempts++;
+            const currentAttempt = state.attempts;
 
-            const renderResponse = await renderClient.render({
-                code: state.code,
-                sceneClass: state.sceneClass,
-                render: { quality: renderQuality },
-                storage: {
-                    // Render service returns a local HTTP URL per scene.
-                    // Final upload to Cloudinary happens in the API via
-                    // uploadConcatToCloudinary() after ffmpeg concat.
-                    backend: "local",
-                    folder: `stitcher/scenes/${projectId ?? userId}`,
-                    public: false,
-                    generateThumbnail: true,
-                    thumbnailAt: 1,
-                },
-                // 300s sandbox cap per scene; render service default is 120s
-                // which is too aggressive for first-render LaTeX cache warm-up.
-                limits: { timeoutSec: 300 },
-                meta: { traceId },
-            });
+            const renderResponse = await withStep(
+                sceneCtx,
+                "render",
+                { "scene.index": state.sceneIndex, attempt: currentAttempt },
+                () =>
+                    renderClient.render({
+                        code: state.code,
+                        sceneClass: state.sceneClass,
+                        render: { quality: renderQuality },
+                        storage: {
+                            // Render service returns a local HTTP URL per scene.
+                            // Final upload to Cloudinary happens in the API via
+                            // uploadConcatToCloudinary() after ffmpeg concat.
+                            backend: "local",
+                            folder: `stitcher/scenes/${projectId ?? userId}`,
+                            public: false,
+                            generateThumbnail: true,
+                            thumbnailAt: 1,
+                        },
+                        // 300s sandbox cap per scene; render service default is 120s
+                        // which is too aggressive for first-render LaTeX cache warm-up.
+                        limits: { timeoutSec: 300 },
+                        meta: { traceId },
+                    })
+            );
 
             if (renderResponse.success) {
                 state.renderUrl = renderResponse.render.url;
@@ -278,6 +433,7 @@ async function processGenerationJob(
                     url: state.renderUrl,
                     attempt: state.attempts,
                 });
+                void incrementJobScene(jobId);
                 break;
             }
 
@@ -298,24 +454,30 @@ async function processGenerationJob(
 
             // d. Debug: ask agent to fix the code
             try {
-                const debugResponse = await agentClient.debug(
-                    {
-                        brokenCode: state.code,
-                        sceneClass: state.sceneClass,
-                        error: {
-                            stderr: renderResponse.error.stderr,
-                            summary: renderResponse.error.summary,
-                            line: renderResponse.error.line,
-                            category: renderResponse.error.category,
-                        },
-                        originalPrompt: sceneSpec.prompt,
-                        modelConfig: {
-                            debugger: modelConfig.debugger,
-                            validator: modelConfig.validator,
-                        },
-                        meta: { traceId },
-                    },
-                    traceId
+                const debugResponse = await withStep(
+                    sceneCtx,
+                    "agent_debug",
+                    { "scene.index": state.sceneIndex, attempt: currentAttempt, model: modelConfig.debugger.model },
+                    () =>
+                        agentClient.debug(
+                            {
+                                brokenCode: state.code,
+                                sceneClass: state.sceneClass,
+                                error: {
+                                    stderr: renderResponse.error.stderr,
+                                    summary: renderResponse.error.summary,
+                                    line: renderResponse.error.line,
+                                    category: renderResponse.error.category,
+                                },
+                                originalPrompt: sceneSpec.prompt,
+                                modelConfig: {
+                                    debugger: modelConfig.debugger,
+                                    validator: modelConfig.validator,
+                                },
+                                meta: { traceId },
+                            },
+                            traceId
+                        )
                 );
 
                 if (debugResponse.success && debugResponse.output?.code) {
@@ -390,21 +552,28 @@ async function processGenerationJob(
 
     // ── Step 6: ffmpeg concat ────────────────────────────────────────────────
     progress("concat_started", "concat");
+    void setJobStatus(jobId, "concatenating");
 
     const sceneUrls = sceneStates
         .sort((a, b) => a.sceneIndex - b.sceneIndex)
         .map((s) => s.renderUrl!);
 
     const outputName = `final-${chatId}.mp4`;
-    const { filePath, cleanup } = await concatVideos(sceneUrls, outputName);
+    const { filePath, cleanup } = await withStep(
+        jobCtx,
+        "concat",
+        { "scene.count": sceneUrls.length },
+        () => concatVideos(sceneUrls, outputName)
+    );
 
     let finalUrl: string;
     let thumbnailUrl: string | undefined;
 
+    void setJobStatus(jobId, "uploading");
+
     try {
-        const uploaded = await uploadConcatToCloudinary(
-            filePath,
-            `stitcher/final/${projectId ?? userId}`
+        const uploaded = await withStep(jobCtx, "upload", {}, () =>
+            uploadConcatToCloudinary(filePath, `stitcher/final/${projectId ?? userId}`)
         );
         finalUrl = uploaded.url;
         thumbnailUrl = uploaded.thumbnailUrl;
@@ -428,7 +597,11 @@ async function processGenerationJob(
     });
 
     // ── Step 8: Decrement credits (atomic; won't go below zero) ─────────────
-    if (!user.isTestAccount) {
+    // Skip the decrement entirely for BYOT runs (credits<=0 && own keys): the
+    // user funded this generation with their own provider key, so it costs us
+    // nothing and must not touch their (already-zero) credit balance. The
+    // credit-funded path is unchanged.
+    if (!user.isTestAccount && !runOnOwnKeys) {
         await User.updateOne(
             { _id: userId, "credits.generation": { $gt: 0 } },
             { $inc: { "credits.generation": -1 } }
@@ -512,6 +685,13 @@ generationWorker.on("failed", (job, err) => {
             },
         });
 
+        // F2.4: mark the persisted history row failed (non-fatal). Only on the
+        // terminal failure (BullMQ retries exhausted) — retryable 503s keep the
+        // row in its current in-progress state so the UI can show "retrying…".
+        if (!isRetryable) {
+            void setJobStatus(job.id, "failed", { error: String(err), completedAt: new Date() });
+        }
+
         // Mark the chat's in-progress assistant message as errored
         GenerateChat.findByIdAndUpdate(job.data.chatId, {
             $set: {
@@ -539,6 +719,9 @@ generationWorker.on("completed", (job, result) => {
         phase: "worker",
         data: result,
     });
+
+    // F2.4: finalize the persisted history row (non-fatal).
+    void setJobStatus(job.id, "complete", { finalUrl: result.finalUrl, completedAt: new Date() });
 });
 
 generationWorker.on("error", (err) => {

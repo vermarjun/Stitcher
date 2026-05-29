@@ -53,6 +53,8 @@ services:
     environment:
       # bubblewrap sandbox is Linux-only; disable on macOS / Windows Docker Desktop
       SANDBOX_ENABLED: "${SANDBOX_ENABLED:-false}"
+      # pydantic expects uppercase log level; override the shared env_file value
+      LOG_LEVEL: "INFO"
     # bubblewrap / user-namespaces require elevated capabilities
     privileged: true
     cap_add:
@@ -66,7 +68,7 @@ services:
     build:
       context: ../../ManimRAG/pipeline
     ports:
-      - "7000:7000"
+      - "7001:7000"
     env_file:
       - ./API/.env.docker
     environment:

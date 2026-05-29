@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Prometheus — Stitcher metric store
+#
+#  Scrapes the OTel Collector's Prometheus exporter (:8889) where all app
+#  metrics land, plus itself. The collector translates OTel dot-names to
+#  Prometheus underscore-names, e.g.:
+#    stitcher.pipeline.step.duration  →  stitcher_pipeline_step_duration_*
+#    stitcher.llm.tokens              →  stitcher_llm_tokens_total
+#    stitcher.queue.depth             →  stitcher_queue_depth
+#    stitcher.render.duration         →  stitcher_render_duration_*
+#
+#  --web.enable-remote-write-receiver is set on the command line so Tempo's
+#  metrics_generator can remote_write span-metrics here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: stitcher-observability
+
+scrape_configs:
+  # ── App metrics, fanned in via the OTel Collector's Prometheus exporter ────
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  # ── Prometheus self-scrape ─────────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

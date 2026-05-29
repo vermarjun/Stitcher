@@ -9,6 +9,7 @@
  */
 
 import { Queue } from "bullmq";
+import { context, propagation } from "@opentelemetry/api";
 import { redisConnection } from "./connection";
 import type { EditJobData } from "./editTypes";
 
@@ -27,6 +28,10 @@ export const editQueue = new Queue<EditJobData>("video-edit", {
  * Throws if the queue is unreachable.
  */
 export async function enqueueEdit(data: EditJobData): Promise<string> {
-    const job = await editQueue.add("edit", data);
+    // OBSERVABILITY §3a: inject the active W3C trace context into the job so the
+    // edit worker can make its spans children of the originating request trace.
+    const otelCarrier: Record<string, string> = {};
+    propagation.inject(context.active(), otelCarrier);
+    const job = await editQueue.add("edit", { ...data, otelCarrier });
     return job.id ?? "";
 }

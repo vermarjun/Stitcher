@@ -24,6 +24,7 @@ import EditChat from "../model/editChat.model";
 import TimelineItem from "../model/timelineitem.model";
 import { enqueueEdit } from "../queue/editQueue";
 import { publishProgress } from "../queue/eventPublisher.util";
+import { createJobRecord } from "../queue/jobTracker.util";
 
 // ─── POST /process ────────────────────────────────────────────────────────────
 
@@ -104,6 +105,17 @@ export const processEditChat = async (req: Request, res: Response) => {
         editPrompt: editPrompt.trim(),
         traceId,
     });
+
+    // Record the edit job in the user's generation history (F2.4). Non-fatal.
+    await createJobRecord({
+        jobId,
+        queue: "edit",
+        userId,
+        projectId,
+        chatId: editChatId,
+        prompt: editPrompt.trim(),
+        traceId,
+    }).catch(() => undefined);
 
     publishProgress(editChatId, { type: "job_queued", phase: "controller", data: { jobId } });
 

@@ -12,6 +12,7 @@ import {
   Users,
   Backpack,
   BellIcon,
+  Clapperboard,
 } from "lucide-react";
 import type { IUser } from "@/State/Types";
 import type { NavigateFunction } from "react-router-dom";
@@ -149,6 +150,7 @@ const Sidebar: React.FC<Props> = ({
     create: [
       { icon: Home, label: "Home", key: "home" },
       { icon: FolderOpen, label: "All Projects", key: "projects" },
+      { icon: Clapperboard, label: "Generations", key: "generations" },
       ...(FEATURES.community ? [
         { icon: Users, label: "Community", key: "community" },
         { icon: Backpack, label: "Backpack", key: "backpack" },

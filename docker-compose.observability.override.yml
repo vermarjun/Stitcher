@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Stitcher — attach the app services to the observability stack
+#
+#  This override points the four app services at the OTel collector and joins
+#  them to the observability network so their traces/metrics/logs flow into
+#  Tempo/Prometheus/Loki. It is OPT-IN: include it AFTER the other compose files.
+#
+#    docker compose \
+#      -f docker-compose.yml \
+#      -f docker-compose.services.yml \
+#      -f docker-compose.observability.yml \
+#      -f docker-compose.observability.override.yml up -d
+#
+#  The `observability` network is created by docker-compose.observability.yml
+#  (name: stitcher-observability). We reference it as external here so the same
+#  named network is reused rather than a second one being created.
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  observability:
+    name: stitcher-observability
+    external: true
+
+services:
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "stitcher-api"
+      OTEL_TRACES_SAMPLER: "always_on"
+    networks: [default, observability]
+
+  agent-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "stitcher-agent"
+      OTEL_TRACES_SAMPLER: "always_on"
+    networks: [default, observability]
+
+  rag-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "stitcher-rag"
+      OTEL_TRACES_SAMPLER: "always_on"
+    networks: [default, observability]
+
+  render-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "stitcher-render"
+      OTEL_TRACES_SAMPLER: "always_on"
+    networks: [default, observability]

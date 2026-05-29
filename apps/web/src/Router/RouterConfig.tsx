@@ -18,6 +18,7 @@ const DashboardLayout = lazy(() => import('../Components/Dashboard/main.dashboar
 const ProfilePage = lazy(() => import('../Pages/ProfilePage.page'));
 const SettingsPage = lazy(() => import('../Pages/SettingsPage.page'));
 const WatchPage = lazy(() => import('../Pages/Watch.page.tsx'));
+const AdminLivePage = lazy(() => import('../Pages/AdminLive.page.tsx'));
 
 const router = createBrowserRouter([
 // LANDING PAGE
@@ -92,6 +93,20 @@ const router = createBrowserRouter([
         <PublicRoute>
           <AuthPage />
         </PublicRoute>
+      </ErrorBoundary>
+    ),
+  },
+// ADMIN LIVE "GOD VIEW" — internal ops dashboard. Must be authenticated to load;
+// the REAL access gate is server-side (auth + admin role on GET /admin/live/jobs
+// and the join_admin_live socket handler). Non-admins see a "denied" notice.
+  {
+    path: '/admin/live',
+    errorElement: <ErrorPage />,
+    element: (
+      <ErrorBoundary>
+        <AuthRoute>
+          <AdminLivePage />
+        </AuthRoute>
       </ErrorBoundary>
     ),
   },

@@ -35,7 +35,8 @@ vi.mock("../../util/crypto.util", () => {
 });
 
 import ApiKey from "../../model/userapikeys.model";
-import { resolveModelConfig } from "../modelConfig.util";
+import { resolveModelConfig, hasOwnKeys } from "../modelConfig.util";
+import type { ResolvedModelConfig } from "../types";
 
 const mockFind = ApiKey.find as unknown as ReturnType<typeof vi.fn>;
 
@@ -65,12 +66,14 @@ describe("resolveModelConfig", () => {
 
         const config = await resolveModelConfig("user-123");
 
-        expect(config.planner.provider).toBe("openrouter");
-        expect(config.planner.model).toBe("anthropic/claude-sonnet-4-6");
-        expect(config.coder.model).toBe("anthropic/claude-sonnet-4-6");
-        expect(config.debugger.model).toBe("anthropic/claude-haiku-4-5");
-        // No apiKeyOverride on defaults
-        expect(config.planner.apiKeyOverride).toBeUndefined();
+        // Defaults use the OpenCodeGo backend; no per-user key/baseURL so the
+        // agent service falls back to its own OPENCODE_GO_API_KEY.
+        expect(config.planner.provider).toBe("opencodego");
+        expect(config.planner.model).toBe("glm-5.1");
+        expect(config.coder.model).toBe("glm-5.1");
+        expect(config.debugger.model).toBe("glm-5.1");
+        // No apiKey on defaults
+        expect(config.planner.apiKey).toBeUndefined();
     });
 
     it("applies user's stored key for the planner role", async () => {
@@ -86,11 +89,11 @@ describe("resolveModelConfig", () => {
 
         const config = await resolveModelConfig("user-456");
 
-        expect(config.planner.apiKeyOverride).toBe("sk-live-user-key-abc123");
+        expect(config.planner.apiKey).toBe("sk-live-user-key-abc123");
         expect(config.planner.model).toBe("anthropic/claude-opus-4-5");
-        expect(config.planner.baseUrlOverride).toBe("https://openrouter.ai/api/v1");
+        expect(config.planner.baseURL).toBe("https://openrouter.ai/api/v1");
         // Other roles should still be env defaults
-        expect(config.coder.apiKeyOverride).toBeUndefined();
+        expect(config.coder.apiKey).toBeUndefined();
     });
 
     it("applies user's stored key for the coder role", async () => {
@@ -104,8 +107,8 @@ describe("resolveModelConfig", () => {
         ]);
 
         const config = await resolveModelConfig("user-coder");
-        expect(config.coder.apiKeyOverride).toBe("sk-coder-key-xyz");
-        expect(config.planner.apiKeyOverride).toBeUndefined();
+        expect(config.coder.apiKey).toBe("sk-coder-key-xyz");
+        expect(config.planner.apiKey).toBeUndefined();
     });
 
     it("maps legacy 'reviewer' agentId to 'validator' role", async () => {
@@ -119,7 +122,7 @@ describe("resolveModelConfig", () => {
         ]);
 
         const config = await resolveModelConfig("user-789");
-        expect(config.validator?.apiKeyOverride).toBe("sk-reviewer-key");
+        expect(config.validator?.apiKey).toBe("sk-reviewer-key");
     });
 
     it("maps 'optimizer' agentId to 'validator' role", async () => {
@@ -133,7 +136,7 @@ describe("resolveModelConfig", () => {
         ]);
 
         const config = await resolveModelConfig("user-opt");
-        expect(config.validator?.apiKeyOverride).toBe("sk-optimizer-key");
+        expect(config.validator?.apiKey).toBe("sk-optimizer-key");
     });
 
     it("falls back to env defaults silently on Mongoose error (does not throw)", async () => {
@@ -142,8 +145,8 @@ describe("resolveModelConfig", () => {
         // Must resolve, not reject
         const config = await resolveModelConfig("user-error");
 
-        expect(config.planner.provider).toBe("openrouter");
-        expect(config.coder.provider).toBe("openrouter");
+        expect(config.planner.provider).toBe("opencodego");
+        expect(config.coder.provider).toBe("opencodego");
     });
 
     it("applies caller overrides on top of resolved config", async () => {
@@ -153,7 +156,7 @@ describe("resolveModelConfig", () => {
             planner: {
                 provider: "openai",
                 model: "gpt-4o",
-                apiKeyOverride: "sk-override-abc",
+                apiKey: "sk-override-abc",
             },
         };
 
@@ -162,7 +165,7 @@ describe("resolveModelConfig", () => {
         expect(config.planner.provider).toBe("openai");
         expect(config.planner.model).toBe("gpt-4o");
         // Coder should still be default
-        expect(config.coder.provider).toBe("openrouter");
+        expect(config.coder.provider).toBe("opencodego");
     });
 
     it("ignores keys with unknown agentId gracefully", async () => {
@@ -177,7 +180,7 @@ describe("resolveModelConfig", () => {
 
         // Should not throw, just return defaults
         const config = await resolveModelConfig("user-unknown");
-        expect(config.planner.apiKeyOverride).toBeUndefined();
+        expect(config.planner.apiKey).toBeUndefined();
     });
 
     it("applies multiple user keys across different roles", async () => {
@@ -198,8 +201,63 @@ describe("resolveModelConfig", () => {
 
         const config = await resolveModelConfig("user-multi");
 
-        expect(config.planner.apiKeyOverride).toBe("sk-planner");
-        expect(config.debugger.apiKeyOverride).toBe("sk-debugger");
-        expect(config.coder.apiKeyOverride).toBeUndefined();
+        expect(config.planner.apiKey).toBe("sk-planner");
+        expect(config.debugger.apiKey).toBe("sk-debugger");
+        expect(config.coder.apiKey).toBeUndefined();
+    });
+});
+
+// ─── hasOwnKeys (credit-exhaust gate logic) ───────────────────────────────────
+
+describe("hasOwnKeys", () => {
+    // Build a minimal config with an optional coder apiKey.
+    function makeConfig(coderApiKey?: string): ResolvedModelConfig {
+        return {
+            planner: { provider: "opencodego", model: "glm-5.1" },
+            coder: { provider: "opencodego", model: "glm-5.1", apiKey: coderApiKey },
+            debugger: { provider: "opencodego", model: "glm-5.1" },
+        };
+    }
+
+    it("returns false for the shared-key env defaults (no apiKey)", () => {
+        expect(hasOwnKeys(makeConfig(undefined))).toBe(false);
+    });
+
+    it("returns true when the coder role carries a user-supplied apiKey", () => {
+        expect(hasOwnKeys(makeConfig("sk-user-coder-key"))).toBe(true);
+    });
+
+    it("returns false for an empty / whitespace-only apiKey", () => {
+        expect(hasOwnKeys(makeConfig(""))).toBe(false);
+        expect(hasOwnKeys(makeConfig("   "))).toBe(false);
+    });
+
+    it("is driven by the coder role (the billed role), not planner/debugger", () => {
+        // planner+debugger have keys but coder does not → still shared-key funded
+        const cfg: ResolvedModelConfig = {
+            planner: { provider: "openrouter", model: "m", apiKey: "sk-planner" },
+            coder: { provider: "opencodego", model: "glm-5.1" },
+            debugger: { provider: "openrouter", model: "m", apiKey: "sk-debugger" },
+        };
+        expect(hasOwnKeys(cfg)).toBe(false);
+    });
+
+    it("integrates with resolveModelConfig: user coder key flips the gate to true", async () => {
+        mockFindReturns([
+            {
+                agentId: "coder",
+                keyValue: "sk-coder-byot",
+                baseUrl: "https://openrouter.ai/api/v1",
+                modelName: "anthropic/claude-sonnet-4-6",
+            },
+        ]);
+        const config = await resolveModelConfig("byot-user");
+        expect(hasOwnKeys(config)).toBe(true);
+    });
+
+    it("integrates with resolveModelConfig: no user keys keeps the gate false", async () => {
+        mockFindReturns([]);
+        const config = await resolveModelConfig("keyless-user");
+        expect(hasOwnKeys(config)).toBe(false);
     });
 });

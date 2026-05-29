@@ -20,16 +20,29 @@ export const initRedisSubscriber = async (io: Server) => {
 
         // Subscribe to all chat-related channels
         // We expect channels like: chat:{chatId}
+        //
+        // Single pSubscribe, two relays (OBSERVABILITY §5):
+        //   1. per-chat room (chatId)      → 'chat_update'  (existing behaviour)
+        //   2. admin firehose ('admin:live') → 'admin_update' { chatId, event }
+        // The admin room is gated at join time (see index.ts `join_admin_live`),
+        // so we can safely fan out every event to it without leaking to chat
+        // participants. No extra Redis subscription is opened.
         await redisSubscriber.pSubscribe('chat:*', (message, channel) => {
             const chatId = channel.split(':')[1];
 
+            let parsedMessage: unknown = message;
             try {
-                // Try to parse JSON, otherwise send raw
-                const parsedMessage = JSON.parse(message) as unknown;
-                io.to(chatId).emit('chat_update', parsedMessage);
+                parsedMessage = JSON.parse(message) as unknown;
             } catch (_e) {
-                io.to(chatId).emit('chat_update', message);
+                // Non-JSON payload — relay the raw string to both rooms.
             }
+
+            // 1. Existing per-chat relay — unchanged contract.
+            io.to(chatId).emit('chat_update', parsedMessage);
+
+            // 2. Admin firehose — tag with chatId so the dashboard can route the
+            // event to the right job card.
+            io.to('admin:live').emit('admin_update', { chatId, event: parsedMessage });
         });
     } catch (error) {
         logger.error({ message: 'Failed to initialize Redis subscriber', error: String(error) });

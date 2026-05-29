@@ -3,11 +3,14 @@ import { Types } from 'mongoose';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import GenerateChat, { IGenerateChat, IGenerateChatMessage } from '../model/generateChat.model';
+import GenerationJob from '../model/generationJob.model';
 import Project, { IProject } from '../model/project.model';
 import User from '../model/user.model';
 import Asset from '../model/asset.model';
 import { enqueueGeneration } from '../queue/generationQueue';
+import { resolveModelConfig, hasOwnKeys } from '../queue/modelConfig.util';
 import { publishProgress } from '../queue/eventPublisher.util';
+import { createJobRecord } from '../queue/jobTracker.util';
 import type { Document } from 'mongoose';
 
 // ─── POST / — main generation entry ──────────────────────────────────────────
@@ -45,9 +48,18 @@ export const generateChatResponse = async (req: Request, res: Response) => {
         res.status(404).json({ success: false, message: 'User not found' });
         return;
     }
+    // BYOT exhaust path: once credits hit zero, users who supplied their own
+    // provider keys may keep generating at no cost. Mirror the worker gate so
+    // the job is actually enqueued for them. resolveModelConfig never throws.
     if (!user.isTestAccount && user.credits.generation <= 0) {
-        res.status(402).json({ success: false, message: 'Not enough credits to generate. Please upgrade your plan.' });
-        return;
+        const modelConfig = await resolveModelConfig(userId);
+        if (!hasOwnKeys(modelConfig)) {
+            res.status(402).json({
+                success: false,
+                message: 'Not enough credits to generate. Add your own API keys in Settings to keep going, or upgrade your plan.',
+            });
+            return;
+        }
     }
 
     // Verify project exists
@@ -129,6 +141,18 @@ export const generateChatResponse = async (req: Request, res: Response) => {
         traceId,
     });
 
+    // Record the job in the user's generation history (F2.4). Non-fatal — a DB
+    // hiccup here must never block the generation that is already enqueued.
+    await createJobRecord({
+        jobId,
+        queue: 'generation',
+        userId,
+        projectId,
+        chatId: resolvedChatId,
+        prompt,
+        traceId,
+    }).catch(() => undefined);
+
     // Publish a queued event so the frontend knows work has started
     publishProgress(resolvedChatId, { type: 'job_queued', phase: 'controller', data: { jobId } });
 
@@ -136,6 +160,55 @@ export const generateChatResponse = async (req: Request, res: Response) => {
         success: true,
         data: { chatId: resolvedChatId, jobId },
     });
+};
+
+// ─── GET /jobs — generation/edit history for the authenticated user (F2.4) ────
+// Returns the user's jobs newest-first. Ownership-scoped by req.userId so users
+// only ever see their own generations.
+//   ?status=active  → in-flight jobs (not complete/failed/cancelled)
+//   ?status=recent  → terminal jobs (complete/failed/cancelled)
+//   (omitted)       → all
+//   ?limit, ?skip   → pagination (limit clamped to 1..100, default 25)
+
+export const getUserJobs = async (req: Request, res: Response) => {
+    try {
+        const userId = req.userId;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'User not authenticated' });
+            return;
+        }
+
+        const { status, limit, skip } = req.query as {
+            status?: string;
+            limit?: string;
+            skip?: string;
+        };
+
+        const ACTIVE_STATUSES = ['queued', 'planning', 'rendering', 'concatenating', 'uploading'];
+        const TERMINAL_STATUSES = ['complete', 'failed', 'cancelled'];
+
+        const query: Record<string, unknown> = { userId: new Types.ObjectId(userId) };
+        if (status === 'active') {
+            query['status'] = { $in: ACTIVE_STATUSES };
+        } else if (status === 'recent') {
+            query['status'] = { $in: TERMINAL_STATUSES };
+        }
+
+        const parsedLimit = Math.min(Math.max(parseInt(limit ?? '25', 10) || 25, 1), 100);
+        const parsedSkip = Math.max(parseInt(skip ?? '0', 10) || 0, 0);
+
+        const jobs = await GenerationJob.find(query)
+            .select('jobId queue projectId chatId prompt status sceneProgress finalUrl error startedAt completedAt createdAt updatedAt')
+            .sort({ createdAt: -1 })
+            .skip(parsedSkip)
+            .limit(parsedLimit)
+            .lean();
+
+        res.status(200).json({ success: true, data: jobs });
+    } catch (error) {
+        console.error('Get user jobs error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch generation jobs' });
+    }
 };
 
 // ─── GET /update/:chatId — polling fallback ───────────────────────────────────
@@ -483,6 +556,16 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
             prompt,
             traceId,
         });
+
+        await createJobRecord({
+            jobId,
+            queue: 'generation',
+            userId: (guestUser._id as Types.ObjectId).toString(),
+            projectId: (guestProject._id as Types.ObjectId).toString(),
+            chatId: resolvedChatId,
+            prompt,
+            traceId,
+        }).catch(() => undefined);
 
         publishProgress(resolvedChatId, { type: 'job_queued', phase: 'controller', data: { jobId } });
 

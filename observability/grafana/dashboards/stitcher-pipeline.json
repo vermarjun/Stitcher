@@ -1,0 +1,349 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["stitcher", "pipeline", "observability"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(stitcher_pipeline_step_duration_milliseconds_bucket, step)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Step",
+        "multi": true,
+        "name": "step",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(stitcher_pipeline_step_duration_milliseconds_bucket, step)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(stitcher_llm_tokens_total, model)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Model",
+        "multi": true,
+        "name": "model",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(stitcher_llm_tokens_total, model)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Stitcher Pipeline",
+  "uid": "stitcher-pipeline",
+  "version": 1,
+  "weekStart": "",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Pipeline step latency",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Step duration p50 — stitcher.pipeline.step.duration (by step)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Median step latency. OTel histogram stitcher.pipeline.step.duration exported to Prometheus as stitcher_pipeline_step_duration_milliseconds_bucket.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 1,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(stitcher_pipeline_step_duration_milliseconds_bucket{step=~\"$step\"}[$__rate_interval])) by (le, step))",
+          "legendFormat": "p50 {{step}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Step duration p95 — stitcher.pipeline.step.duration (by step)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "95th-percentile step latency. Same histogram as the p50 panel.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 2,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(stitcher_pipeline_step_duration_milliseconds_bucket{step=~\"$step\"}[$__rate_interval])) by (le, step))",
+          "legendFormat": "p95 {{step}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "LLM tokens & cost",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM tokens/sec — stitcher.llm.tokens (by model)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Token throughput summed by model. Counter stitcher.llm.tokens → stitcher_llm_tokens_total{model,role,type}.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 3,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10, "stacking": { "mode": "normal" } },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "last"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "sum(rate(stitcher_llm_tokens_total{model=~\"$model\"}[$__rate_interval])) by (model)",
+          "legendFormat": "{{model}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "piechart",
+      "title": "Total tokens by model (input + output)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Cumulative token share per model over the selected range.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 4,
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "sum(increase(stitcher_llm_tokens_total{model=~\"$model\"}[$__range])) by (model)",
+          "instant": true,
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Queue & errors",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 102,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue depth — stitcher.queue.depth (by queue/state)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "BullMQ queue depth gauge. stitcher.queue.depth → stitcher_queue_depth{queue,state}.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "id": 5,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 15 },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "sum(stitcher_queue_depth) by (queue, state)",
+          "legendFormat": "{{queue}} / {{state}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Job error rate — failed steps (stitcher.pipeline.step.duration success=false)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Fraction of pipeline steps completing with success=\"false\" over the rate window.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "id": 6,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.2 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "sum(rate(stitcher_pipeline_step_duration_milliseconds_count{success=\"false\"}[$__rate_interval])) / clamp_min(sum(rate(stitcher_pipeline_step_duration_milliseconds_count[$__rate_interval])), 0.001)",
+          "legendFormat": "error rate",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Render duration p95 — stitcher.render.duration",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Render service latency. stitcher.render.duration → stitcher_render_duration_milliseconds_bucket. Also see stitcher_render_active / stitcher_render_concurrency.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "id": 7,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(stitcher_render_duration_milliseconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "p95 render",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Pipeline logs (Loki)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Recent logs across Stitcher services. Click a trace_id to jump into Tempo (derived field).",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "id": 8,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "expr": "{service_name=~\"stitcher-.*\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

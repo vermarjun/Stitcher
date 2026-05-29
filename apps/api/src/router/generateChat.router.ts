@@ -5,6 +5,7 @@ import {
     getProjectChats,
     getChatUpdate,
     getLatestAssistantMessage,
+    getUserJobs,
     stopGeneration,
     completeGeneration,
     generateGuestChatResponse
@@ -43,6 +44,17 @@ router.get('/update/:chatId', auth, getChatUpdate);
  * @access  Private
  */
 router.get('/latest-message/:chatId', auth, requireChatOwnership('params', 'chatId'), getLatestAssistantMessage);
+
+/**
+ * @route   GET /api/generatechat/jobs
+ * @desc    Get the authenticated user's generation/edit job history (F2.4)
+ * @access  Private
+ * @query   status=active|recent, limit, skip
+ *
+ * NOTE: must be registered BEFORE the `/:chatId` catch-all below so "jobs" is
+ * not mistaken for a chat id.
+ */
+router.get('/jobs', auth, getUserJobs);
 
 /**
  * @route   GET /api/generate-chat/project/:projectId

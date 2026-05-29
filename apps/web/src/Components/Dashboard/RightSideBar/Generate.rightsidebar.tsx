@@ -436,6 +436,12 @@ const GenerateComponent = ({
     } catch (error: any) {
       const errorDetails = getErrorDetails(error);
 
+      // Out-of-credits (402): point the user at BYOT — they can add their own
+      // API keys in Settings to keep generating at no cost once credits run out.
+      if (error?.response?.status === 402) {
+        toast.error("Out of credits — add your own API keys in Settings to keep generating.");
+      }
+
       const errorMessage = messageActions.createMessage(
         `error:${JSON.stringify(errorDetails)}`,
         "assistant"

@@ -27,8 +27,15 @@ export interface LlmRoleConfig {
     model: string;
     temperature?: number;
     maxTokens?: number;
-    apiKeyOverride?: string;
-    baseUrlOverride?: string;
+    /**
+     * Per-request API key. Field name matches the agent service's
+     * ModelConfigSchema (apiKey) and its factory getModel(cfg.apiKey) exactly,
+     * so a user's BYOK key reaches the provider rather than being stripped by
+     * the agent's Zod parse.
+     */
+    apiKey?: string;
+    /** Per-request base URL override; matches the agent's ModelConfigSchema. */
+    baseURL?: string;
 }
 
 // ─── /plan types ─────────────────────────────────────────────────────────────

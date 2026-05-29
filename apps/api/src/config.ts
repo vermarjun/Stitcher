@@ -56,6 +56,16 @@ const envSchema = z.object({
         .string()
         .length(64, 'KEYS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
         .regex(/^[0-9a-fA-F]{64}$/, 'KEYS_ENCRYPTION_KEY must be a 64-character hex string'),
+
+    // ── Observability (OpenTelemetry) — all optional so boot never fails ──────
+    // Consumed by src/instrumentation.ts (loaded via `node -r` before app code).
+    // Endpoint defaults to http://localhost:4318 there if unset.
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+    OTEL_SERVICE_NAME: z.string().optional().default("stitcher-api"),
+    OTEL_TRACES_SAMPLER: z.string().optional(),
+    // Gates the bull-board admin dashboard at ${API_PREFIX}/admin/queues.
+    // Must be "true" AND the request must pass JWT auth to access the board.
+    ADMIN_DASHBOARD_ENABLED: z.string().optional().default("false"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -94,6 +104,10 @@ export const PUBLIC_APP_URL =
 export const FEATURES = {
     community: config.FEATURE_COMMUNITY === "true",
 };
+
+// Observability: when true (and JWT auth passes) the bull-board queue dashboard
+// is mounted at ${API_PREFIX}/admin/queues. See index.ts.
+export const ADMIN_DASHBOARD_ENABLED = config.ADMIN_DASHBOARD_ENABLED === "true";
 export const EMAIL_USER = config.EMAIL_USER;
 export const EMAIL_APP_PASSWORD = config.EMAIL_APP_PASSWORD;
 export const CLOUDINARY_API_KEY = config.CLOUDINARY_API_KEY;

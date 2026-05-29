@@ -19,13 +19,22 @@
 
 import { Worker, Job } from "bullmq";
 import { Types } from "mongoose";
+import {
+    trace,
+    context,
+    propagation,
+    SpanStatusCode,
+    type Context,
+} from "@opentelemetry/api";
 import { redisConnection } from "./connection";
+import { pipelineStepDuration } from "../util/metrics.util";
 import { ragClient } from "../services/ragClient";
 import { agentClient } from "../services/agentClient";
 import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
-import { resolveModelConfig } from "./modelConfig.util";
+import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
 import { publishProgress } from "./eventPublisher.util";
+import { setJobStatus, setJobSceneTotal, incrementJobScene } from "./jobTracker.util";
 import { recall, reflect } from "../services/memoryService";
 import EditChat from "../model/editChat.model";
 import Asset, { AssetType, AssetOrigin } from "../model/asset.model";
@@ -53,13 +62,90 @@ const DEFAULT_STYLE_MANIFEST: StyleManifest = {
     elementNaming: {},
 };
 
+// ─── OTel tracing helper ──────────────────────────────────────────────────────
+// See OBSERVABILITY §3a/§3b. Lighter instrumentation than the generation worker.
+
+const tracer = trace.getTracer("stitcher-api/edit");
+
+/**
+ * Run `fn` inside a `pipeline.<step>` child span of `parentCtx`, record the
+ * exception + ERROR status on throw, and record the step duration histogram
+ * tagged { step, success }. Re-throws so control flow is unchanged.
+ */
+async function withStep<T>(
+    parentCtx: Context,
+    step: string,
+    attrs: Record<string, string | number | boolean>,
+    fn: () => Promise<T>
+): Promise<T> {
+    const span = tracer.startSpan(`pipeline.${step}`, { attributes: attrs }, parentCtx);
+    const spanCtx = trace.setSpan(parentCtx, span);
+    const start = Date.now();
+    let success = false;
+    try {
+        const result = await context.with(spanCtx, fn);
+        success = true;
+        return result;
+    } catch (err) {
+        span.recordException(err as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
+        throw err;
+    } finally {
+        span.end();
+        pipelineStepDuration.record(Date.now() - start, { step, success });
+    }
+}
+
 // ─── Worker process function ──────────────────────────────────────────────────
 
+/**
+ * BullMQ processor entrypoint — extract the enqueue-time trace context, open the
+ * root `edit.job` span as a child of the originating request trace, then run the
+ * pipeline inside that active context.
+ */
 async function processEditJob(
     job: Job<EditJobData, EditJobResult>
 ): Promise<EditJobResult> {
+    const { editChatId, userId, projectId, assetId, traceId } = job.data;
+
+    const parentCtx = propagation.extract(context.active(), job.data.otelCarrier ?? {});
+    const rootSpan = tracer.startSpan(
+        "edit.job",
+        {
+            attributes: {
+                "stitcher.chat_id": editChatId,
+                "stitcher.user_id": userId,
+                "stitcher.project_id": projectId,
+                "stitcher.asset_id": assetId,
+                "stitcher.trace_id": traceId,
+            },
+        },
+        parentCtx
+    );
+    const jobCtx = trace.setSpan(parentCtx, rootSpan);
+
+    try {
+        const result = await context.with(jobCtx, () => runEditPipeline(job, jobCtx));
+        rootSpan.setStatus({ code: SpanStatusCode.OK });
+        return result;
+    } catch (err) {
+        rootSpan.recordException(err as Error);
+        rootSpan.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
+        throw err;
+    } finally {
+        rootSpan.end();
+    }
+}
+
+async function runEditPipeline(
+    job: Job<EditJobData, EditJobResult>,
+    jobCtx: Context
+): Promise<EditJobResult> {
     const { editChatId, userId, projectId, assetId, timelineItemId, editPrompt, traceId } =
         job.data;
+
+    // F2.4: BullMQ job id correlates the persisted GenerationJob history row.
+    const jobId = job.id;
 
     // ── Progress helper ──────────────────────────────────────────────────────
     const progress = (type: string, phase: string, data?: unknown) => {
@@ -67,20 +153,34 @@ async function processEditJob(
         logger.debug({ message: `[editWorker] ${type}`, editChatId, traceId, phase });
     };
 
-    // ── Step 1: Credit check ─────────────────────────────────────────────────
+    // ── Step 1: Load user (credit gate applied after model config resolves) ──
     const user = await User.findById(userId).select("credits isTestAccount").lean();
     if (!user) {
         throw new AppError(404, `User ${userId} not found`, "user_not_found");
     }
-    if (!user.isTestAccount && user.credits.editing <= 0) {
-        throw new AppError(402, "Insufficient editing credits", "insufficient_credits");
-    }
 
     // ── Step 2: Resolve model config ─────────────────────────────────────────
+    // Resolved first so the credit gate can grant a BYOT (bring-your-own-token)
+    // exhaust path when the user supplied their own provider keys.
     const modelConfig = await resolveModelConfig(userId);
+
+    // ── Step 2b: Credit gate ─────────────────────────────────────────────────
+    // Allow the run when ANY of: test account / editing credits remaining /
+    // user supplied their own keys (BYOT). Otherwise block. Conservative: if
+    // hasOwnKeys can't be confirmed we keep requiring credits.
+    const usingOwnKeys = hasOwnKeys(modelConfig);
+    const hasCredits = user.credits.editing > 0;
+    if (!user.isTestAccount && !hasCredits && !usingOwnKeys) {
+        throw new AppError(402, "Insufficient editing credits", "insufficient_credits");
+    }
+    // True only when the run proceeds purely on the user's own keys (no credits
+    // to spend) — in that case we must NOT decrement credits below.
+    const runOnOwnKeys = !user.isTestAccount && !hasCredits && usingOwnKeys;
 
     // ── Step 3: Load source asset ────────────────────────────────────────────
     progress("edit_started", "load_asset");
+    // F2.4: an edit is a single-scene job — advance the history row to planning.
+    void setJobStatus(jobId, "planning");
 
     const sourceAsset = await Asset.findById(assetId)
         .select("code scene_name scene_description metadata projectId duration")
@@ -126,9 +226,11 @@ async function processEditJob(
     });
 
     try {
-        const ragResult = await ragClient.enhance(
-            { prompt: `${editPrompt} --- existing code context: ${existingCode.slice(0, 400)}` },
-            traceId
+        const ragResult = await withStep(jobCtx, "rag_enhance", {}, () =>
+            ragClient.enhance(
+                { prompt: `${editPrompt} --- existing code context: ${existingCode.slice(0, 400)}` },
+                traceId
+            )
         );
         groundedPrompt = ragResult.groundedPrompt;
         const apiExamples = ragResult.structuredContext.apiExamples.map((e) => ({
@@ -158,18 +260,24 @@ async function processEditJob(
     // from scratch.
     progress("edit_started", "agent_code");
 
-    const codeResponse = await agentClient.code(
-        {
-            scenePlan: { ...syntheticScene, prompt: groundedPrompt },
-            styleManifest: DEFAULT_STYLE_MANIFEST,
-            codeExamples: ragCodeExamples,
-            modelConfig: {
-                coder: modelConfig.coder,
-                validator: modelConfig.validator,
-            },
-            meta: { traceId },
-        },
-        traceId
+    const codeResponse = await withStep(
+        jobCtx,
+        "agent_code",
+        { model: modelConfig.coder.model },
+        () =>
+            agentClient.code(
+                {
+                    scenePlan: { ...syntheticScene, prompt: groundedPrompt },
+                    styleManifest: DEFAULT_STYLE_MANIFEST,
+                    codeExamples: ragCodeExamples,
+                    modelConfig: {
+                        coder: modelConfig.coder,
+                        validator: modelConfig.validator,
+                    },
+                    meta: { traceId },
+                },
+                traceId
+            )
     );
 
     if (!codeResponse.success || !codeResponse.output?.code) {
@@ -185,6 +293,7 @@ async function processEditJob(
 
     // ── Step 7: Render with debug-retry loop (budget = 2) ───────────────────
     progress("edit_started", "render");
+    void setJobSceneTotal(jobId, 1); // single-scene edit; moves status -> rendering
 
     let renderUrl: string | undefined;
     let renderDurationSec = durationSec;
@@ -193,28 +302,36 @@ async function processEditJob(
 
     while (attempts < MAX_RENDER_ATTEMPTS) {
         attempts++;
+        const currentAttempt = attempts;
 
-        const renderResponse = await renderClient.render({
-            code: newCode,
-            sceneClass: newSceneClass,
-            render: { quality: "medium" },
-            storage: {
-                backend: "cloudinary",
-                folder: `stitcher/scenes/${projectId}`,
-                public: false,
-                generateThumbnail: true,
-                thumbnailAt: 1,
-            },
-            // 300s sandbox cap per scene; render service default is 120s
-            // which is too aggressive for LaTeX-heavy scenes.
-            limits: { timeoutSec: 300 },
-            meta: { traceId },
-        });
+        const renderResponse = await withStep(
+            jobCtx,
+            "render",
+            { attempt: currentAttempt },
+            () =>
+                renderClient.render({
+                    code: newCode,
+                    sceneClass: newSceneClass,
+                    render: { quality: "medium" },
+                    storage: {
+                        backend: "cloudinary",
+                        folder: `stitcher/scenes/${projectId}`,
+                        public: false,
+                        generateThumbnail: true,
+                        thumbnailAt: 1,
+                    },
+                    // 300s sandbox cap per scene; render service default is 120s
+                    // which is too aggressive for LaTeX-heavy scenes.
+                    limits: { timeoutSec: 300 },
+                    meta: { traceId },
+                })
+        );
 
         if (renderResponse.success) {
             renderUrl = renderResponse.render.url;
             renderDurationSec = renderResponse.render.durationSec;
             progress("edit_render_complete", "render", { url: renderUrl, attempt: attempts });
+            void incrementJobScene(jobId);
             break;
         }
 
@@ -231,7 +348,12 @@ async function processEditJob(
 
         // Debug: ask agent to fix the generated code
         try {
-            const debugResponse = await agentClient.debug(
+            const debugResponse = await withStep(
+                jobCtx,
+                "agent_debug",
+                { attempt: currentAttempt, model: modelConfig.debugger.model },
+                () =>
+                    agentClient.debug(
                 {
                     brokenCode: newCode,
                     sceneClass: newSceneClass,
@@ -249,6 +371,7 @@ async function processEditJob(
                     meta: { traceId },
                 },
                 traceId
+            )
             );
 
             if (debugResponse.success && debugResponse.output?.code) {
@@ -329,7 +452,10 @@ async function processEditJob(
     );
 
     // ── Step 11: Decrement editing credits (atomic; won't go below zero) ─────
-    if (!user.isTestAccount) {
+    // Skip the decrement for BYOT runs (credits<=0 && own keys): the user
+    // funded this edit with their own provider key. The credit-funded path is
+    // unchanged.
+    if (!user.isTestAccount && !runOnOwnKeys) {
         await User.updateOne(
             { _id: userId, "credits.editing": { $gt: 0 } },
             { $inc: { "credits.editing": -1 } }
@@ -405,6 +531,12 @@ editWorker.on("failed", (job, err) => {
             },
         });
 
+        // F2.4: mark the persisted history row failed (non-fatal). Only on the
+        // terminal failure (retries exhausted); retryable 503s leave it as-is.
+        if (!isRetryable) {
+            void setJobStatus(job.id, "failed", { error: String(err), completedAt: new Date() });
+        }
+
         // Append a failed assistant message to EditChat so the UI can reflect it
         EditChat.findByIdAndUpdate(
             job.data.editChatId,
@@ -444,6 +576,9 @@ editWorker.on("completed", (job, result) => {
         phase: "worker",
         data: result,
     });
+
+    // F2.4: finalize the persisted history row (non-fatal).
+    void setJobStatus(job.id, "complete", { finalUrl: result.newAssetUrl, completedAt: new Date() });
 });
 
 editWorker.on("error", (err) => {

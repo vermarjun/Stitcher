@@ -10,6 +10,7 @@ import { Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import api from "@/api";
 
 interface FlipWordsProps {
   words: string[];
@@ -339,16 +340,26 @@ export const Card = ({
 
 
 
-// Video Templates Data with Asset IDs
-const templateVideos = [
-  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1762161983/68eefd7b0465a2d1f8576947_final_edit_1762161982.mp4", assetId: "6789abcd1234567890abcdef" }, //Arjun verma 
-  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164126/IndiaGDP_a8oexw.mp4", assetId: "6789abcd1234567890abcd01" },
-  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958348/MandalaPattern_vfemzi.mp4", assetId: "6789abcd1234567890abcd02" },
-  { url: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1768598046/68eefd7b0465a2d1f8576947_VisualizingAreaSum_1768598044.mp4", assetId: "6789abcd1234567890abcd03" },
-];
+// A featured template as returned by the public GET /template/featured endpoint.
+// `assetId` carries the real Template ObjectId so the drag payload resolves to a
+// real DB document instead of the old hardcoded fake IDs.
+interface FeaturedTemplate {
+  url: string;
+  assetId: string;
+}
+
+// Raw shape returned by the public endpoint (only public-safe fields).
+interface FeaturedTemplateApi {
+  _id: string;
+  title?: string;
+  type?: string;
+  url: string;
+  thumbnail?: string;
+  duration?: number;
+}
 
 
-const DraggableVideoCard = ({ template }: { template: { url: string; assetId: string } }) => {
+const DraggableVideoCard = ({ template }: { template: FeaturedTemplate }) => {
     return (
       <div 
         className="relative w-40 md:w-60 aspect-video rounded-lg overflow-hidden border border-neutral-800 cursor-grab active:cursor-grabbing group"
@@ -387,8 +398,39 @@ const Hero = () => {
   
   const [prompt, setPrompt] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [attachedTemplate, setAttachedTemplate] = useState<{ url: string; assetId: string } | null>(null);
-  
+  const [attachedTemplate, setAttachedTemplate] = useState<FeaturedTemplate | null>(null);
+
+  // Real featured templates fetched from the public API on mount.
+  const [templateVideos, setTemplateVideos] = useState<FeaturedTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchFeaturedTemplates = async () => {
+      try {
+        const res = await api.get("/template/featured", { params: { limit: 6 } });
+        const list: FeaturedTemplateApi[] = res.data?.data?.templates ?? [];
+        if (cancelled) return;
+        setTemplateVideos(
+          list
+            .filter((t) => t?._id && t?.url)
+            .map((t) => ({ url: t.url, assetId: t._id })),
+        );
+      } catch (err) {
+        // Fail gracefully — the section hides itself when the list is empty.
+        console.error("Failed to load featured templates", err);
+        if (!cancelled) setTemplateVideos([]);
+      } finally {
+        if (!cancelled) setTemplatesLoading(false);
+      }
+    };
+    fetchFeaturedTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+
   // Responsive Prism dimensions
   const [prismDimensions, setPrismDimensions] = useState({ height: 20, baseWidth: 7 });
   
@@ -618,17 +660,30 @@ const Hero = () => {
             </div>
         </div>
 
-        {/* Marquee Footer - Stick to bottom */}
-        <div className="w-full max-w-3xl overflow-hidden mt-auto [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] pb-4 md:pb-6">
+        {/* Marquee Footer - Stick to bottom. Skeleton while loading, hidden if empty. */}
+        {templatesLoading ? (
+          <div className="w-full max-w-3xl overflow-hidden mt-auto [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] pb-4 md:pb-6">
+            <div className="flex gap-4 justify-center">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                    <div
+                        key={idx}
+                        className="w-40 md:w-60 aspect-video rounded-lg border border-neutral-800 bg-neutral-900/40 animate-pulse"
+                    />
+                ))}
+            </div>
+          </div>
+        ) : templateVideos.length > 0 ? (
+          <div className="w-full max-w-3xl overflow-hidden mt-auto [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] pb-4 md:pb-6">
             <Marquee pauseOnHover className="[--duration:40s]">
-                {templateVideos.map((template, idx) => (
-                    <DraggableVideoCard key={idx} template={template} />
+                {templateVideos.map((template) => (
+                    <DraggableVideoCard key={template.assetId} template={template} />
                 ))}
             </Marquee>
             <div className="w-full flex justify-center items-center mt-3 animate-pulse">
                 <p className="text-neutral-600 text-[10px] md:text-xs uppercase tracking-widest font-medium">Try editing these templates!</p>
             </div>
-        </div>
+          </div>
+        ) : null}
       </div>
 
 

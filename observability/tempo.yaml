@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Tempo — Stitcher trace store (single-binary, local storage)
+#
+#  Ingests OTLP from the collector (gRPC :4317 / HTTP :4318), stores trace
+#  blocks on a local volume. Queried by Grafana via the Tempo datasource (:3200).
+#
+#  Deliberately minimal: validated with `tempo -config.verify` against the
+#  pinned grafana/tempo image. Retention/ingester tuning is left at Tempo's
+#  defaults (sane for dev) — the `ingester`/`compactor` top-level blocks are not
+#  accepted by every Tempo build's strict config check, so we omit them rather
+#  than risk a crash-loop. Add them back only if your Tempo build verifies them.
+# ─────────────────────────────────────────────────────────────────────────────
+
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks

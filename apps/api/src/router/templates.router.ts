@@ -6,11 +6,16 @@ import {
     getTemplateById,
     addTemplateToProject,
     fetchAllTemplates,
+    fetchFeaturedTemplates,
     toggleTemplateLike
 } from '../controller/templates.controller';
 import auth from '../middleware/auth.middleware';
 
 const router: Router = express.Router();
+
+// Public route (NO auth) — curated, public-safe template set for the marketing
+// landing page. Declared before '/:id' so it is not captured as an id param.
+router.get('/featured', fetchFeaturedTemplates);
 
 // Public-read routes (already auth-gated for user-specific data)
 router.get('/', auth, fetchAllTemplates);

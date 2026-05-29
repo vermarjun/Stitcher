@@ -9,6 +9,7 @@
  */
 
 import { Queue } from "bullmq";
+import { context, propagation } from "@opentelemetry/api";
 import { redisConnection } from "./connection";
 import type { VideoGenerationJobData } from "./types";
 
@@ -27,6 +28,10 @@ export const generationQueue = new Queue<VideoGenerationJobData>("video-generati
  * Throws if the queue is unreachable.
  */
 export async function enqueueGeneration(data: VideoGenerationJobData): Promise<string> {
-    const job = await generationQueue.add("generate", data);
+    // OBSERVABILITY §3a: inject the active W3C trace context into the job so the
+    // worker can make its spans children of the originating request trace.
+    const otelCarrier: Record<string, string> = {};
+    propagation.inject(context.active(), otelCarrier);
+    const job = await generationQueue.add("generate", { ...data, otelCarrier });
     return job.id ?? "";
 }

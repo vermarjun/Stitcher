@@ -232,6 +232,38 @@ const fetchAllTemplates = async (req: Request, res: Response) => {
   }
 };
 
+// GET /template/featured - PUBLIC, no auth. Returns a small curated set of
+// templates for the marketing landing page drag-and-drop. Only exposes the
+// safe public-facing fields (id, title, type, url, thumbnail, duration) — no
+// likes, user interaction, generator code, or project status data is leaked.
+const fetchFeaturedTemplates = async (req: Request, res: Response) => {
+  try {
+    const { limit = 6 } = req.query;
+    const limitNum = Math.min(12, Math.max(1, parseInt(limit as string) || 6));
+
+    const templates = await Template.find(
+      { type: TemplateType.VIDEO },
+      // Whitelist projection — only public-safe fields leave the server.
+      { _id: 1, title: 1, type: 1, url: 1, thumbnail: 1, duration: 1 }
+    )
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: { templates },
+    });
+  } catch (error) {
+    console.error('Error fetching featured templates:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch featured templates',
+      error: process.env.NODE_ENV === 'development' ? error : undefined,
+    });
+  }
+};
+
 // GET /templates/:id - Get single template by ID with likes and project status
 const getTemplateById = async (req: Request, res: Response) => {
   try {
@@ -711,5 +743,6 @@ export {
   getTemplateById,
   addTemplateToProject,
   fetchAllTemplates,
+  fetchFeaturedTemplates,
   toggleTemplateLike,
 };
