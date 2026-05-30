@@ -23,6 +23,7 @@ from app.core.sandbox import Sandbox, SandboxLimits
 from app.core.thumbnail import ThumbnailError, probe_duration
 from app.core.thumbnail import extract as extract_thumbnail
 from app.core.validate import first_issue_as_error, validate
+from app.core.voiceover import VoiceoverStagingError
 from app.logging import get_logger
 from app.models import (
     EchoedInput,
@@ -135,7 +136,15 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
         quality=req.render.quality,
         timeout=limits.timeout_sec,
     ) as manim_span:
-        result = await sandbox.run(render_code, req.scene_class, limits, manim_argv=inv.argv)
+        try:
+            result = await sandbox.run(render_code, req.scene_class, limits,
+                                       manim_argv=inv.argv, voiceover=req.voiceover)
+        except VoiceoverStagingError as e:
+            # Malformed voiceover bundle (bad base64 / empty clip). Caller-attributable —
+            # surface as a structured failure, not a 500.
+            log.info("pipeline.voiceover_staging_failed", error=str(e))
+            set_span_error(manim_span, f"VoiceoverStaging: {e}")
+            return _fail(req, t0, "sandbox_setup", "VoiceoverStaging", str(e))
         sandbox_ms = int((time.perf_counter() - sandbox_t0) * 1000)
         if manim_span is not None:
             manim_span.set_attribute("exit_code", result.exit_code)
@@ -260,7 +269,7 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
             url=url, thumbnailUrl=thumbnail_url, format=req.render.format,
             durationSec=duration_sec,
             width=inv.width, height=inv.height, fps=inv.fps, bytes=size,
-            codec=None, hasAudio=req.audio is not None,
+            codec=None, hasAudio=req.audio is not None or req.voiceover is not None,
         ),
         execution=_exec(total_ms, sandbox_ms=sandbox_ms,
                         render_ms=result.duration_ms, upload_ms=upload_ms),

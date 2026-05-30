@@ -33,7 +33,9 @@ from pathlib import Path
 from typing import Literal
 
 from app.config import get_settings
+from app.core.voiceover import stage_voiceover_bundle
 from app.logging import get_logger
+from app.models import VoiceoverSpec
 
 log = get_logger("sandbox")
 
@@ -81,11 +83,20 @@ class Sandbox:
             )
 
     async def run(self, code: str, scene_class: str, limits: SandboxLimits,
-                  manim_argv: list[str] | None = None) -> SandboxResult:
+                  manim_argv: list[str] | None = None,
+                  voiceover: VoiceoverSpec | None = None) -> SandboxResult:
         workdir = Path(tempfile.mkdtemp(prefix="mrs-", dir="/tmp"))
         script = workdir / "animation.py"
         script.write_text(code, encoding="utf-8")
         (workdir / "media").mkdir(exist_ok=True)
+
+        # Stage native-voiceover clips into <workdir>/media/voiceovers/<key>.mp3 so
+        # OfflineTTS() finds them at <media_dir>/voiceovers. Done on the host before
+        # the sandbox launches — the sandbox stays fully offline. A malformed bundle
+        # raises before manim is invoked; the pipeline turns it into a structured error.
+        staged = stage_voiceover_bundle(workdir, voiceover)
+        if staged:
+            log.debug("sandbox.voiceover_staged", count=staged, workdir=str(workdir))
 
         cmd = self._build_cmd(workdir, scene_class, limits, manim_argv=manim_argv)
         log.debug("sandbox.exec", cmd=cmd, workdir=str(workdir), limits=limits.__dict__)

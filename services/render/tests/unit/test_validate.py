@@ -39,3 +39,70 @@ def test_dunder_access_rejected() -> None:
 def test_scipy_sympy_allowed() -> None:
     code = "import scipy\nimport sympy\nfrom sympy import Symbol\n"
     assert validate(code) == []
+
+
+def test_voiceover_scene_imports_allowed() -> None:
+    # Native voiceover scenes import manim_voiceover + stitcher_voiceover and subclass
+    # VoiceoverScene. All three must pass the AST guard.
+    code = """
+from manim import *
+from manim_voiceover import VoiceoverScene
+from stitcher_voiceover import OfflineTTS
+
+class Scene00(VoiceoverScene):
+    def construct(self):
+        self.set_speech_service(OfflineTTS(), create_subcaption=False)
+        with self.voiceover(text="hello world") as tracker:
+            self.play(Write(Text("hi")), run_time=tracker.duration)
+"""
+    assert validate(code) == []
+
+
+def test_voiceover_scene_still_rejects_socket() -> None:
+    # Security regression guard: enabling voiceover imports must NOT loosen the bans.
+    code = """
+from manim_voiceover import VoiceoverScene
+import socket
+
+class Scene00(VoiceoverScene):
+    def construct(self):
+        socket.socket()
+"""
+    assert any("'socket'" in i.summary for i in validate(code))
+
+
+def test_voiceover_scene_still_rejects_subprocess() -> None:
+    code = """
+from manim_voiceover import VoiceoverScene
+import subprocess
+
+class Scene00(VoiceoverScene):
+    def construct(self):
+        subprocess.run(["ls"])
+"""
+    assert any("'subprocess'" in i.summary for i in validate(code))
+
+
+def test_voiceover_scene_still_rejects_os_system() -> None:
+    code = """
+from manim_voiceover import VoiceoverScene
+import os
+
+class Scene00(VoiceoverScene):
+    def construct(self):
+        os.system("id")
+"""
+    issues = validate(code)
+    assert any("'os'" in i.summary for i in issues)
+    assert any(".system" in i.summary for i in issues)
+
+
+def test_voiceover_scene_still_rejects_eval() -> None:
+    code = """
+from manim_voiceover import VoiceoverScene
+
+class Scene00(VoiceoverScene):
+    def construct(self):
+        eval("1+1")
+"""
+    assert any("'eval'" in i.summary for i in validate(code))

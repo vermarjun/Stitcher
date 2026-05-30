@@ -29,6 +29,12 @@ ALLOWED_TOP_LEVEL_IMPORTS: frozenset[str] = frozenset({
     "manim", "numpy", "np", "math", "random", "itertools", "functools", "collections",
     "dataclasses", "typing", "enum", "fractions", "decimal", "statistics",
     "scipy", "sympy", "colour", "PIL",
+    # Native voiceover: `from manim_voiceover import VoiceoverScene` and
+    # `from stitcher_voiceover import OfflineTTS`. Both are baked into the image at
+    # build time and make NO network calls at render time (OfflineTTS reads local
+    # cached mp3s only). The `VoiceoverScene` base class is a plain Name reference,
+    # already permitted by the guard.
+    "manim_voiceover", "stitcher_voiceover",
     "__future__",
 })
 

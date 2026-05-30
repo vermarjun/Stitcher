@@ -26,6 +26,12 @@ from app.models import FailurePhase
 # formatting drifts release to release; we match the exception name, not the surrounding
 # punctuation.
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # Native voiceover: OfflineTTS raises a RuntimeError naming the missing pre-generated
+    # clip when the staged <key>.mp3 isn't present. Match its stable signature so the API
+    # debug loop can distinguish "audio wasn't pre-generated/staged" from a generic failure.
+    # Keep this FIRST so the specific signature wins over the generic exception patterns.
+    ("VoiceoverAudioMissing",
+        re.compile(r"(?m)OfflineTTS: pre-generated audio NOT found\.(?:.*\n)*?\s*expected file\s*:\s*(.+)$")),
     ("SyntaxError",       re.compile(r"(?m)^\s*(?:File .+, line (\d+).*\n)?.*SyntaxError: (.+)$")),
     ("IndentationError",  re.compile(r"(?m)^.*IndentationError: (.+)$")),
     ("NameError",         re.compile(r"(?m)^.*NameError: (.+)$")),

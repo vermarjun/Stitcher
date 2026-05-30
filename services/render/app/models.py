@@ -51,6 +51,26 @@ class AudioSpec(BaseModel):
     gain: int = 0
 
 
+class VoiceoverEntry(BaseModel):
+    """One pre-generated narration clip. `key` is sha256(normalize_text(beat)) hex;
+    `base64` is the raw mp3 bytes base64-encoded. Staged to
+    `<workdir>/media/voiceovers/<key>.mp3` before manim runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(..., pattern=r"^[0-9a-f]{64}$", description="sha256 hex of normalized beat")
+    base64: str = Field(..., min_length=1)
+
+
+class VoiceoverSpec(BaseModel):
+    """Native voiceover bundle. Separate from the top-level `audio` post-mux field —
+    these clips are baked into the video by manim via add_sound, not muxed after."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    audio: list[VoiceoverEntry] = Field(default_factory=list)
+
+
 class StorageSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -85,6 +105,7 @@ class RenderRequest(BaseModel):
     scene_class: str = Field(..., alias="sceneClass", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     render: RenderSpec = Field(default_factory=RenderSpec)
     audio: AudioSpec | None = None
+    voiceover: VoiceoverSpec | None = None
     storage: StorageSpec = Field(default_factory=StorageSpec)
     limits: LimitSpec = Field(default_factory=LimitSpec)
     meta: MetaSpec = Field(default_factory=MetaSpec)

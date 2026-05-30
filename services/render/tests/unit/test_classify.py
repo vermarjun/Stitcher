@@ -37,3 +37,22 @@ def test_unknown_falls_back_to_stderr_tail() -> None:
     r = classify("some noise\nmanim: broken in a new way\n")
     assert r.category == "Unknown"
     assert "broken" in r.summary
+
+
+def test_voiceover_audio_missing_categorized() -> None:
+    # OfflineTTS raises this RuntimeError when a staged <key>.mp3 is absent. The
+    # debug loop relies on the specific category to react (re-stage the clip).
+    stderr = '''
+Traceback (most recent call last):
+  File "/work/animation.py", line 5, in construct
+RuntimeError: OfflineTTS: pre-generated audio NOT found.
+  expected file : /work/media/voiceovers/abc123.mp3
+  cache key     : abc123
+  normalized    : 'hello'
+  raw text      : 'hello'
+The worker must pre-generate this MP3.
+'''
+    r = classify(stderr)
+    assert r.category == "VoiceoverAudioMissing"
+    assert "/work/media/voiceovers/abc123.mp3" in r.summary
+    assert r.line == 5

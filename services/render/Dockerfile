@@ -51,6 +51,10 @@ ENV PATH="/opt/venv/bin:${PATH}"
 WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY app/ ./app/
+# Baked-in offline voiceover package. `pip install .` builds the wheel from
+# [tool.hatch.build.targets.wheel] packages = ["app", "stitcher_voiceover"], so
+# `from stitcher_voiceover import OfflineTTS` works inside /opt/venv at render time.
+COPY stitcher_voiceover/ ./stitcher_voiceover/
 
 # Install base + selected storage extra(s) into the venv. Quoting handles an empty STORAGE.
 RUN if [ -n "$STORAGE" ]; then \
