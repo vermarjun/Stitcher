@@ -52,7 +52,13 @@ def extract(video_path: Path, *, at_fraction: float = 0.5,
         ffmpeg, "-y", "-v", "error",
         "-ss", f"{seek:.3f}", "-i", str(video_path),
         "-frames:v", "1",
-        "-vf", f"scale='min({max_dimension},iw)':'-2'",
+        # Manim emits limited-range yuv420p h264. The default mjpeg encoder
+        # rejects that ("Non full-range YUV is non-standard … encoder init
+        # failed") on stricter ffmpeg builds (≥5.x), so we explicitly convert to
+        # the JPEG full-range pixel format. Without this the thumbnail step
+        # raised ThumbnailError on every scene (non-fatal, but no thumbnail).
+        "-vf", f"scale='min({max_dimension},iw)':'-2',format=yuvj420p",
+        "-pix_fmt", "yuvj420p",
         "-q:v", "3",
         str(out),
     ]
