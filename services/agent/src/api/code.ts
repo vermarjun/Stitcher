@@ -116,6 +116,13 @@ export function registerCode(app: FastifyInstance): void {
       // but we expose the requested original index in the response for the caller.
       const incomingIndex = body.scenePlan.index;
       const normalisedPlan = { ...body.scenePlan, index: 0 };
+      // The codeGraph forces the generated class name to the NORMALISED index
+      // (always "Scene00" — see codeGen buildUserMessage). The render service
+      // locates the output mp4 by this class name, so the sceneClass we report
+      // MUST equal the real class in the emitted code, NOT the caller's original
+      // index. Reporting Scene<incomingIndex> caused ArtifactMissing for every
+      // scene with index != 0 (manim wrote Scene00.mp4, render looked for SceneNN.mp4).
+      const emittedSceneClass = "Scene00";
 
       const initialState = {
         jobId,
@@ -159,7 +166,7 @@ export function registerCode(app: FastifyInstance): void {
           output: success
             ? {
                 sceneIndex: incomingIndex,
-                sceneClass: `Scene${String(incomingIndex).padStart(2, "0")}`,
+                sceneClass: emittedSceneClass,
                 code: sceneState.finalCode,
                 status: sceneState.status,
                 attempts: sceneState.attempts,
@@ -175,7 +182,7 @@ export function registerCode(app: FastifyInstance): void {
           output: sceneState
             ? {
                 sceneIndex: incomingIndex,
-                sceneClass: `Scene${String(incomingIndex).padStart(2, "0")}`,
+                sceneClass: emittedSceneClass,
                 code: sceneState.finalCode,
                 status: sceneState.status,
                 attempts: sceneState.attempts,

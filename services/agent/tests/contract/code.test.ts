@@ -119,7 +119,11 @@ describe("POST /code contract", () => {
       const body = resp.json<{ output: { sceneIndex: number; sceneClass: string } | null }>();
       if (body.output) {
         expect(body.output.sceneIndex).toBe(3);
-        expect(body.output.sceneClass).toBe("Scene03");
+        // The caller's index is preserved in sceneIndex, but the codeGraph always
+        // emits `class Scene00` (it normalises to index 0). sceneClass must reflect
+        // the REAL emitted class so the render service finds Scene00.mp4 — reporting
+        // Scene03 here caused ArtifactMissing for every scene with index != 0.
+        expect(body.output.sceneClass).toBe("Scene00");
       }
     }
   });
