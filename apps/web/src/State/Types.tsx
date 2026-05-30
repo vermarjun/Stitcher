@@ -207,3 +207,15 @@ export interface ITrack {
   muted: boolean;
   items: ITimelineItem[];
 }
+
+// Optional settings passed on the AI generate request.
+export interface VoiceoverOptions {
+  enabled: boolean;
+  provider?: string;
+  voice?: string;
+  language?: string;
+}
+
+export interface GenerationOptions {
+  voiceover?: VoiceoverOptions;
+}

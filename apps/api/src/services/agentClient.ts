@@ -65,6 +65,14 @@ export interface SceneSpec {
     description?: string;
     concepts?: string[];
     visualElements?: string[];
+    /**
+     * Native voiceover: ordered narration beat strings the planner emits when
+     * voiceover is ON (plan-authoritative). The coder reproduces each verbatim
+     * inside a `self.voiceover(text=...)` block, and the worker pre-synthesizes
+     * audio for these EXACT beats in parallel with code-gen. Absent/empty when
+     * voiceover is OFF.
+     */
+    narration?: string[];
 }
 
 export interface StyleManifest {
@@ -87,6 +95,8 @@ export interface PlanInput {
     styleManifestOverride?: unknown;
     constraints?: PlanConstraints;
     limits?: { timeoutSec?: number };
+    /** When true, the planner emits `narration[]` per scene (plan-authoritative). */
+    voiceover?: boolean;
     meta?: { traceId?: string };
 }
 
@@ -116,6 +126,12 @@ export interface CodeInput {
         validator?: LlmRoleConfig;
     };
     limits?: { maxValidationRetries?: number; timeoutSec?: number };
+    /**
+     * When true, the coder emits a `VoiceoverScene` with one
+     * `self.voiceover(text=...)` block per planned narration beat (verbatim), and
+     * the validator enforces the beats match `scenePlan.narration`.
+     */
+    voiceover?: boolean;
     meta?: { traceId?: string };
 }
 
@@ -154,6 +170,12 @@ export interface DebugInput {
         validator?: LlmRoleConfig;
     };
     limits?: { maxValidationRetries?: number; timeoutSec?: number };
+    /**
+     * When true, the debugger keeps the `VoiceoverScene` shape and PRESERVES the
+     * narration beats verbatim (so the pre-synthesized audio bundle still
+     * resolves — the worker reuses the same bundle without re-synthesizing).
+     */
+    voiceover?: boolean;
     meta?: { traceId?: string };
 }
 
@@ -265,7 +287,7 @@ class AgentClient {
     async plan(input: PlanInput, traceId?: string): Promise<PlanResponse> {
         logger.debug(`[agent] plan traceId=${traceId ?? "-"} prompt="${input.prompt.slice(0, 80)}"`);
         try {
-            const res = await this.http.post<PlanResponse>("/plan", input, this.callCfg(traceId, 60_000));
+            const res = await this.http.post<PlanResponse>("/plan", input, this.callCfg(traceId, 120_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
@@ -277,7 +299,7 @@ class AgentClient {
     async code(input: CodeInput, traceId?: string): Promise<CodeResponse> {
         logger.debug(`[agent] code traceId=${traceId ?? "-"} sceneIndex=${input.scenePlan.index}`);
         try {
-            const res = await this.http.post<CodeResponse>("/code", input, this.callCfg(traceId, 60_000));
+            const res = await this.http.post<CodeResponse>("/code", input, this.callCfg(traceId, 240_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
@@ -289,7 +311,7 @@ class AgentClient {
     async debug(input: DebugInput, traceId?: string): Promise<DebugResponse> {
         logger.debug(`[agent] debug traceId=${traceId ?? "-"} sceneClass=${input.sceneClass ?? "-"}`);
         try {
-            const res = await this.http.post<DebugResponse>("/debug", input, this.callCfg(traceId, 30_000));
+            const res = await this.http.post<DebugResponse>("/debug", input, this.callCfg(traceId, 180_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);

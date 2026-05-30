@@ -1,6 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, useState } from "react";
 import { ScrollArea } from "@/Components/ui/scroll-area";
-import { AlertCircle, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp, Copy, Mic } from "lucide-react";
 import { messageActions, type Message } from "./Main.rightsidebar";
 import EmptyState from "./EmptyState.rightsidebar";
 import MessageBubble from "./MessageBubble.rightsidebar";
@@ -8,7 +8,7 @@ import QuickPrompts from "./QuickPrompts.rightsidebar";
 import MessageInput from "./MessageInput.rightsidebar";
 import api from "@/api";
 import { toast } from "sonner";
-import type { Project, IUser, Asset } from "@/State/Types";
+import type { Project, IUser, Asset, GenerationOptions } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
 import { useRefreshHeader } from "../context";
 import { socket } from "@/socket";
@@ -122,6 +122,9 @@ const GenerateComponent = ({
   const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
   const [totalScenes, setTotalScenes] = useState<number | null>(null);
   const [completedScenes, setCompletedScenes] = useState<number>(0);
+  // Voiceover narration toggle (off by default). When on, the generate
+  // request carries generationOptions.voiceover = { enabled: true }.
+  const [voiceoverEnabled, setVoiceoverEnabled] = useState(false);
 
   const resetProgress = () => {
     setProgressSteps([]);
@@ -395,6 +398,13 @@ const GenerateComponent = ({
         userId: user?._id,
         assetId: assetsAttached,
         ...(currentChatId && { chatId: currentChatId }),
+        // Only attach voiceover when the user turns it on; otherwise omit so
+        // the request body is unchanged from the default behaviour.
+        ...(voiceoverEnabled && {
+          generationOptions: {
+            voiceover: { enabled: true },
+          } as GenerationOptions,
+        }),
       };
 
       const response = await api.post(`/generatechat/`, requestData);
@@ -529,6 +539,37 @@ const GenerateComponent = ({
   const getPlaceholder = () => {
     return "Describe the animation...";
   };
+
+  // Small, self-contained voiceover toggle rendered just above the input.
+  // Off by default; flips the `voiceoverEnabled` state consumed in handleSubmit.
+  const VoiceoverToggle = () => (
+    <div className="px-3 pt-2 bg-zinc-800 flex-shrink-0">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={voiceoverEnabled}
+        onClick={() => setVoiceoverEnabled((v) => !v)}
+        disabled={isProcessing}
+        className="flex w-full items-center gap-2 text-xs text-neutral-300 hover:text-neutral-100 disabled:opacity-50 transition-colors"
+      >
+        <Mic className="w-3.5 h-3.5 text-emerald-400" />
+        <span className="font-medium">Voiceover narration</span>
+        <span
+          className={
+            "ml-auto relative inline-flex h-4 w-7 items-center rounded-full transition-colors " +
+            (voiceoverEnabled ? "bg-emerald-600" : "bg-neutral-600")
+          }
+        >
+          <span
+            className={
+              "inline-block h-3 w-3 transform rounded-full bg-white transition-transform " +
+              (voiceoverEnabled ? "translate-x-3.5" : "translate-x-0.5")
+            }
+          />
+        </span>
+      </button>
+    </div>
+  );
 
   // Custom error message component
   const ErrorMessageBubble = ({ message }: { message: Message }) => {
@@ -708,6 +749,7 @@ const GenerateComponent = ({
             <EmptyState mode="generate" onPromptSelect={handlePromptSelect} />
             <QuickPrompts mode="generate" onPromptSelect={handlePromptSelect} />
           </div>
+          <VoiceoverToggle />
           <MessageInput
             input={input}
             setInput={setInput}
@@ -837,6 +879,7 @@ const GenerateComponent = ({
             </div>
           </ScrollArea>
 
+          <VoiceoverToggle />
           <MessageInput
             input={input}
             setInput={setInput}

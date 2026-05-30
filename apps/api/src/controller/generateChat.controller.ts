@@ -28,6 +28,12 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             minScenes?: number;
             maxScenes?: number;
             quality?: 'low' | 'medium' | 'high';
+            voiceover?: {
+                enabled: boolean;
+                provider?: string;
+                voice?: string;
+                language?: string;
+            };
         };
     };
     const userId = req.userId;

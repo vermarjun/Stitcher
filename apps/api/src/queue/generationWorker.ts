@@ -50,6 +50,8 @@ import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
 import { publishProgress } from "./eventPublisher.util";
 import { setJobStatus, setJobSceneTotal, incrementJobScene } from "./jobTracker.util";
 import { concatVideos, uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
+import { buildAudioBundle } from "../services/ttsClient";
+import type { VoiceoverSpec } from "../services/renderClient";
 import { recall, reflect } from "../services/memoryService";
 import GenerateChat from "../model/generateChat.model";
 import Asset, { AssetType, AssetOrigin } from "../model/asset.model";
@@ -266,12 +268,22 @@ async function runGenerationPipeline(
         logger.warn({ message: "[worker] memory recall failed; proceeding without it", traceId, error: String(err) });
     }
 
+    // ── Native voiceover flag ────────────────────────────────────────────────
+    // Feature-flagged OFF by default. When off, NO voiceover field is sent to the
+    // agent or render services and behavior is byte-for-byte unchanged from today.
+    const voiceoverEnabled = generationOptions?.voiceover?.enabled === true;
+    const voiceoverOpts = {
+        provider: generationOptions?.voiceover?.provider,
+        voice: generationOptions?.voiceover?.voice,
+        lang: generationOptions?.voiceover?.language,
+    };
+
     // ── Step 4: Agent plan ───────────────────────────────────────────────────
     progress("planning", "agent_plan");
     const planResponse = await withStep(
         jobCtx,
         "agent_plan",
-        { model: modelConfig.planner.model },
+        { model: modelConfig.planner.model, voiceover: voiceoverEnabled },
         () =>
             agentClient.plan(
                 {
@@ -283,6 +295,9 @@ async function runGenerationPipeline(
                         targetTotalDurationSec: generationOptions?.targetTotalDurationSec,
                         renderQualityHint: generationOptions?.quality,
                     },
+                    // Plan-authoritative narration: only request beats when voiceover
+                    // is on. Omitted entirely when off (unchanged request shape).
+                    ...(voiceoverEnabled ? { voiceover: true } : {}),
                     meta: { traceId },
                 },
                 traceId
@@ -358,11 +373,24 @@ async function runGenerationPipeline(
             // Non-fatal
         }
 
-        // b. Agent code
-        const codeResponse = await withStep(
+        // Guard: voiceover ON requires planned narration beats. Fail clearly
+        // rather than sending a half-bundle (which would desync render lookups).
+        if (voiceoverEnabled && (!sceneSpec.narration || sceneSpec.narration.length === 0)) {
+            state.status = "failed";
+            state.error = "voiceover enabled but planner returned no narration beats for this scene";
+            progress("scene_failed", "scene", { index: state.sceneIndex, error: state.error });
+            return;
+        }
+
+        // b. Agent code  ||  TTS audio bundle (REQUIRED parallelism when voiceover
+        //    is ON: TTS of the PLANNED beats overlaps code generation, since the
+        //    bundle is keyed off the plan, not the generated code). The agent's
+        //    validator guarantees the generated voiceover texts equal the planned
+        //    beats, so OfflineTTS finds each `<cacheKey>.mp3` at render time.
+        const codePromise = withStep(
             sceneCtx,
             "agent_code",
-            { "scene.index": state.sceneIndex, model: modelConfig.coder.model },
+            { "scene.index": state.sceneIndex, model: modelConfig.coder.model, voiceover: voiceoverEnabled },
             () =>
                 agentClient.code(
                     {
@@ -373,11 +401,25 @@ async function runGenerationPipeline(
                             coder: modelConfig.coder,
                             validator: modelConfig.validator,
                         },
+                        ...(voiceoverEnabled ? { voiceover: true } : {}),
                         meta: { traceId },
                     },
                     traceId
                 )
         );
+
+        const ttsPromise: Promise<VoiceoverSpec | undefined> = voiceoverEnabled
+            ? withStep(
+                  sceneCtx,
+                  "tts",
+                  { "scene.index": state.sceneIndex, beats: sceneSpec.narration!.length },
+                  async () => ({
+                      audio: await buildAudioBundle(sceneSpec.narration!, voiceoverOpts),
+                  })
+              )
+            : Promise.resolve(undefined);
+
+        const [codeResponse, voiceoverBundle] = await Promise.all([codePromise, ttsPromise]);
 
         if (!codeResponse.success || !codeResponse.output?.code) {
             state.status = "failed";
@@ -406,6 +448,10 @@ async function runGenerationPipeline(
                         code: state.code,
                         sceneClass: state.sceneClass,
                         render: { quality: renderQuality },
+                        // Reuse the SAME bundle across debug-retries — the debugger
+                        // preserves the narration beats, so no re-synthesis needed.
+                        // Omitted entirely when voiceover is off (unchanged shape).
+                        ...(voiceoverBundle ? { voiceover: voiceoverBundle } : {}),
                         storage: {
                             // Render service returns a local HTTP URL per scene.
                             // Final upload to Cloudinary happens in the API via
@@ -474,6 +520,9 @@ async function runGenerationPipeline(
                                     debugger: modelConfig.debugger,
                                     validator: modelConfig.validator,
                                 },
+                                // Keep the VoiceoverScene shape + preserve beats so
+                                // the reused audio bundle still resolves at render.
+                                ...(voiceoverEnabled ? { voiceover: true } : {}),
                                 meta: { traceId },
                             },
                             traceId
@@ -515,7 +564,7 @@ async function runGenerationPipeline(
                 origin: AssetOrigin.GENERATED_VIDEO,
                 url: state.renderUrl!,
                 thumbnail: state.thumbnailUrl ?? state.renderUrl!,
-                durationSec: state.durationSec,
+                duration: state.durationSec,
                 bytes: 0,
                 metadata: { traceId, sceneIndex: state.sceneIndex },
                 projectId: new Types.ObjectId(projectId ?? userId),
