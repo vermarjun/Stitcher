@@ -30,6 +30,19 @@ export interface VideoGenerationJobData {
         minScenes?: number;
         maxScenes?: number;
         quality?: "low" | "medium" | "high";
+        /**
+         * Native voiceover. Feature-flagged OFF by default: when absent or
+         * `enabled:false`, the pipeline behaves byte-for-byte as before (no
+         * voiceover field sent to the agent/render services). When enabled, the
+         * worker pre-synthesizes narration audio and bakes it via the render
+         * service. `provider` overrides config.TTS_PROVIDER for this job.
+         */
+        voiceover?: {
+            enabled: boolean;
+            provider?: string;
+            voice?: string;
+            language?: string;
+        };
     };
     /** UUID propagated from the originating HTTP request (req.id). */
     traceId: string;

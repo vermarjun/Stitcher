@@ -66,6 +66,16 @@ const envSchema = z.object({
     // Gates the bull-board admin dashboard at ${API_PREFIX}/admin/queues.
     // Must be "true" AND the request must pass JWT auth to access the board.
     ADMIN_DASHBOARD_ENABLED: z.string().optional().default("false"),
+
+    // ── Native voiceover (TTS) — all optional; voiceover is feature-flagged OFF
+    //    by default at the request layer, so missing Azure keys NEVER break boot.
+    //    TTS_PROVIDER picks the default adapter; a per-request override
+    //    (generationOptions.voiceover.provider) takes precedence in the worker.
+    TTS_PROVIDER: z.string().optional().default("gtts"),
+    AZURE_SPEECH_KEY: z.string().optional(),
+    AZURE_SPEECH_REGION: z.string().optional(),
+    DEFAULT_VOICEOVER_VOICE: z.string().optional(),
+    DEFAULT_VOICEOVER_LANG: z.string().optional().default("en"),
 });
 
 const parsed = envSchema.safeParse(process.env);

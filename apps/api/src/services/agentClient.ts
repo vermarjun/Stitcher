@@ -65,6 +65,14 @@ export interface SceneSpec {
     description?: string;
     concepts?: string[];
     visualElements?: string[];
+    /**
+     * Native voiceover: ordered narration beat strings the planner emits when
+     * voiceover is ON (plan-authoritative). The coder reproduces each verbatim
+     * inside a `self.voiceover(text=...)` block, and the worker pre-synthesizes
+     * audio for these EXACT beats in parallel with code-gen. Absent/empty when
+     * voiceover is OFF.
+     */
+    narration?: string[];
 }
 
 export interface StyleManifest {
@@ -87,6 +95,8 @@ export interface PlanInput {
     styleManifestOverride?: unknown;
     constraints?: PlanConstraints;
     limits?: { timeoutSec?: number };
+    /** When true, the planner emits `narration[]` per scene (plan-authoritative). */
+    voiceover?: boolean;
     meta?: { traceId?: string };
 }
 
@@ -116,6 +126,12 @@ export interface CodeInput {
         validator?: LlmRoleConfig;
     };
     limits?: { maxValidationRetries?: number; timeoutSec?: number };
+    /**
+     * When true, the coder emits a `VoiceoverScene` with one
+     * `self.voiceover(text=...)` block per planned narration beat (verbatim), and
+     * the validator enforces the beats match `scenePlan.narration`.
+     */
+    voiceover?: boolean;
     meta?: { traceId?: string };
 }
 
@@ -154,6 +170,12 @@ export interface DebugInput {
         validator?: LlmRoleConfig;
     };
     limits?: { maxValidationRetries?: number; timeoutSec?: number };
+    /**
+     * When true, the debugger keeps the `VoiceoverScene` shape and PRESERVES the
+     * narration beats verbatim (so the pre-synthesized audio bundle still
+     * resolves — the worker reuses the same bundle without re-synthesizing).
+     */
+    voiceover?: boolean;
     meta?: { traceId?: string };
 }
 

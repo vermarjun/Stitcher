@@ -58,11 +58,28 @@ export interface LimitSpec {
     cpuCount?: number;
 }
 
+/**
+ * Native voiceover bundle (contract: separate from the top-level `audio`
+ * post-mux field). One pre-generated mp3 per distinct narration beat, keyed by
+ * sha256(normalizeText(beat)) hex (see ttsClient.cacheKey). The render service
+ * stages each entry to `<workdir>/media/voiceovers/<key>.mp3` BEFORE manim runs,
+ * where OfflineTTS finds it. Audio is baked by manim via add_sound — NOT muxed.
+ */
+export interface VoiceoverEntry {
+    key: string;
+    base64: string;
+}
+
+export interface VoiceoverSpec {
+    audio: VoiceoverEntry[];
+}
+
 export interface RenderInput {
     code: string;
     sceneClass: string;
     render?: RenderSpec;
     audio?: AudioSpec;
+    voiceover?: VoiceoverSpec;
     storage: StorageSpec;
     limits?: LimitSpec;
     meta: { traceId: string };

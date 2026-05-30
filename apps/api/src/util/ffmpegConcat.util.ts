@@ -120,6 +120,28 @@ function runFfmpeg(args: string[]): Promise<void> {
     });
 }
 
+// ─── ffprobe audio detection ──────────────────────────────────────────────────
+
+/**
+ * Return true if the file has at least one audio stream. Uses ffprobe; on any
+ * failure returns false (conservative — falls back to the fast video-only path).
+ */
+function probeHasAudio(filePath: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const proc = spawn(
+            "ffprobe",
+            ["-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type", "-of", "csv=p=0", filePath],
+            { stdio: ["ignore", "pipe", "pipe"] }
+        );
+        const out: Buffer[] = [];
+        proc.stdout?.on("data", (c: Buffer) => out.push(c));
+        proc.on("close", () => {
+            resolve(Buffer.concat(out).toString("utf8").includes("audio"));
+        });
+        proc.on("error", () => resolve(false));
+    });
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export interface ConcatResult {
@@ -166,23 +188,64 @@ export async function concatVideos(urls: string[], outputName: string): Promise<
             })
         );
 
-        // 2. Write concat list
-        const listPath = path.join(tmpDir, "concat.txt");
-        const listContent = localPaths
-            .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
-            .join("\n");
-        fs.writeFileSync(listPath, listContent, "utf8");
+        // 2. Decide concat strategy from REAL stream inspection.
+        //
+        //    Video-only (no voiceover): every input is a uniform video-only mp4,
+        //    so `-f concat -c copy` (stream copy, no re-encode) is fast and clean —
+        //    this is the existing, unchanged behavior.
+        //
+        //    Voiceover ON: every scene mp4 has a baked AAC track. `-f concat -c copy`
+        //    across separately-encoded AAC streams can drop/desync audio at the
+        //    boundaries (encoder delay / priming samples per file, non-monotonic
+        //    timestamps). When ANY input has audio we use the concat FILTER
+        //    (`-filter_complex concat=n=N:v=1:a=1`) which decodes + re-encodes into
+        //    one continuous A/V stream — proven by ffprobe to preserve a single
+        //    audio track whose duration ≈ sum of inputs. We re-encode only in this
+        //    case; the fast copy path is untouched for video-only generations.
+        const anyHasAudio = (await Promise.all(localPaths.map(probeHasAudio))).some(Boolean);
 
-        // 3. Run ffmpeg
         const outputPath = path.join(tmpDir, outputName);
-        await runFfmpeg([
-            "-y",               // overwrite output
-            "-f", "concat",
-            "-safe", "0",       // allow absolute paths in the list file
-            "-i", listPath,
-            "-c", "copy",       // stream copy — no re-encode
-            outputPath,
-        ]);
+
+        if (anyHasAudio) {
+            logger.debug({ message: "ffmpegConcat: audio detected — using concat filter (re-encode)", count: localPaths.length });
+            // Build: -i a.mp4 -i b.mp4 ... -filter_complex "[0:v][0:a][1:v][1:a]concat=n=N:v=1:a=1[v][a]" -map [v] -map [a]
+            const inputArgs: string[] = [];
+            for (const p of localPaths) {
+                inputArgs.push("-i", p);
+            }
+            const streamRefs = localPaths.map((_, i) => `[${i}:v:0][${i}:a:0]`).join("");
+            const filter = `${streamRefs}concat=n=${localPaths.length}:v=1:a=1[outv][outa]`;
+            await runFfmpeg([
+                "-y",
+                ...inputArgs,
+                "-filter_complex", filter,
+                "-map", "[outv]",
+                "-map", "[outa]",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart",
+                outputPath,
+            ]);
+        } else {
+            // Write concat list for the fast stream-copy path (video-only).
+            const listPath = path.join(tmpDir, "concat.txt");
+            const listContent = localPaths
+                .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
+                .join("\n");
+            fs.writeFileSync(listPath, listContent, "utf8");
+
+            await runFfmpeg([
+                "-y",               // overwrite output
+                "-f", "concat",
+                "-safe", "0",       // allow absolute paths in the list file
+                "-i", listPath,
+                "-c", "copy",       // stream copy — no re-encode
+                outputPath,
+            ]);
+        }
 
         return { filePath: outputPath, cleanup };
     } catch (err) {
