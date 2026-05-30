@@ -60,6 +60,8 @@ export interface ICommunityPost extends Document {
   analytics: IPostAnalytics;
   publishedAt: Date;
   lastActivityAt: Date;
+  /** Whether an admin has featured this post (default false). */
+  isFeatured: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -141,8 +143,9 @@ const CommunityPostSchema = new Schema<ICommunityPost, CommunityPostModel, IComm
     })
   },
   publishedAt: { type: Date, default: Date.now, index: true },
-  lastActivityAt: { type: Date, default: Date.now, index: true }
-}, { 
+  lastActivityAt: { type: Date, default: Date.now, index: true },
+  isFeatured: { type: Boolean, default: false },
+}, {
   timestamps: true,
   optimisticConcurrency: true 
 });
