@@ -564,7 +564,7 @@ async function runGenerationPipeline(
                 origin: AssetOrigin.GENERATED_VIDEO,
                 url: state.renderUrl!,
                 thumbnail: state.thumbnailUrl ?? state.renderUrl!,
-                durationSec: state.durationSec,
+                duration: state.durationSec,
                 bytes: 0,
                 metadata: { traceId, sceneIndex: state.sceneIndex },
                 projectId: new Types.ObjectId(projectId ?? userId),

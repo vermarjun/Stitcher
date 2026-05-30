@@ -267,6 +267,56 @@ async function cacheSet(rk: string, buf: Buffer): Promise<void> {
     }
 }
 
+// ─── Retry + concurrency (robust against TTS throttling, e.g. Azure F0 tier) ───
+// A multi-scene job synthesizes many beats in parallel; the free Azure tier
+// (and gTTS under bursts) can throttle. We cap concurrency and retry transient
+// failures with exponential backoff. Auth/not-found errors are NOT retried.
+
+const TTS_MAX_RETRIES = 3;
+const TTS_MAX_CONCURRENCY = Math.max(1, Number(process.env["TTS_MAX_CONCURRENCY"] ?? 3) || 3);
+
+async function synthesizeWithRetry(
+    adapter: TtsAdapter,
+    text: string,
+    opts: SynthesizeOptions
+): Promise<Buffer> {
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= TTS_MAX_RETRIES; attempt++) {
+        try {
+            return await adapter.synthesize(text, opts);
+        } catch (err) {
+            lastErr = err;
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            // Permanent failures — don't waste retries.
+            if (status === 401 || status === 403 || status === 404) throw err;
+            if (attempt === TTS_MAX_RETRIES) break;
+            const backoffMs = 500 * 2 ** (attempt - 1); // 500, 1000, 2000
+            logger.warn({
+                message: `[tts] synth attempt ${attempt}/${TTS_MAX_RETRIES} failed; retrying in ${backoffMs}ms`,
+                provider: opts.provider,
+                status,
+                error: String((err as Error)?.message ?? err),
+            });
+            await new Promise((r) => setTimeout(r, backoffMs));
+        }
+    }
+    throw lastErr;
+}
+
+/** Run `fn` over `items` with a bounded number of concurrent executions. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let next = 0;
+    async function worker(): Promise<void> {
+        while (next < items.length) {
+            const idx = next++;
+            results[idx] = await fn(items[idx]!);
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+    return results;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -285,7 +335,7 @@ export async function synthesize(text: string, opts: SynthesizeOptions = {}): Pr
     }
 
     const adapter = resolveAdapter(provider);
-    const buf = await adapter.synthesize(text, { ...opts, provider, voice });
+    const buf = await synthesizeWithRetry(adapter, text, { ...opts, provider, voice });
     void cacheSet(rk, buf);
     return buf;
 }
@@ -316,11 +366,15 @@ export async function buildAudioBundle(
         if (!seen.has(key)) seen.set(key, beat);
     }
 
-    const entries = await Promise.all(
-        Array.from(seen.entries()).map(async ([key, beat]) => {
+    // Bounded concurrency so a many-beat scene doesn't burst-throttle the TTS
+    // provider (notably Azure F0). synthesize() itself retries transient errors.
+    const entries = await mapLimit(
+        Array.from(seen.entries()),
+        TTS_MAX_CONCURRENCY,
+        async ([key, beat]) => {
             const buf = await synthesize(beat, opts);
             return { key, base64: buf.toString("base64") };
-        })
+        }
     );
     return entries;
 }
