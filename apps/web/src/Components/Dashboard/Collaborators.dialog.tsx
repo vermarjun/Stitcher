@@ -10,7 +10,8 @@ interface Collaborator {
   userId: string;
   username: string;
   email: string;
-  role: "editor" | "viewer";
+  profilePhoto?: string;
+  role: "owner" | "editor" | "viewer";
   status: string;
 }
 
@@ -32,7 +33,7 @@ interface CollaboratorsResponse {
 
 interface Props {
   projectId: string;
-  projectOwnerId?: string;
+  currentUserRole?: "owner" | "editor" | "viewer" | null;
   currentUser?: IUser;
   onClose: () => void;
 }
@@ -41,7 +42,7 @@ interface Props {
 
 export default function CollaboratorsDialog({
   projectId,
-  projectOwnerId,
+  currentUserRole,
   currentUser,
   onClose,
 }: Props) {
@@ -54,11 +55,9 @@ export default function CollaboratorsDialog({
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
   const [inviting, setInviting] = useState(false);
 
-  // Owner check: compare currentUser._id to projectOwnerId if available
-  const isOwner =
-    !projectOwnerId || !currentUser?._id
-      ? true // fallback — let API 403 if wrong
-      : currentUser._id === projectOwnerId;
+  // Only the owner may invite/remove collaborators. When the role is unknown
+  // (older project payloads) fall back to permissive and let the API 403.
+  const isOwner = currentUserRole == null ? true : currentUserRole === "owner";
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -122,10 +121,36 @@ export default function CollaboratorsDialog({
 
   // ── Role badge helper ──────────────────────────────────────────────────────
 
-  const roleBadge = (role: "editor" | "viewer") =>
-    role === "editor"
-      ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-      : "bg-zinc-700/40 text-zinc-400 border border-zinc-600/30";
+  const roleBadge = (role: "owner" | "editor" | "viewer") =>
+    role === "owner"
+      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+      : role === "editor"
+        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+        : "bg-zinc-700/40 text-zinc-400 border border-zinc-600/30";
+
+  // A real avatar when we have a usable photo URL, else the initial fallback.
+  const Avatar = ({ c }: { c: Collaborator }) => {
+    const hasPhoto =
+      !!c.profilePhoto &&
+      c.profilePhoto.trim() !== "" &&
+      !c.profilePhoto.includes("gravatar.com/avatar/?d=mp");
+    if (hasPhoto) {
+      return (
+        <img
+          src={c.profilePhoto}
+          alt={c.username || c.email}
+          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+        />
+      );
+    }
+    return (
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
+        <span className="text-xs font-semibold text-white">
+          {(c.username || c.email).charAt(0).toUpperCase()}
+        </span>
+      </div>
+    );
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -213,14 +238,13 @@ export default function CollaboratorsDialog({
                     key={c.userId}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-zinc-800/30 border border-zinc-800/60 hover:border-zinc-700/60 transition-colors"
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-semibold text-white">
-                        {(c.username || c.email).charAt(0).toUpperCase()}
-                      </span>
-                    </div>
+                    <Avatar c={c} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-200 truncate font-medium">
                         {c.username || c.email}
+                        {c.userId === currentUser?._id && (
+                          <span className="text-zinc-500 font-normal"> (you)</span>
+                        )}
                       </p>
                       <p className="text-xs text-zinc-500 truncate">{c.email}</p>
                     </div>
@@ -231,17 +255,21 @@ export default function CollaboratorsDialog({
                     >
                       {c.role}
                     </span>
-                    {isOwner && (
-                      <button
-                        onClick={() =>
-                          handleRemove(c.userId, c.username || c.email)
-                        }
-                        className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Remove collaborator"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    {/* Owner-only, and never on the owner's own row or your own
+                        row — you cannot remove the owner or yourself. */}
+                    {isOwner &&
+                      c.role !== "owner" &&
+                      c.userId !== currentUser?._id && (
+                        <button
+                          onClick={() =>
+                            handleRemove(c.userId, c.username || c.email)
+                          }
+                          className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Remove collaborator"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                   </div>
                 ))}
               </div>

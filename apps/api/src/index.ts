@@ -26,6 +26,7 @@ import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import { generationQueue } from "./queue/generationQueue";
 import { editQueue } from "./queue/editQueue";
+import { emailQueue } from "./queue/emailQueue";
 import { startQueueDepthSampler, stopQueueDepthSampler } from "./util/metrics.util";
 import auth from "./middleware/auth.middleware";
 import GenerateChat from "./model/generateChat.model";
@@ -39,6 +40,7 @@ import { requireFeature } from "./middleware/feature.middleware";
 // Queue workers — import after express setup so workers boot with the server
 import { generationWorker } from "./queue/generationWorker";
 import { editWorker } from "./queue/editWorker";
+import { emailWorker } from "./queue/emailWorker";
 
 // Import Routes
 import userRoutes from "./router/user.router";
@@ -321,7 +323,7 @@ if (ADMIN_DASHBOARD_ENABLED) {
     serverAdapter.setBasePath(bullBoardPath);
 
     createBullBoard({
-        queues: [new BullMQAdapter(generationQueue), new BullMQAdapter(editQueue)],
+        queues: [new BullMQAdapter(generationQueue), new BullMQAdapter(editQueue), new BullMQAdapter(emailQueue)],
         serverAdapter,
     });
 
@@ -376,6 +378,7 @@ async function shutdown(signal: string) {
 
             await generationWorker.close();
             await editWorker.close();
+            await emailWorker.close();
             logger.info("BullMQ workers closed");
 
             await mongoose.connection.close();

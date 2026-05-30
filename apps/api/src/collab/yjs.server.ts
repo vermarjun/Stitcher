@@ -24,7 +24,7 @@ import { Types } from 'mongoose';
 import { removeAwarenessStates } from 'y-protocols/awareness';
 
 import { JWT_CONFIG } from '../config';
-import { canAccessProject } from '../util/projectAccess.util';
+import { getProjectRole } from '../util/projectAccess.util';
 import { YDocModel } from '../model/ydoc.model';
 import Timeline from '../model/timeline.model';
 import Track from '../model/track.model';
@@ -429,16 +429,18 @@ async function yjsAuthMiddleware(socket: Socket, next: (err?: Error) => void): P
       return next(new Error('Unauthorized'));
     }
 
-    const ok = await canAccessProject(userId, projectId);
-    if (!ok) {
+    const role = await getProjectRole(userId, projectId);
+    if (!role) {
       logger.warn({ message: 'Yjs auth: access denied', userId, projectId });
       return next(new Error('Unauthorized'));
     }
 
-    // Store userId on socket.data so disconnectProjectUser can match by userId
+    // Store identity + role on socket.data so disconnectProjectUser can match by
+    // userId, and the connection handler can enforce viewer read-only.
     socket.data.userId = userId;
+    socket.data.role = role;
 
-    logger.debug({ message: 'Yjs auth: OK', userId, projectId });
+    logger.debug({ message: 'Yjs auth: OK', userId, projectId, role });
     next();
   } catch (err) {
     logger.error({ message: 'Yjs auth middleware error', error: String(err) });
@@ -542,6 +544,25 @@ export function initYjsServer(io: Server): void {
     // broadcast the removal to remaining room members.
     nsp.on('connection', (socket: Socket) => {
       const projectId = socket.nsp.name.replace(/^\/yjs\|/, '');
+
+      // ── Viewer read-only enforcement ────────────────────────────────────────
+      // A 'viewer' collaborator may receive the shared doc and broadcast presence
+      // (awareness), but must not mutate it. y-socket.io applies document changes
+      // via the 'sync-update' event (incremental edits) and 'sync-step-2' (the
+      // handshake step where a client pushes its local updates to the server).
+      // Drop just those inbound packets for viewers so their edits never reach the
+      // shared Y.Doc — they can still load the doc (server→client sync is
+      // untouched) and appear in presence.
+      if ((socket.data as { role?: string } | undefined)?.role === 'viewer') {
+        socket.use((packet: unknown[], nextPkt: (err?: Error) => void) => {
+          const event = Array.isArray(packet) ? packet[0] : undefined;
+          if (event === 'sync-update' || event === 'sync-step-2') {
+            return nextPkt(new Error('read-only'));
+          }
+          nextPkt();
+        });
+      }
+
       // Set of awareness clientIDs owned by this socket connection
       const socketClientIds = new Set<number>();
 

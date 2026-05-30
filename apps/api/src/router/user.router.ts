@@ -7,8 +7,10 @@ import {
   changePassword,
   uploadProfilePhoto,
   deleteUser, 
-  requestPasswordReset, 
+  requestPasswordReset,
   resetPassword,
+  verifyEmail,
+  resendVerification,
   getUserProfile,
   // NEW: Follow system controllers
   followUser,
@@ -21,7 +23,8 @@ import {
   searchUsers,
   uploadProfileBanner,
   authWithGoogle,
-  getUserCredits
+  getUserCredits,
+  completeOnboardingTour
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
@@ -35,11 +38,14 @@ router.post('/login', login);
 router.get('/google', authWithGoogle);
 router.post('/request-password-reset', requestPasswordReset);
 router.post('/reset-password/:token', resetPassword);
+router.get('/verify-email/:token', verifyEmail);
+router.post('/resend-verification', resendVerification);
 
 // Protected routes
 // Get Update Delete user's profile:
 router.get('/me', auth, getUser);
 router.get('/me/credits', auth, getUserCredits);
+router.post('/me/onboarding/complete', auth, completeOnboardingTour);
 router.put('/me', auth, updateUser);
 router.delete('/me', auth, deleteUser);
 

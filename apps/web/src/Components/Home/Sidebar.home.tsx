@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Home,
   FolderOpen,
-  Key,
   Settings,
   CreditCard,
   ChevronLeft,
@@ -159,7 +158,7 @@ const Sidebar: React.FC<Props> = ({
     ],
     api_keys: [
       { icon: CreditCard, label: "Pricing", key: "pricing" },
-      { icon: Key, label: "API Keys", key: "api-keys" },
+      // API Keys (BYOT) hidden for v1 relaunch — provided keys are enforced.
     ],
     browse: [{ icon: LayoutTemplate, label: "Templates", key: "templates" }],
   };

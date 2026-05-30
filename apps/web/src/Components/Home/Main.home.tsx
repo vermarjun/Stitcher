@@ -22,6 +22,7 @@ import PricingPage from "./Pricing.home";
 import type { IUser } from "@/State/Types";
 import { useNav } from "@/Context/HomeNavigation.context";
 import { FEATURES } from "@/config/features";
+import { maybeRunHomeTour } from "@/lib/onboardingTour";
 
 // Main Component - Updated to handle navigation
 const Main = () => {
@@ -53,6 +54,14 @@ const Main = () => {
 
   useEffect(() => {
     fetchRecentProjects();
+  }, []);
+
+  // First-time product tour, Act 1 ("create a project"). The home dashboard is
+  // the default landing view, so the [data-tour="create-project"] anchor is on
+  // screen; maybeRunHomeTour() no-ops if the user has already seen the tour.
+  useEffect(() => {
+    if (activeItem === "home") maybeRunHomeTour();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Navigation handler

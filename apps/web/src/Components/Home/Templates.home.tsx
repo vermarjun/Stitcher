@@ -11,9 +11,6 @@ import {
   X,
   Pause,
   Volume2,
-  Backpack,
-  Check,
-  Loader2,
 } from "lucide-react";
 import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
@@ -26,7 +23,6 @@ import {
 } from "@/Components/ui/select";
 import { Skeleton } from "@/Components/ui/skeleton";
 import api from "@/api";
-import { toast } from "sonner";
 
 enum TemplateType {
   VIDEO = "video",
@@ -86,7 +82,6 @@ const TemplateGallery: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [loadingStates, setLoadingStates] = useState<{ [templateId: string]: boolean }>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoPlayerRef = useRef<HTMLDivElement>(null);
@@ -220,41 +215,6 @@ const TemplateGallery: React.FC = () => {
       const newTime = (clickPosition / progressBarWidth) * duration;
       audioRef.current.currentTime = newTime;
       setCurrentTime(newTime);
-    }
-  };
-
-  const handleSaveToBackPack = async (template: ITemplate) => {
-    // Set loading state for this specific template
-    setLoadingStates(prev => ({ ...prev, [template._id]: true }));
-    
-    try {
-      const response = await api.post<any>("/backpack/items", {
-        itemType: "Template",
-        itemId: template._id,
-        source: "template_library",
-        sourceId: template._id,
-        favourite: false,
-        tags: [],
-        notes: "",
-      });
-      if ((response.data as any).success == true) {
-        toast.success("Successfully added template to backpack");
-        // Update the template to show it's added to backpack
-        setTemplates(prev => 
-          prev.map(t => 
-            t._id === template._id 
-              ? { ...t, isAddedToBackpack: true }
-              : t
-          )
-        );
-      } else {
-        throw Error("Error came in saving template item to backpack");
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Error saving template to backpack");
-    } finally {
-      // Clear loading state regardless of success or failure
-      setLoadingStates(prev => ({ ...prev, [template._id]: false }));
     }
   };
 
@@ -463,7 +423,6 @@ const TemplateGallery: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
             {templates.map((template) => {
-              const isTemplateLoading = loadingStates[template._id];
               const isHovered = hoveredCard === template._id;
               
               return (
@@ -572,30 +531,6 @@ const TemplateGallery: React.FC = () => {
                         {formatCount(template.likesCount || 0)}
                       </button>
 
-                      {!template.isAddedToBackpack ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSaveToBackPack(template);
-                          }}
-                          disabled={isTemplateLoading}
-                          className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isTemplateLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <Backpack className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Save</span>
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                          <Check className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Saved</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

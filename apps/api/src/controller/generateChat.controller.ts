@@ -123,10 +123,11 @@ export const generateChatResponse = async (req: Request, res: Response) => {
 
     await chat.save();
 
-    if (isNewChat) {
-        project.edit_chat = chat._id as Types.ObjectId;
-        await project.save();
-    }
+    // NOTE: deliberately NOT writing chat._id onto project.edit_chat. Generate
+    // chats are private per user and resolved via GET /generatechat/project/:id
+    // (userId-scoped); project.edit_chat is reserved for the legacy pointer and
+    // must not be hijacked by one user's generate chat on a shared project.
+    void isNewChat;
 
     const resolvedChatId = (chat._id as Types.ObjectId).toString();
     const traceId = (req as Request & { id?: string }).id ?? crypto.randomUUID();
@@ -294,6 +295,13 @@ export const getChatHistory = async (req: Request, res: Response) => {
             return;
         }
 
+        // Privacy: a chat belongs to exactly one user. Even project members
+        // (including the owner) cannot read another member's chat history.
+        if (chat.userId && req.userId && chat.userId.toString() !== req.userId) {
+            res.status(403).json({ success: false, message: 'Forbidden' });
+            return;
+        }
+
         // Populate assetId for each scene
         if (chat.messages) {
             for (let i = 0; i < chat.messages.length; i++) {
@@ -326,8 +334,20 @@ export const getChatHistory = async (req: Request, res: Response) => {
 export const getProjectChats = async (req: Request, res: Response) => {
     try {
         const { projectId } = req.params;
+        const userId = req.userId;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'User not authenticated' });
+            return;
+        }
 
-        const chats = await GenerateChat.find({ projectId })
+        // Chats are PRIVATE per user (like memory): each collaborator only ever
+        // sees their own AI conversations, even on a shared project. This also
+        // backs per-user credit enforcement — you only generate against chats
+        // tied to your own account.
+        const chats = await GenerateChat.find({
+            projectId,
+            userId: new Types.ObjectId(userId),
+        })
             .select('_id title createdAt updatedAt')
             .sort({ updatedAt: -1 })
             .lean();

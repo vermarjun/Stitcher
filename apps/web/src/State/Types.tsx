@@ -31,6 +31,10 @@ export type Project = {
   thumbnailUrl?: string;
   status: "draft" | "processing" | "completed" | "error";
   timeline: Timeline;
+  members?: { username: string; profilePhoto?: string }[];
+  // The requesting user's effective role on this project. Returned by
+  // GET /project/:id. Used to gate edit actions in the editor UI.
+  myRole?: "owner" | "editor" | "viewer" | null;
 };
 
 export interface IUserStats {
@@ -69,6 +73,8 @@ export type IUser = {
   stats?: IUserStats;
   followers?: string[];
   following?: string[];
+  // One-time product tour: null/absent => user hasn't seen it => show it once.
+  onboardingTourCompletedAt?: string | Date | null;
 };
 
 export enum TemplateType {

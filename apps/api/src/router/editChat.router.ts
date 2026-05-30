@@ -5,7 +5,7 @@ import {
   rollbackTimeline
 } from '../controller/editChat.controller';
 import auth from '../middleware/auth.middleware';
-import { requireProjectOwnership } from '../middleware/ownership.middleware';
+import { requireProjectAccess, requireProjectEditor } from '../middleware/access.middleware';
 
 const router = Router();
 
@@ -17,20 +17,20 @@ router.use(auth);
  * Process a user prompt to edit the timeline
  * Body: { projectId: string, prompt: string }
  */
-router.post('/process', requireProjectOwnership('body', 'projectId'), processEditChat);
+router.post('/process', requireProjectEditor('body', 'projectId'), processEditChat);
 
 /**
  * GET /api/edit-chat/history/:projectId
  * Get the edit chat history for a project
  * Params: { projectId: string }
  */
-router.get('/history/:projectId', requireProjectOwnership('params', 'projectId'), getEditChatHistory);
+router.get('/history/:projectId', requireProjectAccess('params', 'projectId'), getEditChatHistory);
 
 /**
  * POST /api/edit-chat/rollback
  * Rollback timeline to a previous state from chat history
  * Body: { projectId: string, messageIndex: number }
  */
-router.post('/rollback', requireProjectOwnership('body', 'projectId'), rollbackTimeline);
+router.post('/rollback', requireProjectEditor('body', 'projectId'), rollbackTimeline);
 
 export default router;

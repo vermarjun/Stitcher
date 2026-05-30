@@ -240,8 +240,10 @@ const AISidebar = ({
         />
       )}
 
-      <div className={`
-        bg-black border-l border-zinc-700 flex flex-col 
+      <div
+        data-tour="ai-chat"
+        className={`
+        bg-black border-l border-zinc-700 flex flex-col
         transition-transform duration-300 ease-in-out
         md:w-80 md:relative md:translate-x-0 md:flex
         fixed top-[57px] md:top-0 right-0 bottom-0 w-[85%] z-[60]

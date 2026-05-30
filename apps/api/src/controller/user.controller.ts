@@ -3,8 +3,12 @@ import User from '../model/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import sendMail from '../util/mailer.util';
-import { JWT_CONFIG, PASSWORD_RESET_CONFIG } from '../config';
+import {
+  sendWelcomeEmail,
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} from '../email/email.service';
+import { JWT_CONFIG, PASSWORD_RESET_CONFIG, EMAIL_VERIFICATION_CONFIG, API_PREFIX, PUBLIC_APP_URL } from '../config';
 import cloudinary from '../util/cloudinary.util';
 import mongoose from 'mongoose';
 import { Types } from 'mongoose';
@@ -40,6 +44,23 @@ interface IGoogleUser {
   family_name: string;
   picture: string;
   locale: string;
+}
+
+// Generates a fresh email-verification token and stamps it (+ expiry) onto the
+// (unsaved) user document. Caller is responsible for persisting. Returns the
+// raw token to embed in the verification link.
+function issueEmailVerificationToken(user: IUser): string {
+  const token = crypto.randomBytes(EMAIL_VERIFICATION_CONFIG.tokenLength).toString('hex');
+  user.emailVerificationToken = token;
+  user.emailVerificationExpires = Date.now() + EMAIL_VERIFICATION_CONFIG.tokenExpiry;
+  return token;
+}
+
+// Absolute URL of the API verify endpoint (which verifies, then redirects the
+// browser back to the app). Built from the request host so it works across
+// environments without extra config.
+function buildVerifyUrl(req: Request, token: string): string {
+  return `${req.protocol}://${req.get('host')}${API_PREFIX}/users/verify-email/${token}`;
 }
 
 export const authWithGoogle = async (req: Request, res: Response) => {
@@ -83,10 +104,15 @@ export const authWithGoogle = async (req: Request, res: Response) => {
         username: finalUsername,
         email,
         profilePhoto: picture,
-        usedOAuth: true
+        usedOAuth: true,
+        // Google has already verified the address — no verification email needed.
+        emailVerified: true,
       });
 
       await user.save();
+
+      // Welcome the first-time OAuth signup (non-blocking).
+      void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
     }
 
     // ✅ STEP 5: Generate JWT
@@ -115,6 +141,7 @@ export const authWithGoogle = async (req: Request, res: Response) => {
         createdAt: user.createdAt,
         lastActive: user.lastActive,
         isActive: user.isActive,
+        onboardingTourCompletedAt: user.onboardingTourCompletedAt ?? null,
       }
     });
 
@@ -152,7 +179,15 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 3, editing: 5, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } });
+    const verifyToken = issueEmailVerificationToken(user);
     await user.save();
+
+    // Fire-and-forget: the email service enqueues and never throws, so a mail
+    // hiccup can't fail signup. Welcome + verification go out on the email queue.
+    const verifyUrl = buildVerifyUrl(req, verifyToken);
+    void sendVerificationEmail({ to: user.email, username: user.username, verifyUrl });
+    void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
+
     return res.status(201).json({ message: 'User created successfully.' });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -218,6 +253,7 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
         createdAt: user.createdAt,
         lastActive: user.lastActive,
         isActive: user.isActive,
+        onboardingTourCompletedAt: user.onboardingTourCompletedAt ?? null,
       },
     });
   } catch (err: any) {
@@ -251,6 +287,28 @@ export const getUserCredits = async (req: IUserRequest, res: IUserResponse): Pro
       success: false,
       message: 'Server error', error: err.message
     });
+  }
+};
+
+// Marks the one-time product tour as completed (or skipped) for the current user.
+// Idempotent: only stamps the timestamp the first time, so "completed once, ever"
+// holds even if the client calls this more than once.
+export const completeOnboardingTour = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    const user: IUser | null = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    if (!user.onboardingTourCompletedAt) {
+      user.onboardingTourCompletedAt = new Date();
+      await user.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      onboardingTourCompletedAt: user.onboardingTourCompletedAt,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
 
@@ -523,14 +581,9 @@ export const requestPasswordReset = async (req: IUserRequest, res: IUserResponse
     user.resetPasswordExpires = resetTokenExpiry;
     await user.save();
 
-    const resetLink = `${req.protocol}://${req.get('host')}/api/users/reset-password/${resetToken}`;
+    const resetLink = `${req.protocol}://${req.get('host')}${API_PREFIX}/users/reset-password/${resetToken}`;
 
-    await sendMail({
-      to: user.email,
-      subject: 'Password Reset Request',
-      text: `Reset your password using this link: ${resetLink}`,
-      html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Click here to reset your password</a></p><p>If you did not request this, please ignore this email.</p>`,
-    });
+    void sendPasswordResetEmail({ to: user.email, resetUrl: resetLink });
 
     return res.status(200).json({ message: 'Password reset link sent to your email.' });
   } catch (err: any) {
@@ -558,6 +611,69 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
     await user.save();
 
     return res.status(200).json({ message: 'Password reset successful.' });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// GET /api/users/verify-email/:token
+// Verifies the address and redirects the browser back to the app with
+// ?emailVerified=1 (success) or =0 (invalid/expired). Opened directly from the
+// link in the verification email.
+export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
+  const appUrl = PUBLIC_APP_URL.replace(/\/$/, '');
+  try {
+    const { token } = req.params;
+
+    const user = token
+      ? await User.findOne({
+          emailVerificationToken: token,
+          emailVerificationExpires: { $gt: Date.now() },
+        })
+      : null;
+
+    if (!user) {
+      res.redirect(`${appUrl}/?emailVerified=0`);
+      return;
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    res.redirect(`${appUrl}/?emailVerified=1`);
+  } catch {
+    res.redirect(`${appUrl}/?emailVerified=0`);
+  }
+};
+
+// POST /api/users/resend-verification  { email }
+// Re-issues a verification email. Always responds 200 with a generic message so
+// the endpoint can't be used to probe which emails have accounts.
+export const resendVerification = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { email } = req.body;
+    email = email?.trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Email is required.' });
+
+    const generic = {
+      message: 'If that account exists and is unverified, a new verification email has been sent.',
+    };
+
+    const user: IUser | null = await User.findOne({ email });
+    // No-op (but identical response) for: no account, already verified, or OAuth
+    // accounts (which are verified by Google and have no password to protect).
+    if (!user || user.emailVerified || user.usedOAuth) {
+      return res.status(200).json(generic);
+    }
+
+    const token = issueEmailVerificationToken(user);
+    await user.save();
+    const verifyUrl = buildVerifyUrl(req, token);
+    void sendVerificationEmail({ to: user.email, username: user.username, verifyUrl });
+
+    return res.status(200).json(generic);
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }

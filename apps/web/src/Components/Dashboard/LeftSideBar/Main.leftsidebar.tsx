@@ -91,6 +91,7 @@ const MainSidebar = ({ currentProject }: Props) => {
               return (
                 <button
                   key={tab.id}
+                  data-tour={`sidebar-${tab.id}`}
                   onClick={() => {
                     setActiveTab(tab.id);
                     if (!isExpanded) setIsExpanded(true);

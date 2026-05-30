@@ -12,7 +12,8 @@ import {
   Download,
   Share2,
   Link as LinkIcon,
-  Copy
+  Copy,
+  Eye
 } from "lucide-react";
 import { Button } from "@/Components/ui/button";
 import type {
@@ -158,6 +159,7 @@ const TimelineEditor = ({
   onSync,
   onDeleteItem,
   onAddTextItem,
+  canEdit = true,
   collabDoc: _collabDoc,
   localOrigin: _localOrigin,
   awareness,
@@ -173,6 +175,8 @@ const TimelineEditor = ({
   onDeleteItem?: (itemId: string, trackId: string) => void;
   /** Called after HTTP add-text succeeds — writes new item to Y.Doc */
   onAddTextItem?: (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => void;
+  /** Viewers are read-only — when false, all mutating controls are disabled/hidden. */
+  canEdit?: boolean;
   collabDoc?: CollabDoc | null;
   localOrigin?: string;
   /** Phase 4: awareness for presence cursors / selections */
@@ -252,6 +256,7 @@ const TimelineEditor = ({
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
+    if (!canEdit) return; // viewers are read-only
     setIsDeleting(true);
     try {
       const response = await api.delete(`/track/items/${selectedItem._id}`);
@@ -323,6 +328,7 @@ const TimelineEditor = ({
   ) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!canEdit) return; // viewers cannot drag / resize
     const rect = timelineRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -566,6 +572,7 @@ const TimelineEditor = ({
 
   // Add new text item (duration default 3s); position is later adjusted in VideoPlayer by dragging
   const handleTextTrackClick = async (e: React.MouseEvent) => {
+    if (!canEdit) return; // viewers are read-only
     if (!isAddingText || !timelineRef.current) return;
 
     const rect = timelineRef.current.getBoundingClientRect();
@@ -632,6 +639,7 @@ const TimelineEditor = ({
   };
 
   const handleAddTextClick = () => {
+    if (!canEdit) return; // viewers are read-only
     setIsAddingText(true);
     setTool("move");
   };
@@ -761,19 +769,29 @@ const TimelineEditor = ({
           </div>
 
           {/* Add Text Button with modern styling */}
-          <Button
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${
-              isAddingText
-                ? "bg-green-600 text-white border-green-500 shadow-md shadow-green-600/25"
-                : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 border-zinc-700 hover:border-zinc-600"
-            }`}
-            title="Add text overlay"
-            onClick={handleAddTextClick}
-          >
-            <Plus className="w-3 h-3" />
-            <Type className="w-3 h-3" />
-            <span>Add Text</span>
-          </Button>
+          {canEdit && (
+            <Button
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${
+                isAddingText
+                  ? "bg-green-600 text-white border-green-500 shadow-md shadow-green-600/25"
+                  : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 border-zinc-700 hover:border-zinc-600"
+              }`}
+              title="Add text overlay"
+              onClick={handleAddTextClick}
+            >
+              <Plus className="w-3 h-3" />
+              <Type className="w-3 h-3" />
+              <span>Add Text</span>
+            </Button>
+          )}
+
+          {/* Read-only badge for viewers */}
+          {!canEdit && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-md">
+              <Eye className="w-3 h-3 text-zinc-400" />
+              <span className="text-zinc-400 text-xs font-medium">View only</span>
+            </div>
+          )}
 
           {/* Status indicator with better visibility */}
           {isAddingText && (
@@ -798,7 +816,7 @@ const TimelineEditor = ({
             </Button>
           )}
 
-          {selectedItem && (
+          {selectedItem && canEdit && (
             <Button
               onClick={handleDeleteItem}
               disabled={isDeleting}
@@ -817,7 +835,8 @@ const TimelineEditor = ({
             </Button>
           )}
 
-          {/* Sync Icon Button */}
+          {/* Sync Icon Button — writes to the project, so editors/owners only */}
+          {canEdit && (
           <Button
             onClick={handleSyncClick}
             disabled={isLoading}
@@ -837,6 +856,7 @@ const TimelineEditor = ({
             )}
             <span>{isLoading ? "Syncing..." : "Sync"}</span>
           </Button>
+          )}
 
           {/* Share Button — opens a dialog to download or get a shareable link */}
           <Button
@@ -1130,7 +1150,7 @@ const TimelineEditor = ({
                         </div>
 
                         {/* Enhanced resize handles */}
-                        {tool === "crop" && (
+                        {tool === "crop" && canEdit && (
                           <>
                             <div
                               className="absolute left-0 top-0 bottom-0 w-2 bg-white/80 cursor-ew-resize rounded-l-lg flex items-center justify-center hover:bg-white transition-colors z-20"

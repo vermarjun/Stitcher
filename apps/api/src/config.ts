@@ -19,8 +19,29 @@ const envSchema = z.object({
     MONGODB_URL: z.string().min(1),
     JWT_SECRET: z.string().min(1),
 
+    // ── Email ────────────────────────────────────────────────────────────────
+    // EMAIL_USER is the sending Gmail address (used as the SMTP/OAuth identity
+    // and the default From). Required.
     EMAIL_USER: z.string().min(1),
-    EMAIL_APP_PASSWORD: z.string().min(1),
+    // Pluggable sender. "gmail" (default) sends through Gmail; "console" just
+    // logs the message (handy for local dev / self-host with no creds). Adding
+    // a new provider (e.g. "resend", "ses") is a switch case in
+    // email/providers/index.ts — no other code changes.
+    EMAIL_PROVIDER: z.string().optional().default("gmail"),
+    // Optional display From, e.g. 'Stitcher <no-reply@stitcher.app>'. Note Gmail
+    // requires this to be EMAIL_USER or a verified alias. Falls back to
+    // `Stitcher <EMAIL_USER>` when unset.
+    EMAIL_FROM: z.string().optional(),
+    // Gmail transport, mode A — OAuth2 ("send via API"). Register an OAuth client
+    // in Google Cloud Console, grant the Gmail send scope, and mint a refresh
+    // token for EMAIL_USER. When all three are set the Gmail provider uses
+    // XOAUTH2 and nodemailer refreshes access tokens automatically.
+    GMAIL_OAUTH_CLIENT_ID: z.string().optional().default(""),
+    GMAIL_OAUTH_CLIENT_SECRET: z.string().optional().default(""),
+    GMAIL_OAUTH_REFRESH_TOKEN: z.string().optional().default(""),
+    // Gmail transport, mode B — App Password (legacy/simple). Used when OAuth2
+    // vars above are absent. Optional so an OAuth-only deployment can omit it.
+    EMAIL_APP_PASSWORD: z.string().optional().default(""),
 
     CLOUDINARY_CLOUD_NAME: z.string().min(1),
     CLOUDINARY_API_KEY: z.string().min(1),
@@ -110,6 +131,7 @@ export const FEATURES = {
 export const ADMIN_DASHBOARD_ENABLED = config.ADMIN_DASHBOARD_ENABLED === "true";
 export const EMAIL_USER = config.EMAIL_USER;
 export const EMAIL_APP_PASSWORD = config.EMAIL_APP_PASSWORD;
+export const EMAIL_PROVIDER = config.EMAIL_PROVIDER;
 export const CLOUDINARY_API_KEY = config.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = config.CLOUDINARY_API_SECRET;
 export const CLOUDINARY_CLOUD_NAME = config.CLOUDINARY_CLOUD_NAME;
@@ -136,11 +158,27 @@ export const PASSWORD_RESET_CONFIG = {
     tokenLength: 32,
 };
 
-// Email Configuration
+// Email Verification Configuration
+export const EMAIL_VERIFICATION_CONFIG = {
+    tokenExpiry: 1000 * 60 * 60 * 24, // 24 hours
+    tokenLength: 32,
+};
+
+// Email Configuration — consumed by the pluggable sender in src/email/.
+// `from` defaults to "Stitcher <EMAIL_USER>" so messages have a friendly name.
+// The Gmail provider picks OAuth2 when oauth.* are all present, else falls back
+// to the app password.
 export const EMAIL_CONFIG = {
+    provider: config.EMAIL_PROVIDER,
     service: "gmail",
     user: EMAIL_USER,
     pass: EMAIL_APP_PASSWORD,
+    from: config.EMAIL_FROM || `Stitcher <${EMAIL_USER}>`,
+    oauth: {
+        clientId: config.GMAIL_OAUTH_CLIENT_ID,
+        clientSecret: config.GMAIL_OAUTH_CLIENT_SECRET,
+        refreshToken: config.GMAIL_OAUTH_REFRESH_TOKEN,
+    },
 };
 
 export const CLOUDINARY_CONFIG = {

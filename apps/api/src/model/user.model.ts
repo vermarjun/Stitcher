@@ -64,6 +64,12 @@ export interface IUser extends Document {
   payments: IPayment[],
   resetPasswordToken?: string;
   resetPasswordExpires?: Date | number;
+  // Email verification. emailVerified defaults false for password signups and
+  // true for OAuth (Google already verifies the address). The token is consumed
+  // on the verify endpoint and cleared after use.
+  emailVerified?: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpires?: Date | number;
   projects?: Types.ObjectId[];
   communityPosts?: Types.ObjectId[];
   likedPosts?: Types.ObjectId[];
@@ -72,6 +78,9 @@ export interface IUser extends Document {
   followers: Types.ObjectId[];
   following: Types.ObjectId[];
   memory: IMemoryPoint[];
+  // Timestamp of when the user finished (or skipped) the one-time product tour.
+  // null/absent => never seen it => show the tour once. Set once, never reset.
+  onboardingTourCompletedAt?: Date | null;
 }
 
 const UserStatsSchema = new Schema<IUserStats>({
@@ -210,6 +219,32 @@ const UserSchema = new Schema<IUser>({
   memory: {
     type: [MemoryPointSchema],
     default: []
+  },
+  // One-time product tour: null until the user finishes or skips it.
+  onboardingTourCompletedAt: {
+    type: Date,
+    default: null
+  },
+  // ── Password reset ──────────────────────────────────────────────────────
+  // These were declared on IUser but never defined on the schema, so under
+  // Mongoose strict mode they were silently dropped on save. Defined here so
+  // the reset token actually persists and the reset flow can match it.
+  resetPasswordToken: {
+    type: String,
+  },
+  resetPasswordExpires: {
+    type: Date,
+  },
+  // ── Email verification ────────────────────────────────────────────────────
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  emailVerificationToken: {
+    type: String,
+  },
+  emailVerificationExpires: {
+    type: Date,
   }
 }, { timestamps: true });
 

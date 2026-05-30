@@ -13,6 +13,7 @@ import {
 import auth from "../middleware/auth.middleware";
 import { refreshCredits } from '../middleware/refreshCredits.middleware';
 import { requireChatOwnership } from '../middleware/ownership.middleware';
+import { requireProjectEditor } from '../middleware/access.middleware';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.post('/guest', generateGuestChatResponse);
  * @access  Private
  * @body    { projectId: string, prompt: string, chatId?: string }
  */
-router.post('/', auth, refreshCredits, generateChatResponse);
+router.post('/', auth, requireProjectEditor('body', 'projectId'), refreshCredits, generateChatResponse);
 
 /**
  * @route   GET /api/generate-chat/update/:chatId

@@ -20,6 +20,9 @@ import {
   applyItemUpdate,
   deleteYItem,
   addYItem,
+  createHydration,
+  harvestHydration,
+  hasUnresolvedAssets,
 } from "@/collab/yjsTimeline";
 import { useCollabAwareness } from "./context";
 
@@ -40,6 +43,13 @@ const VideoEditor = ({ currentProject }: Props) => {
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   // Snapshot of the timeline as fetched from HTTP (used as base for Y.Doc hydration)
   const baseTimelineRef = useRef<Timeline | null>(null);
+  // Cache of fully-populated items/assets so re-deriving from the Y.Doc never
+  // strips asset objects (the cause of remote-collaborator timeline corruption).
+  const hydrationRef = useRef(createHydration());
+  const rehydratingRef = useRef(false);
+
+  // Viewers are read-only: default permissive when role is unknown (older payloads).
+  const canEdit = (currentProject?.myRole ?? "owner") !== "viewer";
 
   const { refreshKey: timelineRefreshKey } = useRefreshTimeline();
 
@@ -67,6 +77,8 @@ const VideoEditor = ({ currentProject }: Props) => {
       const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
       const tl = response.data;
       baseTimelineRef.current = tl;
+      // Learn every populated asset/item so Y.Doc-derived state can be rehydrated.
+      harvestHydration(tl, hydrationRef.current);
       // Only set React timeline from HTTP if Y.Doc isn't synced yet
       if (!collabDoc?.synced) {
         setTimeline(tl);
@@ -84,14 +96,44 @@ const VideoEditor = ({ currentProject }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineRefreshKey]);
 
+  // ─── Re-fetch populated assets when the Y.Doc references one we don't know ──
+  // A collaborator can add a brand-new generated/uploaded asset; remote clients
+  // first see it as a bare id. Pull the populated timeline once to learn it, then
+  // re-derive. Guarded so it can't loop.
+  const hydrateFromServer = useCallback(async () => {
+    if (rehydratingRef.current) return;
+    const projectId = currentProject?._id;
+    if (!projectId || !collabDoc) return;
+    rehydratingRef.current = true;
+    try {
+      const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
+      harvestHydration(response.data, hydrationRef.current);
+      if (baseTimelineRef.current) {
+        setTimeline(
+          yDocToReactTimeline(
+            collabDoc.timelineMap,
+            baseTimelineRef.current,
+            hydrationRef.current
+          )
+        );
+      }
+    } catch {
+      /* best-effort */
+    } finally {
+      rehydratingRef.current = false;
+    }
+  }, [currentProject?._id, collabDoc]);
+
   // ─── Seed React state from Y.Doc once synced ─────────────────────────────
   useEffect(() => {
     if (!collabDoc?.synced || !baseTimelineRef.current) return;
     const derived = yDocToReactTimeline(
       collabDoc.timelineMap,
-      baseTimelineRef.current
+      baseTimelineRef.current,
+      hydrationRef.current
     );
     setTimeline(derived);
+    if (hasUnresolvedAssets(derived)) void hydrateFromServer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collabDoc?.synced]);
 
@@ -103,17 +145,23 @@ const VideoEditor = ({ currentProject }: Props) => {
     const handler = (_events: Y.YEvent<any>[], txn: Y.Transaction) => {
       // Skip echoes from our own local writes
       if (txn.origin === LOCAL_ORIGIN) return;
-      // Apply remote changes to React state
+      // Apply remote changes to React state, rehydrating asset objects so the
+      // remote edit doesn't strip thumbnails/playback for this client.
       if (!baseTimelineRef.current) return;
-      const derived = yDocToReactTimeline(timelineMap, baseTimelineRef.current);
+      const derived = yDocToReactTimeline(
+        timelineMap,
+        baseTimelineRef.current,
+        hydrationRef.current
+      );
       setTimeline(derived);
+      if (hasUnresolvedAssets(derived)) void hydrateFromServer();
     };
 
     timelineMap.observeDeep(handler);
     return () => {
       timelineMap.unobserveDeep(handler);
     };
-  }, [collabDoc]);
+  }, [collabDoc, hydrateFromServer]);
 
   // ─── Playback loop ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -163,6 +211,7 @@ const VideoEditor = ({ currentProject }: Props) => {
     updates: Partial<ITimelineItemBase>
   ) => {
     if (!timeline) return;
+    if (!canEdit) return; // viewers are read-only
 
     // Write to Y.Doc (the observeDeep handler skips LOCAL_ORIGIN echoes)
     if (collabDoc?.synced) {
@@ -317,6 +366,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={defaultLayout.timeline}>
+        <div data-tour="timeline" className="h-full w-full">
         {isLoading || !timeline ? (
           <TimelineEditorLoading />
         ) : (
@@ -328,6 +378,7 @@ const VideoEditor = ({ currentProject }: Props) => {
             onSync={syncToBackend}
             onDeleteItem={handleDeleteItem}
             onAddTextItem={handleAddTextItem}
+            canEdit={canEdit}
             collabDoc={collabDoc}
             localOrigin={LOCAL_ORIGIN}
             awareness={collabDoc?.awareness ?? null}
@@ -336,6 +387,7 @@ const VideoEditor = ({ currentProject }: Props) => {
             key={timelineRefreshKey}
           />
         )}
+        </div>
       </ResizablePanel>
     </ResizablePanelGroup>
   );

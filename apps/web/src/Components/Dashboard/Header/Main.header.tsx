@@ -50,6 +50,7 @@ function Header({ currentProject, user }: Props) {
 
           {currentProject?._id && (
             <button
+              data-tour="collaborators"
               onClick={() => setCollabOpen(true)}
               className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
               title="Manage collaborators"
@@ -66,6 +67,7 @@ function Header({ currentProject, user }: Props) {
       {collabOpen && currentProject?._id && (
         <CollaboratorsDialog
           projectId={currentProject._id}
+          currentUserRole={currentProject.myRole}
           currentUser={user}
           onClose={() => setCollabOpen(false)}
         />

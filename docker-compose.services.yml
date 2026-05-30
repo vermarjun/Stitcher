@@ -28,8 +28,8 @@ services:
     env_file:
       - ./API/.env.docker
     environment:
-      # Point the agent at the compose Redis instance (overrides any value in env_file)
-      CHECKPOINT_REDIS_URL: "redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379"
+      # Point the agent at Redis Cloud for LangGraph checkpoints.
+      CHECKPOINT_REDIS_URL: "redis://default:REDACTED_REDIS_PASSWORD@redis-10017.crce219.us-east-1-4.ec2.cloud.redislabs.com:10017"
       NODE_ENV: production
       # The shared env_file sets PORT=3000 for the API; override so the agent binds 4000
       PORT: "4000"
@@ -75,11 +75,8 @@ services:
     env_file:
       - ./API/.env.docker
     environment:
-      # Use local Qdrant when running in compose
-      VECTOR_STORE: "${VECTOR_STORE:-qdrant}"
-      QDRANT_URL: "http://qdrant:6333"
+      # MongoDB Atlas Vector Search (cloud) — no local Qdrant needed.
+      VECTOR_STORE: "mongodb_atlas"
       # The shared env_file sets PORT=3000 for the API; override so RAG binds 7000
       PORT: "7000"
-    depends_on:
-      - qdrant
     restart: unless-stopped

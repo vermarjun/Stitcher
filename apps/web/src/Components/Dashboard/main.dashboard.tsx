@@ -15,6 +15,7 @@ import {
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
 import { PollingProvider, RefreshHeaderProvider, CollabAwarenessProvider } from "./context";
+import { maybeRunEditorTour } from "@/lib/onboardingTour";
 
 import type { Project, IUser, Asset } from "@/State/Types";
 
@@ -86,6 +87,14 @@ const DashboardLayout = () => {
       fetchData();
     }
   }, []);
+
+  // First-time product tour, Act 2 (the editor walkthrough). Fires once the
+  // project has loaded and the editor chrome is mounted. No-ops unless the user
+  // is mid-tour (or hasn't seen it) — see maybeRunEditorTour() for the gating.
+  useEffect(() => {
+    if (!isLoading && project) maybeRunEditorTour();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, project]);
 
   return (
     <RefreshHeaderProvider>
