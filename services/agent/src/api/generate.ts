@@ -30,7 +30,8 @@ const ModelConfigSchema = z.object({
 });
 
 const GenerateRequestSchema = z.object({
-  prompt: z.string().min(1).max(4000),
+  // Raised 4000 → 64000 to accept RAG-grounded prompts (see plan.ts rationale).
+  prompt: z.string().min(1).max(64000),
   // Native voiceover (FROZEN CONTRACT v1). Default false → unchanged behavior.
   voiceover: z.boolean().optional().default(false),
   modelConfig: z

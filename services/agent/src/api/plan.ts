@@ -29,7 +29,12 @@ const ModelConfigSchema = z.object({
 });
 
 const PlanRequestSchema = z.object({
-  prompt: z.string().min(1).max(4000),
+  // Upper bound raised from 4000 → 64000: the orchestrator (stitcher worker)
+  // feeds a RAG-GROUNDED prompt here (raw task + injected Manim API reference +
+  // pitfalls), which routinely runs 10–20k chars. The 4000 cap rejected every
+  // RAG-enhanced run with "Invalid request". 64000 stays well under the
+  // brokenCode/debug bound (524288) while matching code.ts (unbounded) intent.
+  prompt: z.string().min(1).max(64000),
   // Native voiceover (FROZEN CONTRACT v1). Default false → unchanged behavior.
   voiceover: z.boolean().optional().default(false),
   modelConfig: z
