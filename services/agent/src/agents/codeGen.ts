@@ -55,14 +55,17 @@ export async function codeGenNode(
     model: config.defaultModelCoder,
   };
 
+  const voiceover = state.voiceover === true;
   const model = getModel(coderCfg);
-  const { systemPrompt: rawPrompt } = getPrompt("coder");
+  // Voiceover mode uses a dedicated coder prompt (VoiceoverScene pattern). When
+  // off, the legacy prompt is used unchanged.
+  const { systemPrompt: rawPrompt } = getPrompt(voiceover ? "coder_voiceover" : "coder");
   const systemPrompt = rawPrompt.replace(/\{INDEX:02d\}/g, String(sceneIndex).padStart(2, "0"));
 
   const tools = [manimApiCheckTool, astPreviewTool];
   const agent = createReactAgent({ llm: model, tools });
 
-  const userContent = buildUserMessage(scene, styleManifest, sceneIndex, retrievalContext, codeExamples);
+  const userContent = buildUserMessage(scene, styleManifest, sceneIndex, retrievalContext, codeExamples, voiceover);
 
   const t0 = Date.now();
   try {
@@ -122,7 +125,8 @@ function buildUserMessage(
   manifest: StyleManifest,
   sceneIndex: number,
   ctx?: GraphState["retrievalContext"],
-  codeExamples?: CodeExample[]
+  codeExamples?: CodeExample[],
+  voiceover?: boolean
 ): string {
   const className = `Scene${String(sceneIndex).padStart(2, "0")}`;
   const parts = [
@@ -136,6 +140,23 @@ function buildUserMessage(
     `Required symbols (pre-verified): ${scene.requiredSymbols.join(", ")}`,
     `\nStyleManifest:\n${JSON.stringify(manifest, null, 2)}`,
   ].filter(Boolean);
+
+  if (voiceover) {
+    const beats = Array.isArray(scene.narration) ? scene.narration : [];
+    // Present the beats as an explicit ordered, numbered list AND as a verbatim
+    // JSON array. The prompt instructs the coder to copy each string EXACTLY into
+    // one `self.voiceover(text=...)` block, in this order, with no edits.
+    const numbered = beats.map((b, i) => `Beat ${i + 1}: ${JSON.stringify(b)}`).join("\n");
+    parts.push(
+      `\nVOICEOVER MODE: ON. You MUST emit a VoiceoverScene with EXACTLY ${beats.length} ` +
+        `\`with self.voiceover(text=...)\` block(s), in this exact order, each using the ` +
+        `corresponding beat string BELOW VERBATIM (character-for-character — these strings are ` +
+        `the audio cache key; do not reword, paraphrase, merge, split, re-punctuate, or fix them).` +
+        `\n\nNarration beats (ordered, copy each EXACTLY):\n${numbered}` +
+        `\n\nThe same beats as a JSON array for exact copying:\n` +
+        "```json\n" + JSON.stringify(beats, null, 2) + "\n```"
+    );
+  }
 
   if (codeExamples?.length) {
     parts.push(

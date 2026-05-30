@@ -63,12 +63,31 @@ export async function refinerNode(
   const agent = createReactAgent({ llm: model, tools });
 
   const expectedClass = `Scene${String(sceneIndex).padStart(2, "0")}`;
+  const voiceover = state.voiceover === true;
+  const narration = voiceover ? sceneState.plan?.narration : undefined;
+
+  // In voiceover mode, give the refiner the exact beats so it can correct
+  // beat-text drift (the `voiceoverBeats` check) without re-inventing structure.
+  const voiceoverInstr = voiceover
+    ? [
+        `\nVOICEOVER MODE: ON. This is a VoiceoverScene. PRESERVE the voiceover structure:`,
+        `- keep \`from manim_voiceover import VoiceoverScene\` and \`from stitcher_voiceover import OfflineTTS\`,`,
+        `- keep the class as \`${expectedClass}(VoiceoverScene)\`,`,
+        `- keep \`self.set_speech_service(OfflineTTS(), create_subcaption=False)\` as the first line of construct,`,
+        `- keep EXACTLY one \`with self.voiceover(text=...)\` block per beat, in order, each using \`run_time=tracker.duration\`.`,
+        `If the validator reported a \`voiceoverBeats\` / "voiceover narration drift" failure (it may list MISSING/EXTRA/ALTERED beats), it means a \`self.voiceover(text=...)\` string was reworded, merged, split, re-punctuated, or made dynamic (an f-string or variable). You MUST restore each block's text to the EXACT beat string below, character-for-character. Use ONLY plain string literals — never an f-string, format call, or variable — for the \`text=\` argument.`,
+        `\nThe authoritative narration beats (ordered — copy each EXACTLY into one voiceover block):`,
+        "```json\n" + JSON.stringify(narration ?? [], null, 2) + "\n```",
+      ].join("\n")
+    : "";
+
   const userContent = [
     `Fix the following Manim code. The validator found these issues:`,
     `\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\``,
     `\nFailing code:\n\`\`\`python\n${failingCode}\n\`\`\``,
     `Expected class name: ${expectedClass}`,
     sceneState.plan ? `Original scene prompt: ${sceneState.plan.prompt}` : "",
+    voiceoverInstr,
   ]
     .filter(Boolean)
     .join("\n");
@@ -98,8 +117,9 @@ export async function refinerNode(
       return { sceneStates: { [sceneIndex]: updated }, ...(usage ? { llmCallLog: [usage] } : {}) };
     }
 
-    // Re-validate
-    const newReport = await validate(fixedCode, expectedClass);
+    // Re-validate (with narration beats in voiceover mode so the beat-equality
+    // check re-runs and gates the fix)
+    const newReport = await validate(fixedCode, expectedClass, narration);
 
     publishEvent(jobId, "validator_result", {
       sceneIndex,

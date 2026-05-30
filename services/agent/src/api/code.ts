@@ -37,6 +37,9 @@ const ScenePlanSchema = z.object({
   description: z.string().optional(),
   concepts: z.array(z.string()).optional(),
   visualElements: z.array(z.string()).optional(),
+  // Native voiceover (FROZEN CONTRACT v1): ordered narration beats for this scene.
+  // Supplied by the orchestrator (echoed from /plan) when voiceover mode is on.
+  narration: z.array(z.string()).optional(),
 });
 
 const StyleManifestSchema = z.object({
@@ -58,6 +61,9 @@ const CodeExampleSchema = z.object({
 const CodeRequestSchema = z.object({
   scenePlan: ScenePlanSchema,
   styleManifest: StyleManifestSchema,
+  // Native voiceover (FROZEN CONTRACT v1). Default false → unchanged behavior.
+  // When true, scenePlan.narration is REQUIRED and the coder emits a VoiceoverScene.
+  voiceover: z.boolean().optional().default(false),
   codeExamples: z.array(CodeExampleSchema).optional().default([]),
   modelConfig: z
     .object({
@@ -85,6 +91,15 @@ export function registerCode(app: FastifyInstance): void {
         return reply.status(400).send({ error: "Invalid request", details: parseResult.error.format() });
       }
       const body = parseResult.data;
+
+      // Voiceover contract: narration beats are required when voiceover is on.
+      if (body.voiceover && (!Array.isArray(body.scenePlan.narration) || body.scenePlan.narration.length === 0)) {
+        return reply.status(400).send({
+          error: "Invalid request",
+          details: "voiceover=true requires scenePlan.narration to be a non-empty string array",
+        });
+      }
+
       const jobId = uuidv4();
       const timeoutMs = (body.limits?.timeoutSec ?? config.defaultTimeoutSec) * 1000;
 
@@ -105,6 +120,7 @@ export function registerCode(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "generate" as const,
+        voiceover: body.voiceover,
         traceId: body.meta?.traceId ?? req.traceId,
         scenes: [normalisedPlan],
         styleManifest: body.styleManifest,
@@ -147,6 +163,7 @@ export function registerCode(app: FastifyInstance): void {
                 code: sceneState.finalCode,
                 status: sceneState.status,
                 attempts: sceneState.attempts,
+                ...(body.voiceover ? { narration: body.scenePlan.narration } : {}),
               }
             : null,
           error,
@@ -162,6 +179,7 @@ export function registerCode(app: FastifyInstance): void {
                 code: sceneState.finalCode,
                 status: sceneState.status,
                 attempts: sceneState.attempts,
+                ...(body.voiceover ? { narration: body.scenePlan.narration } : {}),
               }
             : null,
           error: error ?? null,

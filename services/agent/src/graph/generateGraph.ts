@@ -75,10 +75,11 @@ async function validateAndRefineStep(state: GraphState): Promise<Partial<GraphSt
     }
 
     const expectedClass = `Scene${String(idx).padStart(2, "0")}`;
+    const narration = state.voiceover ? sceneState.plan?.narration : undefined;
 
     publishEvent(jobId, "validator_started", { sceneIndex: idx, attempt: sceneState.attempts.length });
 
-    const report = await validate(code, expectedClass);
+    const report = await validate(code, expectedClass, narration);
 
     publishEvent(jobId, "validator_result", {
       sceneIndex: idx,

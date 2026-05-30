@@ -26,6 +26,11 @@ const ModelConfigSchema = z.object({
 const DebugRequestSchema = z.object({
   brokenCode: z.string().min(1).max(524288),
   sceneClass: z.string().optional(),
+  // Native voiceover (FROZEN CONTRACT v1). When true, the debugger preserves the
+  // VoiceoverScene structure and the exact narration beats. Default false →
+  // unchanged behavior.
+  voiceover: z.boolean().optional().default(false),
+  narration: z.array(z.string()).optional(),
   error: z.object({
     stderr: z.string(),
     summary: z.string(),
@@ -73,9 +78,26 @@ export function registerDebug(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "debug" as const,
+        voiceover: body.voiceover,
         traceId: body.meta?.traceId ?? req.traceId,
         brokenCode: body.brokenCode,
         sceneClass: body.sceneClass,
+        // Carry narration as a single-scene plan (index 0) so the debugger node
+        // and validator can access the beats in voiceover mode.
+        ...(body.voiceover && body.narration
+          ? {
+              scenes: [
+                {
+                  index: 0,
+                  prompt: body.originalPrompt ?? "",
+                  durationSec: 1,
+                  manimFeatures: [],
+                  requiredSymbols: [],
+                  narration: body.narration,
+                },
+              ],
+            }
+          : {}),
         brokenError: body.error,
         originalPrompt: body.originalPrompt,
         previousAttempts: body.previousAttempts,

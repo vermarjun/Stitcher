@@ -30,6 +30,8 @@ const ModelConfigSchema = z.object({
 
 const PlanRequestSchema = z.object({
   prompt: z.string().min(1).max(4000),
+  // Native voiceover (FROZEN CONTRACT v1). Default false → unchanged behavior.
+  voiceover: z.boolean().optional().default(false),
   modelConfig: z
     .object({ planner: ModelConfigSchema.optional() })
     .optional()
@@ -80,6 +82,7 @@ export function registerPlan(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "generate" as const,
+        voiceover: body.voiceover,
         traceId: body.meta?.traceId ?? req.traceId,
         prompt: body.prompt,
         modelConfig: body.modelConfig,

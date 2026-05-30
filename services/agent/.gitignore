@@ -8,3 +8,6 @@ llm_captures/
 coverage/
 .nyc_output/
 *.log
+
+__pycache__/
+*.pyc

@@ -48,6 +48,26 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
   const tools = [manimApiCheckTool, astPreviewTool, diffTool];
   const agent = createReactAgent({ llm: model, tools });
 
+  const voiceover = state.voiceover === true;
+  const narration = voiceover ? state.scenes?.[0]?.narration : undefined;
+  const voiceoverInstr = voiceover
+    ? [
+        `VOICEOVER MODE: ON. This is a manim_voiceover VoiceoverScene. You MUST preserve its voiceover structure while fixing the error:`,
+        `- keep \`from manim_voiceover import VoiceoverScene\` and \`from stitcher_voiceover import OfflineTTS\`,`,
+        `- keep the scene class subclassing \`VoiceoverScene\`,`,
+        `- keep \`self.set_speech_service(OfflineTTS(), create_subcaption=False)\` as the first line of construct,`,
+        `- keep EXACTLY one \`with self.voiceover(text=...)\` block per narration beat, in order, each driving \`run_time=tracker.duration\`,`,
+        `- DO NOT reword, merge, split, or re-punctuate any \`self.voiceover(text=...)\` string. They must stay character-for-character identical to the beats below.`,
+        narration?.length
+          ? "\nAuthoritative narration beats (ordered — each must appear verbatim in exactly one voiceover block):\n```json\n" +
+            JSON.stringify(narration, null, 2) +
+            "\n```"
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
   const userContent = [
     brokenCode ? `Broken code:\n\`\`\`python\n${brokenCode}\n\`\`\`` : "",
     brokenError
@@ -55,6 +75,7 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
       : "",
     state.originalPrompt ? `Original prompt: ${state.originalPrompt}` : "",
     sceneClass ? `Scene class: ${sceneClass}` : "",
+    voiceoverInstr,
     previousAttempts?.length
       ? `Previous failed attempts (do NOT repeat these fixes):\n${previousAttempts.map((a) => `Fix tried: ${a.code.slice(0, 200)}\nError: ${a.error}`).join("\n---\n")}`
       : "",
@@ -98,7 +119,7 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
       }
 
       lastCode = fixedCode;
-      const report = await validate(fixedCode, sceneClass);
+      const report = await validate(fixedCode, sceneClass, narration);
       lastValidation = report;
 
       publishEvent(jobId, "validator_result", {

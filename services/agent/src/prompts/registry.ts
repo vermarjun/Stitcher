@@ -11,7 +11,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { config } from "../config.js";
 
-type Role = "planner" | "coder" | "debugger" | "refiner";
+type Role = "planner" | "coder" | "coder_voiceover" | "debugger" | "refiner";
 
 interface PromptMeta {
   role: Role;
@@ -27,8 +27,17 @@ const PROMPTS_DIR = path.join(__dirname);
 const ACTIVE_VERSIONS: Record<Role, string> = {
   planner: config.promptVersionPlanner === "active" ? "v1_initial" : config.promptVersionPlanner,
   coder: config.promptVersionCoder === "active" ? "v1_initial" : config.promptVersionCoder,
+  // Voiceover coder prompt: pinned to its own file under src/prompts/coder/.
+  // The role name maps to directory `coder` (shared with the legacy coder) but a
+  // distinct version file, so it lives at coder/v1_voiceover.md.
+  coder_voiceover: config.promptVersionCoder === "active" ? "v1_voiceover" : `${config.promptVersionCoder}_voiceover`,
   debugger: config.promptVersionDebugger === "active" ? "v1_initial" : config.promptVersionDebugger,
   refiner: config.promptVersionRefiner === "active" ? "v1_initial" : config.promptVersionRefiner,
+};
+
+// Roles whose .md files live in a different directory than the role name.
+const ROLE_DIR_OVERRIDE: Partial<Record<Role, string>> = {
+  coder_voiceover: "coder",
 };
 
 function parseFrontMatter(content: string): { meta: Partial<PromptMeta>; body: string } {
@@ -55,7 +64,8 @@ export function getPrompt(role: Role): { systemPrompt: string; meta: Partial<Pro
   const cacheKey = `${role}:${version}`;
 
   if (!_cache.has(cacheKey)) {
-    const filePath = path.join(PROMPTS_DIR, role, `${version}.md`);
+    const dir = ROLE_DIR_OVERRIDE[role] ?? role;
+    const filePath = path.join(PROMPTS_DIR, dir, `${version}.md`);
     try {
       const content = fs.readFileSync(filePath, "utf8");
       _cache.set(cacheKey, parseFrontMatter(content));

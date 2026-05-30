@@ -32,6 +32,12 @@ export interface ScenePlan {
   description?: string;
   concepts?: string[];
   visualElements?: string[];
+  // Native voiceover (FROZEN CONTRACT v1): when voiceover mode is ON, the planner
+  // emits an ORDERED list of the EXACT narration beat strings to be spoken — one
+  // per intended animation beat. The coder reproduces them VERBATIM inside
+  // `self.voiceover(text=...)` blocks (they are the audio cache key, character-for-
+  // character). Absent/undefined when voiceover mode is OFF (legacy behavior).
+  narration?: string[];
 }
 
 export interface CodeExample {
@@ -124,6 +130,11 @@ export const GraphStateAnnotation = Annotation.Root({
   // Core identity
   jobId: Annotation<string>({ reducer: (_prev, next) => next }),
   mode: Annotation<"generate" | "debug">({ reducer: (_prev, next) => next }),
+  // Native voiceover feature flag (FROZEN CONTRACT v1). Default false →
+  // existing behavior is byte-for-byte unchanged. When true: planner emits
+  // per-scene `narration` beats, coder emits a VoiceoverScene, validator enforces
+  // beat-text equality.
+  voiceover: Annotation<boolean>({ reducer: (_prev, next) => next, default: () => false }),
   // Human-facing distributed trace id (X-Trace-Id) — propagated for Langfuse correlation.
   traceId: Annotation<string | undefined>({ reducer: (_prev, next) => next }),
 

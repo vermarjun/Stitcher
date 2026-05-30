@@ -29,7 +29,8 @@ type CheckResult = "ok" | { error: string; line?: number; suggestion?: string };
 async function runPythonChecks(
   code: string,
   checks: string[],
-  expectedClass?: string
+  expectedClass?: string,
+  voiceoverNarration?: string[]
 ): Promise<{ results: Record<string, { status: string; error?: string; line?: number; suggestion?: string }>; failFast: string | null }> {
   return new Promise((resolve) => {
     const proc = spawn(
@@ -66,6 +67,7 @@ async function runPythonChecks(
         checks,
         ruffConfigPath: config.ruffConfigPath,
         expectedClass,
+        ...(voiceoverNarration ? { voiceoverNarration } : {}),
       })
     );
     proc.stdin.end();
@@ -74,7 +76,8 @@ async function runPythonChecks(
 
 export async function validate(
   code: string,
-  expectedSceneClass?: string
+  expectedSceneClass?: string,
+  voiceoverNarration?: string[]
 ): Promise<ValidationReport> {
   const checks: Record<string, CheckResult> = {};
   let failFast: string | null = null;
@@ -99,8 +102,18 @@ export async function validate(
   }
 
   // ── Python checks: ast, pyflakes, ruff, compile, manimLint, sceneClass ────
+  // When voiceover narration beats are supplied, also run the beat-equality check
+  // (voiceoverBeats). When absent, behavior is unchanged.
   const pythonChecks = ["ast", "pyflakes", "ruff", "compile", "manimLint", "sceneClass"];
-  const { results, failFast: pyFailFast } = await runPythonChecks(code, pythonChecks, expectedSceneClass);
+  if (voiceoverNarration && voiceoverNarration.length > 0) {
+    pythonChecks.push("voiceoverBeats");
+  }
+  const { results, failFast: pyFailFast } = await runPythonChecks(
+    code,
+    pythonChecks,
+    expectedSceneClass,
+    voiceoverNarration
+  );
 
   for (const [name, result] of Object.entries(results)) {
     if (result.status === "ok" || result.status === "skip") {
