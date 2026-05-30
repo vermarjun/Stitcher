@@ -287,7 +287,7 @@ class AgentClient {
     async plan(input: PlanInput, traceId?: string): Promise<PlanResponse> {
         logger.debug(`[agent] plan traceId=${traceId ?? "-"} prompt="${input.prompt.slice(0, 80)}"`);
         try {
-            const res = await this.http.post<PlanResponse>("/plan", input, this.callCfg(traceId, 60_000));
+            const res = await this.http.post<PlanResponse>("/plan", input, this.callCfg(traceId, 120_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
@@ -299,7 +299,7 @@ class AgentClient {
     async code(input: CodeInput, traceId?: string): Promise<CodeResponse> {
         logger.debug(`[agent] code traceId=${traceId ?? "-"} sceneIndex=${input.scenePlan.index}`);
         try {
-            const res = await this.http.post<CodeResponse>("/code", input, this.callCfg(traceId, 60_000));
+            const res = await this.http.post<CodeResponse>("/code", input, this.callCfg(traceId, 240_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
@@ -311,7 +311,7 @@ class AgentClient {
     async debug(input: DebugInput, traceId?: string): Promise<DebugResponse> {
         logger.debug(`[agent] debug traceId=${traceId ?? "-"} sceneClass=${input.sceneClass ?? "-"}`);
         try {
-            const res = await this.http.post<DebugResponse>("/debug", input, this.callCfg(traceId, 30_000));
+            const res = await this.http.post<DebugResponse>("/debug", input, this.callCfg(traceId, 180_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
