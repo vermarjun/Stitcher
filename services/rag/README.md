@@ -110,6 +110,19 @@ re-embeds the full corpus (API chunks + seed scripts + scraped scripts), recreat
 vector index (+ BM25 text index if `STAGE_SPARSE=true`), and **waits until the index is
 READY** before exiting.
 
+> **Native voiceover grounding examples.** `data/seed_examples.json` includes a set of
+> `VoiceoverScene` examples (ids prefixed `voiceover_`, tagged `voiceover`) that ground the
+> coder in the native-voiceover pattern: `from manim_voiceover import VoiceoverScene` +
+> `from stitcher_voiceover import OfflineTTS`, `self.set_speech_service(OfflineTTS(),
+> create_subcaption=False)` as the first construct line, and one `with self.voiceover(text=...)
+> as tracker:` block per narration beat (`run_time=tracker.duration`). These are **seed data
+> only** — they do not affect retrieval until the corpus is re-seeded. `npm run seed` is
+> idempotent and only embeds new ids, so it will pick them up without touching existing docs:
+>
+> ```bash
+> npm run seed          # picks up the new voiceover_* examples (skips already-seeded ids)
+> ```
+
 ### 3. Start the service
 
 ```bash

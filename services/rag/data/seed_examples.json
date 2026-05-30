@@ -222,5 +222,242 @@
     "manimVersion": "0.19.0",
     "sourceType": "handcrafted",
     "code": "from manim import *\nimport numpy as np\n\nclass AnimatedCounter(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0f0f23\"\n\n        target = 1000\n        tracker = ValueTracker(0)\n\n        counter = always_redraw(lambda:\n            Integer(\n                int(tracker.get_value()),\n                font_size=96,\n                color=WHITE\n            ).move_to(ORIGIN)\n        )\n\n        progress_ring = always_redraw(lambda:\n            Arc(\n                radius=1.8,\n                start_angle=PI / 2,\n                angle=-2 * PI * tracker.get_value() / target,\n                color=\"#3B82F6\",\n                stroke_width=8\n            )\n        )\n\n        bg_ring = Circle(radius=1.8, color=\"#1F2937\", stroke_width=8)\n\n        title = Text(\"Loading...\", font_size=28, color=\"#9CA3AF\").to_edge(UP, buff=0.6)\n        pct_label = always_redraw(lambda:\n            Text(\n                f\"{int(tracker.get_value() * 100 / target)}%\",\n                font_size=22, color=\"#3B82F6\"\n            ).move_to(DOWN * 2.5)\n        )\n\n        self.play(FadeIn(bg_ring), Write(title))\n        self.add(progress_ring, counter, pct_label)\n\n        self.play(\n            tracker.animate.set_value(target),\n            run_time=4,\n            rate_func=smooth\n        )\n\n        # Flash effect at completion\n        self.play(\n            Flash(ORIGIN, color=\"#F59E0B\", line_length=0.5, num_lines=16, flash_radius=2.5),\n            counter.animate.set_color(\"#10B981\"),\n            run_time=0.5\n        )\n\n        done_text = Text(\"Complete!\", font_size=40, color=\"#10B981\")\n        done_text.next_to(counter, DOWN, buff=0.8)\n        self.play(Transform(title, done_text))\n        self.wait(1.5)\n"
+  },
+  {
+    "id": "voiceover_derivative_tangent",
+    "originalPrompt": "Explain the derivative as the slope of the tangent line, with narration",
+    "sceneClassName": "Scene00",
+    "description": "Native-voiceover scene explaining the derivative as the slope of a tangent line. Uses VoiceoverScene with the offline TTS speech service. Plots a parabola on Axes, draws a moving point on the curve, and animates a tangent line whose slope is read off the derivative. Each narration beat is spoken via a `with self.voiceover(text=...)` block and the visual `run_time` is locked to `tracker.duration` so the animation stays in sync with the audio.",
+    "apisUsed": [
+      "Axes",
+      "Dot",
+      "Line",
+      "Text",
+      "MathTex",
+      "ValueTracker",
+      "always_redraw"
+    ],
+    "animationTypes": [
+      "Write",
+      "Create",
+      "Transform",
+      "FadeIn"
+    ],
+    "domain": "math",
+    "tags": [
+      "voiceover",
+      "narration",
+      "calculus",
+      "derivative",
+      "tangent",
+      "slope"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#1a1a2e",
+      "#3B82F6",
+      "#F59E0B",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.0",
+    "sourceType": "handcrafted",
+    "code": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom stitcher_voiceover import OfflineTTS\n\n\nclass Scene00(VoiceoverScene):\n    def construct(self):\n        self.set_speech_service(OfflineTTS(), create_subcaption=False)\n        self.camera.background_color = \"#1a1a2e\"\n\n        title = Text(\"The Derivative\", font_size=44, color=WHITE).to_edge(UP, buff=0.5)\n        with self.voiceover(text=\"The derivative measures how fast a function is changing at a single point.\") as tracker:\n            self.play(Write(title), run_time=tracker.duration)\n\n        axes = Axes(x_range=[-3, 3, 1], y_range=[-1, 5, 1], x_length=7, y_length=4.5)\n        graph = axes.plot(lambda x: 0.5 * x**2, color=\"#3B82F6\")\n        axes.next_to(title, DOWN, buff=0.4)\n        with self.voiceover(text=\"Here is the curve y equals one half x squared.\") as tracker:\n            self.play(Create(axes), Create(graph), run_time=tracker.duration)\n\n        x = ValueTracker(-2)\n\n        def slope_line():\n            x0 = x.get_value()\n            m = x0  # derivative of 0.5 x^2 is x\n            y0 = 0.5 * x0**2\n            return axes.plot(lambda t: m * (t - x0) + y0, x_range=[x0 - 1.4, x0 + 1.4],\n                             color=\"#F59E0B\")\n\n        dot = always_redraw(lambda: Dot(axes.c2p(x.get_value(), 0.5 * x.get_value()**2),\n                                         color=\"#10B981\"))\n        tangent = always_redraw(slope_line)\n        with self.voiceover(text=\"At any point, the tangent line touches the curve, and its slope is the derivative.\") as tracker:\n            self.play(FadeIn(dot), Create(tangent), run_time=tracker.duration)\n\n        with self.voiceover(text=\"As the point slides along the curve, watch how the slope of the tangent grows.\") as tracker:\n            self.play(x.animate.set_value(2), run_time=tracker.duration)\n\n        formula = MathTex(r\"\\frac{d}{dx}\\left(\\tfrac{1}{2}x^2\\right) = x\", color=\"#F59E0B\")\n        formula.to_edge(DOWN, buff=0.6)\n        with self.voiceover(text=\"So the derivative of one half x squared is simply x.\") as tracker:\n            self.play(Write(formula), run_time=tracker.duration)\n"
+  },
+  {
+    "id": "voiceover_sieve_of_eratosthenes",
+    "originalPrompt": "Walk through the Sieve of Eratosthenes finding primes, with narration",
+    "sceneClassName": "Scene01",
+    "description": "Native-voiceover scene walking through the Sieve of Eratosthenes. Uses VoiceoverScene with the offline TTS speech service. Lays out the integers 2 through 30 as a grid of numbered cells, then crosses out multiples of each prime while highlighting the primes that remain. Every narration beat is wrapped in a `with self.voiceover(text=...)` block and animations use `run_time=tracker.duration` to stay locked to the spoken audio.",
+    "apisUsed": [
+      "VGroup",
+      "Square",
+      "Text",
+      "Cross",
+      "Indicate"
+    ],
+    "animationTypes": [
+      "FadeIn",
+      "Create",
+      "Indicate",
+      "FadeOut"
+    ],
+    "domain": "cs",
+    "tags": [
+      "voiceover",
+      "narration",
+      "primes",
+      "sieve",
+      "number-theory",
+      "algorithm"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#0f0f23",
+      "#3B82F6",
+      "#EF4444",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.0",
+    "sourceType": "handcrafted",
+    "code": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom stitcher_voiceover import OfflineTTS\n\n\nclass Scene01(VoiceoverScene):\n    def construct(self):\n        self.set_speech_service(OfflineTTS(), create_subcaption=False)\n        self.camera.background_color = \"#0f0f23\"\n\n        numbers = list(range(2, 31))\n        cells = VGroup()\n        for n in numbers:\n            box = Square(side_length=0.7, stroke_color=WHITE, stroke_width=1.5)\n            label = Text(str(n), font_size=22, color=WHITE).move_to(box)\n            cells.add(VGroup(box, label))\n        cells.arrange_in_grid(rows=3, cols=10, buff=0.12).move_to(ORIGIN)\n        index = {n: i for i, n in enumerate(numbers)}\n\n        with self.voiceover(text=\"The Sieve of Eratosthenes finds every prime number up to a limit.\") as tracker:\n            self.play(FadeIn(cells), run_time=tracker.duration)\n\n        with self.voiceover(text=\"We start with all the whole numbers from two to thirty.\") as tracker:\n            self.play(Indicate(cells, scale_factor=1.05), run_time=tracker.duration)\n\n        crossed = set()\n        for prime in [2, 3, 5]:\n            pcell = cells[index[prime]]\n            multiples = [m for m in range(prime * 2, 31, prime) if m not in crossed]\n            with self.voiceover(text=f\"Take the prime {prime}, then cross out every multiple of {prime}.\") as tracker:\n                crosses = [Cross(cells[index[m]], color=\"#EF4444\", stroke_width=4) for m in multiples]\n                self.play(\n                    Indicate(pcell, color=\"#10B981\"),\n                    *[Create(c) for c in crosses],\n                    run_time=tracker.duration,\n                )\n                crossed.update(multiples)\n\n        remaining = [n for n in numbers if n not in crossed]\n        with self.voiceover(text=\"Whatever survives is prime: two, three, five, seven, and so on.\") as tracker:\n            self.play(\n                *[cells[index[n]][1].animate.set_color(\"#10B981\") for n in remaining],\n                run_time=tracker.duration,\n            )\n"
+  },
+  {
+    "id": "voiceover_riemann_sum",
+    "originalPrompt": "Show how Riemann sums approximate the area under a curve, with narration",
+    "sceneClassName": "Scene02",
+    "description": "Native-voiceover scene showing how Riemann sums approximate the area under a curve. Uses VoiceoverScene with the offline TTS speech service. Plots a curve on Axes and uses get_riemann_rectangles to draw progressively finer rectangle approximations, narrating each refinement. Narration beats live inside `with self.voiceover(text=...)` blocks and animation `run_time` follows `tracker.duration`.",
+    "apisUsed": [
+      "Axes",
+      "Text",
+      "MathTex",
+      "get_riemann_rectangles",
+      "Transform"
+    ],
+    "animationTypes": [
+      "Write",
+      "Create",
+      "Transform",
+      "FadeIn"
+    ],
+    "domain": "math",
+    "tags": [
+      "voiceover",
+      "narration",
+      "calculus",
+      "integral",
+      "riemann-sum",
+      "area"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#1a1a2e",
+      "#8B5CF6",
+      "#F59E0B",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.0",
+    "sourceType": "handcrafted",
+    "code": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom stitcher_voiceover import OfflineTTS\n\n\nclass Scene02(VoiceoverScene):\n    def construct(self):\n        self.set_speech_service(OfflineTTS(), create_subcaption=False)\n        self.camera.background_color = \"#1a1a2e\"\n\n        axes = Axes(x_range=[0, 4, 1], y_range=[0, 9, 2], x_length=8, y_length=4.5)\n        func = lambda x: 0.5 * x**2\n        graph = axes.plot(func, x_range=[0, 4], color=\"#8B5CF6\")\n        with self.voiceover(text=\"We want the area under this curve between zero and four.\") as tracker:\n            self.play(Create(axes), Create(graph), run_time=tracker.duration)\n\n        rects = axes.get_riemann_rectangles(graph, x_range=[0, 4], dx=1.0,\n                                            color=\"#F59E0B\", fill_opacity=0.6)\n        with self.voiceover(text=\"A Riemann sum slices that area into rectangles and adds them up.\") as tracker:\n            self.play(Create(rects), run_time=tracker.duration)\n\n        for dx in [0.5, 0.25, 0.1]:\n            finer = axes.get_riemann_rectangles(graph, x_range=[0, 4], dx=dx,\n                                                color=\"#F59E0B\", fill_opacity=0.6)\n            with self.voiceover(text=\"As the rectangles get thinner, the estimate gets closer to the true area.\") as tracker:\n                self.play(Transform(rects, finer), run_time=tracker.duration)\n\n        result = MathTex(r\"\\int_0^4 \\tfrac{1}{2}x^2\\,dx\", color=\"#10B981\").to_edge(UP)\n        with self.voiceover(text=\"In the limit, this becomes the definite integral.\") as tracker:\n            self.play(Write(result), run_time=tracker.duration)\n"
+  },
+  {
+    "id": "voiceover_vector_projection",
+    "originalPrompt": "Explain the projection of one vector onto another, with narration",
+    "sceneClassName": "Scene03",
+    "description": "Native-voiceover scene explaining the projection of one vector onto another. Uses VoiceoverScene with the offline TTS speech service. Draws two vectors as Arrows on a NumberPlane, then constructs the projection vector and the dashed perpendicular component, narrating the geometric meaning of the dot product. Each beat is a `with self.voiceover(text=...)` block with `run_time=tracker.duration`.",
+    "apisUsed": [
+      "NumberPlane",
+      "Arrow",
+      "DashedLine",
+      "Text",
+      "MathTex"
+    ],
+    "animationTypes": [
+      "Create",
+      "Write",
+      "GrowArrow",
+      "FadeIn"
+    ],
+    "domain": "math",
+    "tags": [
+      "voiceover",
+      "narration",
+      "linear-algebra",
+      "vector",
+      "projection",
+      "dot-product"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#1a1a2e",
+      "#3B82F6",
+      "#EF4444",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.0",
+    "sourceType": "handcrafted",
+    "code": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom stitcher_voiceover import OfflineTTS\n\n\nclass Scene03(VoiceoverScene):\n    def construct(self):\n        self.set_speech_service(OfflineTTS(), create_subcaption=False)\n        self.camera.background_color = \"#1a1a2e\"\n\n        plane = NumberPlane(x_range=[-1, 5, 1], y_range=[-1, 4, 1],\n                            background_line_style={\"stroke_opacity\": 0.3})\n        with self.voiceover(text=\"Projection answers how much one vector points along another.\") as tracker:\n            self.play(Create(plane), run_time=tracker.duration)\n\n        o = plane.c2p(0, 0)\n        b = plane.c2p(4, 0)\n        a = plane.c2p(3, 3)\n        vec_b = Arrow(o, b, buff=0, color=\"#3B82F6\")\n        vec_a = Arrow(o, a, buff=0, color=\"#EF4444\")\n        with self.voiceover(text=\"Here is vector a in red and vector b in blue.\") as tracker:\n            self.play(GrowArrow(vec_b), GrowArrow(vec_a), run_time=tracker.duration)\n\n        proj_point = plane.c2p(3, 0)\n        proj = Arrow(o, proj_point, buff=0, color=\"#10B981\")\n        drop = DashedLine(a, proj_point, color=WHITE, stroke_width=2)\n        with self.voiceover(text=\"Drop a perpendicular from a onto b to find its shadow.\") as tracker:\n            self.play(Create(drop), GrowArrow(proj), run_time=tracker.duration)\n\n        formula = MathTex(r\"\\text{proj}_b\\,a = \\frac{a\\cdot b}{\\|b\\|^2}\\,b\",\n                          color=\"#10B981\").to_edge(UP)\n        with self.voiceover(text=\"That shadow is the projection, and its length comes from the dot product.\") as tracker:\n            self.play(Write(formula), run_time=tracker.duration)\n"
+  },
+  {
+    "id": "voiceover_geometric_series",
+    "originalPrompt": "Visualize a geometric series converging to a finite sum, with narration",
+    "sceneClassName": "Scene04",
+    "description": "Native-voiceover scene visualizing a geometric series converging to a finite sum. Uses VoiceoverScene with the offline TTS speech service. Repeatedly halves a unit square and stacks the pieces to show one half plus one quarter plus one eighth approaching one. Each narration beat is spoken via `with self.voiceover(text=...)` and visuals use `run_time=tracker.duration`.",
+    "apisUsed": [
+      "Square",
+      "Rectangle",
+      "Text",
+      "MathTex",
+      "VGroup"
+    ],
+    "animationTypes": [
+      "Create",
+      "FadeIn",
+      "Write",
+      "Transform"
+    ],
+    "domain": "math",
+    "tags": [
+      "voiceover",
+      "narration",
+      "series",
+      "geometric-series",
+      "convergence",
+      "infinite-sum"
+    ],
+    "complexity": "beginner",
+    "colorPalette": [
+      "#0f0f23",
+      "#3B82F6",
+      "#F59E0B",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.0",
+    "sourceType": "handcrafted",
+    "code": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom stitcher_voiceover import OfflineTTS\n\n\nclass Scene04(VoiceoverScene):\n    def construct(self):\n        self.set_speech_service(OfflineTTS(), create_subcaption=False)\n        self.camera.background_color = \"#0f0f23\"\n\n        unit = Square(side_length=4, stroke_color=WHITE, stroke_width=2).move_to(LEFT * 2.5)\n        with self.voiceover(text=\"Start with one whole square representing the number one.\") as tracker:\n            self.play(Create(unit), run_time=tracker.duration)\n\n        palette = [\"#3B82F6\", \"#F59E0B\", \"#10B981\", \"#8B5CF6\"]\n        pieces = VGroup()\n        fraction = 1.0\n        top = unit.get_top()[1]\n        for i in range(4):\n            fraction /= 2\n            height = 4 * fraction\n            piece = Rectangle(width=4, height=height, fill_color=palette[i],\n                              fill_opacity=0.8, stroke_color=WHITE, stroke_width=1)\n            piece.move_to(unit).align_to([0, top, 0], UP).shift(DOWN * (4 - sum(\n                4 / (2 ** (k + 1)) for k in range(i))))\n            pieces.add(piece)\n            label = MathTex(rf\"\\tfrac{{1}}{{{2 ** (i + 1)}}}\", font_size=30, color=palette[i])\n            label.next_to(unit, RIGHT, buff=1.0).shift(UP * (1.5 - i * 0.7))\n            with self.voiceover(text=f\"Add one over {2 ** (i + 1)} of the area.\") as tracker:\n                self.play(FadeIn(piece), Write(label), run_time=tracker.duration)\n\n        total = MathTex(r\"\\tfrac{1}{2}+\\tfrac{1}{4}+\\tfrac{1}{8}+\\cdots = 1\",\n                        color=\"#10B981\").to_edge(DOWN, buff=0.6)\n        with self.voiceover(text=\"Keep halving forever and the pieces fill the whole square, so the sum is one.\") as tracker:\n            self.play(Write(total), run_time=tracker.duration)\n"
+  },
+  {
+    "id": "voiceover_newtons_method",
+    "originalPrompt": "Demonstrate Newton's method converging to a root, with narration",
+    "sceneClassName": "Scene05",
+    "description": "Native-voiceover scene demonstrating Newton's method for finding a root. Uses VoiceoverScene with the offline TTS speech service. Plots a cubic on Axes and iteratively draws tangent lines that step toward the root, narrating each iteration. Beats are wrapped in `with self.voiceover(text=...)` blocks and animation `run_time` is tied to `tracker.duration`.",
+    "apisUsed": [
+      "Axes",
+      "Dot",
+      "Line",
+      "DashedLine",
+      "Text",
+      "MathTex"
+    ],
+    "animationTypes": [
+      "Create",
+      "Write",
+      "FadeIn",
+      "Transform"
+    ],
+    "domain": "math",
+    "tags": [
+      "voiceover",
+      "narration",
+      "numerical-methods",
+      "newtons-method",
+      "root-finding",
+      "iteration"
+    ],
+    "complexity": "advanced",
+    "colorPalette": [
+      "#1a1a2e",
+      "#3B82F6",
+      "#F59E0B",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.0",
+    "sourceType": "handcrafted",
+    "code": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom stitcher_voiceover import OfflineTTS\n\n\nclass Scene05(VoiceoverScene):\n    def construct(self):\n        self.set_speech_service(OfflineTTS(), create_subcaption=False)\n        self.camera.background_color = \"#1a1a2e\"\n\n        f = lambda x: x**3 - 2 * x - 2\n        df = lambda x: 3 * x**2 - 2\n        axes = Axes(x_range=[0, 3, 1], y_range=[-4, 6, 2], x_length=8, y_length=5)\n        graph = axes.plot(f, x_range=[0, 2.6], color=\"#3B82F6\")\n        with self.voiceover(text=\"Newton's method finds where a function crosses zero.\") as tracker:\n            self.play(Create(axes), Create(graph), run_time=tracker.duration)\n\n        title = MathTex(r\"x_{n+1} = x_n - \\frac{f(x_n)}{f'(x_n)}\", color=\"#F59E0B\").to_edge(UP)\n        with self.voiceover(text=\"Each step follows the tangent line down to the x axis.\") as tracker:\n            self.play(Write(title), run_time=tracker.duration)\n\n        x = 2.5\n        for i in range(3):\n            fx = f(x)\n            slope = df(x)\n            x_next = x - fx / slope\n            p_curve = Dot(axes.c2p(x, fx), color=\"#10B981\")\n            tangent = axes.plot(lambda t, x=x, fx=fx, slope=slope: slope * (t - x) + fx,\n                                x_range=[min(x, x_next) - 0.2, max(x, x_next) + 0.2],\n                                color=\"#F59E0B\")\n            drop = DashedLine(axes.c2p(x_next, 0), axes.c2p(x, fx), color=WHITE, stroke_width=2)\n            with self.voiceover(text=f\"From our current guess, follow the tangent to a closer estimate.\") as tracker:\n                self.play(FadeIn(p_curve), Create(tangent), Create(drop), run_time=tracker.duration)\n            x = x_next\n\n        root_dot = Dot(axes.c2p(x, 0), color=\"#10B981\")\n        with self.voiceover(text=\"After only a few iterations we land right on the root.\") as tracker:\n            self.play(FadeIn(root_dot, scale=1.5), run_time=tracker.duration)\n"
   }
 ]
