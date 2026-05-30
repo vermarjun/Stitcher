@@ -49,6 +49,10 @@ export interface IGenerationJob extends Document {
     traceId?: string;
     startedAt: Date;
     completedAt?: Date;
+    /** LLM token usage — populated by the worker once the agent emits usage data. */
+    tokens?: { input: number; output: number };
+    /** Estimated USD cost derived from token usage. Forward-compat; see §5. */
+    costUsd?: number;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -90,6 +94,14 @@ const GenerationJobSchema = new Schema<IGenerationJob>(
         traceId: { type: String, required: false },
         startedAt: { type: Date, default: Date.now },
         completedAt: { type: Date, required: false },
+        tokens: {
+            type: new Schema(
+                { input: { type: Number }, output: { type: Number } },
+                { _id: false }
+            ),
+            required: false,
+        },
+        costUsd: { type: Number, required: false },
     },
     { timestamps: true }
 );

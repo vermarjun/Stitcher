@@ -62,6 +62,13 @@ import paymentRoutes from "./router/payment.router";
 import memoryRoutes from "./router/memory.router";
 import collabRoutes from "./router/collab.router";
 import adminLiveRoutes from "./router/adminLive.router";
+import feedbackRoutes from "./router/feedback.router";
+import adminFeedbackRoutes from "./router/adminFeedback.router";
+import adminMetricsRoutes from "./router/adminMetrics.router";
+import adminPrometheusRoutes from "./router/adminPrometheus.router";
+import adminHealthRoutes from "./router/adminHealth.router";
+import adminActionsRoutes from "./router/adminActions.router";
+import { startHealthPoller, stopHealthPoller } from "./services/adminHealth.service";
 import { isAdminUser } from "./middleware/admin.middleware";
 import { initYjsServer } from "./collab/yjs.server";
 
@@ -309,6 +316,19 @@ app.use(`${API_PREFIX}/collab`, collabRoutes);
 // ADMIN_DASHBOARD_ENABLED=false every route here 404s.
 app.use(`${API_PREFIX}/admin/live`, adminLiveRoutes);
 
+// User feedback intake — any logged-in user may POST (auth only, gated in the
+// router). NOT a community feature, so kept outside the requireFeature block.
+app.use(`${API_PREFIX}/feedback`, feedbackRoutes);
+
+// Admin portal surfaces (OBSERVABILITY §5 + admin dashboard). Every router below
+// is internally double-gated by auth + requireAdmin and 404s when
+// ADMIN_DASHBOARD_ENABLED=false. Mounted outside requireFeature("community").
+app.use(`${API_PREFIX}/admin/feedback`, adminFeedbackRoutes);
+app.use(`${API_PREFIX}/admin/metrics`, adminMetricsRoutes);
+app.use(`${API_PREFIX}/admin/prometheus`, adminPrometheusRoutes);
+app.use(`${API_PREFIX}/admin/health`, adminHealthRoutes);
+app.use(`${API_PREFIX}/admin/actions`, adminActionsRoutes);
+
 // ─── bull-board queue dashboard (OBSERVABILITY §6) ───────────────────────────
 // Instant queue/job/step visibility at ${API_PREFIX}/admin/queues.
 //
@@ -352,6 +372,10 @@ const server = httpServer.listen(PORT, async () => {
             { queue: generationQueue, label: "video-generation" },
             { queue: editQueue, label: "video-edit" },
         ]);
+
+        // Admin portal: poll dependency health (mongo/redis/agent/render/rag) on
+        // a 30s interval so /admin/health serves a cached snapshot. Best-effort.
+        startHealthPoller();
     } catch (error) {
         logger.error({ message: "Failed to start services", error: String(error) });
     }
@@ -375,6 +399,7 @@ async function shutdown(signal: string) {
 
         try {
             stopQueueDepthSampler();
+            stopHealthPoller();
 
             await generationWorker.close();
             await editWorker.close();
