@@ -14,6 +14,7 @@ import {
   RefreshProviderTimeline,
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
+import { DragAssetProvider } from "@/Components/Dashboard/DragAssetContext";
 import { PollingProvider, RefreshHeaderProvider, CollabAwarenessProvider } from "./context";
 import { maybeRunEditorTour } from "@/lib/onboardingTour";
 
@@ -67,7 +68,6 @@ const DashboardLayout = () => {
       }
       setUser(user);
 
-      toast.message(`Welcome ${user.username}`);
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message ||
@@ -134,6 +134,7 @@ const DashboardLayout = () => {
                       </button>
                     </div>
 
+                    <DragAssetProvider>
                     <div className="flex-1 flex overflow-hidden relative">
                       <LeftSideBar currentProject={project} user={user} />
 
@@ -153,6 +154,7 @@ const DashboardLayout = () => {
                         onClose={() => setIsRightSidebarOpen(false)}
                       />
                     </div>
+                    </DragAssetProvider>
 
                     {/* <Footer /> */}
                   </div>

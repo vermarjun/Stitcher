@@ -1,6 +1,6 @@
 import TimelineEditor from "./TimeLine/main.timeline";
 import VideoPlayer from "./VideoPlayer/main.videoplayer";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import VideoPlayerLoading from "@/Components/LoadingScreens/VideoPlayer.loader";
 import TimelineEditorLoading from "@/Components/LoadingScreens/Timeline.loader";
 import api from "@/api";
@@ -70,10 +70,14 @@ const VideoEditor = ({ currentProject }: Props) => {
 
   // ─── Fetch timeline (used as base; Y.Doc is authoritative once synced) ──
   const fetchTimeline = async () => {
+    const projectId = currentProject?._id;
+    if (!projectId) return;
+    // Only show the full-screen loader on the VERY FIRST load. A refetch (e.g.
+    // after an asset drop) must not blank the editor — that caused a visible
+    // flicker/glitch where the timeline briefly vanished and reappeared.
+    const firstLoad = !baseTimelineRef.current;
     try {
-      setLoading(true);
-      const projectId = currentProject?._id;
-      if (!projectId) return;
+      if (firstLoad) setLoading(true);
       const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
       const tl = response.data;
       baseTimelineRef.current = tl;
@@ -87,7 +91,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       console.error("Error fetching timeline:", err);
       toast.error("Error fetching timeline");
     } finally {
-      setLoading(false);
+      if (firstLoad) setLoading(false);
     }
   };
 
@@ -163,6 +167,22 @@ const VideoEditor = ({ currentProject }: Props) => {
     };
   }, [collabDoc, hydrateFromServer]);
 
+  // Effective duration = the stored duration OR the furthest clip end, whichever
+  // is larger. Local edits move/extend clips without updating timeline.duration
+  // (only the server materialize does), so playback must clamp to this — not the
+  // stale stored value — or it stops early before reaching a far-placed clip.
+  const effectiveDuration = useMemo(() => {
+    if (!timeline) return 0;
+    let max = Number(timeline.duration) || 0;
+    for (const t of ((timeline.tracks as ITrack[]) ?? [])) {
+      for (const it of (t.items ?? [])) {
+        const end = (it as ITimelineItemBase).endTime;
+        if (typeof end === "number" && end > max) max = end;
+      }
+    }
+    return max;
+  }, [timeline]);
+
   // ─── Playback loop ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!timeline) return;
@@ -179,9 +199,9 @@ const VideoEditor = ({ currentProject }: Props) => {
           setCurrentTime((prev) => {
             const nt = prev + delta;
             if (nt < prev) return prev;
-            if (nt >= Number(timeline.duration)) {
+            if (nt >= effectiveDuration) {
               setIsPlaying(false);
-              return Number(timeline.duration);
+              return effectiveDuration;
             }
             return nt;
           });
@@ -200,7 +220,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       if (animationFrameRef.current)
         cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isPlaying, timeline?.duration]);
+  }, [isPlaying, effectiveDuration]);
 
   const handlePlayPause = () => setIsPlaying((p) => !p);
   const handleTimeUpdate = (t: number) => setCurrentTime(t);
@@ -384,7 +404,6 @@ const VideoEditor = ({ currentProject }: Props) => {
             awareness={collabDoc?.awareness ?? null}
             setAwarenessCursor={collabDoc?.setAwarenessCursor ?? null}
             setAwarenessSelection={collabDoc?.setAwarenessSelection ?? null}
-            key={timelineRefreshKey}
           />
         )}
         </div>

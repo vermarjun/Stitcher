@@ -4,6 +4,51 @@ import { Button } from "@/Components/ui/button";
 import type { Message } from "./Main.rightsidebar";
 import LiveTextStream from "./LivestreamText.rightsidebar";
 
+/**
+ * Returns true when the string looks like a video URL that should be embedded.
+ * Matches:
+ *   - Cloudinary video delivery URLs  (res.cloudinary.com/.../video/)
+ *   - Any URL ending with .mp4 or .webm (query string ignored)
+ */
+function isVideoUrl(value: string): boolean {
+  if (!value) return false;
+  try {
+    // Must start with http/https to be a URL at all
+    if (!/^https?:\/\//i.test(value.trim())) return false;
+    // Cloudinary video delivery path
+    if (/res\.cloudinary\.com\/.+\/video\//i.test(value)) return true;
+    // Generic .mp4 / .webm extension (strip query string for the test)
+    const pathname = new URL(value).pathname.toLowerCase();
+    if (pathname.endsWith('.mp4') || pathname.endsWith('.webm')) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Embedded player for a completed generation's final video URL. */
+const FinalVideoPlayer = ({ url }: { url: string }) => (
+  <div className="mt-2 rounded-md overflow-hidden w-full border border-zinc-800 shadow-lg">
+    <video
+      src={url}
+      controls
+      playsInline
+      className="w-full aspect-video bg-black"
+    />
+    <div className="p-2 bg-zinc-800 flex items-center justify-between">
+      <span className="text-xs text-neutral-300 truncate max-w-[70%]">Generated video</span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex-shrink-0"
+      >
+        Open ↗
+      </a>
+    </div>
+  </div>
+);
+
 interface Props {
   message: Message;
   onCopy: (content: string) => void;
@@ -255,12 +300,20 @@ const MessageBubble = ({
           {llmResponse && (
             <div className="text-sm text-zinc-400 leading-relaxed mb-2 break-words">
               {(streamSummaryRef.current && llmSummaryRef.current != llmResponse && isLastMessage && isProcessing) ? (
-                (llmSummaryRef.current = llmResponse) && 
-                <LiveTextStream
-                  text={llmSummaryRef.current}
-                  streamingSpeed={50}
-                  onStreamingComplete={onStreamingComplete}
-                />
+                (llmSummaryRef.current = llmResponse) &&
+                (isVideoUrl(llmResponse) ? (
+                  // Video URL arrived live — skip typewriter, show player immediately
+                  (() => { onStreamingComplete?.(); return <FinalVideoPlayer url={llmResponse} />; })()
+                ) : (
+                  <LiveTextStream
+                    text={llmSummaryRef.current}
+                    streamingSpeed={50}
+                    onStreamingComplete={onStreamingComplete}
+                  />
+                ))
+              ) : isVideoUrl(llmResponse) ? (
+                // Video URL in loaded history or completed message
+                <FinalVideoPlayer url={llmResponse} />
               ) : (
                 <p className="break-words">{llmResponse}</p>
               )}

@@ -83,8 +83,11 @@ function yItemToReact(itemMap: Y.Map<unknown>, h?: TimelineHydration): ITimeline
   base._id = id;
   base.type = itemMap.get('type') as 'video' | 'audio' | 'text';
   base.trackId = ''; // filled by caller
-  base.startTime = (itemMap.get('startTime') as number) ?? cached?.startTime ?? 0;
-  base.endTime = (itemMap.get('endTime') as number) ?? cached?.endTime ?? 0;
+  // Position is AUTHORITATIVE in the Y.Doc — never fall back to the (possibly
+  // stale) hydration cache for startTime/endTime, or a moved clip could snap
+  // back to an old position and land on top of another clip.
+  base.startTime = (itemMap.get('startTime') as number) ?? 0;
+  base.endTime = (itemMap.get('endTime') as number) ?? 0;
 
   // Overlay the live positional/style fields the Y.Doc DOES track.
   if (itemMap.has('sourceStartTime')) base.sourceStartTime = itemMap.get('sourceStartTime');
@@ -111,9 +114,17 @@ function yTrackToReact(trackMap: Y.Map<unknown>, h?: TimelineHydration): ITrack 
   const itemsArray = trackMap.get('items') as Y.Array<Y.Map<unknown>> | undefined;
 
   const items: ITimelineItemBase[] = [];
+  const seenIds = new Set<string>();
   if (itemsArray) {
     for (let i = 0; i < itemsArray.length; i++) {
-      const itemReact = yItemToReact(itemsArray.get(i), h);
+      const m = itemsArray.get(i);
+      const itemId = m.get('id') as string;
+      // Defensive de-dup: if a duplicate Y.Map for the same id ever exists (an
+      // insert race, or a server inject colliding with a client add), render it
+      // only ONCE so clips can never stack on top of each other. Keep the first.
+      if (itemId && seenIds.has(itemId)) continue;
+      if (itemId) seenIds.add(itemId);
+      const itemReact = yItemToReact(m, h);
       itemReact.trackId = trackId;
       items.push(itemReact);
     }
@@ -246,6 +257,14 @@ export function addYItem(
   const trackMap = findYTrack(tracksArray, trackId);
   if (!trackMap) return;
   const itemsArray = trackMap.get('items') as Y.Array<Y.Map<unknown>>;
+  // Idempotent: never insert a second Y.Map for an id that already exists.
+  // Guards against double-insert races that would render stacked duplicates.
+  const newId = String((item as any).id ?? (item as any)._id ?? '');
+  if (newId) {
+    for (let i = 0; i < itemsArray.length; i++) {
+      if (String(itemsArray.get(i).get('id')) === newId) return;
+    }
+  }
   const itemMap = new Y.Map<unknown>();
   for (const [k, v] of Object.entries(item)) {
     if (v !== undefined) itemMap.set(k, v);

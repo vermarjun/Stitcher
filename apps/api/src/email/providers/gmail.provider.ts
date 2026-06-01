@@ -1,17 +1,15 @@
 /**
- * Gmail transport for the email subsystem.
+ * Gmail transport for the email subsystem (App Password / SMTP).
  *
- * Two auth modes, chosen automatically:
- *   A. OAuth2 ("send via API") — used when GMAIL_OAUTH_CLIENT_ID,
- *      GMAIL_OAUTH_CLIENT_SECRET and GMAIL_OAUTH_REFRESH_TOKEN are all set.
- *      nodemailer obtains and refreshes short-lived access tokens itself via
- *      Google's OAuth endpoint, so no access token is ever stored. This is the
- *      recommended production path (no app password, revocable from Google).
- *   B. App Password — fallback when OAuth2 vars are absent but EMAIL_APP_PASSWORD
- *      is set. Simpler to set up; fine for low volume / dev.
+ * Authenticates with EMAIL_USER + EMAIL_APP_PASSWORD over Gmail's SMTP service.
+ * Generate an app password at https://myaccount.google.com/apppasswords.
  *
- * If neither mode is configured, construction succeeds but send() throws a clear
- * error (so the worker logs + retries rather than crashing at boot).
+ * If EMAIL_APP_PASSWORD is absent, construction still succeeds but send() throws
+ * a clear error (so the worker logs + retries rather than crashing at boot). For
+ * local dev with no credentials, set EMAIL_PROVIDER=console instead.
+ *
+ * Swapping to OAuth2 or a third-party provider later is a new EmailProvider in
+ * this directory plus a case in providers/index.ts — nothing upstream changes.
  */
 
 import nodemailer, { Transporter } from "nodemailer";
@@ -19,32 +17,22 @@ import { EMAIL_CONFIG } from "../../config";
 import logger from "../../util/logger.util";
 import type { EmailMessage, EmailProvider, EmailSendResult } from "../types";
 
-type GmailAuthMode = "oauth2" | "app_password" | "unconfigured";
-
-function detectMode(): GmailAuthMode {
-  const { oauth, pass } = EMAIL_CONFIG;
-  if (oauth.clientId && oauth.clientSecret && oauth.refreshToken) return "oauth2";
-  if (pass) return "app_password";
-  return "unconfigured";
-}
-
 export class GmailProvider implements EmailProvider {
   readonly name = "gmail";
 
-  private readonly mode: GmailAuthMode;
+  private readonly configured: boolean;
   private transporter: Transporter | null = null;
 
   constructor() {
-    this.mode = detectMode();
-    if (this.mode === "unconfigured") {
+    this.configured = Boolean(EMAIL_CONFIG.pass);
+    if (this.configured) {
+      logger.info({ message: "[email] Gmail provider initialized (app password)" });
+    } else {
       logger.warn({
         message:
-          "[email] Gmail provider has no credentials — set GMAIL_OAUTH_* (preferred) " +
-          "or EMAIL_APP_PASSWORD, or set EMAIL_PROVIDER=console for local dev. " +
-          "Email sends will fail until configured.",
+          "[email] Gmail provider has no EMAIL_APP_PASSWORD — set it, or set " +
+          "EMAIL_PROVIDER=console for local dev. Email sends will fail until configured.",
       });
-    } else {
-      logger.info({ message: `[email] Gmail provider initialized (mode=${this.mode})` });
     }
   }
 
@@ -52,27 +40,14 @@ export class GmailProvider implements EmailProvider {
   private getTransporter(): Transporter {
     if (this.transporter) return this.transporter;
 
-    if (this.mode === "oauth2") {
-      this.transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          type: "OAuth2",
-          user: EMAIL_CONFIG.user,
-          clientId: EMAIL_CONFIG.oauth.clientId,
-          clientSecret: EMAIL_CONFIG.oauth.clientSecret,
-          refreshToken: EMAIL_CONFIG.oauth.refreshToken,
-        },
-      });
-    } else if (this.mode === "app_password") {
-      this.transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: { user: EMAIL_CONFIG.user, pass: EMAIL_CONFIG.pass },
-      });
-    } else {
-      throw new Error(
-        "Gmail email provider is not configured (no OAuth2 credentials and no app password)."
-      );
+    if (!this.configured) {
+      throw new Error("Gmail email provider is not configured (missing EMAIL_APP_PASSWORD).");
     }
+
+    this.transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: EMAIL_CONFIG.user, pass: EMAIL_CONFIG.pass },
+    });
 
     return this.transporter;
   }

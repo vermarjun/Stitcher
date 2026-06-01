@@ -23,6 +23,28 @@ export interface EnhanceInput {
     llmConfig?: Record<string, unknown>;
 }
 
+/**
+ * Per-call provider config override passed from the worker to /enhance.
+ * When present, the RAG service builds its LLM client and embedder from
+ * these instead of its own env defaults.
+ */
+export interface RagProviderConfig {
+    queryTransform?: {
+        provider: string;
+        apiKey: string;
+        baseURL: string | null;
+        model: string | null;
+        params: Record<string, unknown>;
+    };
+    embedder?: {
+        provider: string;
+        apiKey: string;
+        baseURL: string | null;
+        model: string | null;
+        params?: Record<string, unknown>;
+    };
+}
+
 export interface ApiExample {
     symbol: string;
     category: string;
@@ -38,6 +60,54 @@ export interface ApiExample {
     manimVersion?: string;
     colorPalette?: string[];
     similarity?: number;
+}
+
+export interface RagTraceQueryTransform {
+    ran: boolean;
+    provider?: string;
+    model?: string;
+    systemPrompt?: string;
+    userPrompt?: string;
+    rawOutput?: string;
+    transformedQuery?: string;
+    requiredApis?: string[];
+    tokensUsed?: { input: number; output: number };
+    durationMs?: number;
+}
+
+export interface RagTraceEmbed {
+    provider?: string;
+    model?: string;
+    dims?: number;
+    durationMs?: number;
+}
+
+export interface RagTraceCandidate {
+    id: string;
+    title: string;
+    score: number;
+    apisUsed?: string[];
+}
+
+export interface RagTraceRetrieve {
+    searchQuery?: string;
+    dense?: RagTraceCandidate[];
+    sparse?: RagTraceCandidate[];
+    merged?: RagTraceCandidate[];
+    topK?: number;
+}
+
+export interface RagTraceSelect {
+    method?: string;
+    selected?: Array<{ id: string; title: string; apisUsed?: string[] }>;
+    coveredApis?: string[];
+}
+
+export interface RagTrace {
+    queryTransform?: RagTraceQueryTransform;
+    embed?: RagTraceEmbed;
+    retrieve?: RagTraceRetrieve;
+    select?: RagTraceSelect;
 }
 
 export interface EnhanceResponse {
@@ -68,6 +138,8 @@ export interface EnhanceResponse {
         synthesisMs: number;
         llmCalls: number;
     };
+    /** Full pipeline trace returned by the RAG service /enhance endpoint. */
+    trace?: RagTrace;
 }
 
 export interface CorpusDocument {
@@ -145,10 +217,18 @@ class RagClient {
 
     // ── POST /enhance ────────────────────────────────────────────────────────
 
-    async enhance(input: EnhanceInput, traceId?: string): Promise<EnhanceResponse> {
+    async enhance(
+        input: EnhanceInput,
+        traceId?: string,
+        providerConfig?: RagProviderConfig
+    ): Promise<EnhanceResponse> {
         logger.debug(`[rag] enhance traceId=${traceId ?? "-"} prompt="${input.prompt.slice(0, 80)}"`);
         try {
-            const res = await this.http.post<EnhanceResponse>("/enhance", input, {
+            const body: EnhanceInput & { providerConfig?: RagProviderConfig } = {
+                ...input,
+                ...(providerConfig ? { providerConfig } : {}),
+            };
+            const res = await this.http.post<EnhanceResponse>("/enhance", body, {
                 headers: this.traceHeaders(traceId),
             });
             return res.data;
@@ -199,7 +279,7 @@ class RagClient {
     async health(): Promise<RagHealthResponse> {
         try {
             const res = await this.http.get<RagHealthResponse>("/health", {
-                timeout: 5_000,
+                timeout: 15_000,
                 // 503 from health is informational, not a transport error
                 validateStatus: (s: number) => s === 200 || s === 503,
             });
@@ -214,7 +294,7 @@ class RagClient {
     async capabilities(): Promise<RagCapabilitiesResponse> {
         try {
             const res = await this.http.get<RagCapabilitiesResponse>("/capabilities", {
-                timeout: 5_000,
+                timeout: 15_000,
             });
             return res.data;
         } catch (err) {

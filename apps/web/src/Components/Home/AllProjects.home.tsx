@@ -4,10 +4,15 @@ import {
   Trash2,
   UserPlus,
   FolderOpen,
-  Search,
   Calendar,
   MoreVertical,
+  SearchIcon,
 } from 'lucide-react';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/Components/ui/input-group";
 import api from '@/api';
 import {
   Dialog,
@@ -245,17 +250,20 @@ const AllProjects: React.FC<AllProjectsProps> = ({
         <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
             <h1 className="text-xl font-bold text-white tracking-tight hidden md:block">All Projects</h1>
 
-            {/* Mobile Title or Search */}
-            <div className="flex-1 md:max-w-md flex items-center gap-2">
-                <div className="relative w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search projects..."
-                      className="w-full bg-zinc-900/50 border border-zinc-800 rounded-full pl-9 pr-4 py-1.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 focus:bg-zinc-900 transition-all"
-                    />
-                </div>
+            {/* Search */}
+            <div className="flex-1 md:max-w-md flex items-center">
+              <InputGroup>
+                <InputGroupAddon>
+                  <SearchIcon aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  aria-label="Search"
+                  placeholder="Search projects..."
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </InputGroup>
             </div>
 
             <AuroraButton

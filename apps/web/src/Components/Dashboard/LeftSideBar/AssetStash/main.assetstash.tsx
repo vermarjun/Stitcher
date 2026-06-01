@@ -18,6 +18,7 @@ import {
   useRefreshTimeline,
   useRefreshTracks,
 } from "../../RefreshContextProvider";
+import { useDragAsset } from "../../DragAssetContext";
 
 import AssetCardComponent from "./Card.assetstash";
 
@@ -43,10 +44,12 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
   const [loadingStates, setLoadingStates] = useState<{
     [assetId: string]: {
       timeline: boolean;
-      backpack: boolean;
     };
   }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag asset context — used to highlight valid timeline tracks while dragging
+  const { setDraggingAsset } = useDragAsset();
 
   // Subscribe to refresh from GenerateChat
   const { refreshKey: refreshFromGenerateChat } = useRefreshAssetStash();
@@ -59,6 +62,9 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
     // Set drag image to be a copy (transparent original)
     e.dataTransfer.setData("application/json", JSON.stringify(asset));
     e.dataTransfer.effectAllowed = "copy";
+
+    // Signal which asset is being dragged so timeline tracks can highlight
+    setDraggingAsset(asset);
 
     // Create a drag image that's a copy of the card
     const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
@@ -74,14 +80,14 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
     }, 0);
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    console.log(`drag ended ${e}`);
+  const handleDragEnd = (_e: React.DragEvent) => {
+    setDraggingAsset(null);
   };
 
   // Helper function to update loading state for specific asset and action
   const setAssetLoadingState = (
     assetId: string,
-    action: "timeline" | "backpack",
+    action: "timeline",
     isLoading: boolean
   ) => {
     setLoadingStates((prev) => ({
@@ -243,39 +249,6 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
     } finally {
       // Clear loading state for this specific asset
       setAssetLoadingState(asset._id, "timeline", false);
-    }
-  };
-
-  const handleAddToBackpack = async (asset: Asset) => {
-    try {
-      // Set loading state for this specific asset
-      setAssetLoadingState(asset._id, "backpack", true);
-
-      const response = await api.post<{ success: boolean; message?: string }>("/backpack/items", {
-        itemType: "Asset",
-        itemId: asset._id,
-        source: "project",
-        sourceId: asset.projectId,
-        favourite: false,
-        tags: [],
-        notes: "",
-      });
-
-      if (response.data.success === true) {
-        asset.isAddedToBackpack = true;
-        toast.success("Successfully added template to backpack");
-      } else {
-        throw Error("Error came in saving template item to backpack");
-      }
-    } catch (error: any) {
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          "Error saving Asset to backpack"
-      );
-    } finally {
-      // Clear loading state for this specific asset
-      setAssetLoadingState(asset._id, "backpack", false);
     }
   };
 
@@ -668,7 +641,6 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
           getOriginLabel={getOriginLabel}
           handleDragEnd={handleDragEnd}
           handleAddToTimeline={handleAddToTimeline}
-          handleAddToBackPack={handleAddToBackpack}
           handleDragStart={handleDragStart}
           formatDuration={formatDuration}
           formatFileSize={formatFileSize}

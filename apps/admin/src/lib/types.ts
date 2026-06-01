@@ -257,6 +257,66 @@ export interface JobsListResponse {
   limit: number;
 }
 
+// --------------- §4.1: Job Detail / Ticket Timeline ---------------
+
+export type StageId =
+  | 'rag_enhance'
+  | 'agent_plan'
+  | 'agent_code'
+  | 'render'
+  | 'agent_debug'
+  | 'tts'
+  | 'concat'
+  | 'upload';
+
+export type StageService =
+  | 'stitcher-api'
+  | 'stitcher-rag'
+  | 'stitcher-agent'
+  | 'stitcher-render';
+
+export interface JobStageTokens {
+  input: number;
+  output: number;
+  total: number;
+}
+
+export interface JobStage {
+  stage: StageId;
+  service: StageService;
+  sceneIndex?: number;
+  status: 'ok' | 'failed';
+  error?: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  tokens?: JobStageTokens;
+  model?: string;
+  outputSummary?: string;
+  /** Generated Manim code at time of failure — shown in collapsible code block. */
+  failedCode?: string;
+}
+
+export interface JobDetail {
+  _id: string;
+  jobId: string;
+  queue: JobQueue;
+  userId: string;
+  prompt: string;
+  status: JobStatus;
+  sceneProgress: SceneProgress;
+  error?: string;
+  traceId?: string;
+  finalUrl?: string;
+  startedAt: string;
+  completedAt?: string;
+  tokens?: { input: number; output: number };
+  costUsd?: number;
+  stages: JobStage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // --------------- §2b: Admin Metrics — Content ---------------
 
 export interface ProjectByStatus {
@@ -478,4 +538,97 @@ export interface AuditLogResponse {
 export interface DateRange {
   from: Date;
   to: Date;
+}
+
+// --------------- RLHF — Feature 1 + 2 + 3 ---------------
+
+export type CurationStatus = 'unreviewed' | 'approved' | 'rejected';
+
+/** Extended JobRow with RLHF fields returned by /admin/metrics/generations/list */
+export interface JobRowRlhf extends JobRow {
+  rating: number | null;
+  ratedAt?: string;
+  curationStatus: CurationStatus;
+  debugInvoked: boolean;
+  debugResolved: boolean;
+  createdAt: string;
+}
+
+/** Extended JobsListResponse with RLHF rows */
+export interface JobsListRlhfResponse {
+  jobs: JobRowRlhf[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** Extended JobDetail with RLHF fields */
+export interface JobDetailRlhf extends JobDetail {
+  rating: number | null;
+  ratedAt?: string;
+  curationStatus: CurationStatus;
+  debugInvoked: boolean;
+  debugResolved: boolean;
+}
+
+// --------------- RLHF — RAG retrieval trace ---------------
+
+export interface RetrievalCandidate {
+  id: string;
+  title: string;
+  score: number;
+  apisUsed?: string[];
+}
+
+export interface RetrievalSelectResult {
+  method: string;
+  selected: Array<{ id: string; title: string; apisUsed?: string[] }>;
+  coveredApis: string[];
+}
+
+export interface RetrievalEmbedInfo {
+  provider: string;
+  model: string;
+  dims: number;
+}
+
+export interface RetrievalTrace {
+  searchQuery: string;
+  dense: RetrievalCandidate[];
+  sparse: RetrievalCandidate[];
+  merged: RetrievalCandidate[];
+  topK: number;
+  select: RetrievalSelectResult;
+  embed: RetrievalEmbedInfo;
+}
+
+/** One LLM I/O record from GET /admin/rlhf/generations/:jobId/llm-io */
+export interface LlmIoEntry {
+  stage: string;
+  sceneIndex?: number;
+  attempt: number;
+  role: string;
+  provider: string;
+  llmModel: string;
+  systemPrompt: string;
+  userPrompt: string;
+  fullInput?: unknown;
+  rawOutput: string;
+  tokensUsed?: number;
+  error?: string;
+  createdAt: string;
+  /** Present on stage="rag_enhance" / role="retrieval" rows — renders as RAG panel instead of LLM I/O */
+  retrievalTrace?: RetrievalTrace;
+}
+
+/** POST /admin/rlhf/rag/sync response */
+export interface RagSyncResponse {
+  synced: number;
+  failed: number;
+}
+
+/** POST /admin/rlhf/generations/:jobId/curate response — returns updated job fields */
+export interface CurateResponse {
+  curationStatus: CurationStatus;
+  jobId: string;
 }

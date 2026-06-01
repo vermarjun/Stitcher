@@ -66,13 +66,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
   };
 
   const handleDeleteAccount = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete your account? This action cannot be undone."
-      )
-    ) {
-      return;
-    }
+    // Confirmation is handled by the typed-confirmation dialog in DangerTab.
     setLoading(true);
     try {
       await api.delete<any>("/users/me");
@@ -110,7 +104,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
       <Header user={user} />
 
       {/* Single-column settings: Profile, Security, then Danger Zone */}
-      <div className="px-4 md:px-6 max-w-5xl mx-auto pb-20 space-y-6 md:space-y-8">
+      <div className="mx-auto max-w-3xl space-y-5 px-4 pb-20 md:px-6">
         <ProfileTab />
         <PasswordTab
           passwordData={passwordData}

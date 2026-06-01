@@ -1,6 +1,7 @@
 import React, {
   useState,
   useRef,
+  useEffect,
   type ChangeEvent,
   type MouseEvent,
 } from "react";
@@ -54,9 +55,24 @@ const AuthPage: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [dustParticles, setDustParticles] = useState<DustParticle[]>([]);
   const [isLoading, setLoading] = useState(false);
+  // Which method the user last authenticated with on this device ("google" |
+  // "password"), read from localStorage. Drives the "Last used" hint badge.
+  const [lastMethod, setLastMethod] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
+
+  // On mount: (1) if the API client logged us out (e.g. expired session) it
+  // leaves a note in localStorage — surface it as a toast so the redirect isn't
+  // silent. (2) Load the last-used auth method for the hint badge.
+  useEffect(() => {
+    const notice = localStorage.getItem("authNotice");
+    if (notice === "session_expired") {
+      toast.error("Your session expired — please sign in again.");
+    }
+    localStorage.removeItem("authNotice");
+    setLastMethod(localStorage.getItem("lastAuthMethod"));
+  }, []);
 
   const createDustParticles = (): void => {
     if (!formRef.current) return;
@@ -142,6 +158,7 @@ const AuthPage: React.FC = () => {
 
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("lastAuthMethod", "password");
         // Reconnect socket so the new JWT lands in the handshake.auth.token
         if (socket.connected) socket.disconnect();
         socket.connect();
@@ -196,6 +213,7 @@ const AuthPage: React.FC = () => {
 
         localStorage.setItem("token", loginResponse.data.token);
         localStorage.setItem("user", JSON.stringify(normalizedUser));
+        localStorage.setItem("lastAuthMethod", "password");
 
         if (socket.connected) socket.disconnect();
         socket.connect();
@@ -268,6 +286,12 @@ const AuthPage: React.FC = () => {
     </svg>
   );
 
+  const LastUsedPill = ({ label = "Last used" }: { label?: string }) => (
+    <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-300 shadow-sm shadow-black/30">
+      {label}
+    </span>
+  );
+
   const responseGoogle = async (authResult:any) => {
     try {
       setLoading(true)
@@ -277,6 +301,7 @@ const AuthPage: React.FC = () => {
 
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("lastAuthMethod", "google");
         if (socket.connected) socket.disconnect();
         socket.connect();
         toast.success(`Welcome ${user.username}! Let's get some Stitching Done.`);
@@ -385,14 +410,21 @@ const AuthPage: React.FC = () => {
             </div>
 
             {/* Google Auth Button */}
-            <button
-              type="button"
-              className="w-full text-sm bg-gray-900 hover:bg-gray-800 border border-gray-800 text-white py-2 px-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-300 hover:border-gray-700 group font-medium"
-              onClick={()=>googleLogin()}
-            >
-              <GoogleIcon />
-              <span>Continue with Google</span>
-            </button>
+            <div className="relative">
+              {lastMethod === "google" && (
+                <span className="absolute -top-3 left-3 z-10">
+                  <LastUsedPill />
+                </span>
+              )}
+              <button
+                type="button"
+                className="w-full text-sm bg-gray-900 hover:bg-gray-800 border border-gray-800 text-white py-2 px-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-300 hover:border-gray-700 group font-medium"
+                onClick={()=>googleLogin()}
+              >
+                <GoogleIcon />
+                <span>Continue with Google</span>
+              </button>
+            </div>
 
             {/* Improved divider */}
             <div className="relative mt-6 mb-3 flex items-center">
@@ -452,6 +484,11 @@ const AuthPage: React.FC = () => {
 
                 {/* Email field */}
                 <div className="relative">
+                  {lastMethod === "password" && isLogin && (
+                    <span className="absolute -top-3 right-3 z-10">
+                      <LastUsedPill />
+                    </span>
+                  )}
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Mail className="h-4 w-4 text-gray-500" />
                   </div>
@@ -555,7 +592,7 @@ const AuthPage: React.FC = () => {
                 </div>
 
                 {/* Submit Button */}
-                <div className="">
+                <div>
                   <button
                     type="button"
                     onClick={handleSubmit}
@@ -570,10 +607,10 @@ const AuthPage: React.FC = () => {
                         </div>
                       ) : (
                         // Normal button content
-                        <>
+                        <span className="flex items-center justify-center gap-2">
                           <span>{isLogin ? "Sign in" : "Create account"}</span>
                           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-                        </>
+                        </span>
                       )}
                     </span>
                   </button>

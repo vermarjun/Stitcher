@@ -45,7 +45,7 @@ interface Scene {
 
 export type Message = {
   _id?: string;
-  content: string | IAssistant; 
+  content: string | IAssistant;
   role: "user" | "assistant";
   timestamp: string | Date;
   scenes: Scene[];
@@ -53,6 +53,7 @@ export type Message = {
   completed: boolean;
   plannerOut: boolean;
   generatorOutput: boolean;
+  rating?: number;
 };
 
 export const messageActions = {

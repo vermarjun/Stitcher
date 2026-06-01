@@ -1,6 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, useState } from "react";
 import { ScrollArea } from "@/Components/ui/scroll-area";
-import { AlertCircle, ChevronDown, ChevronUp, Copy, Mic } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp, Copy, Mic, Lock, Star } from "lucide-react";
 import { messageActions, type Message } from "./Main.rightsidebar";
 import EmptyState from "./EmptyState.rightsidebar";
 import MessageBubble from "./MessageBubble.rightsidebar";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import type { Project, IUser, Asset, GenerationOptions } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
 import { useRefreshHeader } from "../context";
-import { socket } from "@/socket";
+import { socket, setActiveChat } from "@/socket";
 
 interface Props {
   currentProject?: Project;
@@ -29,6 +29,69 @@ interface Props {
   droppedItems?: Asset[];
   onRemoveItem?: (id: string) => void;
 }
+
+/** Mirror of the same helper in MessageBubble — avoids cross-file import. */
+function isVideoUrl(value: string): boolean {
+  if (!value) return false;
+  try {
+    if (!/^https?:\/\//i.test(value.trim())) return false;
+    if (/res\.cloudinary\.com\/.+\/video\//i.test(value)) return true;
+    const pathname = new URL(value).pathname.toLowerCase();
+    if (pathname.endsWith(".mp4") || pathname.endsWith(".webm")) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** RLHF star-rating widget shown below a completed video message. */
+const StarRatingWidget = ({
+  chatId,
+  onRated,
+}: {
+  chatId: string;
+  onRated: () => void;
+}) => {
+  const [hovered, setHovered] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleClick = async (n: number) => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await api.patch(`/generatechat/${chatId}/rating`, { rating: n });
+    } catch {
+      // best-effort — hide widget regardless
+    }
+    onRated();
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1 mb-2 ml-9">
+      <span className="text-xs text-zinc-500">How would you rate this video?</span>
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            disabled={submitting}
+            onMouseEnter={() => setHovered(n)}
+            onMouseLeave={() => setHovered(0)}
+            onClick={() => handleClick(n)}
+            className="p-0.5 text-zinc-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
+            aria-label={`Rate ${n} star${n !== 1 ? "s" : ""}`}
+          >
+            <Star
+              className="w-3.5 h-3.5"
+              fill={hovered >= n ? "#facc15" : "none"}
+              stroke={hovered >= n ? "#facc15" : "currentColor"}
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // Helper function to format error messages
 const formatErrorMessage = (error: any): string => {
@@ -104,6 +167,9 @@ const GenerateComponent = ({
   onRemoveItem
 }: Props) => {
   const { triggerHeaderRefresh } = useRefreshHeader()
+  // Viewers are read-only: they cannot spend credits / generate. Default
+  // permissive when the role is unknown (older project payloads).
+  const canEdit = (currentProject?.myRole ?? "owner") !== "viewer";
   const plannerOutputRef = useRef("");
   const streamSummaryRef = useRef(false);
   const llmSummaryRef = useRef("");
@@ -113,6 +179,12 @@ const GenerateComponent = ({
   const [pollingStatus, setPollingStatus] = useState<
     "generating" | "planning" | "generating-scenes" | "concat" | null
   >(null);
+  // Ref to the active resumable-poll interval so we can cancel it.
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Tracks whether a job_complete/job_failed was received (idempotency guard).
+  const jobCompletedRef = useRef(false);
+  // Tracks which chatId the current poll is running for (avoids cross-chat leaks).
+  const pollChatIdRef = useRef<string | null>(null);
   // Rich live progress: stable log of step events shown beneath the spinner.
   type ProgressStep = {
     id: string;
@@ -141,6 +213,127 @@ const GenerateComponent = ({
       return next;
     });
   };
+  /** Stop the running resumable-poll interval (if any). */
+  const stopPoll = () => {
+    if (pollTimerRef.current !== null) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollChatIdRef.current = null;
+  };
+
+  /**
+   * Apply a failed state to the last assistant message.
+   * Shared by socket job_failed handler and poll — idempotent.
+   */
+  const applyFailure = (errMsg: string) => {
+    setMessages((prev) => {
+      const updated = [...prev];
+      const lastIdx = updated.length - 1;
+      if (lastIdx >= 0 && updated[lastIdx].role === "assistant" && !updated[lastIdx].completed) {
+        updated[lastIdx] = {
+          ...updated[lastIdx],
+          content: { plannerOutput: "", llmResponse: `error: ${errMsg}` },
+          completed: true,
+        };
+      }
+      return updated;
+    });
+    upsertStep("failed", `Generation failed: ${errMsg}`, "failed");
+    toast.error(`Generation failed: ${errMsg}`);
+    setIsProcessing(false);
+    setPollingStatus(null);
+    jobCompletedRef.current = true;
+    stopPoll();
+  };
+
+  /**
+   * Apply a finalUrl received either from socket or poll, updating the last
+   * assistant message.  Idempotent — safe to call from both paths.
+   * If the message is already completed (socket beat us), this is a no-op.
+   */
+  const applyCompletionResult = (finalUrl: string | undefined) => {
+    setMessages((prevMessages) => {
+      const updated = [...prevMessages];
+      const lastIdx = updated.length - 1;
+      if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+        // Don't overwrite if already completed (socket beat poll, or reload found history)
+        if (updated[lastIdx].completed) return prevMessages;
+        updated[lastIdx] = {
+          ...updated[lastIdx],
+          content: {
+            plannerOutput:
+              typeof updated[lastIdx].content === "object"
+                ? (updated[lastIdx].content as any)?.plannerOutput || ""
+                : "",
+            llmResponse: finalUrl || "Video ready.",
+          },
+          completed: true,
+        };
+      }
+      return updated;
+    });
+    upsertStep("done", "Generation complete ✓", "done");
+    toast.success("Video generated!");
+    // A final video URL renders as a <video> player (not streamed text), so the
+    // LiveTextStream onStreamingComplete callback never fires.  Clear loading
+    // state explicitly here so the spinner does not persist after completion.
+    setIsProcessing(false);
+    setPollingStatus(null);
+    resetProgress();
+    triggerRefresh();
+    triggerHeaderRefresh();
+    jobCompletedRef.current = true;
+    stopPoll();
+  };
+
+  /**
+   * Resumable safety-net poll: polls GET /generatechat/:chatId/status every 4 s
+   * until a terminal status arrives.  Can be started from:
+   *   • state reconciliation on load (when job is still in-flight on mount)
+   *   • handleSubmit (as a fallback if socket events don't arrive)
+   * Idempotent with the socket handlers — both funnel into applyCompletionResult
+   * / applyFailure which guard on message.completed.
+   * Stops itself on terminal status, unmount, or chat switch.
+   */
+  const startResumablePoll = (chatId: string) => {
+    // Stop any poll running for a previous chat.
+    stopPoll();
+    // Reset completion flag only when starting for a new/fresh job from submit.
+    // When called from reconciliation on load, we leave jobCompletedRef as-is
+    // (it starts false, which is correct for an in-flight job).
+    pollChatIdRef.current = chatId;
+
+    const intervalMs = 4_000;
+
+    const doPoll = async () => {
+      // If the chat switched or job completed via socket, stop silently.
+      if (pollChatIdRef.current !== chatId || jobCompletedRef.current) {
+        stopPoll();
+        return;
+      }
+      try {
+        const res = await api.get<{ success: boolean; data?: { status?: string; finalUrl?: string } }>(
+          `/generatechat/${chatId}/status`
+        );
+        const statusData = res.data?.data;
+        const status = statusData?.status;
+        if (status === "completed" || status === "complete") {
+          applyCompletionResult(statusData?.finalUrl);
+        } else if (status === "failed" || status === "cancelled") {
+          applyFailure(status === "cancelled" ? "cancelled" : "Generation failed.");
+        }
+        // queued|planning|rendering|concatenating|uploading → keep polling
+      } catch {
+        // Network error or 404 — keep polling silently.
+      }
+    };
+
+    // Fire immediately, then every intervalMs.
+    void doPoll();
+    pollTimerRef.current = setInterval(() => void doPoll(), intervalMs);
+  };
+
   useImperativeHandle(ref, () => ({
     handleNewChat: () => {},
     handleExportChat,
@@ -151,14 +344,12 @@ const GenerateComponent = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Cleanup
+  // Cleanup: stop poll and clear active-chat tracker when the component unmounts.
   useEffect(() => {
     return () => {
-       socket.disconnect();
-       socket.connect(); // Reconnect fresh on remount if needed, or just let autoConnect handle it.
-       // Actually typically we don't disconnect on component unmount if socket is global, 
-       // but we might want to leave the room?
-       // For now, no explicit cleanup needed for global socket except listeners.
+      stopPoll();
+      setActiveChat(null);
+      // Socket is a global singleton — do not disconnect here.
     };
   }, []);
 
@@ -172,12 +363,133 @@ const GenerateComponent = ({
       triggerHeaderRefresh();
   };
 
-  // Socket Event Listeners
+  // ─── State reconciliation on load / chat switch ──────────────────────────
+  // Whenever a chat becomes active (mount, reload, chat switch), after history
+  // is already loaded by the parent, query the backend status endpoint and
+  // reconcile the UI to match the persisted job state.
+  // This ensures a page reload during or after generation always shows the
+  // correct state instead of a blank/loading screen.
   useEffect(() => {
     if (!currentChatId) return;
 
-    // Join the chat room
+    // Stop any poll from the previous chat and reset completion flag.
+    stopPoll();
+    jobCompletedRef.current = false;
+
+    let cancelled = false; // guard for async stale closure
+
+    const reconcile = async () => {
+      try {
+        const res = await api.get<{
+          success: boolean;
+          data?: { jobId?: string; status?: string; finalUrl?: string; sceneProgress?: unknown };
+        }>(`/generatechat/${currentChatId}/status`);
+
+        if (cancelled) return;
+
+        const statusData = res.data?.data;
+        const status = statusData?.status;
+
+        if (!status || status === "idle" || !statusData?.jobId) {
+          // No active job — nothing to reconcile.
+          return;
+        }
+
+        const inFlightStatuses = ["queued", "planning", "rendering", "concatenating", "uploading"];
+
+        if (inFlightStatuses.includes(status)) {
+          // Job is still running: show the in-progress indicator and resume polling.
+          // Add a placeholder assistant message only if the last message isn't already
+          // an in-progress assistant message.
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === "assistant" && !last.completed) {
+              // Already has an in-progress placeholder — keep it.
+              return prev;
+            }
+            // Append a placeholder so the spinner renders.
+            const placeholder: Message = {
+              _id: `resume_${Date.now()}`,
+              content: { plannerOutput: "", llmResponse: "" },
+              role: "assistant",
+              timestamp: new Date().toISOString(),
+              scenes: [],
+              projectDescription: "",
+              completed: false,
+              plannerOut: false,
+              generatorOutput: false,
+            };
+            return [...prev, placeholder];
+          });
+          setIsProcessing(true);
+          setPollingStatus("planning"); // generic in-progress label until socket events arrive
+          // Re-join the socket room so live events resume.
+          socket.emit("join_chat", currentChatId);
+          setActiveChat(currentChatId);
+          // Start the resumable poll as the safety net.
+          startResumablePoll(currentChatId);
+        } else if (status === "complete" || status === "completed") {
+          // Job already finished: ensure the last assistant message shows the video.
+          // History from the parent usually already has it; this is a defensive patch.
+          if (statusData.finalUrl) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "assistant" && !updated[lastIdx].completed) {
+                updated[lastIdx] = {
+                  ...updated[lastIdx],
+                  content: {
+                    plannerOutput:
+                      typeof updated[lastIdx].content === "object"
+                        ? (updated[lastIdx].content as any)?.plannerOutput || ""
+                        : "",
+                    llmResponse: statusData.finalUrl!,
+                  },
+                  completed: true,
+                };
+              }
+              return updated;
+            });
+          }
+          setIsProcessing(false);
+          jobCompletedRef.current = true;
+        } else if (status === "failed" || status === "cancelled") {
+          // Job ended in failure.
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === "assistant" && !updated[lastIdx].completed) {
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                content: { plannerOutput: "", llmResponse: `error: Generation ${status}.` },
+                completed: true,
+              };
+            }
+            return updated;
+          });
+          setIsProcessing(false);
+          jobCompletedRef.current = true;
+        }
+      } catch {
+        // Status endpoint unavailable (e.g. no job ever created) — ignore silently.
+      }
+    };
+
+    void reconcile();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChatId]);
+
+  // ─── Socket Event Listeners ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentChatId) return;
+
+    // Join the chat room and register as the active chat for reconnect re-join.
     socket.emit('join_chat', currentChatId);
+    setActiveChat(currentChatId);
 
   const handleUpdate = (event: any) => {
     console.log("Socket Event:", event);
@@ -260,58 +572,16 @@ const GenerateComponent = ({
 
     if (type === "job_complete") {
       upsertStep("concat", "Stitched final video", "done");
-      upsertStep("done", "Generation complete ✓", "done");
-
       const finalUrl: string | undefined = data?.finalUrl ?? data?.cloudinaryUrl;
-      setMessages((prevMessages) => {
-        const updated = [...prevMessages];
-        const lastIdx = updated.length - 1;
-        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-          updated[lastIdx] = {
-            ...updated[lastIdx],
-            content: {
-              plannerOutput:
-                typeof updated[lastIdx].content === "object"
-                  ? updated[lastIdx].content?.plannerOutput || ""
-                  : "",
-              llmResponse: finalUrl || "Video ready.",
-            },
-            completed: true,
-          };
-        }
-        return updated;
-      });
-      toast.success(
-        totalScenes
-          ? `Video generated! ${completedScenes + 1}/${totalScenes} scenes`
-          : "Video generated!"
-      );
-      // The progress UI clears via handleStreamingComplete after LiveTextStream
-      // finishes typing the final URL.
+      // Funnel into shared idempotent handler (clears loading, stops poll, etc.)
+      applyCompletionResult(finalUrl);
       return;
     }
 
     if (type === "job_failed") {
       const err = data?.error ?? "unknown error";
-      upsertStep("failed", `Generation failed: ${err}`, "failed");
-      toast.error(`Generation failed: ${err}`);
-      setMessages((prevMessages) => {
-        const updated = [...prevMessages];
-        const lastIdx = updated.length - 1;
-        if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-          updated[lastIdx] = {
-            ...updated[lastIdx],
-            content: {
-              plannerOutput: "",
-              llmResponse: `error: ${err}`,
-            },
-            completed: true,
-          };
-        }
-        return updated;
-      });
-      setIsProcessing(false);
-      setPollingStatus(null);
+      // Funnel into shared idempotent handler.
+      applyFailure(String(err));
       return;
     }
 
@@ -365,14 +635,20 @@ const GenerateComponent = ({
     socket.on('chat_update', handleUpdate);
 
     return () => {
-        socket.off('chat_update', handleUpdate);
-        
-        // Clear cleanup if needed (refs are handled by React)
+      socket.off('chat_update', handleUpdate);
+      // On chat switch, stop any poll running for the outgoing chat and clear
+      // the active-chat tracker so reconnect doesn't re-join a stale room.
+      stopPoll();
+      setActiveChat(null);
     };
   }, [currentChatId, triggerRefresh]);
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
+    if (!canEdit) {
+      toast.error("You have viewer-only access to this project.");
+      return;
+    }
     triggerHeaderRefresh();
 
     const userMessage = messageActions.createMessage(input.trim(), "user");
@@ -439,6 +715,12 @@ const GenerateComponent = ({
         // Change status to planning. Socket connection in useEffect will handle updates
         setPollingStatus("planning");
         socket.emit('join_chat', chatIdToUse);
+        setActiveChat(chatIdToUse);
+
+        // Start the resumable safety-net poll. It cancels itself when socket
+        // delivers job_complete / job_failed first (idempotency guard).
+        jobCompletedRef.current = false;
+        startResumablePoll(chatIdToUse);
       } else {
         toast.error((response.data as any).message);
         throw new Error((response.data as any).message);
@@ -470,6 +752,8 @@ const GenerateComponent = ({
 
       if ((response.data as any).success) {
         toast.success("Generation cancelled");
+        jobCompletedRef.current = true;
+        stopPoll();
         setIsProcessing(false);
         setPollingStatus(null);
 
@@ -741,6 +1025,33 @@ const GenerateComponent = ({
     return { text, progress };
   };
 
+  // Read-only bar shown in place of the message input for viewers.
+  const ViewerLockedBar = () => (
+    <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400">
+      <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+      <span>
+        You have <span className="text-amber-300 font-medium">viewer-only</span> access — AI generation is disabled.
+      </span>
+    </div>
+  );
+
+  // The input bar: the real composer for editors/owners, a disabled notice for viewers.
+  const inputBar = canEdit ? (
+    <MessageInput
+      input={input}
+      setInput={setInput}
+      onSubmit={handleSubmit}
+      isProcessing={isProcessing}
+      placeholder={getPlaceholder()}
+      onCancel={handleCancelGeneration}
+      onAssetDrop={onAssetDrop}
+      droppedItems={droppedItems}
+      onRemoveItem={onRemoveItem}
+    />
+  ) : (
+    <ViewerLockedBar />
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {messages.length === 0 ? (
@@ -750,17 +1061,7 @@ const GenerateComponent = ({
             <QuickPrompts mode="generate" onPromptSelect={handlePromptSelect} />
           </div>
           <VoiceoverToggle />
-          <MessageInput
-            input={input}
-            setInput={setInput}
-            onSubmit={handleSubmit}
-            isProcessing={isProcessing}
-            placeholder={getPlaceholder()}
-            onCancel={handleCancelGeneration}
-            onAssetDrop={onAssetDrop}
-            droppedItems={droppedItems}
-            onRemoveItem={onRemoveItem}
-          />
+          {inputBar}
         </>
       ) : (
         <>
@@ -779,6 +1080,21 @@ const GenerateComponent = ({
                   return null; // Don't render the last assistant message while processing
                 }
 
+                // Determine whether to show the RLHF star-rating widget.
+                // Conditions: last message, assistant, completed, video URL, not yet rated, not currently processing.
+                const llmResp =
+                  typeof message.content === "object" && message.content !== null
+                    ? (message.content as { plannerOutput: string; llmResponse: string }).llmResponse
+                    : "";
+                const showRating =
+                  isLastMessage &&
+                  message.role === "assistant" &&
+                  message.completed &&
+                  isVideoUrl(llmResp) &&
+                  !message.rating &&
+                  !isProcessing &&
+                  !!currentChatId;
+
                 return (
                   <div key={message._id || index} className="break-words">
                     {typeof message.content === "string" &&
@@ -795,6 +1111,18 @@ const GenerateComponent = ({
                         llmSummaryRef={llmSummaryRef}
                         isProcessing={isProcessing}
                         onStreamingComplete={handleStreamingComplete}
+                      />
+                    )}
+                    {showRating && (
+                      <StarRatingWidget
+                        chatId={currentChatId!}
+                        onRated={() =>
+                          setMessages((prev) => {
+                            const updated = [...prev];
+                            updated[index] = { ...updated[index], rating: -1 }; // -1 = rated, hides widget
+                            return updated;
+                          })
+                        }
                       />
                     )}
                   </div>
@@ -880,17 +1208,7 @@ const GenerateComponent = ({
           </ScrollArea>
 
           <VoiceoverToggle />
-          <MessageInput
-            input={input}
-            setInput={setInput}
-            onSubmit={handleSubmit}
-            isProcessing={isProcessing}
-            placeholder={getPlaceholder()}
-            onCancel={handleCancelGeneration}
-            onAssetDrop={onAssetDrop}
-            droppedItems={droppedItems}
-            onRemoveItem={onRemoveItem}
-          />
+          {inputBar}
         </>
       )}
     </div>

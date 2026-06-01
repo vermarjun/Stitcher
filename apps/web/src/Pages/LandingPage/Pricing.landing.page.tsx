@@ -6,7 +6,6 @@ import {
   Rocket,
   ExternalLink,
 } from "lucide-react";
-import { Toaster } from "sonner";
 import { ShineBorder } from "../../Components/magicui/shine-border";
 
 // Razorpay type declaration
@@ -76,19 +75,6 @@ const PaymentPage = () => {
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
       <div className="fixed bottom-0 right-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
-
-      <Toaster
-        position="top-center"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: "#18181b",
-            border: "1px solid #27272a",
-            color: "#fff",
-            fontSize: "14px",
-          },
-        }}
-      />
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10 w-full">
         

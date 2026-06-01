@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AreaChart,
   Area,
@@ -14,8 +15,11 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { ExternalLink, Activity, Clock, RotateCcw, Film, XCircle, CheckCircle2, Hash } from 'lucide-react';
+import { ExternalLink, Activity, Clock, RotateCcw, Film, XCircle, CheckCircle2, Hash, Star, Check, X, Bug, RefreshCw } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import api from '@/lib/api';
 
 import { PageHeader } from '@/components/PageHeader';
 import { DateRangePicker, presetToRange } from '@/components/DateRangePicker';
@@ -44,11 +48,13 @@ import { useAdminQuery } from '@/lib/useAdminQuery';
 import { formatDuration, formatRelative, formatNumber } from '@/lib/format';
 import type {
   GenerationsMetrics,
-  JobsListResponse,
-  JobRow,
   JobStatus,
   JobQueue,
   DateRange,
+  JobRowRlhf,
+  JobsListRlhfResponse,
+  CurationStatus,
+  RagSyncResponse,
 } from '@/lib/types';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -310,9 +316,145 @@ function RecentPromptsFeed({ data }: { data: GenerationsMetrics['recentPrompts']
   );
 }
 
+// ── RLHF helpers ──────────────────────────────────────────────────────────────
+
+/** Render 5 stars filled to `rating`, or a muted "unrated" chip. */
+function RatingStars({ rating }: { rating: number | null }) {
+  if (rating == null) {
+    return <span className="text-[10px] text-muted-foreground italic">unrated</span>;
+  }
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          className={`h-3 w-3 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Green ✓ / red ✗ curate buttons + status chip. */
+function CurateControls({
+  jobId,
+  curationStatus,
+  onSuccess,
+}: {
+  jobId: string;
+  curationStatus: CurationStatus;
+  onSuccess: () => void;
+}) {
+  const mutation = useMutation({
+    mutationFn: (decision: 'approve' | 'reject') =>
+      api.post(`/admin/rlhf/generations/${jobId}/curate`, { decision }).then((r) => r.data),
+    onSuccess: (_data, decision) => {
+      toast.success(`Job ${decision === 'approve' ? 'approved' : 'rejected'}`);
+      onSuccess();
+    },
+    onError: () => toast.error('Curation failed'),
+  });
+
+  const chipClass =
+    curationStatus === 'approved'
+      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+      : curationStatus === 'rejected'
+      ? 'bg-destructive/15 text-destructive border-destructive/30'
+      : 'bg-muted/40 text-muted-foreground border-border';
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${chipClass} capitalize whitespace-nowrap`}>
+        {curationStatus}
+      </span>
+      <button
+        type="button"
+        title="Approve"
+        disabled={mutation.isPending || curationStatus === 'approved'}
+        onClick={() => mutation.mutate('approve')}
+        className={`inline-flex items-center justify-center rounded p-0.5 transition-colors
+          ${curationStatus === 'approved'
+            ? 'text-emerald-400 bg-emerald-500/20 cursor-default'
+            : 'text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40'
+          }`}
+      >
+        <Check className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        title="Reject"
+        disabled={mutation.isPending || curationStatus === 'rejected'}
+        onClick={() => mutation.mutate('reject')}
+        className={`inline-flex items-center justify-center rounded p-0.5 transition-colors
+          ${curationStatus === 'rejected'
+            ? 'text-destructive bg-destructive/20 cursor-default'
+            : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-40'
+          }`}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/** Amber "debugged" badge, red "debug failed" if unresolved. */
+function DebugBadge({ debugInvoked, debugResolved }: { debugInvoked: boolean; debugResolved: boolean }) {
+  if (!debugInvoked) return null;
+  const resolved = debugResolved;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border
+        ${resolved
+          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+          : 'bg-destructive/15 text-destructive border-destructive/30'
+        }`}
+    >
+      <Bug className="h-2.5 w-2.5" />
+      {resolved ? 'debugged' : 'debug failed'}
+    </span>
+  );
+}
+
+/** Wrapper so we can call useQueryClient() inside a component per-row. */
+function CurateCell({ row }: { row: JobRowRlhf }) {
+  const qc = useQueryClient();
+  return (
+    <CurateControls
+      jobId={row.jobId || row._id}
+      curationStatus={row.curationStatus}
+      onSuccess={() => void qc.invalidateQueries({ queryKey: ['generations-list'] })}
+    />
+  );
+}
+
+/** Sync approved → RAG header button */
+function SyncRagButton() {
+  const mutation = useMutation({
+    mutationFn: (): Promise<RagSyncResponse> =>
+      api.post('/admin/rlhf/rag/sync').then((r) => r.data),
+    onSuccess: (data) => {
+      toast.success(`RAG sync complete — ${data.synced} synced, ${data.failed} failed`);
+    },
+    onError: () => toast.error('RAG sync failed'),
+  });
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-1.5 h-8 text-xs"
+      onClick={() => mutation.mutate()}
+      disabled={mutation.isPending}
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${mutation.isPending ? 'animate-spin' : ''}`} />
+      Sync approved → RAG
+    </Button>
+  );
+}
+
 // ── Jobs table columns ─────────────────────────────────────────────────────────
 
-const jobColumns: ColumnDef<JobRow, unknown>[] = [
+const jobColumns: ColumnDef<JobRowRlhf, unknown>[] = [
   {
     accessorKey: 'prompt',
     header: 'Prompt',
@@ -347,7 +489,7 @@ const jobColumns: ColumnDef<JobRow, unknown>[] = [
     accessorKey: 'sceneProgress',
     header: 'Scenes',
     cell: ({ row }) => {
-      const { done, total } = row.original.sceneProgress;
+      const { done, total } = row.original.sceneProgress ?? { done: 0, total: 0 };
       return (
         <span className="text-xs tabular-nums">
           {done}/{total}
@@ -401,6 +543,44 @@ const jobColumns: ColumnDef<JobRow, unknown>[] = [
       );
     },
   },
+  {
+    id: 'rating',
+    header: 'Rating',
+    cell: ({ row }) => <RatingStars rating={row.original.rating} />,
+  },
+  {
+    id: 'curation',
+    header: 'Curation',
+    cell: ({ row }) => {
+      // We need the queryClient from inside a component — render a tiny wrapper
+      return <CurateCell row={row.original} />;
+    },
+  },
+  {
+    id: 'flags',
+    header: 'Flags',
+    cell: ({ row }) => (
+      <DebugBadge
+        debugInvoked={row.original.debugInvoked}
+        debugResolved={row.original.debugResolved}
+      />
+    ),
+  },
+  {
+    id: 'detail',
+    header: '',
+    cell: ({ row }) => {
+      const id = row.original.jobId || row.original._id;
+      return (
+        <Link
+          to={`/generation/${id}`}
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
+        >
+          View detail
+        </Link>
+      );
+    },
+  },
 ];
 
 // ── Main page ──────────────────────────────────────────────────────────────────
@@ -410,6 +590,7 @@ export default function GenerationPage() {
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
   const [queueFilter, setQueueFilter] = useState<JobQueue | 'all'>('all');
   const [jobsPage, setJobsPage] = useState(0);
+  const [showDebugOnly, setShowDebugOnly] = useState(false);
 
   // ── Metrics query ──────────────────────────────────────────────────────────
   const metricsParams: Record<string, unknown> = {
@@ -434,11 +615,12 @@ export default function GenerationPage() {
   };
   if (statusFilter !== 'all') listParams.status = statusFilter;
   if (queueFilter !== 'all') listParams.queue = queueFilter;
+  if (showDebugOnly) listParams.debugInvoked = true;
 
   const {
     data: jobsData,
     isLoading: jobsLoading,
-  } = useAdminQuery<JobsListResponse>(
+  } = useAdminQuery<JobsListRlhfResponse>(
     ['generations-list', listParams],
     '/admin/metrics/generations/list',
     listParams
@@ -451,6 +633,10 @@ export default function GenerationPage() {
   };
   const handleQueueChange = (val: string) => {
     setQueueFilter(val as JobQueue | 'all');
+    setJobsPage(0);
+  };
+  const handleDebugToggle = () => {
+    setShowDebugOnly((v) => !v);
     setJobsPage(0);
   };
 
@@ -663,14 +849,29 @@ export default function GenerationPage() {
               </SelectContent>
             </Select>
 
+            {/* Debug-only filter toggle */}
+            <Button
+              variant={showDebugOnly ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              onClick={handleDebugToggle}
+            >
+              <Bug className="h-3.5 w-3.5" />
+              {showDebugOnly ? 'All jobs' : 'Flagged only'}
+            </Button>
+
+            {/* Sync approved → RAG */}
+            <SyncRagButton />
+
             {/* Reset filters */}
-            {(statusFilter !== 'all' || queueFilter !== 'all') && (
+            {(statusFilter !== 'all' || queueFilter !== 'all' || showDebugOnly) && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setStatusFilter('all');
                   setQueueFilter('all');
+                  setShowDebugOnly(false);
                   setJobsPage(0);
                 }}
               >
@@ -692,7 +893,7 @@ export default function GenerationPage() {
             description="Try adjusting the status or queue filter."
           />
         ) : (
-          <DataTable<JobRow>
+          <DataTable<JobRowRlhf>
             columns={jobColumns}
             data={jobsData.jobs}
             pageSize={PAGE_SIZE}

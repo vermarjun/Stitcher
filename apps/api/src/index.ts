@@ -68,6 +68,10 @@ import adminMetricsRoutes from "./router/adminMetrics.router";
 import adminPrometheusRoutes from "./router/adminPrometheus.router";
 import adminHealthRoutes from "./router/adminHealth.router";
 import adminActionsRoutes from "./router/adminActions.router";
+import adminProvidersRoutes from "./router/adminProviders.router";
+import adminRlhfRoutes from "./router/adminRlhf.router";
+import gatewayRoutes from "./router/gateway.router";
+import { codexAuthCallback } from "./controller/gateway.controller";
 import { startHealthPoller, stopHealthPoller } from "./services/adminHealth.service";
 import { isAdminUser } from "./middleware/admin.middleware";
 import { initYjsServer } from "./collab/yjs.server";
@@ -328,6 +332,14 @@ app.use(`${API_PREFIX}/admin/metrics`, adminMetricsRoutes);
 app.use(`${API_PREFIX}/admin/prometheus`, adminPrometheusRoutes);
 app.use(`${API_PREFIX}/admin/health`, adminHealthRoutes);
 app.use(`${API_PREFIX}/admin/actions`, adminActionsRoutes);
+app.use(`${API_PREFIX}/admin/providers`, adminProvidersRoutes);
+app.use(`${API_PREFIX}/admin/rlhf`, adminRlhfRoutes);
+// Gateway: admin management + internal proxy (Agent service calls /gateway/proxy/*)
+app.use(`${API_PREFIX}`, gatewayRoutes);
+// Codex OAuth callback — OpenAI ALWAYS redirects to http://localhost:1455/auth/callback
+// (hardcoded in OpenAI's Hydra allowlist). Port 1455 maps to this container in docker-compose.
+// This route must be at /auth/callback with NO API prefix.
+app.get('/auth/callback', codexAuthCallback);
 
 // ─── bull-board queue dashboard (OBSERVABILITY §6) ───────────────────────────
 // Instant queue/job/step visibility at ${API_PREFIX}/admin/queues.

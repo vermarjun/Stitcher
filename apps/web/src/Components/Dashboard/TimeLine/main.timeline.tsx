@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Scissors,
   Move,
@@ -32,7 +32,9 @@ import type { Awareness } from "y-protocols/awareness";
 import { usePresence } from "@/collab/usePresence";
 import TimelineCursors from "@/Components/Dashboard/Presence/TimelineCursors";
 
-import { useRefreshTracks } from "../RefreshContextProvider";
+import { useRefreshTracks, useRefreshTimeline } from "../RefreshContextProvider";
+import { useDragAsset } from "@/Components/Dashboard/DragAssetContext";
+import type { Asset } from "@/State/Types";
 
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
@@ -195,9 +197,29 @@ const TimelineEditor = ({
   const [isAddingText, setIsAddingText] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [pixelsPerSecond] = useState<number>(38);
-  const [rulerDuration] = useState<number>(
-    Math.max(50, Number(timeline.duration) + 1)
+  // ── Infinite-ish timeline canvas ────────────────────────────────────────────
+  // Real editors give you a long canvas that extends well past your content so
+  // you can place clips anywhere (with gaps) and keep scrolling — you never hit
+  // a hard "end". We size the canvas to whichever is larger: a 10-minute
+  // minimum, or the furthest clip end + 2 minutes of empty runway. It auto-grows
+  // as clips are moved/placed further out (no need to pad with dummy audio).
+  const TIMELINE_MIN_SECONDS = 600; // 10 minutes of scrollable canvas by default
+  const TIMELINE_PAD_SECONDS = 120; // always keep 2 min of empty runway past content
+  const contentEndSec = useMemo(() => {
+    let max = Number(timeline.duration) || 0;
+    for (const t of ((timeline.tracks as ITrack[]) ?? [])) {
+      for (const it of (t.items ?? [])) {
+        if (it.endTime > max) max = it.endTime;
+      }
+    }
+    return max;
+  }, [timeline]);
+  const viewDuration = Math.max(
+    Math.ceil(contentEndSec) + TIMELINE_PAD_SECONDS,
+    TIMELINE_MIN_SECONDS
   );
+  // Ruler ticks span the whole canvas so the time labels never get clipped.
+  const rulerDuration = viewDuration + 1;
   const [isLoading, setLoading] = useState(false);
   // Share/export dialog state machine.
   const [shareOpen, setShareOpen] = useState(false);
@@ -217,7 +239,7 @@ const TimelineEditor = ({
       if (!setAwarenessCursor) return;
       const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
       const xPx = e.clientX - rect.left;
-      const ts = (xPx / rect.width) * Number(timeline.duration);
+      const ts = xPx / pixelsPerSecond;
       pendingCursorRef.current = { xPx, ts };
 
       if (!cursorThrottleRef.current) {
@@ -231,7 +253,7 @@ const TimelineEditor = ({
         }, 40); // ~25fps throttle
       }
     },
-    [setAwarenessCursor, timeline.duration],
+    [setAwarenessCursor, pixelsPerSecond],
   );
 
   const handleTimelineMouseLeave = useCallback(() => {
@@ -251,8 +273,77 @@ const TimelineEditor = ({
     setAwarenessSelection?.(selectedItem?._id ?? null);
   }, [selectedItem, setAwarenessSelection]);
 
-  // Get trigger to refresh Tracks
+  // Get trigger to refresh Tracks and Timeline
   const { triggerRefresh: triggerTracksRefresh } = useRefreshTracks();
+  const { triggerRefresh: triggerTimelineRefresh } = useRefreshTimeline();
+
+  // Drag-and-drop from AssetStash
+  const { draggingAsset, setDraggingAsset } = useDragAsset();
+  const [isDropping, setIsDropping] = useState(false);
+
+  /** Maps an asset type to the track type it can be dropped on. Returns null for unsupported types. */
+  const assetTargetTrackType = (assetType: Asset["type"]): "video" | "audio" | null => {
+    if (assetType === "video") return "video";
+    if (assetType === "audio") return "audio";
+    return null;
+  };
+
+  const handleTrackDrop = async (e: React.DragEvent, track: ITrack) => {
+    e.preventDefault();
+    if (!canEdit || isDropping) return;
+
+    let asset: Asset | null = null;
+    try {
+      asset = JSON.parse(e.dataTransfer.getData("application/json")) as Asset;
+    } catch {
+      return;
+    }
+    if (!asset) return;
+
+    const validType = assetTargetTrackType(asset.type);
+    if (!validType || track.type !== validType) return;
+
+    setIsDropping(true);
+    try {
+      const requestBody = {
+        assetId: asset._id,
+        sourceStartTime: 0,
+        sourceEndTime: asset.duration,
+        speed: 1,
+        volume: 1,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        scaleX: 1,
+        scaleY: 1,
+        rotation: 0,
+        fadeIn: 0,
+        fadeOut: 0,
+      };
+      const response = await api.post<{ success: boolean; message?: string }>(
+        `/track/${track._id}/asset`,
+        requestBody
+      );
+      if (response.data.success) {
+        triggerTracksRefresh();
+        // When collab is synced, the new clip arrives via the server's Y.Doc
+        // inject + observer (hydrateFromServer then resolves its asset), so a
+        // timeline refetch would be redundant and racy. Only refetch the
+        // timeline in the non-collab path.
+        if (!_collabDoc?.synced) triggerTimelineRefresh();
+        toast.success("Successfully added to timeline");
+      } else {
+        toast.error(response.data.message || "Failed to add asset to timeline");
+      }
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.message || error.message || "An unexpected error occurred"
+      );
+    } finally {
+      setIsDropping(false);
+      setDraggingAsset(null);
+    }
+  };
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
@@ -310,10 +401,11 @@ const TimelineEditor = ({
   }, [timeline, selectedItem]);
 
   const secondsPerPixel = useCallback(() => {
-    const rect = timelineRef.current?.getBoundingClientRect();
-    if (!rect) return 0.01; // fallback
-    return Number(timeline.duration) / rect.width;
-  }, [timeline.duration]);
+    // Fixed zoom: the canvas maps exactly `pixelsPerSecond` px to one second,
+    // so seconds-per-pixel is simply its inverse — independent of canvas width.
+    // (The old `duration / rect.width` made drags slow/wrong on long canvases.)
+    return 1 / pixelsPerSecond;
+  }, [pixelsPerSecond]);
 
   const handleItemClick = (item: ITimelineItemBase, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -453,19 +545,29 @@ const TimelineEditor = ({
                   0,
                   dragData.initialSourceStart + cropDelta
                 );
-                
-                // Validate source range doesn't exceed asset duration
+
+                // Validate source range doesn't exceed asset duration — but ONLY
+                // when a real positive duration is known. An unpopulated assetId
+                // (bare id string after a collab re-derive) has no .duration; the
+                // old `|| 0` made this guard always true and FROZE the drag.
                 if (it.type === "video" || it.type === "audio") {
                   const mediaItem = it as IVideoTimelineItem | IAudioTimelineItem;
-                  const assetDuration = mediaItem.assetId?.duration || 0;
-                  if (newSourceStart >= assetDuration) {
+                  const assetDuration = mediaItem.assetId?.duration;
+                  if (typeof assetDuration === "number" && assetDuration > 0 && newSourceStart >= assetDuration) {
                     return it; // Invalid source range
                   }
                 }
-                
+
+                // Derive startTime from the CLAMPED source so the on-timeline
+                // length and the trimmed source length can never diverge. (Dragging
+                // the left edge past the start of available source no longer
+                // stretches the clip beyond the media it actually has.)
+                const appliedLeftDelta = newSourceStart - dragData.initialSourceStart;
+                const clampedStart = dragData.initialStart + appliedLeftDelta;
+
                 return {
                   ...it,
-                  startTime: newStart,
+                  startTime: clampedStart,
                   ...(it.type === "video" || it.type === "audio"
                     ? {
                         sourceStartTime: newSourceStart,
@@ -492,12 +594,16 @@ const TimelineEditor = ({
                 
                 const cropDelta = newEnd - dragData.initialEnd;
                 const newSourceEnd = dragData.initialSourceEnd + cropDelta;
-                
-                // Validate source range doesn't exceed asset duration
+
+                // Validate source range doesn't exceed asset duration — but ONLY
+                // when a real positive duration is known. The old `|| 0` made the
+                // clamp fire for ANY clip whose assetId was an unpopulated string,
+                // collapsing it to zero/negative width. Skip the clamp when the
+                // duration is unknown and let the clip resize normally.
                 if (it.type === "video" || it.type === "audio") {
                   const mediaItem = it as IVideoTimelineItem | IAudioTimelineItem;
-                  const assetDuration = mediaItem.assetId?.duration || 0;
-                  if (newSourceEnd > assetDuration) {
+                  const assetDuration = mediaItem.assetId?.duration;
+                  if (typeof assetDuration === "number" && assetDuration > 0 && newSourceEnd > assetDuration) {
                     // Clamp to asset duration
                     const clampedSourceEnd = assetDuration;
                     const clampedEnd = dragData.initialStart + (clampedSourceEnd - dragData.initialSourceStart);
@@ -557,7 +663,7 @@ const TimelineEditor = ({
 
     const onMove = (ev: MouseEvent) => {
       const x = Math.max(0, Math.min(ev.clientX - rect.left, rect.width));
-      const time = (x / rect.width) * Number(timeline.duration);
+      const time = Math.max(0, Math.min(x / pixelsPerSecond, viewDuration));
       onTimeUpdate(time);
     };
 
@@ -577,7 +683,7 @@ const TimelineEditor = ({
 
     const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const clickTime = (x / rect.width) * Number(timeline.duration);
+    const clickTime = Math.max(0, x / pixelsPerSecond);
 
     const tracks = timeline.tracks as ITrack[];
     const textTrack = tracks.find((t) => t.type === "text");
@@ -591,7 +697,7 @@ const TimelineEditor = ({
       type: "text",
       trackId: textTrack._id,
       startTime: clickTime,
-      endTime: Math.min(clickTime + 3, Number(timeline.duration)),
+      endTime: clickTime + 3,
       content: "New Text",
       fontFamily: "Arial",
       fontSize: 32,
@@ -864,9 +970,9 @@ const TimelineEditor = ({
             disabled={shareBusy || isLoading}
             className={`p-2 rounded-lg transition-all duration-200 shadow-md flex items-center gap-1 ${
               shareBusy
-                ? "bg-emerald-700 text-white shadow-emerald-700/25 animate-pulse cursor-not-allowed"
-                : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/25"
-            } border border-opacity-20 border-emerald-400`}
+                ? "bg-zinc-700 text-white animate-pulse cursor-not-allowed"
+                : "bg-zinc-100 text-black hover:bg-white shadow-white/10"
+            } border border-zinc-500/40`}
             title="Share or download this video"
           >
             {shareBusy ? (
@@ -882,92 +988,94 @@ const TimelineEditor = ({
       {/* ── Share dialog ──────────────────────────────────────────────── */}
       {shareOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
           onClick={() => !shareBusy && setShareOpen(false)}
         >
           <div
-            className="w-full max-w-md mx-4 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl p-6"
+            className="w-full max-w-[460px] rounded-xl border border-zinc-700 bg-black p-5 text-zinc-100 shadow-2xl shadow-black/60"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-zinc-100">Share video</h3>
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">Share video</h3>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Export video as an MP4 or a public Stitcher link.
+                </p>
+              </div>
               <button
                 onClick={() => !shareBusy && setShareOpen(false)}
-                className="text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
+                className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
                 disabled={shareBusy}
+                aria-label="Close share dialog"
               >
-                <X className="w-5 h-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             {sharePhase === "choose" && (
-              <div className="space-y-3">
-                <p className="text-sm text-zinc-400 mb-1">
-                  How do you want to share this video?
-                </p>
+              <div className="grid gap-2 sm:grid-cols-2">
                 <button
                   onClick={() => runExport("download")}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors text-left"
+                  className="group rounded-lg border border-zinc-700 bg-zinc-900/60 p-4 text-left transition-colors hover:bg-zinc-800/80"
                 >
-                  <Download className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <div>
-                    <div className="font-medium text-zinc-100">Download</div>
-                    <div className="text-xs text-zinc-400">Save the MP4 to your computer</div>
+                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-black text-zinc-200 group-hover:text-white">
+                    <Download className="h-4 w-4" />
+                  </div>
+                  <div className="text-sm font-medium text-white">Download MP4</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Save the rendered file locally.
                   </div>
                 </button>
                 <button
                   onClick={() => runExport("share")}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors text-left"
+                  className="group rounded-lg border border-zinc-700 bg-zinc-900/60 p-4 text-left transition-colors hover:bg-zinc-800/80"
                 >
-                  <LinkIcon className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <div>
-                    <div className="font-medium text-zinc-100">Get a shareable link</div>
-                    <div className="text-xs text-zinc-400">A Stitcher link anyone can open</div>
+                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-black text-zinc-200 group-hover:text-white">
+                    <LinkIcon className="h-4 w-4" />
+                  </div>
+                  <div className="text-sm font-medium text-white">Public link</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Create a Stitcher watch page.
                   </div>
                 </button>
               </div>
             )}
 
             {sharePhase === "working" && (
-              <div className="flex flex-col items-center gap-3 py-8 text-zinc-400">
-                <div className="animate-spin w-8 h-8 border-2 border-zinc-600 border-t-emerald-400 rounded-full" />
-                <span className="text-sm">Rendering your video… this can take a minute.</span>
+              <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/60 p-4 text-zinc-300">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+                <div>
+                  <p className="text-sm font-medium text-white">Rendering video</p>
+                  <p className="text-xs text-zinc-400">This can take a minute.</p>
+                </div>
               </div>
             )}
 
             {sharePhase === "link" && (
-              <div className="space-y-4">
-                <p className="text-sm text-zinc-400">
-                  Your video is ready. Share this link — it opens on Stitcher.
-                </p>
-                <div className="flex items-center gap-2">
+              <div className="space-y-3">
+                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-2">
                   <input
                     readOnly
                     value={shareLink}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="flex-1 px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-700 text-sm text-zinc-200 truncate"
+                    className="w-full bg-transparent px-2 py-2 text-sm text-white outline-none"
                   />
-                  <button
-                    onClick={copyShareLink}
-                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-sm"
-                  >
-                    <Copy className="w-4 h-4" /> Copy
-                  </button>
                 </div>
-                <div className="flex justify-between items-center pt-2">
+                <div className="flex items-center justify-between gap-2">
                   <a
                     href={shareLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-emerald-400 hover:underline"
+                    className="text-sm text-zinc-400 transition-colors hover:text-white"
                   >
-                    Open link →
+                    Open link
                   </a>
                   <button
-                    onClick={() => setShareOpen(false)}
-                    className="text-sm text-zinc-400 hover:text-zinc-200"
+                    onClick={copyShareLink}
+                    className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
                   >
-                    Done
+                    <Copy className="h-4 w-4" />
+                    Copy
                   </button>
                 </div>
               </div>
@@ -983,7 +1091,7 @@ const TimelineEditor = ({
             className="relative min-h-full"
             style={{
               width: `${Math.max(
-                Number(timeline.duration) * pixelsPerSecond,
+                viewDuration * pixelsPerSecond,
                 window.innerWidth - 32
               )}px`,
             }}
@@ -996,7 +1104,7 @@ const TimelineEditor = ({
                 const x = e.clientX - rect.left;
                 const clickTime = x / pixelsPerSecond;
                 // Clamp to valid range
-                const targetTime = Math.max(0, Math.min(clickTime, Number(timeline.duration)));
+                const targetTime = Math.max(0, Math.min(clickTime, viewDuration));
                 onTimeUpdate(targetTime);
               }}
               title="Click to seek"
@@ -1025,13 +1133,30 @@ const TimelineEditor = ({
               {/* Phase 4: other users' live cursors */}
               <TimelineCursors others={others} pixelsPerSecond={pixelsPerSecond} />
 
-              {tracks.map((track) => (
+              {tracks.map((track) => {
+                // Compute drag-highlight state for this track
+                const validDropType = draggingAsset ? assetTargetTrackType(draggingAsset.type) : null;
+                const isValidDropTarget = draggingAsset !== null && validDropType === track.type;
+                const isDimmedDropTarget = draggingAsset !== null && !isValidDropTarget;
+
+                const trackClassName = [
+                  "relative flex-1 min-h-[60px] max-h-[150px] bg-zinc-900/80 border border-zinc-700 rounded-lg overflow-hidden backdrop-blur-sm shadow-inner",
+                  isValidDropTarget ? "ring-2 ring-green-500/70 border-green-500/50 bg-zinc-900" : "",
+                  isDimmedDropTarget ? "opacity-40 pointer-events-none" : "",
+                ].filter(Boolean).join(" ");
+
+                return (
                 <div
                   key={track._id}
-                  className="relative flex-1 min-h-[60px] max-h-[150px] bg-zinc-900/80 border border-zinc-700 rounded-lg overflow-hidden backdrop-blur-sm shadow-inner"
+                  className={trackClassName}
                   onClick={
-                    track.type == "text" ? handleTextTrackClick : () => {}
+                    track.type === "text" ? handleTextTrackClick : () => {}
                   }
+                  onDragOver={isValidDropTarget ? (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                  } : undefined}
+                  onDrop={isValidDropTarget ? (e) => handleTrackDrop(e, track) : undefined}
                 >
                   {/* Track label with better typography */}
                   <div className="absolute left-0 top-0 bg-gradient-to-r from-zinc-800 to-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-200 uppercase tracking-wider z-10 rounded-br-lg border-r border-b border-zinc-600">
@@ -1041,8 +1166,13 @@ const TimelineEditor = ({
                   {/* Track items with enhanced visual distinction */}
                   {track.items.map((item) => {
                     const leftPx = item.startTime * pixelsPerSecond;
-                    const widthPx =
-                      (item.endTime - item.startTime) * pixelsPerSecond;
+                    // Floor width at 0 so a momentarily-invalid item (endTime <
+                    // startTime) can never render a negative box that visually
+                    // collapses/overlaps onto a neighbour.
+                    const widthPx = Math.max(
+                      0,
+                      (item.endTime - item.startTime) * pixelsPerSecond
+                    );
 
                     // Enhanced color scheme for different item types
                     const getItemStyle = () => {
@@ -1199,7 +1329,8 @@ const TimelineEditor = ({
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div

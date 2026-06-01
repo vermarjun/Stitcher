@@ -1,82 +1,138 @@
-import React from "react";
-import { Trash2, AlertTriangle, AlertOctagon } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/Components/ui/card";
+import React, { useState } from "react";
+import { Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/Components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/Components/ui/alert";
+import { Input } from "@/Components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/Components/ui/alert-dialog";
 
 interface DangerTabProps {
   loading: boolean;
   handleDeleteAccount: () => void;
 }
 
+const CONFIRM_WORD = "DELETE";
+
 const DangerTab: React.FC<DangerTabProps> = ({
   loading,
   handleDeleteAccount,
 }) => {
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const canDelete = confirmText.trim().toUpperCase() === CONFIRM_WORD;
+
   return (
-    <div className="space-y-6">
-      <Card className="bg-zinc-900 border-red-900/50 overflow-hidden">
-        <CardHeader className="border-b border-red-900/30 bg-red-950/10 pb-6">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-red-900/20 rounded-lg">
-                <AlertOctagon className="h-6 w-6 text-red-500" />
-             </div>
-             <div>
-                <CardTitle className="text-xl font-semibold text-red-400">
-                    Danger Zone
-                </CardTitle>
-                <CardDescription className="text-red-300/70 mt-1">
-                    Irreversible and destructive actions
-                </CardDescription>
-             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6 space-y-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 p-4 rounded-xl border border-red-900/30 bg-red-950/5">
-            <div className="space-y-1">
-                <h3 className="font-medium text-red-200 flex items-center gap-2">
-                    Delete Account
-                </h3>
-                <p className="text-sm text-red-300/60 max-w-lg">
-                    Once you delete your account, there is no going back. Please be certain. 
-                    All your data, projects, and settings will be permanently removed.
-                </p>
-            </div>
+    <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-red-500/15 px-4 py-4 md:px-5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400 ring-1 ring-red-500/20">
+          <TriangleAlert className="h-[18px] w-[18px]" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-white">Danger zone</h3>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Irreversible and destructive actions.
+          </p>
+        </div>
+      </div>
+
+      {/* Delete row */}
+      <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-5">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium text-white">Delete account</p>
+          <p className="max-w-md text-xs text-zinc-500">
+            Permanently removes your account, projects, and settings. Active
+            subscriptions are cancelled and remaining credits are lost. This
+            can&apos;t be undone.
+          </p>
+        </div>
+
+        <AlertDialog
+          open={open}
+          onOpenChange={(o) => {
+            setOpen(o);
+            if (!o) setConfirmText("");
+          }}
+        >
+          <AlertDialogTrigger asChild>
             <Button
-              onClick={handleDeleteAccount}
+              size="sm"
               disabled={loading}
-              variant="destructive"
-              className="bg-red-600 hover:bg-red-700 text-white border-red-500 whitespace-nowrap"
+              className="h-9 shrink-0 gap-1.5 border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200"
             >
-              {loading ? (
-                 <>
-                   <div className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                   Deleting...
-                 </>
-              ) : (
-                 <>
-                   <Trash2 className="h-4 w-4 mr-2" />
-                   Delete Account
-                 </>
-              )}
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete account
             </Button>
-          </div>
-          
-          <Alert className="bg-yellow-950/20 border-yellow-900/50 text-yellow-200">
-             <AlertTriangle className="h-4 w-4 text-yellow-500" />
-             <AlertTitle className="text-yellow-500 mb-1">Warning</AlertTitle>
-             <AlertDescription className="text-yellow-200/70 text-xs">
-                Deleting your account will also cancel any active subscriptions immediately. You will not be able to recover any unused credits.
-             </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="border-zinc-800 bg-zinc-950 text-white">
+            <AlertDialogHeader>
+              <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10 ring-1 ring-red-500/20">
+                <TriangleAlert className="h-5 w-5 text-red-400" />
+              </div>
+              <AlertDialogTitle className="text-base text-white">
+                Delete your account?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-zinc-400">
+                This action is permanent and cannot be undone. All your data,
+                projects, and settings will be erased, and any active
+                subscription will be cancelled immediately.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="space-y-1.5 py-1">
+              <label className="text-xs text-zinc-400">
+                Type{" "}
+                <span className="font-mono font-semibold text-red-300">
+                  {CONFIRM_WORD}
+                </span>{" "}
+                to confirm
+              </label>
+              <Input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                autoComplete="off"
+                placeholder={CONFIRM_WORD}
+                className="h-9 border-zinc-800 bg-zinc-900 font-mono text-sm text-white focus-visible:border-red-500/50 focus-visible:ring-red-500/20"
+              />
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-900 hover:text-white">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!canDelete || loading}
+                onClick={(e) => {
+                  // keep the dialog logic in our hands; only fire when confirmed
+                  if (!canDelete) {
+                    e.preventDefault();
+                    return;
+                  }
+                  handleDeleteAccount();
+                }}
+                className="bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <div className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete account"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 };

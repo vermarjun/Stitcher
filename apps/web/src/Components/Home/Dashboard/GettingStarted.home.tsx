@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Github, MessageSquarePlus, Code2, Star } from "lucide-react";
 import { LINKS } from "@/config/links";
 import { NoiseTexture } from "@/Components/ui/noise-texture";
 import { SocialTooltip } from "@/Components/ui/social-media";
+import { Spotlight } from "@/Components/ui/spotlight-wrapper";
+import { FeedbackModal } from "./FeedbackModal";
 
 // Discord isn't part of lucide's icon set, so we inline its logo.
 const DiscordIcon = ({ className }: { className?: string }) => (
@@ -36,6 +39,8 @@ interface Props {
 }
 
 const GettingStarted = ({}: Props) => {
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
   // Social links for the "Meet the Developer" stripe (SocialTooltip).
   const socialItems = [
     {
@@ -73,7 +78,7 @@ const GettingStarted = ({}: Props) => {
       <div className="flex flex-col xl:flex-row gap-5 xl:h-[260px]">
         {/* Two full-height feature cards (left 2/3) */}
         <div className="w-full xl:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {/* Tutorial video */}
+          {/* Tutorial video — no spotlight (it's an iframe, glow would obscure it) */}
           <div className="relative rounded-xl overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-colors bg-black h-full min-h-[180px]">
             <iframe
               src={LINKS.tutorialEmbed}
@@ -86,101 +91,113 @@ const GettingStarted = ({}: Props) => {
           </div>
 
           {/* We're Open Source */}
-          <a
-            href={LINKS.githubRepo}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group relative flex flex-col justify-between rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-5 hover:border-zinc-700 transition-all duration-200 h-full min-h-[180px] overflow-hidden"
-          >
-            <NoiseTexture
-              className="absolute inset-0 opacity-60"
-              style={{
-                maskImage:
-                  "radial-gradient(420px circle at center, white, transparent)",
-                WebkitMaskImage:
-                  "radial-gradient(420px circle at center, white, transparent)",
-              }}
-            />
-            <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-800 text-white ring-1 ring-white/10">
-              <Github size={22} />
-            </div>
-            <div className="relative z-10 space-y-3">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-white">
-                  We&apos;re Open Source
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  Explore the code, open an issue, or star the repo to follow
-                  along.
-                </p>
+          <Spotlight radius={12} className="h-full min-h-[180px]">
+            <a
+              href={LINKS.githubRepo}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative flex flex-col justify-between rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-5 hover:border-zinc-700 transition-all duration-200 h-full overflow-hidden"
+            >
+              <NoiseTexture
+                className="absolute inset-0 opacity-60"
+                style={{
+                  maskImage:
+                    "radial-gradient(420px circle at center, white, transparent)",
+                  WebkitMaskImage:
+                    "radial-gradient(420px circle at center, white, transparent)",
+                }}
+              />
+              <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-800 text-white ring-1 ring-white/10">
+                <Github size={22} />
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-white group-hover:border-zinc-600 transition-colors">
-                <Star className="h-3.5 w-3.5" />
-                Star on GitHub
-              </span>
-            </div>
-          </a>
+              <div className="relative z-10 space-y-3">
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold text-white">
+                    We&apos;re Open Source
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Explore the code, open an issue, or star the repo to follow
+                    along.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-white group-hover:border-zinc-600 transition-colors">
+                  <Star className="h-3.5 w-3.5" />
+                  Star on GitHub
+                </span>
+              </div>
+            </a>
+          </Spotlight>
         </div>
 
         {/* Three horizontal stripes (right 1/3) */}
         <div className="w-full xl:w-1/3 xl:min-w-[300px] flex flex-col gap-3">
-          {/* Give Feedback */}
-          <a
-            href={`mailto:${LINKS.feedbackEmail}?subject=Stitcher%20Feedback`}
-            className="group flex items-center justify-between w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 flex-1"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
-                <MessageSquarePlus size={18} />
+          {/* Give Feedback — button opens FeedbackModal instead of mailto */}
+          <Spotlight radius={8} className="flex-1">
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="group flex items-center justify-between w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 h-full text-left"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
+                  <MessageSquarePlus size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-white">Give Feedback</h3>
+                  <p className="text-xs text-zinc-400">Share a bug or an idea</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-medium text-white">Give Feedback</h3>
-                <p className="text-xs text-zinc-400">Share a bug or an idea</p>
-              </div>
-            </div>
-            <span className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white group-hover:bg-zinc-700 transition-colors">
-              Send
-            </span>
-          </a>
+              <span className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white group-hover:bg-zinc-700 transition-colors">
+                Send
+              </span>
+            </button>
+          </Spotlight>
 
           {/* Join Community */}
-          <a
-            href={LINKS.discord || undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center justify-between w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 flex-1"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
-                <DiscordIcon className="h-[18px] w-[18px]" />
+          <Spotlight radius={8} className="flex-1">
+            <a
+              href={LINKS.discord || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 h-full"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
+                  <DiscordIcon className="h-[18px] w-[18px]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-white">Join Community</h3>
+                  <p className="text-xs text-zinc-400">Connect with other creators</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-medium text-white">Join Community</h3>
-                <p className="text-xs text-zinc-400">Connect with other creators</p>
-              </div>
-            </div>
-            <span className="rounded-md bg-[#5865F2] px-3 py-1.5 text-xs font-medium text-white group-hover:bg-[#4752c4] transition-colors">
-              Join
-            </span>
-          </a>
+              <span className="rounded-md bg-[#5865F2] px-3 py-1.5 text-xs font-medium text-white group-hover:bg-[#4752c4] transition-colors">
+                Join
+              </span>
+            </a>
+          </Spotlight>
 
           {/* Meet the Developer */}
-          <div className="flex items-center justify-between w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
-                <Code2 size={18} />
+          <Spotlight radius={8} className="flex-1">
+            <div className="flex items-center justify-between w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 h-full">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
+                  <Code2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-white">
+                    Meet the Developer
+                  </h3>
+                  <p className="text-xs text-zinc-400">Built solo, say hi</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-medium text-white">
-                  Meet the Developer
-                </h3>
-                <p className="text-xs text-zinc-400">Built solo, say hi</p>
-              </div>
+              <SocialTooltip items={socialItems} className="gap-2 flex-shrink-0" />
             </div>
-            <SocialTooltip items={socialItems} className="gap-2 flex-shrink-0" />
-          </div>
+          </Spotlight>
         </div>
       </div>
+
+      {/* Feedback modal — rendered outside the card flow */}
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
 };

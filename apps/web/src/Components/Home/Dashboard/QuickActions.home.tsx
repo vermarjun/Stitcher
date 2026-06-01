@@ -13,7 +13,7 @@ import { Label } from "@/Components/ui/label";
 import { Textarea } from "@/Components/ui/textarea";
 import {
   Plus,
-  LayoutTemplate,
+  Compass,
   Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,13 +21,14 @@ import { type NavigateFunction } from "react-router-dom";
 import api from "@/api";
 import { ShineBorder } from "../../magicui/shine-border";
 import { LINKS } from "@/config/links";
+import { startReplayTour } from "@/lib/onboardingTour";
 
 interface Props3 {
   navigate: NavigateFunction;
   onNavigate: (itemKey:string)=>void,
 }
 
-const QuickActions = ({ navigate, onNavigate }: Props3) => {
+const QuickActions = ({ navigate }: Props3) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -204,20 +205,23 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
             </DialogContent>
           </Dialog>
 
+          {/* Replaces "Browse Templates" (already in the left panel). Starts the
+              guided cat-meme tour from here; finishing Act 1 arms the editor leg
+              to auto-run once the user opens a project. */}
           <Card
-            onClick={() => { onNavigate("templates"); }}
+            onClick={() => { startReplayTour(); }}
             className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full">
               <div className="flex flex-col items-center text-center space-y-3">
                 <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
-                  <LayoutTemplate className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
+                  <Compass className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                 </div>
                 <div className="space-y-1">
                   <h3 className="font-medium text-white text-sm group-hover:text-white transition-colors duration-200">
-                    Browse Templates
+                    Take the Tour
                   </h3>
                   <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
-                    Start from a design
+                    Guided demo 🐱
                   </p>
                 </div>
               </div>

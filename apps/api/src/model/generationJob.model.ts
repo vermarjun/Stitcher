@@ -27,10 +27,47 @@ export type GenerationJobStatus =
     | "failed"
     | "cancelled";
 
+export type StageId =
+    | "rag_enhance"
+    | "agent_plan"
+    | "agent_code"
+    | "render"
+    | "agent_debug"
+    | "tts"
+    | "concat"
+    | "upload";
+
+export type StageService =
+    | "stitcher-api"
+    | "stitcher-rag"
+    | "stitcher-agent"
+    | "stitcher-render";
+
+export interface IJobStage {
+    stage: StageId;
+    service: StageService;
+    sceneIndex?: number;
+    status: "ok" | "failed";
+    /** Full error message or stack on failure. */
+    error?: string;
+    startedAt: Date;
+    endedAt: Date;
+    durationMs: number;
+    tokens?: { input: number; output: number; total: number };
+    /** LLM model id used for this stage (if any). */
+    model?: string;
+    /** Short human-readable summary of what this stage returned. */
+    outputSummary?: string;
+    /** Generated Manim code at time of failure (capped to 8 KB). Set on agent_code / agent_debug / render when the scene fails. */
+    failedCode?: string;
+}
+
 export interface ISceneProgress {
     done: number;
     total: number;
 }
+
+export type CurationStatus = "unreviewed" | "approved" | "rejected";
 
 export interface IGenerationJob extends Document {
     /** BullMQ job id (indexed). Empty string only if the queue failed to assign one. */
@@ -45,6 +82,8 @@ export interface IGenerationJob extends Document {
     status: GenerationJobStatus;
     sceneProgress: ISceneProgress;
     finalUrl?: string;
+    /** Final generated Manim code persisted for curation/RAG pipeline. */
+    finalCode?: string;
     error?: string;
     traceId?: string;
     startedAt: Date;
@@ -53,6 +92,18 @@ export interface IGenerationJob extends Document {
     tokens?: { input: number; output: number };
     /** Estimated USD cost derived from token usage. Forward-compat; see §5. */
     costUsd?: number;
+    /** Per-stage ticket record. Each pipeline step pushes one row here (best-effort). */
+    stages: IJobStage[];
+    /** RLHF: 1–5 star rating submitted by the user after viewing the video. */
+    rating?: number | null;
+    /** When the rating was set. */
+    ratedAt?: Date;
+    /** Admin curation decision for RAG pipeline. */
+    curationStatus: CurationStatus;
+    /** Whether the debug loop was invoked at least once for this job. */
+    debugInvoked: boolean;
+    /** Whether a render eventually succeeded after the debug loop ran. */
+    debugResolved: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -61,6 +112,41 @@ const SceneProgressSchema = new Schema<ISceneProgress>(
     {
         done: { type: Number, default: 0 },
         total: { type: Number, default: 0 },
+    },
+    { _id: false }
+);
+
+const JobStageTokensSchema = new Schema(
+    {
+        input: { type: Number },
+        output: { type: Number },
+        total: { type: Number },
+    },
+    { _id: false }
+);
+
+const JobStageSchema = new Schema<IJobStage>(
+    {
+        stage: {
+            type: String,
+            enum: ["rag_enhance", "agent_plan", "agent_code", "render", "agent_debug", "tts", "concat", "upload"],
+            required: true,
+        },
+        service: {
+            type: String,
+            enum: ["stitcher-api", "stitcher-rag", "stitcher-agent", "stitcher-render"],
+            required: true,
+        },
+        sceneIndex: { type: Number, required: false },
+        status: { type: String, enum: ["ok", "failed"], required: true },
+        error: { type: String, required: false },
+        startedAt: { type: Date, required: true },
+        endedAt: { type: Date, required: true },
+        durationMs: { type: Number, required: true },
+        tokens: { type: JobStageTokensSchema, required: false },
+        model: { type: String, required: false },
+        outputSummary: { type: String, required: false },
+        failedCode: { type: String, required: false },
     },
     { _id: false }
 );
@@ -102,6 +188,17 @@ const GenerationJobSchema = new Schema<IGenerationJob>(
             required: false,
         },
         costUsd: { type: Number, required: false },
+        stages: { type: [JobStageSchema], default: [] },
+        finalCode: { type: String, required: false },
+        rating: { type: Number, default: null, required: false },
+        ratedAt: { type: Date, required: false },
+        curationStatus: {
+            type: String,
+            enum: ["unreviewed", "approved", "rejected"],
+            default: "unreviewed",
+        },
+        debugInvoked: { type: Boolean, default: false },
+        debugResolved: { type: Boolean, default: false },
     },
     { timestamps: true }
 );

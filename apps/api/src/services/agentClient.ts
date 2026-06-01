@@ -20,6 +20,41 @@ import { config } from "../config";
 import logger from "../util/logger.util";
 import { toServiceError } from "./ServiceError";
 
+// ─── LLM call log (mirrored from agent service observability/llm.ts) ─────────
+
+/**
+ * One entry in the per-stage LLM call log emitted by the agent service.
+ * Matches the shape the agent already builds in `finalState.llmCallLog`.
+ *
+ * Extended with full I/O fields for the RLHF visibility feature.
+ * All I/O fields are optional so this type stays backward-compatible with
+ * agent versions that do not yet emit them.
+ */
+export interface LlmCallLogEntry {
+    role: string;         // "planner" | "coder" | "validator" | "debugger"
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    durationMs: number;
+    // ── Full I/O visibility (RLHF Feature 2) ──────────────────────────────────
+    /** Full system message sent to the model. */
+    systemPrompt?: string;
+    /** Full user message sent to the model. */
+    userPrompt?: string;
+    /** Exact messages array sent (verbatim, before any extraction). */
+    fullInput?: unknown;
+    /** Raw LLM response content verbatim, before code extraction. */
+    rawOutput?: string;
+}
+
+/** Summed token counts over all LLM calls in a single agent endpoint. */
+export interface AgentTokensUsed {
+    input: number;
+    output: number;
+    total: number;
+}
+
 // ─── Shared LLM role config ───────────────────────────────────────────────────
 
 export interface LlmRoleConfig {
@@ -36,6 +71,14 @@ export interface LlmRoleConfig {
     apiKey?: string;
     /** Per-request base URL override; matches the agent's ModelConfigSchema. */
     baseURL?: string;
+    /**
+     * Freeform params forwarded to the model factory as modelKwargs.
+     * Keys: maxTokens (token cap), temperature, enable_thinking, reasoning_effort,
+     * thinking_budget, top_p, etc. The factory reads maxTokens/temperature from
+     * here first (takes precedence over the top-level fields above), then passes
+     * everything else through to the model as modelKwargs.
+     */
+    params?: Record<string, unknown>;
 }
 
 // ─── /plan types ─────────────────────────────────────────────────────────────
@@ -108,6 +151,10 @@ export interface PlanResponse {
         styleManifest: StyleManifest;
     } | null;
     error: { summary: string } | null;
+    /** Per-call LLM usage emitted by the agent (Phase 2.1 upstream contract). */
+    llmCallLog?: LlmCallLogEntry[];
+    /** Summed token counts across all LLM calls in this agent endpoint. */
+    tokensUsed?: AgentTokensUsed;
 }
 
 // ─── /code types ─────────────────────────────────────────────────────────────
@@ -117,22 +164,36 @@ export interface CodeExample {
     code: string;
 }
 
+/**
+ * New CONTRACT 2 shape: single LLM completion, no planner/scenePlan.
+ * The worker passes the raw prompt + RAG-selected examples + requiredApis.
+ * voiceover is always true (always emits a VoiceoverScene).
+ * styleManifest: null means the coder uses sensible defaults.
+ */
 export interface CodeInput {
-    scenePlan: SceneSpec;
-    styleManifest: StyleManifest;
-    codeExamples?: CodeExample[];
+    /** Raw user prompt. */
+    prompt: string;
+    /** Coverage-diverse example scripts from RAG similarScripts. */
+    examples?: CodeExample[];
+    /** API symbol names from RAG query-transform; used for cheatsheet lookup. */
+    requiredApis?: string[];
+    /** Always true — coder always emits a VoiceoverScene. */
+    voiceover: true;
+    /** Optional style manifest; null means use coder defaults. */
+    styleManifest?: object | null;
     modelConfig?: {
         coder?: LlmRoleConfig;
         validator?: LlmRoleConfig;
     };
     limits?: { maxValidationRetries?: number; timeoutSec?: number };
-    /**
-     * When true, the coder emits a `VoiceoverScene` with one
-     * `self.voiceover(text=...)` block per planned narration beat (verbatim), and
-     * the validator enforces the beats match `scenePlan.narration`.
-     */
-    voiceover?: boolean;
     meta?: { traceId?: string };
+    /**
+     * RLHF Feature 3 — Coder mistake-memory.
+     * Past lessons learned from previously debugged generations. Each is a
+     * 1–2 line string. The agent prepends these to the coder system prompt
+     * as "PAST MISTAKES TO AVOID".
+     */
+    coderMemory?: string[];
 }
 
 export interface CodeOutput {
@@ -148,6 +209,10 @@ export interface CodeResponse {
     jobId: string;
     output: CodeOutput | null;
     error: { summary: string } | null;
+    /** Per-call LLM usage emitted by the agent (Phase 2.1 upstream contract). */
+    llmCallLog?: LlmCallLogEntry[];
+    /** Summed token counts across all LLM calls in this agent endpoint. */
+    tokensUsed?: AgentTokensUsed;
 }
 
 // ─── /debug types ────────────────────────────────────────────────────────────
@@ -190,6 +255,42 @@ export interface DebugResponse {
         validation?: unknown;
     } | null;
     error: unknown;
+    /** Per-call LLM usage emitted by the agent (Phase 2.1 upstream contract). */
+    llmCallLog?: LlmCallLogEntry[];
+    /** Summed token counts across all LLM calls in this agent endpoint. */
+    tokensUsed?: AgentTokensUsed;
+}
+
+// ─── /reflect types ──────────────────────────────────────────────────────────
+
+export interface DebugHistoryEntry {
+    code?: string;
+    error?: string;
+    changeSummary?: string;
+}
+
+export interface ReflectInput {
+    /** The original user prompt that triggered the generation. */
+    prompt: string;
+    /** The first version of code that failed to render. */
+    originalCode: string;
+    /** The final error after all debug attempts. */
+    finalError?: string;
+    /** Full debug history [{code, error, changeSummary}] across all attempts. */
+    debugHistory: DebugHistoryEntry[];
+    /** Model config to use for the reflection (debugger tier recommended). */
+    modelConfig?: {
+        debugger?: LlmRoleConfig;
+    };
+}
+
+export interface ReflectResponse {
+    success: boolean;
+    /** 1–2 line lesson: what the coder got wrong + how to avoid it. */
+    lesson: string;
+    /** Per-call I/O entries for persisting a GenerationLlmIO row. */
+    llmIO?: LlmCallLogEntry[];
+    error?: string;
 }
 
 // ─── /generate types ─────────────────────────────────────────────────────────
@@ -297,9 +398,9 @@ class AgentClient {
     // ── POST /code ───────────────────────────────────────────────────────────
 
     async code(input: CodeInput, traceId?: string): Promise<CodeResponse> {
-        logger.debug(`[agent] code traceId=${traceId ?? "-"} sceneIndex=${input.scenePlan.index}`);
+        logger.debug(`[agent] code traceId=${traceId ?? "-"} prompt="${input.prompt.slice(0, 80)}"`);
         try {
-            const res = await this.http.post<CodeResponse>("/code", input, this.callCfg(traceId, 240_000));
+            const res = await this.http.post<CodeResponse>("/code", input, this.callCfg(traceId, 330_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
@@ -311,10 +412,37 @@ class AgentClient {
     async debug(input: DebugInput, traceId?: string): Promise<DebugResponse> {
         logger.debug(`[agent] debug traceId=${traceId ?? "-"} sceneClass=${input.sceneClass ?? "-"}`);
         try {
-            const res = await this.http.post<DebugResponse>("/debug", input, this.callCfg(traceId, 180_000));
+            const res = await this.http.post<DebugResponse>("/debug", input, this.callCfg(traceId, 330_000));
             return res.data;
         } catch (err) {
             throw toServiceError(SERVICE, err, traceId);
+        }
+    }
+
+    // ── POST /reflect ────────────────────────────────────────────────────────
+
+    /**
+     * Ask the agent to reflect on a failed/debugged generation and produce a
+     * 1–2 line lesson for the coder memory store.
+     *
+     * Used after the debug loop ends (whether or not it eventually resolved).
+     * Best-effort caller: errors here must never crash the pipeline.
+     */
+    async reflect(input: ReflectInput, traceId?: string): Promise<ReflectResponse> {
+        logger.debug(`[agent] reflect traceId=${traceId ?? "-"} prompt="${input.prompt.slice(0, 80)}"`);
+        try {
+            const res = await this.http.post<ReflectResponse>("/reflect", input, this.callCfg(traceId, 60_000));
+            return res.data;
+        } catch (err) {
+            // Convert to ServiceError but also return a fallback response so the
+            // caller (which wraps this in try/catch anyway) can still log cleanly.
+            const svcErr = toServiceError(SERVICE, err, traceId);
+            logger.warn(`[agent] reflect failed (non-fatal): ${svcErr.message}`);
+            return {
+                success: false,
+                lesson: "",
+                error: svcErr.message,
+            };
         }
     }
 

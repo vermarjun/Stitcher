@@ -91,9 +91,32 @@ const FFMPEG_BIN = process.env["EXPORT_FFMPEG_PATH"] || "ffmpeg";
 const PREVIEW_REF_HEIGHT = 405;
 const FONT_SCALE = OUT_H / PREVIEW_REF_HEIGHT;
 
+// Recursively find the first .ttf/.otf under `dir` (bounded depth), preferring
+// a common sans-serif face. Lets us locate a usable font no matter which font
+// package the host/container happens to ship or where it installs it.
+function findFontInDir(dir: string, depth: number): string | null {
+    if (depth < 0) return null;
+    let entries: import("fs").Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch { return null; }
+    const isFont = (n: string) => /\.(ttf|otf)$/i.test(n);
+    const preferred = (n: string) => /(dejavusans|liberationsans|arial|helvetica|noto.*sans|sans)/i.test(n);
+    const files = entries.filter((e) => e.isFile() && isFont(e.name));
+    const pref = files.find((e) => preferred(e.name));
+    if (pref) return path.join(dir, pref.name);
+    if (files.length) return path.join(dir, files[0]!.name);
+    for (const e of entries) {
+        if (e.isDirectory()) {
+            const found = findFontInDir(path.join(dir, e.name), depth - 1);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
 // First existing font wins. Override with EXPORT_FONT_PATH.
 function resolveFontFile(): string | null {
-    const candidates = [
+    const explicit = [
         process.env["EXPORT_FONT_PATH"],
         "/System/Library/Fonts/Supplemental/Arial.ttf",      // macOS
         "/Library/Fonts/Arial.ttf",                          // macOS (user)
@@ -101,8 +124,19 @@ function resolveFontFile(): string | null {
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",            // Alpine/Fedora
     ].filter(Boolean) as string[];
-    for (const p of candidates) {
+    for (const p of explicit) {
         try { if (fs.existsSync(p)) return p; } catch { /* ignore */ }
+    }
+    // Fallback: scan common font directories for any usable face.
+    const fontDirs = [
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        "/System/Library/Fonts",
+        "/Library/Fonts",
+    ];
+    for (const dir of fontDirs) {
+        const found = findFontInDir(dir, 4);
+        if (found) return found;
     }
     return null;
 }
@@ -131,9 +165,12 @@ function normalizeColor(c: string | undefined): string {
     return hex; // named color (white, red, …)
 }
 
-// Build a drawtext filter chain for the text overlays. Empty string if none.
+// Build a drawtext filter chain for the text overlays. Empty string if there
+// are no text clips OR no usable font — drawtext without an explicit fontfile
+// falls back to the fontconfig family "Sans", which fails on hosts that don't
+// ship it (e.g. a bare Alpine container), so we never emit that form.
 function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null): string {
-    if (textClips.length === 0) return "";
+    if (textClips.length === 0 || !fontFile) return "";
     const filters = textClips
         .filter((t) => (t.content ?? "").trim().length > 0)
         .map((t) => {
@@ -143,7 +180,7 @@ function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null
             const xFrac = Math.min(1, Math.max(0, (t.x ?? 50) / 100));
             const yFrac = Math.min(1, Math.max(0, (t.y ?? 50) / 100));
             const parts = [
-                fontFile ? `fontfile='${fontFile}'` : null,
+                `fontfile='${fontFile}'`,
                 `text='${text}'`,
                 `fontsize=${fontsize}`,
                 `fontcolor=${color}`,
@@ -257,7 +294,9 @@ export async function exportTimeline(
         // 2b. Burn in text overlays (drawtext), timed to the timeline.
         const warnings: string[] = [];
         let videoPath = concatPath;
-        const drawChain = buildDrawTextChain(textClips, resolveFontFile());
+        const fontFile = resolveFontFile();
+        const hasText = textClips.some((t) => (t.content ?? "").trim().length > 0);
+        const drawChain = buildDrawTextChain(textClips, fontFile);
         if (drawChain) {
             if (await hasDrawText()) {
                 const titled = path.join(tmpDir, "titled.mp4");
@@ -275,6 +314,12 @@ export async function exportTimeline(
                 logger.warn({ message: "[export] " + msg });
                 warnings.push(msg);
             }
+        } else if (hasText && !fontFile) {
+            // Text exists but no usable font on this host — skip the overlay
+            // rather than emitting a drawtext that crashes the whole render.
+            const msg = "Text overlays were skipped: no usable font found on the render host. Install a font (e.g. `apk add font-dejavu`) or set EXPORT_FONT_PATH.";
+            logger.warn({ message: "[export] " + msg });
+            warnings.push(msg);
         }
 
         // 3. Mux the first audio clip over the video, trimmed to video length.

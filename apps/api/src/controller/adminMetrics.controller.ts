@@ -536,34 +536,80 @@ export async function getGenerationsList(req: Request, res: Response) {
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("jobId queue userId prompt status sceneProgress error startedAt completedAt traceId finalUrl")
+                .select("jobId queue userId prompt status sceneProgress error startedAt completedAt traceId finalUrl rating ratedAt curationStatus debugInvoked debugResolved")
                 .lean(),
             GenerationJob.countDocuments(filter),
         ]);
 
-        const jobRows = jobs.map((j) => ({
-            _id: j._id,
-            jobId: j.jobId,
-            queue: j.queue,
-            userId: j.userId,
-            prompt: j.prompt,
-            status: j.status,
-            sceneProgress: j.sceneProgress,
-            error: j.error,
-            startedAt: j.startedAt,
-            completedAt: j.completedAt,
-            durationMs:
-                j.completedAt && j.startedAt
-                    ? new Date(j.completedAt).getTime() - new Date(j.startedAt).getTime()
-                    : undefined,
-            traceId: j.traceId,
-            finalUrl: j.finalUrl,
-        }));
+        const jobRows = jobs.map((j) => {
+            const jr = j as typeof j & {
+                rating?: number | null;
+                ratedAt?: Date;
+                curationStatus?: string;
+                debugInvoked?: boolean;
+                debugResolved?: boolean;
+            };
+            return {
+                _id: jr._id,
+                jobId: jr.jobId,
+                queue: jr.queue,
+                userId: jr.userId,
+                prompt: jr.prompt,
+                status: jr.status,
+                sceneProgress: jr.sceneProgress,
+                error: jr.error,
+                startedAt: jr.startedAt,
+                completedAt: jr.completedAt,
+                durationMs:
+                    jr.completedAt && jr.startedAt
+                        ? new Date(jr.completedAt).getTime() - new Date(jr.startedAt).getTime()
+                        : undefined,
+                traceId: jr.traceId,
+                finalUrl: jr.finalUrl,
+                rating: jr.rating ?? null,
+                ratedAt: jr.ratedAt,
+                curationStatus: jr.curationStatus ?? "unreviewed",
+                debugInvoked: jr.debugInvoked ?? false,
+                debugResolved: jr.debugResolved ?? false,
+            };
+        });
 
         return res.status(200).json({ jobs: jobRows, total, page, limit });
     } catch (err) {
         logger.error({ message: "getGenerationsList failed", error: String(err) });
         return res.status(500).json({ error: { message: "Failed to load generation list" } });
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GET /admin/metrics/generations/:jobId
+// ──────────────────────────────────────────────────────────────────────────────
+export async function getGenerationDetail(req: Request, res: Response) {
+    try {
+        const { jobId } = req.params;
+        if (!jobId) {
+            return res.status(400).json({ error: { message: "jobId is required" } });
+        }
+
+        // Support lookup by BullMQ jobId (string) OR MongoDB _id
+        const job = await GenerationJob.findOne({ jobId }).lean();
+        if (!job) {
+            // Fallback: try by MongoDB _id (useful when clicking from the list)
+            const { Types: MongooseTypes } = await import("mongoose");
+            if (!MongooseTypes.ObjectId.isValid(jobId)) {
+                return res.status(404).json({ error: { message: "Job not found" } });
+            }
+            const byOid = await GenerationJob.findById(jobId).lean();
+            if (!byOid) {
+                return res.status(404).json({ error: { message: "Job not found" } });
+            }
+            return res.status(200).json(byOid);
+        }
+
+        return res.status(200).json(job);
+    } catch (err) {
+        logger.error({ message: "getGenerationDetail failed", error: String(err) });
+        return res.status(500).json({ error: { message: "Failed to load generation detail" } });
     }
 }
 

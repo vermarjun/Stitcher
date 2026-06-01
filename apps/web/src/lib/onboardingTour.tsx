@@ -29,6 +29,14 @@ import api from "@/api";
 import type { IUser } from "@/State/Types";
 
 const PROGRESS_KEY = "stitcher_onboarding_progress";
+// The account that PROGRESS_KEY belongs to. Tour state is per-user, but
+// localStorage is per-browser — without this, a "done" cached by one account
+// would suppress the first-run tour for the next account that signs in here.
+const UID_KEY = "stitcher_onboarding_uid";
+// Set by startReplayTour() to arm Act 2 to auto-run the next time the editor
+// mounts, so a home-initiated "Take the tour" spans both routes like a real
+// first run. Value "act2" = armed.
+const REPLAY_KEY = "stitcher_onboarding_replay";
 type Progress = "home" | "editor" | "done";
 
 // ─── State helpers ───────────────────────────────────────────────────────────
@@ -42,13 +50,29 @@ function getStoredUser(): IUser | null {
   }
 }
 
+/** The id of the account currently cached in localStorage (tour state is per-user). */
+function currentUid(): string | null {
+  const id = getStoredUser()?._id;
+  return id ? String(id) : null;
+}
+
 function getProgress(): Progress | null {
+  // If the cached progress was written by a *different* account on this browser
+  // (someone signed out and a new user signed up), it's stale — drop it so the
+  // newcomer still gets their first-run tour instead of inheriting "done".
+  if (localStorage.getItem(UID_KEY) !== currentUid()) {
+    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(UID_KEY);
+    return null;
+  }
   const v = localStorage.getItem(PROGRESS_KEY);
   return v === "home" || v === "editor" || v === "done" ? v : null;
 }
 
 function setProgress(p: Progress) {
   localStorage.setItem(PROGRESS_KEY, p);
+  const uid = currentUid();
+  if (uid) localStorage.setItem(UID_KEY, uid); // stamp the owner of this progress
 }
 
 /** True once the user has finished or skipped the tour (backend flag or cache). */
@@ -168,31 +192,35 @@ function buildDriver(
 }
 
 // ─── Copy ────────────────────────────────────────────────────────────────────
-// Keep it short and funny — nobody reads a paragraph in a popover. HTML allowed.
+// The whole point of this tour is that it does NOT read like docs. Each step is a
+// reaction-cat meme + ONE short line (≤7 words). Gen-Z attention span is the spec:
+// a paragraph in a popover gets skipped, a funny cat gets remembered.
+//
+// Every cat lives in /public/cats (served at the site root). Swapping the meme for
+// any step is a one-word filename change — the full collection is in that folder.
+
+/** Build a popover body: a reaction cat on top, one punchy line underneath. */
+const cat = (file: string, line: string) =>
+  `<img class="stitcher-tour-cat" src="/cats/${file}" alt="" draggable="false" />` +
+  `<span class="stitcher-tour-line">${line}</span>`;
 
 const ACT1_STEPS: DriveStep[] = [
   {
-    // Centered welcome — no element.
+    // Centered welcome — no element. Animated Happy Cat for the warmest first hit.
     popover: {
       title: "Welcome to Stitcher 🎬",
-      description:
-        "This is the part where most apps throw 47 buttons at you and yell <i>“good luck.”</i> " +
-        "We're gonna do that too — but politely, one at a time. 🫡<br/><br/>" +
-        "Takes ~30 seconds. Or hit the ✕ and wing it like a true main character.",
-      nextBtnText: "Show me around →",
+      description: cat("happy-cat.gif", "30 seconds. Then you’re dangerous."),
+      nextBtnText: "Show me →",
     },
   },
   {
     element: '[data-tour="create-project"]',
     popover: {
       title: "Step one: a project 🆕",
-      description:
-        "Everything starts here. Click <b>New Project</b>, give it a name, and a blank canvas " +
-        "appears — ready to judge your creativity. Don't worry, it's a <i>supportive</i> canvas.<br/><br/>" +
-        "Create one and I'll meet you inside. 👀",
+      description: cat("nerd-pointing.png", "Hit New Project. That’s it."),
       side: "bottom",
       align: "start",
-      doneBtnText: "Got it — let me in!",
+      doneBtnText: "Let me in!",
     },
   },
 ];
@@ -210,11 +238,9 @@ function buildEditorSteps(): DriveStep[] {
   const all: (DriveStep & { _need?: string })[] = [
     {
       popover: {
-        title: "You're in! 🎉",
-        description:
-          "This is the editor — your control room. Looks like a spaceship cockpit, " +
-          "but I promise you only need like four buttons. Let me show you which ones.",
-        nextBtnText: "Tour the cockpit →",
+        title: "You’re in! 🎉",
+        description: cat("headset-cockpit.png", "Your cockpit. Four buttons matter."),
+        nextBtnText: "Tour it →",
       },
     },
     {
@@ -222,10 +248,7 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="timeline"]',
       popover: {
         title: "The timeline 🎞️",
-        description:
-          "Where your video actually lives. Think of it like a Subway sandwich: you stack the " +
-          "layers, it becomes a meal. The layers are clips. There is no mayonnaise.<br/><br/>" +
-          "Drag clips around, trim the ends, line things up.",
+        description: cat("dancing.png", "Your video lives here."),
         side: "top",
         align: "center",
       },
@@ -235,10 +258,8 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="sidebar-assetstash"]',
       onHighlightStarted: openRailTab("assetstash"),
       popover: {
-        title: "Add elements 🧩",
-        description:
-          "Your clips, images and audio live here in the Asset Stash. <b>Drag them onto the " +
-          "timeline</b> — yes, drag, with the mouse, like it's 2009 and you're moving files into a folder.",
+        title: "Add stuff 🧩",
+        description: cat("tongue-shaka.png", "Drag these onto the timeline."),
         side: "right",
         align: "start",
       },
@@ -248,9 +269,7 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="ai-chat"]',
       popover: {
         title: "Generate with AI 🪄",
-        description:
-          "Don't feel like animating by hand? <b>Describe what you want here</b> and the AI builds " +
-          "the animation for you. You're basically a movie director now — minus the budget and the sunglasses.",
+        description: cat("amazed-glasses.png", "Lazy? Describe it, AI builds it."),
         side: "left",
         align: "start",
       },
@@ -261,9 +280,7 @@ function buildEditorSteps(): DriveStep[] {
       onHighlightStarted: openRailTab("memory"),
       popover: {
         title: "Memory 🧠",
-        description:
-          "This is where Stitcher remembers your project's context so the AI doesn't have goldfish " +
-          "brain. 🐠 The more it knows, the less you have to repeat yourself.",
+        description: cat("thinking-suit-dog.png", "It remembers so you don’t repeat."),
         side: "right",
         align: "start",
       },
@@ -273,20 +290,16 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="collaborators"]',
       popover: {
         title: "Bring the squad 👥",
-        description:
-          "Invite teammates and you'll see their cursors move in real time — which is either " +
-          "delightful or deeply unsettling, depending on the teammate.",
+        description: cat("rock-on-hype.png", "Invite friends. See live cursors."),
         side: "bottom",
         align: "end",
       },
     },
     {
       popover: {
-        title: "That's the whole tour 🎓",
-        description:
-          "You're now legally an expert. Go make something gorgeous.<br/><br/>" +
-          "We'll be over here, quietly counting render credits. 💸",
-        doneBtnText: "Let's go 🚀",
+        title: "That’s the tour 🎓",
+        description: cat("empty-wallet.png", "Now go make something gorgeous."),
+        doneBtnText: "Let’s go 🚀",
       },
     },
   ];
@@ -326,6 +339,12 @@ export async function maybeRunHomeTour() {
  * without ever seeing /home (progress null). Finishing or skipping completes it.
  */
 export async function maybeRunEditorTour() {
+  // A home-initiated "Take the tour" arms Act 2 to run here once, regardless of
+  // whether the user already finished onboarding. Checked before the gate below.
+  if (localStorage.getItem(REPLAY_KEY) === "act2") {
+    localStorage.removeItem(REPLAY_KEY);
+    return replayEditorTour();
+  }
   if (hasCompletedTour()) return;
   const progress = getProgress();
   if (progress !== "editor" && progress !== "home" && progress !== null) return;
@@ -342,5 +361,43 @@ export async function maybeRunEditorTour() {
     celebrate();
   };
   const d = buildDriver(steps, finish, () => markTourComplete());
+  d.drive();
+}
+
+/**
+ * Force-run the editor walkthrough (Act 2) on demand, e.g. from a "Replay tour"
+ * menu item — for users who want a refresher, and for us while testing.
+ *
+ * Unlike maybeRunEditorTour(), this ignores the "already completed" gate and
+ * deliberately does NOT mutate completion state: replaying a finished tour must
+ * not un-complete it, and finishing the replay must not re-stamp the backend.
+ * Confetti still fires on the last step — a replay should feel just as fun.
+ */
+export async function replayEditorTour() {
+  const ready = await waitForElements(['[data-tour="timeline"]']);
+  if (!ready) return;
+
+  const steps = buildEditorSteps();
+  if (steps.length === 0) return;
+
+  const d = buildDriver(steps, celebrate, () => {});
+  d.drive();
+}
+
+/**
+ * Replay the FULL tour from /home — wired to the "Take the tour" quick action.
+ * Runs Act 1 now; finishing it arms Act 2 (REPLAY_KEY) so the editor walkthrough
+ * fires the next time the user opens a project, mirroring the real first run.
+ * Ignores the "completed" gate and never mutates completion state.
+ */
+export async function startReplayTour() {
+  const ready = await waitForElements(['[data-tour="create-project"]']);
+  if (!ready) return;
+
+  const d = buildDriver(
+    ACT1_STEPS,
+    () => localStorage.setItem(REPLAY_KEY, "act2"), // arm the editor leg
+    () => localStorage.removeItem(REPLAY_KEY),      // bailed early — disarm
+  );
   d.drive();
 }

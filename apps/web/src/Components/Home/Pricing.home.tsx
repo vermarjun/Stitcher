@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Check,
   Zap,
@@ -11,10 +11,11 @@ import {
   Linkedin,
   X,
 } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { ShimmerButton } from "../magicui/shimmer-button";
 import api from "@/api";
+import { PlanBadge } from "@/Components/ui/PlanBadge";
 
 // Dialog component for social media modal
 const SocialModal = ({
@@ -100,15 +101,16 @@ const UserCurrentPlan = ({
   userData,
 }: {
   userData: {
-    plan: "free" | "basic" | "plus" | "max";
+    plan: string;
     credits: {
       generation: number;
       editing: number;
-      expiresAt: Date;
+      expiresAt: Date | string | null | undefined;
     };
   };
 }) => {
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return "—";
     return new Date(date).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -119,15 +121,13 @@ const UserCurrentPlan = ({
   return (
     <div className="w-full max-w-2xl mx-auto mb-10">
       <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-2xl sm:rounded-full p-5 sm:px-6 sm:py-3 flex flex-col sm:flex-row items-center sm:justify-between gap-y-4 sm:gap-4 shadow-lg shadow-black/20 w-full">
-        
+
         {/* Plan Section */}
         <div className="flex items-center justify-between w-full sm:w-auto gap-2">
           <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Current Plan</span>
-          <span className="bg-zinc-800 text-white text-xs px-2 py-0.5 rounded border border-zinc-700 font-medium capitalize">
-            {userData.plan}
-          </span>
+          <PlanBadge plan={userData.plan} />
         </div>
-        
+
         {/* Divider */}
         <div className="w-full h-px bg-zinc-800 sm:hidden" />
         <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
@@ -174,15 +174,39 @@ const PaymentPage = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSocialModal, setShowSocialModal] = useState(false);
 
-  // Mock user data - replace with actual data from your app
-  const userData = {
-    plan: "free" as const,
+  const [userData, setUserData] = useState<{
+    plan: string;
     credits: {
-      generation: 5,
-      editing: 10,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-    },
-  };
+      generation: number;
+      editing: number;
+      expiresAt: Date | string | null | undefined;
+    };
+  }>({
+    plan: "free",
+    credits: { generation: 0, editing: 0, expiresAt: null },
+  });
+
+  useEffect(() => {
+    api
+      .get<any>("/users/me/credits")
+      .then((response) => {
+        const data = response.data;
+        if (data.success) {
+          const msg = data.message;
+          setUserData({
+            plan: msg.plan,
+            credits: {
+              generation: msg.credits.generation,
+              editing: msg.credits.editing,
+              expiresAt: msg.credits.expiresAt ?? null,
+            },
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch credits:", err);
+      });
+  }, []);
 
   const plans = [
     {
@@ -339,19 +363,6 @@ const PaymentPage = () => {
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
-
-      <Toaster
-        position="top-center"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: "#18181b",
-            border: "1px solid #27272a",
-            color: "#fff",
-            fontSize: "14px",
-          },
-        }}
-      />
 
       {showConfetti && (
         <Confetti 

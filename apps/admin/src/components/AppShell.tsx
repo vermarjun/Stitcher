@@ -9,6 +9,8 @@ import {
   Radio,
   LogOut,
   Scissors,
+  Plug,
+  Brain,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,6 +36,8 @@ const NAV_ITEMS = [
   { label: 'Content', href: '/content', icon: FileVideo },
   { label: 'Feedback', href: '/feedback', icon: MessageSquare },
   { label: 'Live', href: '/live', icon: Radio },
+  { label: 'Providers', href: '/providers', icon: Plug },
+  { label: 'Coder Memory', href: '/memory', icon: Brain },
 ];
 
 export function AppShell() {

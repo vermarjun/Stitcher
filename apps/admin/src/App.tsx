@@ -5,10 +5,13 @@ import LoginPage from '@/pages/Login';
 import OverviewPage from '@/pages/Overview';
 import UsersPage from '@/pages/Users';
 import GenerationPage from '@/pages/Generation';
+import GenerationDetailPage from '@/pages/GenerationDetail';
 import CostPage from '@/pages/Cost';
 import ContentPage from '@/pages/Content';
 import FeedbackPage from '@/pages/Feedback';
 import LivePage from '@/pages/Live';
+import ProvidersPage from '@/pages/Providers';
+import CoderMemoryPage from '@/pages/CoderMemory';
 
 export default function App() {
   return (
@@ -22,10 +25,13 @@ export default function App() {
           <Route path="/" element={<OverviewPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/generation" element={<GenerationPage />} />
+          <Route path="/generation/:jobId" element={<GenerationDetailPage />} />
           <Route path="/cost" element={<CostPage />} />
           <Route path="/content" element={<ContentPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/live" element={<LivePage />} />
+          <Route path="/providers" element={<ProvidersPage />} />
+          <Route path="/memory" element={<CoderMemoryPage />} />
         </Route>
       </Route>
 

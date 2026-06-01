@@ -2,18 +2,14 @@ import { useState } from "react";
 import {
   Users,
   ChevronLeft,
-  Scissors,
   FolderOpen,
   Layout,
   Backpack,
-  Edit,
   Brain,
 } from "lucide-react";
 import AssetStash from "./AssetStash/main.assetstash";
 import TemplatesComponent from "./Template.leftsidebar";
-import ProjectDescriptionComponent from "./Script.leftsidebar";
 import CollaboratorsComponent from "./Collaborators.leftsidebar";
-import TimelineTracksSidebar from "./Tracks.leftsidebar";
 import MemoryComponent from "./Memory.leftsidebar";
 import type { Project, IUser } from "@/State/Types";
 // import BackpackComponent from "@/Components/Dashboard/LeftSideBar/Backpack.leftsidebar";
@@ -26,18 +22,16 @@ interface Props {
   user?: IUser;
 }
 
-const MainSidebar = ({ currentProject }: Props) => {
+const MainSidebar = ({ currentProject, user }: Props) => {
   const [activeTab, setActiveTab] = useState("assetstash");
   const [isExpanded, setIsExpanded] = useState(true);
 
   const sidebarTabs = [
     { id: "assetstash", icon: FolderOpen, label: "Asset Stash" },
-    { id: "tracks", icon: Scissors, label: "Tracks" },
     ...(FEATURES.community ? [{ id: "backpack", icon: Backpack, label: "Backpack" }] : []),
     { id: "templates", icon: Layout, label: "Templates" },
-    { id: "description", icon: Edit, label: "Project Script" },
     { id: "memory", icon: Brain, label: "Memory" },
-    { id: "collaborators", icon: Users, label: "Add Collaborators" },
+    { id: "collaborators", icon: Users, label: "Collaborators" },
   ];
 
   const renderActiveComponent = () => {
@@ -45,16 +39,12 @@ const MainSidebar = ({ currentProject }: Props) => {
       case "explorer":
       case "assetstash":
         return <AssetStash currentProject={currentProject} />;
-      case "tracks":
-        return <TimelineTracksSidebar currentProject={currentProject} />;
       case "templates":
         return <TemplatesComponent currentProject={currentProject} />;
-      case "description":
-        return <ProjectDescriptionComponent currentProject={currentProject} />;
       case "memory":
         return <MemoryComponent />;
       case "collaborators":
-        return <CollaboratorsComponent />;
+        return <CollaboratorsComponent currentProject={currentProject} user={user} />;
       case "backpack":
         return <BackpackComponent currentProject={currentProject}/>;
       default:

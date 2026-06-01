@@ -606,6 +606,11 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
     if (!user) return res.status(400).json({ message: 'Invalid or expired token.' });
 
     user.password = await bcrypt.hash(password, 10);
+    // Clear the OAuth-only flag: setting a password makes password login valid.
+    // Without this, a Google-signup user who sets a password here would still be
+    // blocked by login() ("This account uses Google OAuth"). They keep Google
+    // login too — authWithGoogle doesn't depend on this flag.
+    user.usedOAuth = false;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();

@@ -13,6 +13,7 @@ import { Types } from "mongoose";
 import GenerationJob, {
     type GenerationJobQueue,
     type GenerationJobStatus,
+    type IJobStage,
 } from "../model/generationJob.model";
 import logger from "../util/logger.util";
 
@@ -93,5 +94,47 @@ export async function incrementJobScene(jobId: string | undefined): Promise<void
         await GenerationJob.updateOne({ jobId }, { $inc: { "sceneProgress.done": 1 } });
     } catch (err) {
         logger.warn({ message: "[jobTracker] incrementJobScene failed (non-fatal)", jobId, error: String(err) });
+    }
+}
+
+/**
+ * Push one stage row onto the job's `stages[]` array.
+ *
+ * Best-effort / non-fatal — a Mongo hiccup must never break a generation.
+ */
+export async function appendJobStage(
+    jobId: string | undefined,
+    stage: IJobStage
+): Promise<void> {
+    if (!jobId) return;
+    try {
+        await GenerationJob.updateOne({ jobId }, { $push: { stages: stage } });
+    } catch (err) {
+        logger.warn({ message: "[jobTracker] appendJobStage failed (non-fatal)", jobId, stage: stage.stage, error: String(err) });
+    }
+}
+
+/**
+ * Persist aggregated token counts and computed USD cost on the job record.
+ *
+ * Best-effort / non-fatal.
+ */
+export async function setJobTokens(
+    jobId: string | undefined,
+    tokens: { input: number; output: number; total: number },
+    costUsd: number | null
+): Promise<void> {
+    if (!jobId) return;
+    try {
+        const update: Record<string, unknown> = {
+            "tokens.input": tokens.input,
+            "tokens.output": tokens.output,
+        };
+        if (costUsd !== null) {
+            update["costUsd"] = costUsd;
+        }
+        await GenerationJob.updateOne({ jobId }, { $set: update });
+    } catch (err) {
+        logger.warn({ message: "[jobTracker] setJobTokens failed (non-fatal)", jobId, error: String(err) });
     }
 }

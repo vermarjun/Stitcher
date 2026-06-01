@@ -4,8 +4,6 @@ import {
   Music,
   Plus,
   Loader2,
-  Backpack,
-  Check,
 } from "lucide-react";
 import type { Asset } from "@/State/Types";
 import { AssetOrigin, AssetType } from "@/State/Types";
@@ -16,13 +14,11 @@ interface CardProps {
   handleDragEnd: (e: React.DragEvent) => void;
   formatDuration: (x: number) => string;
   handleAddToTimeline: (asset: Asset) => Promise<void>;
-  handleAddToBackPack: (asset: Asset) => Promise<void>;
   getOriginLabel: (origin: AssetOrigin) => string;
   formatFileSize: (s: number) => string;
   loadingStates: {
     [assetId: string]: {
       timeline: boolean;
-      backpack: boolean;
     };
   };
 }
@@ -33,7 +29,6 @@ const AssetCardComponent = ({
   handleDragEnd,
   formatDuration,
   handleAddToTimeline,
-  handleAddToBackPack,
   getOriginLabel,
   formatFileSize,
   loadingStates,
@@ -112,24 +107,6 @@ const AssetCardComponent = ({
                         <Loader2 className="w-3 h-3 text-white animate-spin" />
                       ) : (
                         <Plus className="w-3 h-3 text-white" />
-                      )}
-                    </button>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddToBackPack(asset);
-                      }}
-                      disabled={loadingStates[asset._id]?.backpack}
-                      className="p-1 cursor-pointer bg-green-800 text-black rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loadingStates[asset._id]?.backpack ? (
-                        <Loader2 className="w-3 h-3 text-white animate-spin" />
-                      ) : !asset.isAddedToBackpack ? (
-                        <Backpack className="w-3 h-3 text-white" />
-                      ) : (
-                        <Check className="w-3 h-3 text-white" />
                       )}
                     </button>
                   </div>

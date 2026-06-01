@@ -27,6 +27,16 @@ services:
       - "4000:4000"
     env_file:
       - ./API/.env.docker
+    volumes:
+      # Bind-mount prompt subdirs so they survive image rebuilds without
+      # requiring the Dockerfile to copy them explicitly.  Each role's .md
+      # files land at exactly /srv/dist/prompts/<role>/<version>.md as the
+      # registry expects (registry.js: path.join(__dirname, role, version+'.md')).
+      # Resolves "Could not load prompt for role=planner version=v1_initial" (HTTP 500→400).
+      - ../../Manim-Agent-Service/src/prompts/planner:/srv/dist/prompts/planner:ro
+      - ../../Manim-Agent-Service/src/prompts/coder:/srv/dist/prompts/coder:ro
+      - ../../Manim-Agent-Service/src/prompts/debugger:/srv/dist/prompts/debugger:ro
+      - ../../Manim-Agent-Service/src/prompts/refiner:/srv/dist/prompts/refiner:ro
     environment:
       # Point the agent at Redis Cloud for LangGraph checkpoints.
       CHECKPOINT_REDIS_URL: "redis://default:REDACTED_REDIS_PASSWORD@redis-10017.crce219.us-east-1-4.ec2.cloud.redislabs.com:10017"
@@ -79,4 +89,10 @@ services:
       VECTOR_STORE: "mongodb_atlas"
       # The shared env_file sets PORT=3000 for the API; override so RAG binds 7000
       PORT: "7000"
+      # Production logging (JSON via pino) — the dev pino-pretty transport spawns a
+      # worker thread whose file isn't present in the single-file CJS bundle.
+      NODE_ENV: "production"
+      # OpenTelemetry (OBSERVABILITY_PLAN §3 Phase 1)
+      OTEL_SERVICE_NAME: "stitcher-rag"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
     restart: unless-stopped

@@ -32,15 +32,9 @@ const envSchema = z.object({
     // requires this to be EMAIL_USER or a verified alias. Falls back to
     // `Stitcher <EMAIL_USER>` when unset.
     EMAIL_FROM: z.string().optional(),
-    // Gmail transport, mode A — OAuth2 ("send via API"). Register an OAuth client
-    // in Google Cloud Console, grant the Gmail send scope, and mint a refresh
-    // token for EMAIL_USER. When all three are set the Gmail provider uses
-    // XOAUTH2 and nodemailer refreshes access tokens automatically.
-    GMAIL_OAUTH_CLIENT_ID: z.string().optional().default(""),
-    GMAIL_OAUTH_CLIENT_SECRET: z.string().optional().default(""),
-    GMAIL_OAUTH_REFRESH_TOKEN: z.string().optional().default(""),
-    // Gmail transport, mode B — App Password (legacy/simple). Used when OAuth2
-    // vars above are absent. Optional so an OAuth-only deployment can omit it.
+    // Gmail App Password — generated at https://myaccount.google.com/apppasswords.
+    // The Gmail provider authenticates with this over SMTP. (A pluggable OAuth2
+    // or third-party provider can be added later in email/providers/.)
     EMAIL_APP_PASSWORD: z.string().optional().default(""),
 
     CLOUDINARY_CLOUD_NAME: z.string().min(1),
@@ -72,6 +66,11 @@ const envSchema = z.object({
     // app still boots without it; memory reflection no-ops when the key is absent.
     OPENCODE_GO_API_KEY: z.string().optional().default(""),
     OPENCODE_GO_DEFAULT_MODEL: z.string().optional().default("glm-5.1"),
+
+    // Gateway proxy — internal bearer key that the Agent service must present
+    // when using /gateway/proxy/* endpoints. Set to a random secret string.
+    // If unset, the proxy is open (dev/local only — never leave unset in prod).
+    GATEWAY_INTERNAL_KEY: z.string().optional().default(""),
 
     KEYS_ENCRYPTION_KEY: z
         .string()
@@ -176,19 +175,13 @@ export const EMAIL_VERIFICATION_CONFIG = {
 
 // Email Configuration — consumed by the pluggable sender in src/email/.
 // `from` defaults to "Stitcher <EMAIL_USER>" so messages have a friendly name.
-// The Gmail provider picks OAuth2 when oauth.* are all present, else falls back
-// to the app password.
+// The Gmail provider authenticates via app password over SMTP.
 export const EMAIL_CONFIG = {
     provider: config.EMAIL_PROVIDER,
     service: "gmail",
     user: EMAIL_USER,
     pass: EMAIL_APP_PASSWORD,
     from: config.EMAIL_FROM || `Stitcher <${EMAIL_USER}>`,
-    oauth: {
-        clientId: config.GMAIL_OAUTH_CLIENT_ID,
-        clientSecret: config.GMAIL_OAUTH_CLIENT_SECRET,
-        refreshToken: config.GMAIL_OAUTH_REFRESH_TOKEN,
-    },
 };
 
 export const CLOUDINARY_CONFIG = {

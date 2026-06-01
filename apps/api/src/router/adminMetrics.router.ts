@@ -14,6 +14,7 @@ import {
     getUsersList,
     getGenerationsMetrics,
     getGenerationsList,
+    getGenerationDetail,
     getContentMetrics,
     getRevenueMetrics,
     getCostMetrics,
@@ -38,6 +39,9 @@ router.get("/generations", getGenerationsMetrics);
 
 // GET /admin/metrics/generations/list
 router.get("/generations/list", getGenerationsList);
+
+// GET /admin/metrics/generations/:jobId  (must come after /list)
+router.get("/generations/:jobId", getGenerationDetail);
 
 // GET /admin/metrics/content
 router.get("/content", getContentMetrics);

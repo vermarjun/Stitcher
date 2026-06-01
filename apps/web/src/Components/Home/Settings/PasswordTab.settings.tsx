@@ -1,12 +1,5 @@
 import React from "react";
-import { Eye, EyeOff, KeyRound } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/Components/ui/card";
+import { Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
 import { Label } from "@/Components/ui/label";
@@ -21,6 +14,12 @@ interface PasswordTabProps {
   handlePasswordChange: (e: React.FormEvent) => void;
 }
 
+const FIELDS = [
+  { key: "current" as const, prop: "currentPassword" as const, label: "Current password" },
+  { key: "new" as const, prop: "newPassword" as const, label: "New password" },
+  { key: "confirm" as const, prop: "confirmPassword" as const, label: "Confirm new password" },
+];
+
 const PasswordTab: React.FC<PasswordTabProps> = ({
   passwordData,
   setPasswordData,
@@ -30,105 +29,90 @@ const PasswordTab: React.FC<PasswordTabProps> = ({
   handlePasswordChange,
 }) => {
   return (
-    <div className="space-y-6">
-      <Card className="bg-zinc-900 border-zinc-800">
-        <CardHeader className="border-b border-zinc-800 pb-6">
-          <div className="flex items-center gap-3">
-            {/* <div className="p-2 bg-blue-500/10 rounded-lg">
-              <ShieldCheck className="h-6 w-6 text-blue-400" />
-            </div> */}
-            <div>
-              <CardTitle className="text-xl font-semibold text-white">
-                Password & Security
-              </CardTitle>
-              <CardDescription className="text-zinc-400 mt-1">
-                Manage your password and security preferences
-              </CardDescription>
-            </div>
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 border-b border-zinc-800 px-4 py-4 md:px-5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 ring-1 ring-white/10">
+            <ShieldCheck className="h-[18px] w-[18px]" />
           </div>
-        </CardHeader>
-        <CardContent className="pt-8">
-          <form onSubmit={handlePasswordChange} className="space-y-6 max-w-xl">
-            {(["current", "new", "confirm"] as const).map((field) => (
-              <div key={field} className="space-y-2">
-                <Label className="text-sm font-medium text-zinc-300">
-                  {field === "current"
-                    ? "Current Password"
-                    : field === "new"
-                    ? "New Password"
-                    : "Confirm New Password"}
-                </Label>
-                <div className="relative group">
+          <div>
+            <h3 className="text-sm font-semibold text-white">
+              Password &amp; security
+            </h3>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Update the password used to sign in.
+            </p>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form
+          onSubmit={handlePasswordChange}
+          className="space-y-4 px-4 py-5 md:px-5"
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {FIELDS.map(({ key, prop, label }) => (
+              <div
+                key={key}
+                className={`space-y-1.5 ${key === "current" ? "sm:col-span-2" : ""}`}
+              >
+                <Label className="text-xs text-zinc-400">{label}</Label>
+                <div className="relative">
                   <Input
-                    type={showPasswords[field] ? "text" : "password"}
-                    value={
-                      passwordData[
-                        field === "current"
-                          ? "currentPassword"
-                          : field === "new"
-                          ? "newPassword"
-                          : "confirmPassword"
-                      ]
-                    }
+                    type={showPasswords[key] ? "text" : "password"}
+                    value={passwordData[prop]}
                     onChange={(e) =>
                       setPasswordData({
                         ...passwordData,
-                        [field === "current"
-                          ? "currentPassword"
-                          : field === "new"
-                          ? "newPassword"
-                          : "confirmPassword"]: e.target.value,
+                        [prop]: e.target.value,
                       })
                     }
-                    className="bg-zinc-950 border-zinc-800 text-white focus:border-blue-500/50 focus:ring-blue-500/20 h-11 pr-10 transition-all font-mono text-sm"
+                    className="h-9 border-zinc-800 bg-zinc-950 pr-9 font-mono text-sm text-white focus-visible:border-[#19E5A1]/50 focus-visible:ring-[#19E5A1]/20"
                     required
-                    minLength={field !== "current" ? 6 : undefined}
+                    minLength={key !== "current" ? 6 : undefined}
                     placeholder="••••••••"
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
-                    onClick={() => togglePasswordVisibility(field)}
+                    className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                    onClick={() => togglePasswordVisibility(key)}
+                    aria-label={showPasswords[key] ? "Hide password" : "Show password"}
                   >
-                    {showPasswords[field] ? (
-                      <EyeOff className="h-4 w-4" />
+                    {showPasswords[key] ? (
+                      <EyeOff className="h-3.5 w-3.5" />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <Eye className="h-3.5 w-3.5" />
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
             ))}
+          </div>
 
-            <div className="pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-0">
-               <div className="text-xs text-zinc-500 order-2 md:order-1">
-                  Password must be at least 6 characters long
-               </div>
-               <Button
-                type="submit"
-                disabled={loading}
-                className="bg-white text-black hover:bg-zinc-200 transition-colors h-10 px-8 font-medium w-full md:w-auto order-1 md:order-2"
-              >
-                {loading ? (
-                    <div className="flex items-center gap-2 justify-center">
-                        <div className="h-4 w-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                        Updating...
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-2 justify-center">
-                        <KeyRound className="h-4 w-4" />
-                        Update Password
-                    </div>
-                )}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-      
-      {/* Optional: Add 2FA placeholder or login sessions later */}
+          <div className="flex flex-col items-stretch justify-between gap-3 pt-1 sm:flex-row sm:items-center sm:gap-0">
+            <p className="order-2 text-xs text-zinc-500 sm:order-1">
+              Must be at least 6 characters long.
+            </p>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={loading}
+              className="order-1 h-9 min-w-[150px] bg-white text-black hover:bg-zinc-200 sm:order-2"
+            >
+              {loading ? (
+                <>
+                  <div className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <KeyRound className="mr-2 h-3.5 w-3.5" />
+                  Update password
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
     </div>
   );
 };

@@ -69,6 +69,7 @@ services:
       context: ./API
     ports:
       - "3000:3000"
+      - "1455:3000"  # Codex OAuth callback — OpenAI redirects to localhost:1455/auth/callback
     env_file:
       - ./API/.env.docker
     depends_on:
