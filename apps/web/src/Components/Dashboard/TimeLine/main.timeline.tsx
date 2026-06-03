@@ -161,6 +161,7 @@ const TimelineEditor = ({
   onSync,
   onDeleteItem,
   onAddTextItem,
+  onAddAssetItem,
   canEdit = true,
   collabDoc: _collabDoc,
   localOrigin: _localOrigin,
@@ -177,6 +178,10 @@ const TimelineEditor = ({
   onDeleteItem?: (itemId: string, trackId: string) => void;
   /** Called after HTTP add-text succeeds — writes new item to Y.Doc */
   onAddTextItem?: (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => void;
+  /** Called after HTTP asset-drop succeeds — updates local React state immediately
+   *  (server already injects the item into the Y.Doc, so we must NOT write it
+   *  to the Y.Doc here or it would create a duplicate clip). */
+  onAddAssetItem?: (trackId: string, item: any) => void;
   /** Viewers are read-only — when false, all mutating controls are disabled/hidden. */
   canEdit?: boolean;
   collabDoc?: CollabDoc | null;
@@ -320,11 +325,15 @@ const TimelineEditor = ({
         fadeIn: 0,
         fadeOut: 0,
       };
-      const response = await api.post<{ success: boolean; message?: string }>(
+      const response = await api.post<{ success: boolean; message?: string; data?: { timelineItem?: any } }>(
         `/track/${track._id}/asset`,
         requestBody
       );
       if (response.data.success) {
+        const created = response.data.data?.timelineItem;
+        if (created) {
+          onAddAssetItem?.(track._id, { ...created, trackId: track._id });
+        }
         triggerTracksRefresh();
         // When collab is synced, the new clip arrives via the server's Y.Doc
         // inject + observer (hydrateFromServer then resolves its asset), so a

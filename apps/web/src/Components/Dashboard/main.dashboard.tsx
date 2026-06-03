@@ -17,6 +17,7 @@ import {
 import { DragAssetProvider } from "@/Components/Dashboard/DragAssetContext";
 import { PollingProvider, RefreshHeaderProvider, CollabAwarenessProvider } from "./context";
 import { maybeRunEditorTour } from "@/lib/onboardingTour";
+import PossibilitiesDialog from "@/Components/Dashboard/PossibilitiesDialog";
 
 import type { Project, IUser, Asset } from "@/State/Types";
 
@@ -26,6 +27,7 @@ const DashboardLayout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState<Project>();
   const [user, setUser] = useState<IUser>();
+  const [showPossibilities, setShowPossibilities] = useState(false);
 
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
   
@@ -88,6 +90,22 @@ const DashboardLayout = () => {
     }
   }, []);
 
+  const openPossibilities = () => {
+    setShowPossibilities(true);
+    try {
+      const raw = localStorage.getItem("user");
+      const uid = raw ? (JSON.parse(raw)?._id ?? "") : "";
+      localStorage.setItem("stitcher_possibilities_seen", uid || "1");
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    const handler = () => openPossibilities();
+    window.addEventListener("stitcher:show-possibilities", handler);
+    return () => window.removeEventListener("stitcher:show-possibilities", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // First-time product tour, Act 2 (the editor walkthrough). Fires once the
   // project has loaded and the editor chrome is mounted. No-ops unless the user
   // is mid-tour (or hasn't seen it) — see maybeRunEditorTour() for the gating.
@@ -110,7 +128,8 @@ const DashboardLayout = () => {
               <RefreshProviderTimeline>
                 <RefreshProviderAssetStash>
                     <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-                    <Header currentProject={project} user={user} />
+                    <PossibilitiesDialog open={showPossibilities} onClose={() => setShowPossibilities(false)} />
+                    <Header currentProject={project} user={user} onShowPossibilities={openPossibilities} />
                     
                     {/* Mobile Only: Generate / Edit Buttons */}
                     <div className="md:hidden flex w-full border-b border-zinc-800 bg-black">

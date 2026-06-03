@@ -71,8 +71,10 @@ import adminActionsRoutes from "./router/adminActions.router";
 import adminProvidersRoutes from "./router/adminProviders.router";
 import adminRlhfRoutes from "./router/adminRlhf.router";
 import gatewayRoutes from "./router/gateway.router";
+import analyticsRoutes from "./router/analytics.router";
 import { codexAuthCallback } from "./controller/gateway.controller";
 import { startHealthPoller, stopHealthPoller } from "./services/adminHealth.service";
+import { startStuckJobCleaner, stopStuckJobCleaner } from "./util/stuckJobCleaner.util";
 import { isAdminUser } from "./middleware/admin.middleware";
 import { initYjsServer } from "./collab/yjs.server";
 
@@ -303,6 +305,7 @@ app.use(`${API_PREFIX}/editchat`, editChatRoutes);
 app.use(`${API_PREFIX}/generatechat`, generateChatRoutes);
 app.use(`${API_PREFIX}/timeline`, timelineRoutes);
 app.use(`${API_PREFIX}/share`, shareRoutes); // public — no auth
+app.use(`${API_PREFIX}`, analyticsRoutes); // public — POST /analytics/collect (best-effort auth)
 app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
 // Community surface — gated behind FEATURE_COMMUNITY (off for v1 relaunch).
@@ -388,6 +391,7 @@ const server = httpServer.listen(PORT, async () => {
         // Admin portal: poll dependency health (mongo/redis/agent/render/rag) on
         // a 30s interval so /admin/health serves a cached snapshot. Best-effort.
         startHealthPoller();
+        startStuckJobCleaner();
     } catch (error) {
         logger.error({ message: "Failed to start services", error: String(error) });
     }
@@ -412,6 +416,7 @@ async function shutdown(signal: string) {
         try {
             stopQueueDepthSampler();
             stopHealthPoller();
+            stopStuckJobCleaner();
 
             await generationWorker.close();
             await editWorker.close();

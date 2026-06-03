@@ -177,6 +177,8 @@ export interface CodeInput {
     examples?: CodeExample[];
     /** API symbol names from RAG query-transform; used for cheatsheet lookup. */
     requiredApis?: string[];
+    /** Plugin slugs from RAG query-transform (e.g. ["manim-chess"]); drive skill injection. */
+    requiredPlugins?: string[];
     /** Always true — coder always emits a VoiceoverScene. */
     voiceover: true;
     /** Optional style manifest; null means use coder defaults. */

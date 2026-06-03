@@ -225,6 +225,19 @@ export interface GenerationsMetrics {
   queueSplit: QueueSplit;
   recentPrompts: RecentPrompt[];
   topPromptTerms: TopPromptTerm[];
+  // ── Resilience fields (added with the fallback/debug pipeline) ──
+  /** Fraction 0..1 of completed jobs that produced a real animation (not a fallback card). */
+  realRate?: number;
+  /** Count of jobs that produced a real animation. */
+  realCount?: number;
+  /** Count of jobs that fell back to a static title-card scene. */
+  fallbackSceneCount?: number;
+  /** Count of jobs saved by an LLM fallback. */
+  fallbackLlmCount?: number;
+  /** Fraction 0..1 of jobs where the debugger was invoked. */
+  debugInvokedRate?: number;
+  /** Fraction 0..1 of debugger invocations that resolved the failure. */
+  debugResolveRate?: number;
 }
 
 // --------------- §2b: Admin Metrics — Generations List ---------------
@@ -487,6 +500,7 @@ export interface ServiceHealth {
 export interface HealthResponse {
   services: ServiceHealth[];
   generatedAt: string;
+  llmUsage?: { count: number; cap: number } | null;
 }
 
 // --------------- §2d: Live Jobs ---------------
@@ -538,6 +552,36 @@ export interface AuditLogResponse {
 export interface DateRange {
   from: Date;
   to: Date;
+}
+
+// --------------- Providers — per-service fallback ---------------
+
+/**
+ * Masked fallback config as returned on a provider cell from
+ * GET /api/admin/providers (and the PUT response `config.fallback`).
+ * The apiKey is never returned — only its masked form.
+ */
+export interface ProviderFallbackConfig {
+  enabled: boolean;
+  provider: string;
+  maskedKey: string;
+  hasKey: boolean;
+  baseURL: string | null;
+  model: string | null;
+  params: Record<string, unknown>;
+}
+
+/**
+ * Fallback object accepted in the PUT /api/admin/providers/:service/:tier body.
+ * `apiKey` is write-only — omit/blank it to preserve the existing encrypted key.
+ */
+export interface ProviderFallbackPayload {
+  enabled: boolean;
+  provider: string;
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+  params?: Record<string, unknown>;
 }
 
 // --------------- RLHF — Feature 1 + 2 + 3 ---------------
@@ -631,4 +675,154 @@ export interface RagSyncResponse {
 export interface CurateResponse {
   curationStatus: CurationStatus;
   jobId: string;
+}
+
+// --------------- Pipeline ops health — /admin/metrics/pipeline ---------------
+
+export interface PipelineStage {
+  stage: string;
+  runs: number;
+  /** Fractions 0..1 */
+  okRate: number;
+  failRate: number;
+  p50Ms: number;
+  p95Ms: number;
+  avgMs: number;
+  errors: number;
+}
+
+export interface PipelineFailureCategory {
+  category: string;
+  count: number;
+}
+
+export interface PipelineModelUsage {
+  model: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  /** True when the model has no known price → costUsd is not estimable. */
+  unknownPrice: boolean;
+}
+
+export interface PipelineProviderUsage {
+  provider: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface PipelineSlowestStage {
+  stage: string;
+  p95Ms: number;
+}
+
+export interface PipelineMetrics {
+  range: { from: string; to: string };
+  totals: {
+    jobs: number;
+    complete: number;
+    failed: number;
+    cancelled: number;
+    real: number;
+    fallbackScene: number;
+    fallbackLlm: number;
+  };
+  /** ALL rate fields are fractions 0..1. */
+  rates: {
+    success: number;
+    real: number;
+    fallbackScene: number;
+    fallbackLlm: number;
+    debugInvoked: number;
+    debugResolved: number;
+  };
+  /** Sorted slowest p95 first. */
+  stages: PipelineStage[];
+  failureCategories: PipelineFailureCategory[];
+  byModel: PipelineModelUsage[];
+  byProvider: PipelineProviderUsage[];
+  slowestStages: PipelineSlowestStage[];
+}
+
+// --------------- Analytics / Behaviour — /admin/metrics/analytics/* ---------------
+
+export interface AnalyticsDauPoint {
+  date: string;
+  count: number;
+}
+
+export interface AnalyticsOverview {
+  activeUsers: {
+    range: string;
+    dau: number;
+    wau: number;
+    mau: number;
+  };
+  sessions: number;
+  avgSessionMin: number;
+  totalActiveHours: number;
+  avgMinutesPerUser: number;
+  pageViews: number;
+  newUsers: number;
+  returningUsers: number;
+  /** stickiness = DAU/MAU fraction (0..1). */
+  stickiness: number;
+  dauSeries: AnalyticsDauPoint[];
+}
+
+export interface AnalyticsPage {
+  page: string;
+  views: number;
+  uniqueUsers: number;
+  avgSecOnPage: number;
+  totalMinutes: number;
+}
+
+export interface AnalyticsSection {
+  section: string;
+  events: number;
+  uniqueUsers: number;
+  totalMinutes: number;
+}
+
+export interface AnalyticsPagesResponse {
+  pages: AnalyticsPage[];
+  sections: AnalyticsSection[];
+}
+
+export interface AnalyticsRetention {
+  totalUsers: number;
+  recurrentUsers: number;
+  /** Fraction 0..1 */
+  recurrentRate: number;
+  returningUsers: number;
+  /** Fraction 0..1 */
+  returningRate: number;
+  activeDaysDistribution: {
+    '1': number;
+    '2': number;
+    '3-5': number;
+    '6+': number;
+  };
+}
+
+export interface AnalyticsUserRow {
+  identity: string;
+  userId: string | null;
+  username: string | null;
+  email: string | null;
+  plan: UserPlan | null;
+  sessions: number;
+  daysActive: number;
+  pageViews: number;
+  totalMinutes: number;
+  lastSeen: string | null;
+}
+
+export interface AnalyticsUsersResponse {
+  users: AnalyticsUserRow[];
 }

@@ -31,8 +31,64 @@ import type { IUser } from '../model/user.model';
 
 export const GATEWAY_BASE_URLS: Record<string, string> = {
     'opencode-go': 'https://opencode.ai/zen/go/v1',
-    'codex': 'https://api.openai.com/v1',
+    // Codex subscription tokens work against the ChatGPT backend, NOT api.openai.com.
+    // api.openai.com requires API-scoped tokens; chatgpt.com/backend-api/codex accepts
+    // the ChatGPT session OAuth token the Codex CLI exchanges.
+    'codex': 'https://chatgpt.com/backend-api/codex',
 };
+
+// ── Codex Responses API translation ──────────────────────────────────────────
+// Codex OAuth session tokens only work with the Responses API (/v1/responses),
+// NOT with /v1/chat/completions. These helpers translate between the two formats
+// so callers (LangChain, test endpoint, proxy) can keep using the chat format.
+
+interface ChatMessage { role: string; content: string }
+
+interface ResponsesRequest {
+    model: string;
+    input: unknown;
+    instructions?: string;
+    max_output_tokens?: number;
+    temperature?: number;
+    [key: string]: unknown;
+}
+
+
+/**
+ * Translate OpenAI chat/completions body → Codex backend body.
+ * Derived from codex2api/proxy/translator.go (TranslateChatCompletionsToResponses).
+ *
+ * The Codex backend ONLY accepts: model, stream, store, include, input, reasoning.
+ * Everything else (temperature, max_tokens, instructions, etc.) is rejected.
+ * System messages map to role "developer" per the library source.
+ */
+function chatToResponses(body: Record<string, unknown>): ResponsesRequest {
+    const messages = (body.messages ?? []) as ChatMessage[];
+    const reasoningEffort = (body.reasoning_effort as string | undefined)?.trim();
+
+    // Convert messages to Codex input format.
+    // system → role "developer", others stay as-is.
+    const input = messages.map((m) => ({
+        type: 'message',
+        role: m.role === 'system' ? 'developer' : m.role,
+        content: [{ type: m.role === 'assistant' ? 'output_text' : 'input_text', text: m.content }],
+    }));
+
+    const out: Record<string, unknown> = {
+        model:        body.model as string,
+        stream:       true,
+        store:        false,
+        include:      ['reasoning.encrypted_content'],
+        instructions: '', // required by Codex backend even when empty (executor.go:L1)
+        input,
+        reasoning: reasoningEffort
+            ? { effort: reasoningEffort, summary: 'auto' }
+            : { summary: 'auto' },
+    };
+
+    return out as ResponsesRequest;
+}
+
 
 export const GATEWAY_MODELS: Record<string, string[]> = {
     'opencode-go': [
@@ -44,10 +100,7 @@ export const GATEWAY_MODELS: Record<string, string[]> = {
         'qwen3.5-plus', 'qwen3.6-plus',
     ],
     'codex': [
-        'o3', 'o4-mini', 'o3-mini',
-        'gpt-4.1', 'gpt-4.1-mini',
-        'gpt-4o', 'gpt-4o-mini',
-        'gpt-4-turbo', 'gpt-4',
+        'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex',
     ],
 };
 
@@ -62,7 +115,9 @@ const CODEX_TOKEN_URL   = 'https://auth.openai.com/oauth/token';
 // Port 1455 is what OpenAI's Hydra allowlist expects.  1457 is the official fallback.
 const CODEX_OAUTH_PORT  = 1455;
 const CODEX_REDIRECT_URI = `http://localhost:${CODEX_OAUTH_PORT}/auth/callback`;
-const CODEX_SCOPE = 'openid profile email offline_access api.connectors.read api.connectors.invoke';
+// Canonical Codex CLI scope. Adding api.responses.* (or api.connectors.*) here is
+// NOT a registered scope for this client → OpenAI's authorize returns AuthApiFailed.
+const CODEX_SCOPE = 'openid profile email offline_access';
 
 // In-memory PKCE state store (TTL 10 minutes). Fine for a single-admin app.
 const pkceStore = new Map<string, { verifier: string; userId: string; createdAt: number }>();
@@ -76,6 +131,25 @@ setInterval(() => {
 }, 5 * 60_000).unref();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Decode a JWT payload (no signature verification). Returns claims or null. */
+function decodeJwtClaims(jwt: string): Record<string, unknown> | null {
+    try {
+        const parts = jwt.split('.');
+        if (parts.length < 2) return null;
+        const json = Buffer.from(parts[1]!, 'base64url').toString('utf8');
+        return JSON.parse(json) as Record<string, unknown>;
+    } catch { return null; }
+}
+
+/** Extract the ChatGPT account id from a Codex access_token or id_token JWT. */
+function extractChatgptAccountId(token: string): string | null {
+    const claims = decodeJwtClaims(token);
+    if (!claims) return null;
+    const auth = claims['https://api.openai.com/auth'] as Record<string, unknown> | undefined;
+    const acct = auth?.['chatgpt_account_id'];
+    return typeof acct === 'string' && acct.length > 0 ? acct : null;
+}
 
 function maskToken(token: string): string {
     if (!token || token.length <= 8) return '••••';
@@ -103,6 +177,7 @@ export async function listGatewayStatus(_req: Request, res: Response): Promise<v
             configured: !!doc,
             maskedToken,
             hasRefreshToken: doc ? !!doc.encryptedRefreshToken : false,
+            hasAccountId: !!doc?.accountId,
             expiresAt: doc?.expiresAt ?? null,
             updatedAt: (doc as unknown as { updatedAt?: Date })?.updatedAt ?? null,
             updatedBy: doc?.updatedBy ?? null,
@@ -126,10 +201,11 @@ export async function upsertGatewayProvider(req: Request, res: Response): Promis
         return;
     }
 
-    const { token, refreshToken, expiresAt } = req.body as {
+    const { token, refreshToken, expiresAt, accountId } = req.body as {
         token?: string;
         refreshToken?: string;
         expiresAt?: string;
+        accountId?: string;
     };
 
     if (!token?.trim()) {
@@ -144,6 +220,12 @@ export async function upsertGatewayProvider(req: Request, res: Response): Promis
     };
     if (refreshToken?.trim()) update.encryptedRefreshToken = encrypt(refreshToken.trim());
     if (expiresAt) update.expiresAt = new Date(expiresAt);
+
+    let resolvedAccountId = accountId?.trim();
+    if (!resolvedAccountId && provider === 'codex') {
+        resolvedAccountId = extractChatgptAccountId(token.trim()) ?? undefined;
+    }
+    if (resolvedAccountId) update.accountId = resolvedAccountId;
 
     await GatewayConfig.findOneAndUpdate({ provider }, { $set: update }, { upsert: true, new: true });
     logger.info({ message: '[gateway] token upserted', provider, updatedBy: userId });
@@ -169,6 +251,9 @@ export async function startCodexAuth(req: Request, res: Response): Promise<void>
     authURL.searchParams.set('scope', CODEX_SCOPE);
     authURL.searchParams.set('code_challenge', challenge);
     authURL.searchParams.set('code_challenge_method', 'S256');
+    // Codex-specific authorize params the official CLI sends; OpenAI's flow expects them.
+    authURL.searchParams.set('id_token_add_organizations', 'true');
+    authURL.searchParams.set('codex_cli_simplified_flow', 'true');
     authURL.searchParams.set('state', state);
 
     logger.info({ message: '[gateway] codex OAuth flow started', callbackURL });
@@ -241,6 +326,7 @@ export async function codexAuthCallback(req: Request, res: Response): Promise<vo
             refresh_token?: string;
             expires_in?: number;
             token_type?: string;
+            id_token?: string;
         }>(
             CODEX_TOKEN_URL,
             {
@@ -253,7 +339,7 @@ export async function codexAuthCallback(req: Request, res: Response): Promise<vo
             { headers: { 'Content-Type': 'application/json' } }
         );
 
-        const { access_token, refresh_token, expires_in } = tokenRes.data;
+        const { access_token, refresh_token, expires_in, id_token } = tokenRes.data;
 
         if (!access_token) {
             res.send(callbackErrorHTML('No access token in OAuth response.'));
@@ -266,6 +352,9 @@ export async function codexAuthCallback(req: Request, res: Response): Promise<vo
         };
         if (refresh_token) update.encryptedRefreshToken = encrypt(refresh_token);
         if (expires_in) update.expiresAt = new Date(Date.now() + expires_in * 1000);
+
+        const acct = (id_token ? extractChatgptAccountId(id_token) : null) ?? extractChatgptAccountId(access_token);
+        if (acct) update.accountId = acct;
 
         await GatewayConfig.findOneAndUpdate(
             { provider: 'codex' },
@@ -286,7 +375,19 @@ export async function codexAuthCallback(req: Request, res: Response): Promise<vo
 
 // ── Codex token refresh (shared by admin endpoint + auto-refresh) ─────────────
 
-async function refreshCodexTokens(): Promise<string> {
+// Single-flight guard: OpenAI rotates (single-use) refresh tokens, so two concurrent
+// refreshes race and one fails with `refresh_token_reused`. The worker runs at
+// concurrency 4, so a burst of 401s at token expiry would otherwise all refresh at
+// once. Coalesce concurrent callers into ONE in-flight refresh that everyone awaits.
+let codexRefreshInFlight: Promise<string> | null = null;
+
+function refreshCodexTokens(): Promise<string> {
+    if (codexRefreshInFlight) return codexRefreshInFlight;
+    codexRefreshInFlight = doRefreshCodexTokens().finally(() => { codexRefreshInFlight = null; });
+    return codexRefreshInFlight;
+}
+
+async function doRefreshCodexTokens(): Promise<string> {
     const doc = await GatewayConfig.findOne({ provider: 'codex' }).lean();
     if (!doc?.encryptedRefreshToken) {
         throw new Error('No refresh token stored for codex. Re-connect via OAuth.');
@@ -298,23 +399,32 @@ async function refreshCodexTokens(): Promise<string> {
         access_token: string;
         refresh_token?: string;
         expires_in?: number;
+        id_token?: string;
     }>(
         CODEX_TOKEN_URL,
         {
             grant_type: 'refresh_token',
             refresh_token: refreshToken,
             client_id: CODEX_CLIENT_ID,
+            // NOTE: deliberately NO `scope` param. Per RFC 6749 §6, sending a scope on
+            // refresh can only NARROW the token; omitting it preserves the originally
+            // granted scopes (incl. api.responses.*). Sending a subset here was dropping
+            // the responses scopes and causing 403s on the next call after a refresh.
         },
         { headers: { 'Content-Type': 'application/json' } }
     );
 
-    const { access_token, refresh_token: newRefreshToken, expires_in } = res.data;
+    const { access_token, refresh_token: newRefreshToken, expires_in, id_token } = res.data;
     if (!access_token) throw new Error('No access_token in refresh response');
 
     const update: Record<string, unknown> = { encryptedToken: encrypt(access_token) };
     // Some providers rotate the refresh token — save the new one if issued
     if (newRefreshToken) update.encryptedRefreshToken = encrypt(newRefreshToken);
     if (expires_in) update.expiresAt = new Date(Date.now() + expires_in * 1000);
+    // Re-capture accountId if the refreshed token still carries it (belt-and-suspenders;
+    // refreshed tokens often DON'T, so the originally-stored accountId is the source of truth).
+    const refreshedAcct = (id_token ? extractChatgptAccountId(id_token) : null) ?? extractChatgptAccountId(access_token);
+    if (refreshedAcct) update.accountId = refreshedAcct;
 
     await GatewayConfig.findOneAndUpdate({ provider: 'codex' }, { $set: update });
     logger.info({ message: '[gateway] Codex token refreshed' });
@@ -334,33 +444,175 @@ export async function refreshCodexTokenEndpoint(_req: Request, res: Response): P
 
 // ── Proxy handler ─────────────────────────────────────────────────────────────
 
+/**
+ * Parse Codex SSE stream and extract text + reasoning content.
+ * Event types from codex2api/proxy/translator.go:
+ *   response.output_text.delta               → content text
+ *   response.reasoning_summary_text.delta    → reasoning/thinking text
+ *   response.reasoning_text.delta            → reasoning/thinking text (alternate)
+ *   response.completed                       → usage stats
+ */
+function parseCodexSSE(
+    raw: string,
+    _text: string, _reasoning: string, _in: number, _out: number,
+    set: (text: string, reasoning: string, inputTokens: number, outputTokens: number) => void
+): void {
+    let fullText = _text, fullReasoning = _reasoning;
+    let inputTokens = _in, outputTokens = _out;
+
+    for (const line of raw.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+            const evt = JSON.parse(payload) as {
+                type?: string;
+                delta?: string;
+                response?: { usage?: { input_tokens?: number; output_tokens?: number } };
+                usage?: { input_tokens?: number; output_tokens?: number };
+            };
+            const type = evt.type ?? '';
+            if (type === 'response.output_text.delta') {
+                fullText += evt.delta ?? '';
+            } else if (type === 'response.reasoning_summary_text.delta' || type === 'response.reasoning_text.delta') {
+                fullReasoning += evt.delta ?? '';
+            } else if (type === 'response.completed') {
+                const u = evt.response?.usage ?? evt.usage;
+                if (u?.input_tokens)  inputTokens  = u.input_tokens;
+                if (u?.output_tokens) outputTokens = u.output_tokens;
+            }
+        } catch { /* skip malformed line */ }
+    }
+    set(fullText, fullReasoning, inputTokens, outputTokens);
+}
+
+function buildChatResponse(
+    model: string, text: string, reasoning: string,
+    inputTokens: number, outputTokens: number, rawSse: string
+): Record<string, unknown> {
+    return {
+        id: `codex-${Date.now()}`,
+        object: 'chat.completion',
+        model,
+        choices: [{
+            index: 0,
+            message: {
+                role: 'assistant',
+                content: text,
+                ...(reasoning ? { reasoning } : {}),
+            },
+            finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: inputTokens, completion_tokens: outputTokens, total_tokens: inputTokens + outputTokens },
+        _raw_sse: rawSse.slice(0, 3000),
+    };
+}
+
 async function doProxy(
     req: Request,
     res: Response,
     targetURL: string,
     providerToken: string,
-    provider: string
+    provider: string,
+    accountId?: string
 ): Promise<void> {
     const headers: Record<string, string> = {
         Authorization: `Bearer ${providerToken}`,
-        'Content-Type': req.headers['content-type'] ?? 'application/json',
+        'Content-Type': 'application/json',
     };
     if (req.headers['accept'])      headers['Accept']      = req.headers['accept'] as string;
     if (req.headers['openai-beta']) headers['OpenAI-Beta'] = req.headers['openai-beta'] as string;
 
+    // Codex subscription tokens work on chatgpt.com/backend-api/codex, NOT api.openai.com.
+    // Translate incoming chat/completions → Codex /responses endpoint transparently.
+    const isCodex = provider === 'codex';
+
+    // Unconditionally set required Codex headers (must win over any passthrough above).
+    if (isCodex) {
+        headers['OpenAI-Beta'] = 'responses=experimental';
+        headers['originator'] = 'codex_cli_rs';
+        if (accountId) {
+            headers['chatgpt-account-id'] = accountId;
+        } else {
+            // The ChatGPT backend requires chatgpt-account-id; without it Codex calls 401/403.
+            // Happens when a token was pasted before account_id capture existed — re-paste the
+            // token (auto-extracts) or set Account ID in the Admin Gateway tab.
+            logger.warn({ message: '[gateway] codex request has NO chatgpt-account-id — will likely 401. Re-save the Codex token or set Account ID in Admin.' });
+        }
+    }
+    const isChatCompletions = targetURL.endsWith('/chat/completions');
+
+    let requestData = ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined;
+    let resolvedURL = targetURL;
+
+    if (isCodex && isChatCompletions && requestData) {
+        // Base URL is chatgpt.com/backend-api/codex — endpoint is just /responses
+        resolvedURL = `${GATEWAY_BASE_URLS['codex']}/responses`;
+        requestData = chatToResponses(requestData as Record<string, unknown>);
+        logger.info({ message: '[gateway] codex: translated chat→responses', model: (requestData as ResponsesRequest).model, url: resolvedURL });
+    }
+
     const upstreamRes = await axios({
         method: req.method,
-        url: targetURL,
+        url: resolvedURL,
         headers,
-        data: ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined,
+        data: requestData,
         responseType: 'stream',
         timeout: 300_000,
         validateStatus: () => true,
     });
 
+    // For Codex translated chat→responses: the Codex backend is stream-only (SSE).
+    // Collect all SSE chunks, assemble the full text, and return as a single
+    // chat completions response so the Agent service sees a normal non-stream reply.
+    if (isCodex && isChatCompletions) {
+        return new Promise<void>((resolve, reject) => {
+            if (upstreamRes.status === 401 && !res.headersSent) {
+                (upstreamRes.data as NodeJS.ReadableStream).resume();
+                (upstreamRes.data as NodeJS.ReadableStream).on('end', () => reject({ is401: true, provider }));
+                return;
+            }
+            if (upstreamRes.status >= 400 && !res.headersSent) {
+                const errChunks: Buffer[] = [];
+                const s = upstreamRes.data as NodeJS.ReadableStream;
+                s.on('data', (c: Buffer) => errChunks.push(c));
+                s.on('end', () => {
+                    let errBody: unknown;
+                    try { errBody = JSON.parse(Buffer.concat(errChunks).toString('utf8')); } catch { errBody = Buffer.concat(errChunks).toString('utf8'); }
+                    res.status(upstreamRes.status).json(errBody);
+                    resolve();
+                });
+                s.on('error', reject);
+                return;
+            }
+
+            // Collect SSE stream and extract text + reasoning from delta events
+            let fullText = '';
+            let fullReasoning = '';
+            let inputTokens = 0, outputTokens = 0;
+            const chunks: Buffer[] = [];
+            const stream = upstreamRes.data as NodeJS.ReadableStream;
+
+            stream.on('data', (c: Buffer) => chunks.push(c));
+            stream.on('error', reject);
+            stream.on('end', () => {
+                try {
+                    const raw = Buffer.concat(chunks).toString('utf8');
+                    parseCodexSSE(raw, fullText, fullReasoning, inputTokens, outputTokens,
+                        (t, r, it, ot) => { fullText = t; fullReasoning = r; inputTokens = it; outputTokens = ot; });
+                    const model = (requestData as ResponsesRequest).model ?? '';
+                    res.status(200).json(buildChatResponse(model, fullText, fullReasoning, inputTokens, outputTokens, raw));
+                    resolve();
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
+    }
+
     return new Promise<void>((resolve, reject) => {
         if (upstreamRes.status === 401 && !res.headersSent) {
-            // Drain the body before the caller handles the 401
             (upstreamRes.data as NodeJS.ReadableStream).resume();
             (upstreamRes.data as NodeJS.ReadableStream).on('end', () => reject({ is401: true, provider }));
             return;
@@ -400,17 +652,19 @@ export async function proxyRequest(req: Request, res: Response): Promise<void> {
 
     const urlSuffix = (req.params as Record<string, string>)['0'] ?? '';
     const targetURL = `${targetBase}/${urlSuffix}`;
-    logger.debug({ message: '[gateway] proxy', provider, targetURL });
+    logger.info({ message: '[gateway] proxy hit', provider, targetURL, method: req.method });
 
     try {
-        await doProxy(req, res, targetURL, providerToken, provider);
+        await doProxy(req, res, targetURL, providerToken, provider, gatewayDoc.accountId);
     } catch (err) {
         // ── Auto-refresh for Codex on 401 ────────────────────────────────────
         if ((err as { is401?: boolean }).is401 && provider === 'codex' && !res.headersSent) {
             logger.info({ message: '[gateway] codex 401 — attempting token refresh' });
             try {
                 const freshToken = await refreshCodexTokens();
-                await doProxy(req, res, targetURL, freshToken, provider);
+                // Re-read the doc so the retry uses any accountId captured during refresh.
+                const refreshedDoc = await GatewayConfig.findOne({ provider }).lean();
+                await doProxy(req, res, targetURL, freshToken, provider, refreshedDoc?.accountId ?? gatewayDoc.accountId);
                 return;
             } catch (refreshErr) {
                 const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
@@ -432,10 +686,11 @@ export async function proxyRequest(req: Request, res: Response): Promise<void> {
 // ── Admin: test a model ───────────────────────────────────────────────────────
 
 export async function testGatewayModel(req: Request, res: Response): Promise<void> {
-    const { provider, model, params } = req.body as {
+    const { provider, model, params, prompt } = req.body as {
         provider?: string;
         model?: string;
         params?: Record<string, unknown>;
+        prompt?: string;
     };
 
     if (!provider || !GATEWAY_BASE_URLS[provider]) {
@@ -463,57 +718,90 @@ export async function testGatewayModel(req: Request, res: Response): Promise<voi
     // Sanitise params — strip stream so we always get a JSON response
     const { stream: _stream, ...safeParams } = (params ?? {}) as Record<string, unknown> & { stream?: unknown };
 
+    const userPrompt = prompt?.trim() || 'Hi! Just say "API OK" and nothing else.';
+    const isCodex = provider === 'codex';
+
     try {
-        const upstream = await axios.post<{
-            choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-            usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-            error?: { message?: string; type?: string };
-        }>(
-            `${baseURL}/chat/completions`,
-            {
+        // Codex OAuth tokens only work with /v1/responses, not /v1/chat/completions.
+        let endpoint: string;
+        let requestBody: Record<string, unknown>;
+
+        if (isCodex) {
+            // Codex subscription uses chatgpt.com/backend-api/codex/responses
+            endpoint = `${GATEWAY_BASE_URLS['codex']}/responses`;
+            requestBody = chatToResponses({
                 model: model.trim(),
-                messages: [{ role: 'user', content: 'Hi! Just say "API OK" and nothing else.' }],
-                max_tokens: 32,          // keep test cheap
+                messages: [{ role: 'user', content: userPrompt }],
                 ...safeParams,
-            },
+            });
+        } else {
+            endpoint = `${baseURL}/chat/completions`;
+            requestBody = {
+                model: model.trim(),
+                messages: [{ role: 'user', content: userPrompt }],
+                ...safeParams,
+            };
+        }
+
+        const testHeaders: Record<string, string> = {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        };
+        if (isCodex) {
+            testHeaders['OpenAI-Beta'] = 'responses=experimental';
+            testHeaders['originator'] = 'codex_cli_rs';
+            if (gatewayDoc.accountId) testHeaders['chatgpt-account-id'] = gatewayDoc.accountId;
+        }
+
+        const upstream = await axios.post(
+            endpoint,
+            requestBody,
             {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                timeout: 30_000,
+                headers: testHeaders,
+                // Codex returns SSE text; others return JSON
+                responseType: isCodex ? 'text' : 'json',
+                timeout: 60_000,
                 validateStatus: () => true,
             }
         );
 
         const latencyMs = Date.now() - startMs;
-        const data = upstream.data;
 
-        if (upstream.status >= 400) {
-            const errMsg = data?.error?.message ?? JSON.stringify(data).slice(0, 300);
-            res.status(upstream.status).json({
-                success: false,
-                provider,
-                model,
-                latencyMs,
-                httpStatus: upstream.status,
-                error: errMsg,
-                raw: data,
-            });
-            return;
+        // Codex backend always returns SSE — collect and assemble into chat response
+        let data: Record<string, unknown>;
+        if (isCodex) {
+            const raw = upstream.data as string;
+            let fullText = '', fullReasoning = '';
+            let inputTokens = 0, outputTokens = 0;
+            parseCodexSSE(raw, fullText, fullReasoning, inputTokens, outputTokens,
+                (t, r, it, ot) => { fullText = t; fullReasoning = r; inputTokens = it; outputTokens = ot; });
+            data = buildChatResponse(model.trim(), fullText, fullReasoning, inputTokens, outputTokens, raw);
+        } else {
+            data = upstream.data as Record<string, unknown>;
         }
 
-        const reply = data.choices?.[0]?.message?.content ?? '(no content)';
-        const finish = data.choices?.[0]?.finish_reason;
-        res.json({
-            success: true,
+        logger.info({ message: '[gateway] test result', provider, model, httpStatus: upstream.status, latencyMs, preview: JSON.stringify(data).slice(0, 300) });
+
+        const choices = data.choices as Array<Record<string, unknown>> | undefined;
+        const firstChoice = choices?.[0] as Record<string, unknown> | undefined;
+        const message = firstChoice?.message as Record<string, unknown> | undefined;
+        const reply = typeof message?.content === 'string' ? message.content : null;
+        const finish = firstChoice?.finish_reason;
+        const usage = data.usage ?? null;
+
+        // Always respond HTTP 200 — upstream errors are in the payload.
+        // This prevents the admin panel's 401 interceptor from logging the user
+        // out when the Codex/provider token is wrong or expired.
+        res.status(200).json({
+            success: upstream.status < 400,
             provider,
             model,
             latencyMs,
             httpStatus: upstream.status,
             reply,
             finishReason: finish,
-            usage: data.usage ?? null,
+            usage,
+            raw: data,
         });
     } catch (err) {
         const latencyMs = Date.now() - startMs;

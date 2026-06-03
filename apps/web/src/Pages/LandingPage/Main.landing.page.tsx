@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from "react";
 import LazyWrapper from "./LazyWrapper.landing.page";
 import GlassyNavbar from "./Navbar.landing.page";
 import PaymentPage from "./Pricing.landing.page";
+import RevealFooter from "./RevealFooter.landing.page";
 
 // Lazy load all components except Navbar (which should load immediately)
 const Hero = lazy(() => import("./Hero.landing.page"));
@@ -69,14 +70,14 @@ const LandingPage: React.FC = () => {
         </Suspense>
       </LazyWrapper>
 
-      <LazyWrapper fallback={<LoadingFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
-           <section id="endpagecta" className="w-full flex flex-col justify-center">
+      <RevealFooter>
+        <Suspense fallback={<LoadingFallback height="h-screen" />}>
+          <div className="relative flex min-h-0 flex-1 flex-col justify-center">
             <EndPageCTA />
-            <Footer />
-           </section>
+          </div>
+          <Footer />
         </Suspense>
-      </LazyWrapper>
+      </RevealFooter>
     </div>
   );
 };

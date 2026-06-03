@@ -15,6 +15,7 @@ import GenerationJob, {
     type GenerationJobStatus,
     type IJobStage,
 } from "../model/generationJob.model";
+import { getPhaseMeta, type GenerationPhase } from "./pipelinePhases";
 import logger from "../util/logger.util";
 
 const MAX_PROMPT_LEN = 500;
@@ -39,6 +40,7 @@ export async function createJobRecord(input: {
     traceId?: string;
 }): Promise<void> {
     try {
+        const q = getPhaseMeta("queued");
         await GenerationJob.create({
             jobId: input.jobId,
             queue: input.queue,
@@ -48,6 +50,9 @@ export async function createJobRecord(input: {
             prompt: (input.prompt ?? "").slice(0, MAX_PROMPT_LEN),
             status: "queued",
             sceneProgress: { done: 0, total: 0 },
+            // Seed the live progress so a reload right after submit (before the
+            // worker picks the job up) still shows "Waiting in queue…" at the floor.
+            progress: { phase: "queued", label: q.label, percent: q.percent, ceil: q.ceil, updatedAt: new Date() },
             traceId: input.traceId,
             startedAt: new Date(),
         });
@@ -71,6 +76,42 @@ export async function setJobStatus(
         await GenerationJob.updateOne({ jobId }, { $set: update });
     } catch (err) {
         logger.warn({ message: "[jobTracker] setJobStatus failed (non-fatal)", jobId, status, error: String(err) });
+    }
+}
+
+/**
+ * Persist the live granular progress (phase + label + percent + ceil) so a page
+ * reload restores the exact bar position.
+ *
+ * MONOTONIC: the stored percentage never decreases. The debug→re-render loop
+ * re-enters lower-numbered phases (render's floor is below debug's), but the bar
+ * must not jump backward on reload — so the percent uses `$max` while the
+ * phase/label/ceil always update (the label correctly flips to "Rendering…"
+ * even while the percent holds at the debug high-water mark).
+ *
+ * Best-effort / non-fatal — a Mongo hiccup must never break a generation.
+ */
+export async function setJobProgress(
+    jobId: string | undefined,
+    phase: GenerationPhase
+): Promise<void> {
+    if (!jobId) return;
+    try {
+        const meta = getPhaseMeta(phase);
+        await GenerationJob.updateOne(
+            { jobId },
+            {
+                $max: { "progress.percent": meta.percent },
+                $set: {
+                    "progress.phase": phase,
+                    "progress.label": meta.label,
+                    "progress.ceil": meta.ceil,
+                    "progress.updatedAt": new Date(),
+                },
+            }
+        );
+    } catch (err) {
+        logger.warn({ message: "[jobTracker] setJobProgress failed (non-fatal)", jobId, phase, error: String(err) });
     }
 }
 

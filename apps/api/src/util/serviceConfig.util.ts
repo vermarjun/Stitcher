@@ -39,6 +39,13 @@ export interface ResolvedServiceConfig {
     model: string | null;
     /** Freeform params (temperature, maxTokens, region, voice, …). */
     params: Record<string, unknown>;
+    /**
+     * Resolved fallback provider (decrypted). Present only when the admin
+     * configured a fallback for this (service, tier) AND marked it enabled.
+     * The worker retries the call with this config when the primary errors or
+     * returns empty output. Never has its own nested fallback.
+     */
+    fallback?: Omit<ResolvedServiceConfig, "fallback">;
 }
 
 // ─── ENV defaults (read once at module load) ──────────────────────────────────
@@ -64,8 +71,13 @@ function envDefaults(): Record<ServiceKey, ResolvedServiceConfig> {
             provider: "opencodego",
             apiKey:   config.OPENCODE_GO_API_KEY ?? "",
             baseURL:  "https://opencode.ai/zen/go/v1",
-            model:    config.OPENCODE_GO_DEFAULT_MODEL || "glm-5.1",
-            params:   { max_tokens: 4096, temperature: 0.1 },
+            model:    config.OPENCODE_GO_DEFAULT_MODEL || "deepseek-v4-flash",
+            // query_transform is latency-critical: if thinking is on it times out under
+            // load → empty requiredPlugins → coder falls back to raw Manim. Disable it.
+            // The flag is model-family-specific (verified 2026-06-03): deepseek/kimi/qwen/mimo
+            // → thinking:{type:"disabled"}; glm/minimax-m2.7 → reasoning:{enabled:false}.
+            // Default model here is deepseek-v4-flash (best: ~2.4s, 0 reasoning).
+            params:   { max_tokens: 4096, temperature: 0.1, thinking: { type: "disabled" } },
         },
         embedder: {
             provider: "ollama",
@@ -85,6 +97,34 @@ function envDefaults(): Record<ServiceKey, ResolvedServiceConfig> {
             },
         },
     };
+}
+
+// ─── Gateway baseURL normalisation ────────────────────────────────────────────
+//
+// Subscription-gateway proxy URLs (…/api/gateway/proxy/<provider>/v1) must be
+// reachable from the AGENT container, which calls them. The admin UI auto-fills
+// the PUBLIC app URL (e.g. http://localhost:3000 in dev) — but inside docker the
+// agent cannot reach `localhost:3000` (that's the agent's own container) or a
+// public domain reliably. Force every gateway-proxy URL to the internal docker
+// origin so codegen never silently fails with a connection error.
+//
+// Override with env GATEWAY_INTERNAL_URL (default http://api:3000 — the compose
+// service name). Non-gateway URLs (opencode.ai, openai.com, …) pass through.
+
+const GATEWAY_INTERNAL_ORIGIN = process.env.GATEWAY_INTERNAL_URL || "http://api:3000";
+
+export function normalizeGatewayBaseURL(baseURL: string | null | undefined): string | null {
+    if (!baseURL) return baseURL ?? null;
+    if (!baseURL.includes("/api/gateway/proxy/")) return baseURL;
+    try {
+        const u = new URL(baseURL);
+        const internal = new URL(GATEWAY_INTERNAL_ORIGIN);
+        u.protocol = internal.protocol;
+        u.host = internal.host; // host includes port
+        return u.toString();
+    } catch {
+        return baseURL;
+    }
 }
 
 // ─── In-memory TTL cache ──────────────────────────────────────────────────────
@@ -130,28 +170,53 @@ export function bustServiceConfigCache(): void {
 
 // ─── Row → ResolvedServiceConfig ─────────────────────────────────────────────
 
+interface RawFallback {
+    enabled?: boolean;
+    provider?: string;
+    apiKey?: string;
+    baseURL?: string | null;
+    modelId?: string | null;
+    params?: Record<string, unknown>;
+}
+
+function safeDecrypt(enc: string | undefined | null): string {
+    if (!enc) return "";
+    try {
+        return decrypt(enc);
+    } catch {
+        return "";
+    }
+}
+
 function rowToResolved(doc: {
     provider: string;
     apiKey: string;
     baseURL: string | null;
     modelId: string | null;
     params: Record<string, unknown>;
+    fallback?: RawFallback | null;
 }): ResolvedServiceConfig {
-    let decrypted = "";
-    if (doc.apiKey) {
-        try {
-            decrypted = decrypt(doc.apiKey);
-        } catch {
-            decrypted = "";
-        }
-    }
-    return {
+    const resolved: ResolvedServiceConfig = {
         provider: doc.provider,
-        apiKey:   decrypted,
+        apiKey:   safeDecrypt(doc.apiKey),
         baseURL:  doc.baseURL,
         model:    doc.modelId,
         params:   doc.params ?? {},
     };
+
+    // Attach the fallback only when it's enabled and has a provider.
+    const fb = doc.fallback;
+    if (fb && fb.enabled && typeof fb.provider === "string" && fb.provider.trim()) {
+        resolved.fallback = {
+            provider: fb.provider,
+            apiKey:   safeDecrypt(fb.apiKey),
+            baseURL:  fb.baseURL ?? null,
+            model:    fb.modelId ?? null,
+            params:   fb.params ?? {},
+        };
+    }
+
+    return resolved;
 }
 
 // ─── Main resolver ────────────────────────────────────────────────────────────
@@ -186,6 +251,7 @@ export async function resolveServiceConfig(
             baseURL: string | null;
             modelId: string | null;
             params: Record<string, unknown>;
+            fallback?: RawFallback | null;
             enabled: boolean;
         }>>();
 

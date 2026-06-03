@@ -31,11 +31,17 @@ services:
   # ── Redis ────────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    # noeviction is REQUIRED by BullMQ — under memory pressure Redis must reject
+    # writes (backpressure) rather than silently EVICT queued job keys (which
+    # would lose jobs). appendonly persists the queue across restarts. If you
+    # point the API's BullMQ at this local redis (REDIS_HOST=redis in
+    # API/.env.docker), this is the correct, DNS-safe configuration.
     command: >
       redis-server
         --requirepass ${REDIS_PASSWORD:-dev_redis_password}
         --maxmemory 512mb
-        --maxmemory-policy allkeys-lru
+        --maxmemory-policy noeviction
+        --appendonly yes
     ports:
       - "6379:6379"
     volumes:

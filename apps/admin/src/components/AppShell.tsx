@@ -2,7 +2,9 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  LineChart,
   Cpu,
+  Gauge,
   DollarSign,
   FileVideo,
   MessageSquare,
@@ -31,7 +33,9 @@ import { socket } from '@/lib/socket';
 const NAV_ITEMS = [
   { label: 'Overview', href: '/', icon: LayoutDashboard, end: true },
   { label: 'Users', href: '/users', icon: Users },
+  { label: 'Analytics', href: '/analytics', icon: LineChart },
   { label: 'Generation', href: '/generation', icon: Cpu },
+  { label: 'Pipeline', href: '/pipeline', icon: Gauge },
   { label: 'Cost', href: '/cost', icon: DollarSign },
   { label: 'Content', href: '/content', icon: FileVideo },
   { label: 'Feedback', href: '/feedback', icon: MessageSquare },

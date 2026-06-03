@@ -37,9 +37,12 @@ services:
       - ../../Manim-Agent-Service/src/prompts/coder:/srv/dist/prompts/coder:ro
       - ../../Manim-Agent-Service/src/prompts/debugger:/srv/dist/prompts/debugger:ro
       - ../../Manim-Agent-Service/src/prompts/refiner:/srv/dist/prompts/refiner:ro
+      # Per-plugin skill docs (manim-<plugin>.md) → loaded by src/tools/skills.ts
+      # via SKILLS_DIR=/srv/dist/prompts/skills (set in the agent Dockerfile).
+      - ../../Manim-Agent-Service/src/prompts/skills:/srv/dist/prompts/skills:ro
     environment:
-      # Point the agent at Redis Cloud for LangGraph checkpoints.
-      CHECKPOINT_REDIS_URL: "redis://default:REDACTED_REDIS_PASSWORD@redis-10017.crce219.us-east-1-4.ec2.cloud.redislabs.com:10017"
+      # LangGraph checkpoints — use the local Redis instance (same stack).
+      CHECKPOINT_REDIS_URL: "redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379"
       NODE_ENV: production
       # The shared env_file sets PORT=3000 for the API; override so the agent binds 4000
       PORT: "4000"

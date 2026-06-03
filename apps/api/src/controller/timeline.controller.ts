@@ -274,6 +274,43 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
   }
 };
 
+// Creates a share link for an already-rendered video URL (no ffmpeg needed).
+export const createSharedVideo = async (req: Request, res: Response) => {
+  try {
+    const { projectId, videoUrl, durationSec, thumbnailUrl, projectName: bodyProjectName } = req.body as {
+      projectId?: string;
+      videoUrl?: string;
+      durationSec?: number;
+      thumbnailUrl?: string;
+      projectName?: string;
+    };
+
+    if (!projectId || !videoUrl || !videoUrl.startsWith('http')) {
+      return res.status(400).json({ success: false, message: 'projectId and a valid videoUrl are required' });
+    }
+
+    const project = await Project.findById(projectId).select('name').lean<{ name?: string }>();
+    const name = (bodyProjectName && bodyProjectName.trim()) || project?.name || 'Stitcher video';
+
+    const shareId = nanoid(10);
+    await SharedVideo.create({
+      shareId,
+      projectId,
+      userId: req.userId,
+      videoUrl,
+      thumbnailUrl: thumbnailUrl ?? '',
+      durationSec: durationSec ?? 0,
+      projectName: name,
+    });
+
+    const base = PUBLIC_APP_URL.replace(/\/$/, '');
+    return res.status(200).json({ success: true, data: { shareId, shareUrl: `${base}/v/${shareId}` } });
+  } catch (error: any) {
+    logger.error({ message: '[share] create failed', error: String(error?.message ?? error) });
+    return res.status(500).json({ success: false, message: 'Failed to create share link' });
+  }
+};
+
 // Public (no-auth) resolver for a shared video. Returns the metadata the watch
 // page needs to play the video. Increments a view counter.
 export const getSharedVideo = async (req: Request, res: Response) => {

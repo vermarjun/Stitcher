@@ -11,6 +11,7 @@ import { enqueueGeneration, generationQueue } from '../queue/generationQueue';
 import { resolveModelConfig, hasOwnKeys } from '../queue/modelConfig.util';
 import { publishProgress } from '../queue/eventPublisher.util';
 import { createJobRecord } from '../queue/jobTracker.util';
+import { getPhaseMeta } from '../queue/pipelinePhases';
 import { markCancelled } from '../queue/generationWorker';
 import type { Document } from 'mongoose';
 
@@ -163,6 +164,16 @@ export const generateChatResponse = async (req: Request, res: Response) => {
 
     // Publish a queued event so the frontend knows work has started
     publishProgress(resolvedChatId, { type: 'job_queued', phase: 'controller', data: { jobId } });
+    // …and an initial live-progress event so the bar + step label start moving
+    // immediately (before the worker picks the job up). Mirrors PIPELINE_PHASES.
+    {
+        const q = getPhaseMeta('queued');
+        publishProgress(resolvedChatId, {
+            type: 'progress',
+            phase: 'queued',
+            data: { phase: 'queued', label: q.label, percent: q.percent, ceil: q.ceil },
+        });
+    }
 
     res.status(202).json({
         success: true,
@@ -521,7 +532,7 @@ export const getChatStatus = async (req: Request, res: Response) => {
 
         // Fetch the most recent job for this chat (newest-first)
         const job = await GenerationJob.findOne({ chatId: new Types.ObjectId(chatId) })
-            .select('jobId status finalUrl sceneProgress')
+            .select('jobId status progress finalUrl sceneProgress startedAt completedAt')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -541,8 +552,13 @@ export const getChatStatus = async (req: Request, res: Response) => {
             data: {
                 jobId: job?.jobId ?? null,
                 status: job?.status ?? (finalUrlFallback ? 'complete' : 'unknown'),
+                // Live granular progress (phase + label + percent + ceil) so a page
+                // reload restores the exact bar position + step label.
+                progress: job?.progress ?? null,
                 finalUrl: job?.finalUrl ?? finalUrlFallback ?? null,
                 sceneProgress: job?.sceneProgress ?? null,
+                startedAt: job?.startedAt ?? null,
+                completedAt: job?.completedAt ?? null,
             },
         });
     } catch (error) {

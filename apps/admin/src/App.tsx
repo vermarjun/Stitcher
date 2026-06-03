@@ -6,6 +6,8 @@ import OverviewPage from '@/pages/Overview';
 import UsersPage from '@/pages/Users';
 import GenerationPage from '@/pages/Generation';
 import GenerationDetailPage from '@/pages/GenerationDetail';
+import PipelinePage from '@/pages/Pipeline';
+import AnalyticsPage from '@/pages/Analytics';
 import CostPage from '@/pages/Cost';
 import ContentPage from '@/pages/Content';
 import FeedbackPage from '@/pages/Feedback';
@@ -24,8 +26,10 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<OverviewPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/generation" element={<GenerationPage />} />
           <Route path="/generation/:jobId" element={<GenerationDetailPage />} />
+          <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/cost" element={<CostPage />} />
           <Route path="/content" element={<ContentPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />

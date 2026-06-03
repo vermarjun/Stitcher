@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import api from '@/lib/api';
+import type { ProviderFallbackConfig } from '@/lib/types';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ interface ServiceConfigDoc {
   enabled: boolean;
   updatedAt?: string;
   updatedBy?: string | null;
+  /** Optional fallback provider, used when the primary fails. */
+  fallback?: ProviderFallbackConfig;
 }
 type ProvidersResponse = Record<ServiceKey, Record<Tier, ServiceConfigDoc>>;
 
@@ -51,6 +54,16 @@ interface TierFormState {
   model: string;
   paramsJson: string;
   enabled: boolean;
+  fallback: FallbackFormState;
+}
+
+interface FallbackFormState {
+  enabled: boolean;
+  provider: string;
+  apiKey: string;
+  baseURL: string;
+  model: string;
+  paramsJson: string;
 }
 
 interface GatewayProviderStatus {
@@ -59,6 +72,7 @@ interface GatewayProviderStatus {
   configured: boolean;
   maskedToken: string | null;
   hasRefreshToken: boolean;
+  hasAccountId: boolean;
   expiresAt: string | null;
   updatedAt: string | null;
   updatedBy: string | null;
@@ -86,10 +100,7 @@ const PROVIDER_MODELS: Record<string, string[]> = {
     'qwen3.5-plus', 'qwen3.6-plus',
   ],
   'codex': [
-    'o3', 'o4-mini', 'o3-mini',
-    'gpt-4.1', 'gpt-4.1-mini',
-    'gpt-4o', 'gpt-4o-mini',
-    'gpt-4-turbo', 'gpt-4',
+    'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex',
   ],
   'openai': [
     'gpt-4o', 'gpt-4o-mini',
@@ -111,7 +122,7 @@ const PROVIDER_MODELS: Record<string, string[]> = {
 
 const PROVIDER_DEFAULT_BASE_URL: Record<string, string> = {
   'opencodego': 'https://opencode.ai/zen/go/v1',
-  'codex': '', // filled dynamically from gateway proxyBase
+  'codex': 'http://api:3000/api/gateway/proxy/codex/v1',
   'openai': 'https://api.openai.com/v1',
   'anthropic': '',
   'gemini': '',
@@ -120,41 +131,50 @@ const PROVIDER_DEFAULT_BASE_URL: Record<string, string> = {
 };
 
 // Per-model param presets — auto-applied when a model is selected.
-// These are the correct, tested param shapes for each model.
-const MODEL_PARAM_PRESETS: Record<string, { params: Record<string, unknown>; note?: string }> = {
-  // OpenCode Go — glm/kimi support thinking and populate content correctly
-  'glm-5.1':         { params: { temperature: 0.6, max_tokens: 16000, enable_thinking: true, thinking_budget: 10000 }, note: '✓ thinking supported — response in content' },
-  'glm-5':           { params: { temperature: 0.6, max_tokens: 16000, enable_thinking: true, thinking_budget: 10000 }, note: '✓ thinking supported' },
-  'kimi-k2.5':       { params: { temperature: 0.6, max_tokens: 16000, enable_thinking: true, thinking_budget: 10000 }, note: '✓ thinking supported' },
-  'kimi-k2.6':       { params: { temperature: 0.6, max_tokens: 16000, enable_thinking: true, thinking_budget: 10000 }, note: '✓ thinking supported' },
-  // OpenCode Go — deepseek/mimo/minimax/qwen put thinking in `reasoning` not `content`
-  // → enable_thinking MUST be false, otherwise codeGen gets empty response
-  'deepseek-v4-flash': { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ keep enable_thinking: false — thinking response goes to `reasoning` field (not `content`), code extractor gets empty string' },
-  'deepseek-v4-pro':   { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ keep enable_thinking: false — same reason as deepseek-v4-flash' },
-  'mimo-v2-omni':    { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'mimo-v2-pro':     { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'mimo-v2.5':       { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'mimo-v2.5-pro':   { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'minimax-m2.5':    { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'minimax-m2.7':    { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'qwen3.5-plus':    { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  'qwen3.6-plus':    { params: { temperature: 0.2, max_tokens: 8000, enable_thinking: false }, note: '⚠ enable_thinking: false required' },
-  // Codex / OpenAI reasoning models — use reasoning_effort
-  'o3':       { params: { max_tokens: 100000, reasoning_effort: 'medium' }, note: '✓ reasoning_effort: low|medium|high — do NOT set temperature for o3' },
-  'o4-mini':  { params: { max_tokens: 65536,  reasoning_effort: 'medium' }, note: '✓ reasoning_effort: low|medium|high — do NOT set temperature' },
-  'o3-mini':  { params: { max_tokens: 65536,  reasoning_effort: 'medium' }, note: '✓ reasoning_effort: low|medium|high — do NOT set temperature' },
-  // Standard OpenAI / Codex non-reasoning
-  'gpt-4o':      { params: { temperature: 0.2, max_tokens: 8000 } },
-  'gpt-4o-mini': { params: { temperature: 0.2, max_tokens: 8000 } },
-  'gpt-4.1':     { params: { temperature: 0.2, max_tokens: 8000 } },
-  'gpt-4.1-mini':{ params: { temperature: 0.2, max_tokens: 8000 } },
-  'gpt-4-turbo': { params: { temperature: 0.2, max_tokens: 8000 } },
-  'gpt-4':       { params: { temperature: 0.2, max_tokens: 8000 } },
+//
+// Verified empirically on opencode-go 2026-06-03 (see CODEGEN_PLUGIN_ROOTCAUSE.md §10).
+// KEY FINDING: the thinking-disable flag is NOT the same across model families and the
+// gateway does NOT normalise it. Sending the wrong flag (or several at once) either
+// leaves thinking ON (slow → query_transform 12s timeouts) or 400s the request:
+//   • deepseek / kimi / qwen / mimo  → thinking: { type: "disabled" }   (0 reasoning tokens)
+//   • glm-5.1 / glm-5 / minimax-m2.7 → reasoning: { enabled: false }    (0 reasoning tokens)
+//   • kimi   → 400s on enable_thinking / reasoning flags (only thinking:{type:disabled} works)
+//   • qwen   → reasoning:{enabled:false} times out (use thinking:{type:disabled})
+//   • minimax-m2.5 → cannot be fully disabled (~226 reasoning tokens on every flag) — avoid for latency-critical
+//
+//   params  = sensible default for the coder/debugger services.
+//   noThink = VERIFIED fully-thinking-disabled set — auto-applied for the latency-critical
+//             query_transform service so it never hangs/times out (deepseek-v4-flash ≈ 2.4s, 0 reasoning).
+const TD = { type: 'disabled' };  // thinking-disable knob — deepseek/kimi/qwen/mimo
+const RD = { enabled: false };    // reasoning-disable knob — glm / minimax-m2.7
+const MODEL_PARAM_PRESETS: Record<string, { params: Record<string, unknown>; noThink?: Record<string, unknown>; note?: string }> = {
+  // OpenCode Go — glm/kimi populate `content` even with thinking on, so coder may keep it on.
+  'glm-5.1':   { params: { temperature: 0.6, max_tokens: 16000, enable_thinking: true, thinking_budget: 10000 }, noThink: { temperature: 0.2, max_tokens: 2048, reasoning: RD }, note: '✓ thinking ok for coder. Disable with reasoning:{enabled:false} (verified 0 reasoning, ~3s) — NOT thinking:{type:disabled} (glm only partly honors that).' },
+  'glm-5':     { params: { temperature: 0.6, max_tokens: 16000, enable_thinking: true, thinking_budget: 10000 }, noThink: { temperature: 0.2, max_tokens: 2048, reasoning: RD }, note: '✓ thinking ok for coder. Disable with reasoning:{enabled:false} (verified).' },
+  'kimi-k2.5': { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified). NOTE: kimi 400s on enable_thinking / reasoning flags.' },
+  'kimi-k2.6': { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified). NOTE: kimi 400s on enable_thinking / reasoning flags.' },
+  // OpenCode Go — deepseek/mimo/minimax/qwen route thinking to the `reasoning` field.
+  // MUST disable with thinking:{type:disabled}; enable_thinking:false leaves thinking ON (slow).
+  'deepseek-v4-flash': { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: '★ best query_transform model — thinking:{type:disabled} → 0 reasoning, ~2.4s, valid JSON, holds at concurrency 12. (enable_thinking:false does NOT fully disable it → 26s.)' },
+  'deepseek-v4-pro':   { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'thinking:{type:disabled} → 0 reasoning, ~3.5s (verified). enable_thinking:false does NOT fully disable it.' },
+  'mimo-v2-omni':  { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified 0 reasoning).' },
+  'mimo-v2-pro':   { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified).' },
+  'mimo-v2.5':     { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified).' },
+  'mimo-v2.5-pro': { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified).' },
+  'minimax-m2.7':  { params: { temperature: 0.2, max_tokens: 8000, reasoning: RD }, noThink: { temperature: 0.2, max_tokens: 2048, reasoning: RD }, note: 'Disable with reasoning:{enabled:false} (verified 0 reasoning, ~2.8s).' },
+  'minimax-m2.5':  { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: '⚠ cannot fully disable thinking (~226 reasoning tokens remain on every flag) — avoid for latency-critical query_transform.' },
+  'qwen3.5-plus':  { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified 0 reasoning). reasoning:{enabled:false} times out on qwen.' },
+  'qwen3.6-plus':  { params: { temperature: 0.2, max_tokens: 8000, thinking: TD }, noThink: { temperature: 0.2, max_tokens: 2048, thinking: TD }, note: 'Disable with thinking:{type:disabled} (verified 0 reasoning). reasoning:{enabled:false} times out on qwen.' },
+  // Codex Plus plan models — reasoning_effort controls depth; lower = faster/cheaper.
+  'gpt-5.5':       { params: { max_tokens: 8000, reasoning_effort: 'medium' }, noThink: { max_tokens: 2048, reasoning_effort: 'low' }, note: '✓ reasoning low|medium|high. query_transform uses reasoning_effort:low.' },
+  'gpt-5.4':       { params: { max_tokens: 8000, reasoning_effort: 'medium' }, noThink: { max_tokens: 2048, reasoning_effort: 'low' }, note: '✓ reasoning low|medium|high.' },
+  'gpt-5.4-mini':  { params: { max_tokens: 8000 }, noThink: { max_tokens: 2048 }, note: 'omit reasoning_effort for fastest response.' },
+  'gpt-5.3-codex': { params: { max_tokens: 8000, reasoning_effort: 'medium' }, noThink: { max_tokens: 2048, reasoning_effort: 'low' }, note: '✓ reasoning low|medium|high.' },
 };
 
 const PROVIDER_DEFAULT_PARAMS: Record<string, Record<string, unknown>> = {
   'opencodego': { temperature: 0.2, max_tokens: 8000, enable_thinking: false },
-  'codex':       { temperature: 0.2, max_tokens: 8000 },
+  'codex':       { reasoning_effort: 'medium' },
   'openai':      { temperature: 0.2, max_tokens: 8000 },
   'anthropic':   { temperature: 0.2, max_tokens: 8000 },
   'gemini':      { temperature: 0.2, maxOutputTokens: 8000 },
@@ -162,6 +182,16 @@ const PROVIDER_DEFAULT_PARAMS: Record<string, Record<string, unknown>> = {
   'azure':       { temperature: 0.2 },
   'gtts':        { voice: 'en-us' },
 };
+
+// Service-aware default params for a model. The query_transform stage is
+// latency-critical (a slow/thinking transform times out → no plugins → raw Manim),
+// so it gets the VERIFIED thinking-disabled (`noThink`) preset; coder/debugger get
+// the default preset (thinking allowed where the model supports it in `content`).
+function presetParamsFor(model: string, serviceKey: ServiceKey): Record<string, unknown> | undefined {
+  const preset = MODEL_PARAM_PRESETS[model];
+  if (!preset) return undefined;
+  return serviceKey === 'query_transform' && preset.noThink ? preset.noThink : preset.params;
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -188,19 +218,20 @@ const SERVICES: ServiceMeta[] = [
     key: 'coder', label: 'Code Generator',
     description: 'LLM used in the agent /code stage to write Manim scenes.',
     icon: Code2, kind: 'llm', providers: LLM_PROVIDERS,
-    paramsHint: 'Keys: temperature, max_tokens (or maxTokens), enable_thinking, reasoning_effort, top_p',
+    paramsHint: 'Disable thinking → deepseek/kimi/qwen/mimo: {"thinking":{"type":"disabled"}} · glm/minimax-m2.7: {"reasoning":{"enabled":false}} · codex: reasoning_effort:low. Plus temperature, max_tokens (or maxTokens), top_p. Picking a model auto-fills the verified preset.',
   },
   {
     key: 'debugger', label: 'Debugger',
     description: 'LLM used in the agent /debug stage to fix render errors.',
     icon: Bug, kind: 'llm', providers: LLM_PROVIDERS,
-    paramsHint: 'Keys: temperature, max_tokens (or maxTokens), enable_thinking, reasoning_effort, top_p',
+    paramsHint: 'Disable thinking → deepseek/kimi/qwen/mimo: {"thinking":{"type":"disabled"}} · glm/minimax-m2.7: {"reasoning":{"enabled":false}} · codex: reasoning_effort:low. Plus temperature, max_tokens (or maxTokens), top_p. Picking a model auto-fills the verified preset.',
   },
   {
     key: 'query_transform', label: 'Query Transform',
-    description: 'LLM used in the RAG /enhance stage to expand user queries.',
+    description: 'LLM used in the RAG /enhance stage to expand user queries + detect required plugins.',
     icon: Search, kind: 'llm', providers: LLM_PROVIDERS,
-    paramsHint: 'Keys: temperature, max_tokens (or maxTokens), enable_thinking, reasoning_effort, top_p',
+    note: 'Latency-critical: if thinking is left on, this stage times out under load → no plugin detection → coder falls back to raw Manim. Picking a model auto-applies the verified thinking-disabled preset. Best: deepseek-v4-flash (~2.4s).',
+    paramsHint: 'Disable thinking → deepseek/kimi/qwen/mimo: {"thinking":{"type":"disabled"}} · glm/minimax-m2.7: {"reasoning":{"enabled":false}} · codex: reasoning_effort:low. Plus temperature, max_tokens (or maxTokens), top_p. Picking a model auto-fills the verified preset.',
   },
   {
     key: 'embedder', label: 'Embedder',
@@ -219,6 +250,29 @@ const SERVICES: ServiceMeta[] = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+function emptyFallbackForm(provider = ''): FallbackFormState {
+  return {
+    enabled: false,
+    provider,
+    apiKey: '',
+    baseURL: '',
+    model: '',
+    paramsJson: '{}',
+  };
+}
+
+function fallbackToFormState(fb: ProviderFallbackConfig | undefined): FallbackFormState {
+  if (!fb) return emptyFallbackForm();
+  return {
+    enabled: fb.enabled ?? false,
+    provider: fb.provider ?? '',
+    apiKey: '',
+    baseURL: fb.baseURL ?? '',
+    model: fb.model ?? '',
+    paramsJson: JSON.stringify(fb.params ?? {}, null, 2),
+  };
+}
+
 function docToFormState(doc: ServiceConfigDoc): TierFormState {
   return {
     provider: doc.provider ?? '',
@@ -227,6 +281,7 @@ function docToFormState(doc: ServiceConfigDoc): TierFormState {
     model: doc.model ?? '',
     paramsJson: JSON.stringify(doc.params ?? {}, null, 2),
     enabled: doc.enabled ?? true,
+    fallback: fallbackToFormState(doc.fallback),
   };
 }
 
@@ -287,6 +342,17 @@ function ConfigSummary({ doc }: { doc: ServiceConfigDoc | undefined }) {
         <span className="text-[10px] text-muted-foreground w-14 shrink-0">params</span>
         <span className="text-[11px] font-mono text-foreground break-all">{paramsStr}</span>
       </div>
+      {doc.fallback?.enabled && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] text-muted-foreground w-14 shrink-0">fallback</span>
+          <span className="text-[11px] font-mono text-foreground break-all">
+            {doc.fallback.provider || '—'}{doc.fallback.model ? ' / ' + doc.fallback.model : ''}
+          </span>
+          {doc.fallback.hasKey
+            ? <KeyRound className="h-3 w-3 text-muted-foreground shrink-0" />
+            : <span className="text-[10px] text-amber-600 dark:text-amber-400">no key</span>}
+        </div>
+      )}
       <div className="flex items-center gap-1.5 pt-0.5">
         {isSeeded
           ? <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 font-medium"><Leaf className="h-2.5 w-2.5" />seeded from env</span>
@@ -321,13 +387,15 @@ function JsonParamsEditor({ value, onChange, hint }: { value: string; onChange: 
 
 // ── ModelSelector: dropdown of known models + free-text fallback ───────────────
 
-function ModelSelector({ provider, value, onChange, kind, onPresetApply }: {
+function ModelSelector({ provider, value, onChange, kind, serviceKey, onPresetApply }: {
   provider: string; value: string; onChange: (v: string) => void; kind: ServiceMeta['kind'];
+  serviceKey: ServiceKey;
   onPresetApply?: (params: Record<string, unknown>) => void;
 }) {
   const knownModels = PROVIDER_MODELS[provider] ?? [];
   const isKnown = knownModels.includes(value);
   const preset = MODEL_PARAM_PRESETS[value];
+  const isQT = serviceKey === 'query_transform';
 
   if (kind === 'tts' || knownModels.length === 0) {
     return (
@@ -343,10 +411,10 @@ function ModelSelector({ provider, value, onChange, kind, onPresetApply }: {
         onValueChange={(v) => {
           if (v === '__custom__') return;
           onChange(v);
-          // Auto-apply preset params when model is picked
-          if (onPresetApply && MODEL_PARAM_PRESETS[v]) {
-            onPresetApply(MODEL_PARAM_PRESETS[v].params);
-          }
+          // Auto-apply preset params when model is picked (service-aware: query_transform
+          // gets the verified thinking-disabled set so it never times out).
+          const ps = presetParamsFor(v, serviceKey);
+          if (onPresetApply && ps) onPresetApply(ps);
         }}>
         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select model" /></SelectTrigger>
         <SelectContent>
@@ -371,11 +439,16 @@ function ModelSelector({ provider, value, onChange, kind, onPresetApply }: {
           {preset.note}
         </p>
       )}
+      {isQT && preset?.noThink && (
+        <p className="text-[10px] text-sky-600 dark:text-sky-400">
+          ↯ query_transform: auto-applying the thinking-disabled preset (latency-critical — must not time out).
+        </p>
+      )}
       {preset && onPresetApply && (
         <button type="button"
-          onClick={() => onPresetApply(preset.params)}
+          onClick={() => onPresetApply(presetParamsFor(value, serviceKey) ?? preset.params)}
           className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline">
-          ↺ Reset params to {value} defaults
+          ↺ Reset params to {value}{isQT && preset.noThink ? ' (thinking off)' : ''} defaults
         </button>
       )}
     </div>
@@ -401,11 +474,13 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
       model: '',
       paramsJson: '{}',
       enabled: true,
+      fallback: emptyFallbackForm(),
     }
   );
   const [expanded, setExpanded] = useState(false);
 
   const paramsValid = tryParseJson(form.paramsJson).ok;
+  const fallbackParamsValid = tryParseJson(form.fallback.paramsJson).ok;
 
   // When provider changes, auto-fill baseURL + params if the fields are empty/default
   const handleProviderChange = useCallback((newProvider: string) => {
@@ -424,44 +499,118 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
 
       if (prevDefault) newBaseURL = autoURL;
 
-      // Auto-populate params if they're empty or were {}/default
-      const prevParamsParsed = tryParseJson(prev.paramsJson);
-      const isEmpty = prevParamsParsed.ok && Object.keys(prevParamsParsed.value).length === 0;
-      const wasDefault = Object.entries(PROVIDER_DEFAULT_PARAMS).some(
-        ([, def]) => JSON.stringify(def) === JSON.stringify(prevParamsParsed.ok ? prevParamsParsed.value : {})
-      );
-      if (isEmpty || wasDefault) {
-        const defaults = PROVIDER_DEFAULT_PARAMS[newProvider];
-        if (defaults) newParamsJson = JSON.stringify(defaults, null, 2);
-      }
-
-      // Clear model if it's not valid for the new provider
+      // Clear model if it's not valid for the new provider (compute first so we can
+      // auto-apply the model's service-aware preset below).
       const newModelList = PROVIDER_MODELS[newProvider] ?? [];
       const newModel = newModelList.length > 0 && !newModelList.includes(prev.model)
         ? newModelList[0]
         : prev.model;
 
+      // Auto-populate params if they're empty or were {}/default. Prefer the model's
+      // service-aware preset (query_transform → thinking-disabled) over the provider default.
+      const prevParamsParsed = tryParseJson(prev.paramsJson);
+      const isEmpty = prevParamsParsed.ok && Object.keys(prevParamsParsed.value).length === 0;
+      const wasDefault = Object.entries(PROVIDER_DEFAULT_PARAMS).some(
+        ([, def]) => JSON.stringify(def) === JSON.stringify(prevParamsParsed.ok ? prevParamsParsed.value : {})
+      );
+      const modelPreset = presetParamsFor(newModel, service.key);
+      if (newProvider === 'codex') {
+        // Codex only accepts reasoning_effort — always override params
+        newParamsJson = JSON.stringify(
+          modelPreset ?? { reasoning_effort: service.key === 'query_transform' ? 'low' : 'medium' }, null, 2);
+      } else if (isEmpty || wasDefault) {
+        const defaults = modelPreset ?? PROVIDER_DEFAULT_PARAMS[newProvider];
+        if (defaults) newParamsJson = JSON.stringify(defaults, null, 2);
+      }
+
       return { ...prev, provider: newProvider, baseURL: newBaseURL, paramsJson: newParamsJson, model: newModel };
     });
-  }, [proxyBase]);
+  }, [proxyBase, service.key]);
+
+  // Same auto-fill behaviour as handleProviderChange, but for the fallback sub-form.
+  const handleFallbackProviderChange = useCallback((newProvider: string) => {
+    setForm((prev) => {
+      const fb = prev.fallback;
+      let newBaseURL = fb.baseURL;
+      let newParamsJson = fb.paramsJson;
+
+      // Auto-populate baseURL if it's empty or was auto-set for a previous known provider
+      const autoURL = newProvider === 'codex' && proxyBase
+        ? `${proxyBase}/${newProvider}/v1`
+        : PROVIDER_DEFAULT_BASE_URL[newProvider] ?? '';
+
+      const prevDefault = Object.values(PROVIDER_DEFAULT_BASE_URL).includes(fb.baseURL)
+        || (proxyBase && fb.baseURL.startsWith(proxyBase))
+        || !fb.baseURL;
+
+      if (prevDefault) newBaseURL = autoURL;
+
+      // Clear model if it's not valid for the new provider (compute first for preset).
+      const newModelList = PROVIDER_MODELS[newProvider] ?? [];
+      const newModel = newModelList.length > 0 && !newModelList.includes(fb.model)
+        ? newModelList[0]
+        : fb.model;
+
+      // Auto-populate params if they're empty or were {}/default. Prefer the model's
+      // service-aware preset (query_transform → thinking-disabled) over the provider default.
+      const prevParamsParsed = tryParseJson(fb.paramsJson);
+      const isEmpty = prevParamsParsed.ok && Object.keys(prevParamsParsed.value).length === 0;
+      const wasDefault = Object.entries(PROVIDER_DEFAULT_PARAMS).some(
+        ([, def]) => JSON.stringify(def) === JSON.stringify(prevParamsParsed.ok ? prevParamsParsed.value : {})
+      );
+      const modelPreset = presetParamsFor(newModel, service.key);
+      if (newProvider === 'codex') {
+        // Codex only accepts reasoning_effort — always override params
+        newParamsJson = JSON.stringify(
+          modelPreset ?? { reasoning_effort: service.key === 'query_transform' ? 'low' : 'medium' }, null, 2);
+      } else if (isEmpty || wasDefault) {
+        const defaults = modelPreset ?? PROVIDER_DEFAULT_PARAMS[newProvider];
+        if (defaults) newParamsJson = JSON.stringify(defaults, null, 2);
+      }
+
+      return {
+        ...prev,
+        fallback: { ...fb, provider: newProvider, baseURL: newBaseURL, paramsJson: newParamsJson, model: newModel },
+      };
+    });
+  }, [proxyBase, service.key]);
 
   const mutation = useMutation({
     mutationFn: () => {
       const parseResult = tryParseJson(form.paramsJson);
       if (!parseResult.ok) throw new Error('Invalid JSON params: ' + parseResult.error);
       const body: Record<string, unknown> = {
-        provider: form.provider,
+        // 'codex' is a UI convenience label — the agent service factory only
+        // understands 'openai' (OpenAI-compat). The gateway at the baseURL handles
+        // the Codex-specific translation transparently.
+        provider: form.provider === 'codex' ? 'openai' : form.provider,
         enabled: form.enabled,
         params: parseResult.value,
       };
       if (form.apiKey.trim()) body.apiKey = form.apiKey.trim();
       if (form.baseURL.trim()) body.baseURL = form.baseURL.trim();
       if (form.model.trim()) body.model = form.model.trim();
+
+      // Fallback provider (used if the primary fails). Same semantics as primary:
+      // blank apiKey preserves the existing encrypted key, so only send it when typed.
+      const fb = form.fallback;
+      const fbParseResult = tryParseJson(fb.paramsJson);
+      if (!fbParseResult.ok) throw new Error('Invalid JSON fallback params: ' + fbParseResult.error);
+      const fallback: Record<string, unknown> = {
+        enabled: fb.enabled,
+        provider: fb.provider === 'codex' ? 'openai' : fb.provider,
+        params: fbParseResult.value,
+      };
+      if (fb.apiKey.trim()) fallback.apiKey = fb.apiKey.trim();
+      if (fb.baseURL.trim()) fallback.baseURL = fb.baseURL.trim();
+      if (fb.model.trim()) fallback.model = fb.model.trim();
+      body.fallback = fallback;
+
       return api.put(`/admin/providers/${service.key}/${tier}`, body);
     },
     onSuccess: () => {
       toast.success(`Saved ${service.label} / ${tier}`);
-      setForm((f) => ({ ...f, apiKey: '' }));
+      setForm((f) => ({ ...f, apiKey: '', fallback: { ...f.fallback, apiKey: '' } }));
       onSaved();
     },
     onError: (err: unknown) => {
@@ -542,7 +691,7 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
               autoComplete="new-password" />
             {form.provider === 'codex' && (
               <p className="text-[10px] text-sky-600 dark:text-sky-400">
-                Paste your OpenAI/Codex session token from ~/.codex/auth.json → auth → access_token
+                API Key = your GATEWAY_INTERNAL_KEY env var value. Base URL must be http://api:3000/api/gateway/proxy/codex/v1 for the agent service to reach the gateway internally.
               </p>
             )}
             {form.provider === 'opencodego' && (
@@ -575,6 +724,7 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
                 value={form.model}
                 onChange={(v) => setForm((f) => ({ ...f, model: v }))}
                 kind={service.kind}
+                serviceKey={service.key}
                 onPresetApply={(params) => setForm((f) => ({ ...f, paramsJson: JSON.stringify(params, null, 2) }))}
               />
               {service.kind === 'embedder' && (
@@ -595,18 +745,125 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
             />
           </div>
 
+          {/* ── Fallback provider (used if primary fails) ────────────────────── */}
+          <div className="rounded-md border border-dashed bg-muted/30 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground">Fallback (used if primary fails)</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.fallback.enabled}
+                  aria-label="Enable fallback"
+                  onClick={() => setForm((f) => ({ ...f, fallback: { ...f.fallback, enabled: !f.fallback.enabled } }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${form.fallback.enabled ? 'bg-primary' : 'bg-input'}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${form.fallback.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-xs text-muted-foreground">{form.fallback.enabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+
+            {form.fallback.enabled ? (
+              <div className="space-y-3">
+                {/* Fallback provider */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Provider</Label>
+                  <Select value={service.providers.includes(form.fallback.provider) ? form.fallback.provider : (form.fallback.provider ? '__custom__' : '')}
+                    onValueChange={(v) => { if (v !== '__custom__') handleFallbackProviderChange(v); }}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select provider" /></SelectTrigger>
+                    <SelectContent>
+                      {service.providers.map((p) => (
+                        <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+                      ))}
+                      {form.fallback.provider && !service.providers.includes(form.fallback.provider) && (
+                        <SelectItem value="__custom__" className="text-xs">{form.fallback.provider} (custom)</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Input className="h-7 text-xs" placeholder="or type custom provider…"
+                    value={service.providers.includes(form.fallback.provider) ? '' : form.fallback.provider}
+                    onChange={(e) => { if (e.target.value) handleFallbackProviderChange(e.target.value); }} />
+                </div>
+
+                {/* Fallback API Key */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {form.fallback.provider === 'codex' ? 'Session Token / API Key' : 'API Key'}
+                  </Label>
+                  <Input type="password" className="h-8 text-xs font-mono"
+                    placeholder={doc?.fallback?.hasKey ? `${doc.fallback.maskedKey} — leave blank to keep` : 'Enter key / token'}
+                    value={form.fallback.apiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, fallback: { ...f.fallback, apiKey: e.target.value } }))}
+                    autoComplete="new-password" />
+                  <p className="text-[10px] text-muted-foreground">Write-only. Existing key shown masked above. Leave blank to keep.</p>
+                </div>
+
+                {/* Fallback Base URL */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Base URL / Endpoint</Label>
+                  <Input className="h-8 text-xs font-mono" placeholder="Auto-populated — or enter custom"
+                    value={form.fallback.baseURL}
+                    onChange={(e) => setForm((f) => ({ ...f, fallback: { ...f.fallback, baseURL: e.target.value } }))} />
+                  {form.fallback.provider === 'codex' && proxyBase && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                      Use <span className="font-mono">{proxyBase}/codex/v1</span> to route through the gateway (auto-refresh + logging), or <span className="font-mono">https://api.openai.com/v1</span> for direct.
+                    </p>
+                  )}
+                </div>
+
+                {/* Fallback Model */}
+                {service.kind !== 'tts' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Model</Label>
+                    <ModelSelector
+                      provider={form.fallback.provider}
+                      value={form.fallback.model}
+                      onChange={(v) => setForm((f) => ({ ...f, fallback: { ...f.fallback, model: v } }))}
+                      kind={service.kind}
+                      serviceKey={service.key}
+                      onPresetApply={(params) => setForm((f) => ({ ...f, fallback: { ...f.fallback, paramsJson: JSON.stringify(params, null, 2) } }))}
+                    />
+                    {service.kind === 'embedder' && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        Model change requires corpus re-embed (dimensions must match).
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Fallback JSON params */}
+                <div className="space-y-1.5">
+                  <Separator />
+                  <JsonParamsEditor
+                    value={form.fallback.paramsJson}
+                    onChange={(val) => setForm((f) => ({ ...f, fallback: { ...f.fallback, paramsJson: val } }))}
+                    hint={service.paramsHint}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">
+                Enable to define a secondary provider that runs automatically when the primary provider fails.
+              </p>
+            )}
+          </div>
+
           {/* Save */}
           <div className="pt-1 flex items-center gap-2">
             <Button size="sm" className="h-7 text-xs gap-1.5"
               onClick={() => mutation.mutate()}
-              disabled={mutation.isPending || !paramsValid}
-              title={!paramsValid ? 'Fix JSON errors before saving' : undefined}>
+              disabled={mutation.isPending || !paramsValid || (form.fallback.enabled && !fallbackParamsValid)}
+              title={(!paramsValid || (form.fallback.enabled && !fallbackParamsValid)) ? 'Fix JSON errors before saving' : undefined}>
               {mutation.isPending
                 ? <><RefreshCw className="h-3 w-3 animate-spin" />Saving…</>
                 : <><Save className="h-3 w-3" />Save {tier}</>}
             </Button>
-            {!paramsValid && <span className="flex items-center gap-1 text-[11px] text-destructive"><AlertCircle className="h-3 w-3" />Invalid JSON</span>}
-            {mutation.isSuccess && paramsValid && <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400"><CheckCircle2 className="h-3 w-3" />Saved</span>}
+            {(!paramsValid || (form.fallback.enabled && !fallbackParamsValid)) && <span className="flex items-center gap-1 text-[11px] text-destructive"><AlertCircle className="h-3 w-3" />Invalid JSON</span>}
+            {mutation.isSuccess && paramsValid && (!form.fallback.enabled || fallbackParamsValid) && <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400"><CheckCircle2 className="h-3 w-3" />Saved</span>}
             {mutation.isError && <span className="flex items-center gap-1 text-[11px] text-destructive"><AlertCircle className="h-3 w-3" />Error</span>}
           </div>
         </div>
@@ -683,7 +940,7 @@ interface TestResult {
   model: string;
   latencyMs: number;
   httpStatus?: number;
-  reply?: string;
+  reply?: string | null;
   finishReason?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
   error?: string;
@@ -693,26 +950,25 @@ interface TestResult {
 function ModelTestPanel({ provider, models }: { provider: string; models: string[] }) {
   const [open, setOpen] = useState(false);
   const [model, setModel] = useState(models[0] ?? '');
+  const [prompt, setPrompt] = useState('Hi! Just say "API OK" and nothing else.');
   const [paramsJson, setParamsJson] = useState(() => {
-    const defaults: Record<string, Record<string, unknown>> = {
-      'opencodego': { temperature: 0.2, max_tokens: 64 },
-      'codex':       { temperature: 0.2, max_tokens: 64 },
-    };
-    return JSON.stringify(defaults[provider] ?? { temperature: 0.2, max_tokens: 64 }, null, 2);
+    const first = models[0] ? MODEL_PARAM_PRESETS[models[0]]?.params : undefined;
+    return JSON.stringify(first ?? { temperature: 0.2, max_tokens: 256 }, null, 2);
   });
   const [result, setResult] = useState<TestResult | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
 
   const paramsValid = (() => { try { JSON.parse(paramsJson); return true; } catch { return false; } })();
 
   const testMutation = useMutation({
     mutationFn: () => {
       const params = JSON.parse(paramsJson) as Record<string, unknown>;
-      return api.post<TestResult>('/admin/gateway/test', { provider, model, params }).then((r) => r.data);
+      return api.post<TestResult>('/admin/gateway/test', { provider, model, params, prompt }).then((r) => r.data);
     },
-    onSuccess: (data) => setResult(data),
+    onSuccess: (data) => { setResult(data); setShowRaw(false); },
     onError: (err: unknown) => {
       const apiErr = (err as { response?: { data?: TestResult } })?.response?.data;
-      if (apiErr) { setResult(apiErr); return; }
+      if (apiErr) { setResult(apiErr); setShowRaw(false); return; }
       setResult({ success: false, model, latencyMs: 0, error: String(err) });
     },
   });
@@ -770,11 +1026,23 @@ function ModelTestPanel({ provider, models }: { provider: string; models: string
         )}
       </div>
 
+      {/* Prompt */}
+      <div className="space-y-1">
+        <Label className="text-xs">Prompt</Label>
+        <textarea
+          className="w-full min-h-[56px] rounded-md border border-input px-3 py-2 text-xs bg-background resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          spellCheck={false}
+          placeholder='e.g. "Say hi" or "Explain what enable_thinking does"'
+        />
+      </div>
+
       {/* Params JSON */}
       <div className="space-y-1">
         <Label className="text-xs flex items-center gap-1.5">
           Params (JSON)
-          <span className="text-[10px] text-muted-foreground font-normal">— temperature, max_tokens, reasoning_effort, enable_thinking, thinking_budget, top_p…</span>
+          <span className="text-[10px] text-muted-foreground font-normal">— temperature, max_tokens, enable_thinking, thinking_budget, reasoning_effort…</span>
         </Label>
         <textarea
           className={`w-full min-h-[80px] rounded-md border px-3 py-2 text-xs font-mono bg-background resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${!paramsValid ? 'border-destructive' : 'border-input'}`}
@@ -812,15 +1080,13 @@ function ModelTestPanel({ provider, models }: { provider: string; models: string
             </span>
           </div>
 
-          {/* Reply */}
-          {result.reply && (
-            <div className="space-y-0.5">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Reply</p>
-              <p className="font-mono text-foreground whitespace-pre-wrap break-all bg-background/60 rounded px-2 py-1.5 border text-[11px]">
-                {result.reply}
-              </p>
-            </div>
-          )}
+          {/* Parsed reply (content field) */}
+          <div className="space-y-0.5">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">content field</p>
+            <p className="font-mono text-foreground whitespace-pre-wrap break-all bg-background/60 rounded px-2 py-1.5 border text-[11px]">
+              {result.reply ?? <span className="text-amber-600 italic">(null — thinking models may put output in reasoning field, check raw below)</span>}
+            </p>
+          </div>
 
           {/* Error */}
           {result.error && (
@@ -842,11 +1108,23 @@ function ModelTestPanel({ provider, models }: { provider: string; models: string
                   {result.usage.total_tokens ? ` (${result.usage.total_tokens} total)` : ''}
                 </span>
               )}
-              {result.finishReason && (
-                <span>finish: <span className="font-mono">{result.finishReason}</span></span>
-              )}
+              {result.finishReason && <span>finish: <span className="font-mono">{result.finishReason}</span></span>}
             </div>
           )}
+
+          {/* Raw response toggle */}
+          <div className="space-y-1 pt-1">
+            <button type="button"
+              onClick={() => setShowRaw((x) => !x)}
+              className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline font-medium">
+              {showRaw ? '▲ Hide raw response' : '▼ Show full raw response'}
+            </button>
+            {showRaw && (
+              <pre className="text-[10px] font-mono bg-muted/60 border rounded p-2 overflow-auto max-h-96 whitespace-pre-wrap break-all">
+                {JSON.stringify(result.raw, null, 2)}
+              </pre>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -860,6 +1138,7 @@ function GatewayProviderCard({ p, onSaved }: { p: GatewayProviderStatus; onSaved
   const [manualMode, setManualMode] = useState(false);
   const [token, setToken] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [connectingOAuth, setConnectingOAuth] = useState(false);
   const popupRef = useRef<Window | null>(null);
 
@@ -920,10 +1199,11 @@ function GatewayProviderCard({ p, onSaved }: { p: GatewayProviderStatus; onSaved
     mutationFn: () => api.put(`/admin/gateway/providers/${p.provider}`, {
       token: token.trim(),
       ...(refreshToken.trim() ? { refreshToken: refreshToken.trim() } : {}),
+      ...(isCodex && accountId.trim() ? { accountId: accountId.trim() } : {}),
     }),
     onSuccess: () => {
       toast.success(`Token saved for ${p.provider}`);
-      setToken(''); setRefreshToken(''); setManualMode(false);
+      setToken(''); setRefreshToken(''); setAccountId(''); setManualMode(false);
       onSaved();
     },
     onError: (err: unknown) => {
@@ -949,6 +1229,11 @@ function GatewayProviderCard({ p, onSaved }: { p: GatewayProviderStatus; onSaved
               : <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">not connected</span>}
             {p.hasRefreshToken && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 font-medium">auto-refresh</span>
+            )}
+            {isCodex && (
+              p.hasAccountId
+                ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 font-medium">account id: set</span>
+                : <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 font-medium">account id: not set</span>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground pl-6">
@@ -1071,6 +1356,21 @@ function GatewayProviderCard({ p, onSaved }: { p: GatewayProviderStatus; onSaved
                     onChange={(e) => setRefreshToken(e.target.value)} />
                 </div>
               )}
+              {isCodex && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Account ID (optional)</Label>
+                  <Input className="h-8 text-xs font-mono"
+                    placeholder={p.hasAccountId ? 'Already set — leave blank to keep' : 'e.g. user-abc123'}
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    autoComplete="off" />
+                  <p className="text-[10px] text-muted-foreground">
+                    Leave blank to auto-extract from the token. Find it in{' '}
+                    <span className="font-mono">~/.codex/auth.json</span> as{' '}
+                    <span className="font-mono">tokens.account_id</span>.
+                  </p>
+                </div>
+              )}
               <Button size="sm" className="h-7 text-xs gap-1.5"
                 onClick={() => manualMutation.mutate()}
                 disabled={manualMutation.isPending || !token.trim()}>
@@ -1172,7 +1472,7 @@ export default function ProvidersPage() {
 
   const { data, isLoading, isError, refetch } = useQuery<ProvidersResponse>({
     queryKey: ['admin/providers'],
-    queryFn: () => api.get<ProvidersResponse>('/admin/providers').then((r) => r.data),
+    queryFn: () => api.get<{ ok: boolean; providers: ProvidersResponse }>('/admin/providers').then((r) => r.data.providers),
   });
 
   // Fetch gateway status to get proxyBase for service config auto-fill

@@ -38,15 +38,25 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: handle 401 globally
+// Response interceptor: handle 401 globally — only redirect to login when the
+// 401 comes from an auth/user endpoint. Gateway/test/content endpoints return 401
+// for upstream provider errors (wrong API key etc.) and must NOT trigger logout.
+const AUTH_PATHS = ['/users/login', '/users/me', '/users/signup'];
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.warn('[admin api] Unauthorized — redirecting to /login');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const url: string = error.config?.url ?? '';
+      const isAuthEndpoint = AUTH_PATHS.some((p) => url.includes(p));
+      if (isAuthEndpoint) {
+        console.warn('[admin api] Unauthorized — redirecting to /login');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+      // For non-auth endpoints (gateway test, providers etc.) just reject normally
+      // so the component can show the error without logging the user out.
     }
     return Promise.reject(error);
   }

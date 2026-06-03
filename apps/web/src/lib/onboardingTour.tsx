@@ -167,7 +167,7 @@ function buildDriver(
     nextBtnText: "Next →",
     prevBtnText: "← Back",
     doneBtnText: "Let's go 🚀",
-    allowClose: true, // the tour is always skippable
+    allowClose: false, // must complete or reach the last step to exit
     // Read-only walkthrough: don't let clicks fall through to the highlighted
     // element. Otherwise tapping (say) the "Collaborators" button mid-tour opens
     // a dialog *behind* driver's overlay and traps the user. They advance with
@@ -199,28 +199,23 @@ function buildDriver(
 // Every cat lives in /public/cats (served at the site root). Swapping the meme for
 // any step is a one-word filename change — the full collection is in that folder.
 
-/** Build a popover body: a reaction cat on top, one punchy line underneath. */
-const cat = (file: string, line: string) =>
-  `<img class="stitcher-tour-cat" src="/cats/${file}" alt="" draggable="false" />` +
+/**
+ * Build a popover body: cat PNG pinned to the right, subtitle line on the left.
+ * Pass "cat-photo" as extraClass for images that keep their original (opaque)
+ * background — those get framed with rounded corners instead of floating free.
+ */
+const cat = (file: string, line: string, extraClass = "") =>
+  `<div class="stitcher-tour-cat-float"><img class="stitcher-tour-cat ${extraClass}" src="/cats/${file}" alt="" draggable="false" /></div>` +
   `<span class="stitcher-tour-line">${line}</span>`;
 
-const ACT1_STEPS: DriveStep[] = [
+// Act 1 is a single welcome step — the "Take me in" click auto-opens/creates
+// a project and navigates to it, so there is no "Hit New Project" instruction.
+const ACT1_WELCOME: DriveStep[] = [
   {
-    // Centered welcome — no element. Animated Happy Cat for the warmest first hit.
     popover: {
-      title: "Welcome to Stitcher 🎬",
-      description: cat("happy-cat.gif", "30 seconds. Then you’re dangerous."),
-      nextBtnText: "Show me →",
-    },
-  },
-  {
-    element: '[data-tour="create-project"]',
-    popover: {
-      title: "Step one: a project 🆕",
-      description: cat("nerd-pointing.png", "Hit New Project. That’s it."),
-      side: "bottom",
-      align: "start",
-      doneBtnText: "Let me in!",
+      title: "Stitcher just entered the chat 🎬",
+      description: cat("big-grin.png", "AI video editor. Describe what you want — it builds the whole thing. No cap.", "cat-photo"),
+      doneBtnText: "Take me in →",
     },
   },
 ];
@@ -238,8 +233,8 @@ function buildEditorSteps(): DriveStep[] {
   const all: (DriveStep & { _need?: string })[] = [
     {
       popover: {
-        title: "You’re in! 🎉",
-        description: cat("headset-cockpit.png", "Your cockpit. Four buttons matter."),
+        title: "Sheesh, you're in 🎉",
+        description: cat("headset-cockpit.png", "Timeline at the bottom, asset stash left, AI chat right. These 4 zones run your whole workflow.", "cat-photo"),
         nextBtnText: "Tour it →",
       },
     },
@@ -247,8 +242,8 @@ function buildEditorSteps(): DriveStep[] {
       _need: '[data-tour="timeline"]',
       element: '[data-tour="timeline"]',
       popover: {
-        title: "The timeline 🎞️",
-        description: cat("dancing.png", "Your video lives here."),
+        title: "This IS your video 🎞️",
+        description: cat("pointing-watch.png", "Drag clips, AI scenes, and audio here in order. Trim, reorder, stack layers — the timeline is everything."),
         side: "top",
         align: "center",
       },
@@ -258,8 +253,8 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="sidebar-assetstash"]',
       onHighlightStarted: openRailTab("assetstash"),
       popover: {
-        title: "Add stuff 🧩",
-        description: cat("tongue-shaka.png", "Drag these onto the timeline."),
+        title: "The plug for your media 🧩",
+        description: cat("nerd-pointing.png", "All your uploads live here. Drag images, video, or audio onto the timeline — instant W."),
         side: "right",
         align: "start",
       },
@@ -268,8 +263,8 @@ function buildEditorSteps(): DriveStep[] {
       _need: '[data-tour="ai-chat"]',
       element: '[data-tour="ai-chat"]',
       popover: {
-        title: "Generate with AI 🪄",
-        description: cat("amazed-glasses.png", "Lazy? Describe it, AI builds it."),
+        title: "Rizz the AI into cooking 🪄",
+        description: cat("amazed-glasses.png", "Type what you want, AI generates an actual video scene. Not mid. Genuinely bussin'."),
         side: "left",
         align: "start",
       },
@@ -279,8 +274,8 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="sidebar-memory"]',
       onHighlightStarted: openRailTab("memory"),
       popover: {
-        title: "Memory 🧠",
-        description: cat("thinking-suit-dog.png", "It remembers so you don’t repeat."),
+        title: "It lowkey never forgets 🧠",
+        description: cat("thinking-suit-dog.png", "Drop your brand, style refs, and recurring context here. AI stays on theme — zero delulu outputs."),
         side: "right",
         align: "start",
       },
@@ -289,17 +284,17 @@ function buildEditorSteps(): DriveStep[] {
       _need: '[data-tour="collaborators"]',
       element: '[data-tour="collaborators"]',
       popover: {
-        title: "Bring the squad 👥",
-        description: cat("rock-on-hype.png", "Invite friends. See live cursors."),
+        title: "Bring the whole fam 👥",
+        description: cat("tongue-shaka.png", "Invite your crew and edit the same project live. You'll see their cursors moving IRL. Squad goals, fr."),
         side: "bottom",
         align: "end",
       },
     },
     {
       popover: {
-        title: "That’s the tour 🎓",
-        description: cat("empty-wallet.png", "Now go make something gorgeous."),
-        doneBtnText: "Let’s go 🚀",
+        title: "You understood the assignment 🎓",
+        description: cat("empty-wallet.png", "Tour's done. Go make something that hits different. The timeline's yours, bestie."),
+        doneBtnText: "Let's go 🚀",
       },
     },
   ];
@@ -313,22 +308,21 @@ function buildEditorSteps(): DriveStep[] {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Call from the /home screen. Runs Act 1 (welcome + "create a project") once.
- * Finishing advances progress to "editor"; skipping ends the whole tour.
+ * Call from the /home screen. Shows a single welcome step then auto-opens or
+ * creates a project via onAutoOpen, so the user never has to click "New Project"
+ * themselves. Finishing calls onAutoOpen then advances progress to "editor".
  */
-export async function maybeRunHomeTour() {
+export async function maybeRunHomeTour(onAutoOpen: () => Promise<void>) {
   if (hasCompletedTour()) return;
-  // If Act 1 is already behind us (progress === "editor"), don't replay it —
-  // the user is between acts, waiting to land in the editor.
   if (getProgress() === "editor") return;
 
-  const ready = await waitForElements(['[data-tour="create-project"]']);
-  if (!ready) return; // anchor never showed up (e.g. odd layout) — skip silently
-
   const d = buildDriver(
-    ACT1_STEPS,
-    () => setProgress("editor"), // finished Act 1 → wait for the editor
-    () => markTourComplete(), // skipped → never show again
+    ACT1_WELCOME,
+    async () => {
+      setProgress("editor");
+      await onAutoOpen();
+    },
+    () => markTourComplete(),
   );
   d.drive();
 }
@@ -386,18 +380,17 @@ export async function replayEditorTour() {
 
 /**
  * Replay the FULL tour from /home — wired to the "Take the tour" quick action.
- * Runs Act 1 now; finishing it arms Act 2 (REPLAY_KEY) so the editor walkthrough
- * fires the next time the user opens a project, mirroring the real first run.
- * Ignores the "completed" gate and never mutates completion state.
+ * Shows the welcome step, then auto-opens/creates a project and arms Act 2 so
+ * the editor walkthrough fires as soon as the editor mounts.
  */
-export async function startReplayTour() {
-  const ready = await waitForElements(['[data-tour="create-project"]']);
-  if (!ready) return;
-
+export async function startReplayTour(onAutoOpen: () => Promise<void>) {
   const d = buildDriver(
-    ACT1_STEPS,
-    () => localStorage.setItem(REPLAY_KEY, "act2"), // arm the editor leg
-    () => localStorage.removeItem(REPLAY_KEY),      // bailed early — disarm
+    ACT1_WELCOME,
+    async () => {
+      localStorage.setItem(REPLAY_KEY, "act2"); // arm the editor leg
+      await onAutoOpen();
+    },
+    () => localStorage.removeItem(REPLAY_KEY),
   );
   d.drive();
 }

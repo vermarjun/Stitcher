@@ -36,10 +36,11 @@ import { agentClient } from "../services/agentClient";
 import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
 import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
-import { resolveServiceConfig, tierForUser } from "../util/serviceConfig.util";
+import { resolveServiceConfig, tierForUser, normalizeGatewayBaseURL } from "../util/serviceConfig.util";
 import type { ResolvedTtsConfig } from "../services/ttsClient";
 import { publishProgress } from "./eventPublisher.util";
-import { setJobStatus, setJobSceneTotal, incrementJobScene, appendJobStage, setJobTokens } from "./jobTracker.util";
+import { setJobStatus, setJobSceneTotal, incrementJobScene, appendJobStage, setJobTokens, setJobProgress } from "./jobTracker.util";
+import { getPhaseMeta, type GenerationPhase } from "./pipelinePhases";
 import { buildAudioBundle } from "../services/ttsClient";
 import { uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
 import { promises as fsp } from "fs";
@@ -53,9 +54,10 @@ import GenerationLlmIO, { IO_FIELD_CAP } from "../model/generationLlmIO.model";
 import type { RagTrace } from "../services/ragClient";
 import CoderLesson from "../model/coderLesson.model";
 import GenerationJob from "../model/generationJob.model";
-import type { LlmCallLogEntry, DebugHistoryEntry } from "../services/agentClient";
+import type { LlmCallLogEntry, DebugHistoryEntry, LlmRoleConfig } from "../services/agentClient";
 import User from "../model/user.model";
 import logger from "../util/logger.util";
+import { buildFallbackSceneCode, FALLBACK_SCENE_CLASS } from "../util/fallbackScene.util";
 
 // ─── Cancellation support ─────────────────────────────────────────────────────
 
@@ -192,8 +194,10 @@ async function persistRagTrace(opts: {
     if (!opts.jobId) return;
     const t = opts.trace;
 
-    // Row 1: query_transform LLM call (only when the RAG service ran the transform)
-    if (t?.queryTransform?.ran) {
+    // Row 1: query_transform LLM call. Persist whenever the trace exists — including
+    // the degraded (ran:false) case (timeout/no-JSON), so the admin can SEE why a
+    // job got no plugins instead of the transform silently vanishing from the I/O log.
+    if (t?.queryTransform) {
         try {
             const qt = t.queryTransform;
             await GenerationLlmIO.create({
@@ -209,7 +213,9 @@ async function persistRagTrace(opts: {
                 userPrompt: capString(qt.userPrompt),
                 rawOutput: capString(qt.rawOutput),
                 tokensUsed: qt.tokensUsed,
-                error: opts.error ? capString(opts.error) : undefined,
+                error: opts.error
+                    ? capString(opts.error)
+                    : (qt.ran ? undefined : capString("query_transform did not run (timeout/degraded → raw-query fallback, no requiredPlugins)")),
             });
         } catch { /* non-fatal */ }
     }
@@ -235,9 +241,12 @@ async function persistRagTrace(opts: {
             role: "retrieval",
             provider: capString(t?.embed?.provider ?? "rag"),
             llmModel: capString(t?.embed?.model ?? "unknown"),
-            systemPrompt: "",
-            userPrompt: "",
-            rawOutput: "",
+            // These three are required:true on the schema and Mongoose rejects "" for a
+            // required String — so empty strings here silently threw and the retrieval
+            // row never persisted (0/30 in the stress test). Use non-LLM placeholders.
+            systemPrompt: "(rag retrieval — non-LLM stage)",
+            userPrompt: "(embed → retrieve → select; see retrievalTrace)",
+            rawOutput: "(see retrievalTrace field)",
             retrievalTrace,
             error: opts.error ? capString(opts.error) : undefined,
         });
@@ -466,6 +475,10 @@ async function runGenerationPipeline(
 
     const jobId = job.id;
 
+    // Wall-clock start of the generation pipeline — used to persist how long the
+    // video took to generate (so "time taken" survives a page reload).
+    const pipelineStartMs = Date.now();
+
     // ── Token accumulator ────────────────────────────────────────────────────
     const tokens = makeTokenAccumulator();
 
@@ -473,6 +486,23 @@ async function runGenerationPipeline(
     const progress = (type: Parameters<typeof publishProgress>[1]["type"], phase: string, data?: unknown) => {
         publishProgress(chatId, { type, phase, data });
         logger.debug({ message: `[worker] ${type}`, chatId, traceId, phase });
+    };
+
+    // ── Live phase helper ────────────────────────────────────────────────────
+    // Advances the user-facing live progress for one real pipeline transition.
+    // Does BOTH, from the single source of truth (PIPELINE_PHASES):
+    //   1. persists progress to the job (reload-safe, monotonic percent)
+    //   2. emits a `progress` socket event { phase, label, percent, ceil } so the
+    //      bar + step label update live without polling.
+    const phase = (key: GenerationPhase) => {
+        void setJobProgress(jobId, key);
+        const meta = getPhaseMeta(key);
+        publishProgress(chatId, {
+            type: "progress",
+            phase: key,
+            data: { phase: key, label: meta.label, percent: meta.percent, ceil: meta.ceil },
+        });
+        logger.debug({ message: `[worker] phase ${key}`, chatId, traceId, percent: meta.percent });
     };
 
     // ── Step 1: Load user (credit gate applied after model config resolves) ──
@@ -521,46 +551,81 @@ async function runGenerationPipeline(
     // and passes everything else through as modelKwargs (enable_thinking,
     // reasoning_effort, thinking_budget, top_p, etc.).
     // We store max_tokens (OpenAI convention) in the DB so rename it here.
-    function normaliseParams(p: Record<string, unknown>): Record<string, unknown> {
+    function normaliseParams(p: Record<string, unknown>, provider?: string): Record<string, unknown> {
+        // Codex backend only accepts reasoning_effort — strip everything else.
+        // The gateway also strips on its end, but avoid sending junk to the factory.
+        if (provider === 'codex') {
+            return p.reasoning_effort ? { reasoning_effort: p.reasoning_effort } : {};
+        }
+        // For all other providers: rename max_tokens → maxTokens (factory convention)
         const { max_tokens, ...rest } = p as Record<string, unknown> & { max_tokens?: unknown };
         return max_tokens !== undefined ? { ...rest, maxTokens: max_tokens } : rest;
     }
 
-    if (!modelConfig.coder.apiKey) {
-        modelConfig.coder = {
-            provider: tierCoderCfg.provider,
-            model: tierCoderCfg.model ?? modelConfig.coder.model,
-            apiKey: tierCoderCfg.apiKey || undefined,
-            baseURL: tierCoderCfg.baseURL ?? undefined,
-            params: normaliseParams(tierCoderCfg.params),
+    // Convert a resolved (service,tier) config — primary OR fallback — into the
+    // LlmRoleConfig the agent service consumes. Coerces codex→openai for the
+    // factory, normalises params, and forces gateway-proxy baseURLs to the
+    // docker-internal origin so the agent can always reach them.
+    function toRoleConfig(
+        cfg: { provider: string; model: string | null; apiKey: string; baseURL: string | null; params: Record<string, unknown> },
+        defaultModel: string
+    ): LlmRoleConfig {
+        return {
+            provider: cfg.provider === 'codex' ? 'openai' : cfg.provider,
+            model: cfg.model ?? defaultModel,
+            apiKey: cfg.apiKey || undefined,
+            baseURL: normalizeGatewayBaseURL(cfg.baseURL) ?? undefined,
+            params: normaliseParams(cfg.params, cfg.provider),
         };
+    }
+
+    // Fallback role-configs (admin-defined). Only present when the user is NOT on
+    // BYOK for that role (tier config governs) AND the admin enabled a fallback.
+    let coderFallbackCfg: LlmRoleConfig | undefined;
+    let debuggerFallbackCfg: LlmRoleConfig | undefined;
+
+    if (!modelConfig.coder.apiKey) {
+        modelConfig.coder = toRoleConfig(tierCoderCfg, modelConfig.coder.model);
+        if (tierCoderCfg.fallback) {
+            coderFallbackCfg = toRoleConfig(tierCoderCfg.fallback, modelConfig.coder.model);
+        }
     }
     if (!modelConfig.debugger.apiKey) {
-        modelConfig.debugger = {
-            provider: tierDebuggerCfg.provider,
-            model: tierDebuggerCfg.model ?? modelConfig.debugger.model,
-            apiKey: tierDebuggerCfg.apiKey || undefined,
-            baseURL: tierDebuggerCfg.baseURL ?? undefined,
-            params: normaliseParams(tierDebuggerCfg.params),
-        };
+        modelConfig.debugger = toRoleConfig(tierDebuggerCfg, modelConfig.debugger.model);
+        if (tierDebuggerCfg.fallback) {
+            debuggerFallbackCfg = toRoleConfig(tierDebuggerCfg.fallback, modelConfig.debugger.model);
+        }
     }
 
-    // Build RAG providerConfig from the resolved tier configs.
-    const ragProviderConfig = {
-        queryTransform: tierRagQueryTransformCfg,
-        embedder: tierRagEmbedderCfg,
+    // Build RAG providerConfig from the resolved tier configs. Strip the nested
+    // `fallback` field before sending downstream (RAG only needs the active config).
+    const stripFallback = <T extends { fallback?: unknown }>(c: T) => {
+        const { fallback: _omit, ...rest } = c;
+        return rest;
     };
+    const ragProviderConfig = {
+        queryTransform: stripFallback(tierRagQueryTransformCfg),
+        embedder: stripFallback(tierRagEmbedderCfg),
+    };
+    // Admin-defined query_transform fallback — retried if the primary RAG enhance throws.
+    const ragProviderConfigFallback = tierRagQueryTransformCfg.fallback
+        ? { queryTransform: tierRagQueryTransformCfg.fallback, embedder: stripFallback(tierRagEmbedderCfg) }
+        : undefined;
 
     // Build the TTS config for this tier (cast to the expected type).
-    const resolvedTtsConfig: ResolvedTtsConfig = {
-        provider: tierTtsCfg.provider,
-        apiKey: tierTtsCfg.apiKey,
-        baseURL: tierTtsCfg.baseURL,
+    const toTtsConfig = (c: { provider: string; apiKey: string; baseURL: string | null; params: Record<string, unknown> }): ResolvedTtsConfig => ({
+        provider: c.provider,
+        apiKey: c.apiKey,
+        baseURL: c.baseURL,
         params: {
-            region: typeof tierTtsCfg.params.region === "string" ? tierTtsCfg.params.region : undefined,
-            voice: typeof tierTtsCfg.params.voice === "string" ? tierTtsCfg.params.voice : undefined,
+            region: typeof c.params.region === "string" ? c.params.region : undefined,
+            voice: typeof c.params.voice === "string" ? c.params.voice : undefined,
         },
-    };
+    });
+    const resolvedTtsConfig: ResolvedTtsConfig = toTtsConfig(tierTtsCfg);
+    // Admin-defined TTS fallback (e.g. azure → gtts) — used if the primary TTS throws.
+    const resolvedTtsFallbackConfig: ResolvedTtsConfig | undefined =
+        tierTtsCfg.fallback ? toTtsConfig(tierTtsCfg.fallback) : undefined;
 
     // ── Cancellation gate ────────────────────────────────────────────────────
     await assertNotCancelled(chatId);
@@ -569,33 +634,71 @@ async function runGenerationPipeline(
     // Returns examples (similarScripts) and requiredApis for the coder.
     progress("planning", "rag_enhance");
     void setJobStatus(jobId, "planning");
+    phase("rag");
 
     let ragExamples: Array<{ description: string; code: string }> = [];
     let ragRequiredApis: string[] = [];
+    let ragRequiredPlugins: string[] = [];
+
+    const doEnhance = (cfg: typeof ragProviderConfig, fb: boolean) => withStep(
+        jobCtx,
+        "rag_enhance",
+        { "scene.index": 0, fallback: fb },
+        () => ragClient.enhance({ prompt }, traceId, cfg),
+        {
+            jobId,
+            stageId: "rag_enhance",
+            onSuccess: (r) => {
+                const scriptCount = Array.isArray(r.structuredContext.similarScripts)
+                    ? r.structuredContext.similarScripts.length
+                    : 0;
+                return { outputSummary: `${fb ? "[fallback] " : ""}${scriptCount} similarScripts` };
+            },
+            onFail: () => ({ outputSummary: `${fb ? "[fallback] " : ""}RAG down → raw prompt` }),
+        }
+    );
 
     try {
-        const ragResult = await withStep(
-            jobCtx,
-            "rag_enhance",
-            { "scene.index": 0 },
-            () => ragClient.enhance({ prompt }, traceId, ragProviderConfig),
-            {
-                jobId,
-                stageId: "rag_enhance",
-                onSuccess: (r) => {
-                    const scriptCount = Array.isArray(r.structuredContext.similarScripts)
-                        ? r.structuredContext.similarScripts.length
-                        : 0;
-                    return { outputSummary: `${scriptCount} similarScripts` };
-                },
-                onFail: () => ({ outputSummary: "RAG down → raw prompt" }),
+        let ragResult: Awaited<ReturnType<typeof ragClient.enhance>>;
+        try {
+            ragResult = await doEnhance(ragProviderConfig, false);
+            // A timeout in query_transform does NOT throw — transformQuery swallows it
+            // and returns HTTP 200 with an empty transform (ran:false, no requiredPlugins).
+            // So the throw-based fallback below never fires for the real failure mode.
+            // Detect the degraded case explicitly and retry the enhance via the fallback
+            // provider (e.g. gpt-5.5) so the coder still gets requiredPlugins + skills.
+            if (
+                ragResult.trace?.queryTransform &&
+                ragResult.trace.queryTransform.ran === false &&
+                ragProviderConfigFallback
+            ) {
+                logger.warn({ message: "[worker] query_transform degraded (did not run) — retrying enhance with fallback provider", traceId });
+                try {
+                    const fbResult = await doEnhance(ragProviderConfigFallback as typeof ragProviderConfig, true);
+                    if (fbResult.trace?.queryTransform?.ran) ragResult = fbResult;
+                } catch (fbErr) {
+                    logger.warn({ message: "[worker] fallback enhance failed; keeping primary result", traceId, error: String(fbErr) });
+                }
             }
-        );
+        } catch (primaryRagErr) {
+            // query_transform FALLBACK: retry enhance with the fallback provider.
+            if (ragProviderConfigFallback) {
+                logger.warn({ message: "[worker] primary RAG/query_transform failed — retrying with fallback", traceId, error: String(primaryRagErr) });
+                ragResult = await doEnhance(ragProviderConfigFallback as typeof ragProviderConfig, true);
+            } else {
+                throw primaryRagErr;
+            }
+        }
 
         // Persist RAG pipeline trace on success (best-effort, non-fatal)
         void persistRagTrace({ jobId, chatId, trace: ragResult.trace });
 
-        // Extract similarScripts → examples for the coder (CONTRACT 2 input shape)
+        // Extract similarScripts → examples for the coder (CONTRACT 2 input shape).
+        // Cap at MAX_CODER_EXAMPLES: the RAG examples are ~70-85% of the codegen prompt
+        // (5 full scenes ≈ 5-6k tokens). The relevance-first selector ranks them, so the
+        // top 3 are the on-domain ones; 3 cuts ~40% of the user-message tokens with
+        // negligible quality loss.
+        const MAX_CODER_EXAMPLES = 3;
         if (Array.isArray(ragResult.structuredContext.similarScripts)) {
             ragExamples = ragResult.structuredContext.similarScripts
                 .filter((s): s is Record<string, unknown> => s != null && typeof s === "object")
@@ -603,13 +706,20 @@ async function runGenerationPipeline(
                     description: String((s as Record<string, unknown>)["description"] ?? ""),
                     code: String((s as Record<string, unknown>)["code"] ?? ""),
                 }))
-                .filter((e) => e.code.length > 0);
+                .filter((e) => e.code.length > 0)
+                .slice(0, MAX_CODER_EXAMPLES);
         }
 
         // requiredApis from RAG query-transform (CONTRACT 1 output)
         const ra = (ragResult.structuredContext as unknown as Record<string, unknown>)["requiredApis"];
         if (Array.isArray(ra)) {
             ragRequiredApis = ra.filter((x): x is string => typeof x === "string");
+        }
+
+        // requiredPlugins from RAG query-transform — drives plugin-skill injection in the coder
+        const rp = (ragResult.structuredContext as unknown as Record<string, unknown>)["requiredPlugins"];
+        if (Array.isArray(rp)) {
+            ragRequiredPlugins = rp.filter((x): x is string => typeof x === "string");
         }
     } catch (err) {
         // RAG is best-effort; proceed with empty examples + raw prompt
@@ -651,6 +761,7 @@ async function runGenerationPipeline(
     void setJobSceneTotal(jobId, 1);
     void setJobStatus(jobId, "rendering");
     progress("planning", "agent_code");
+    phase("code");
     rootSpan.setAttribute("scene.count", 1);
 
     const renderQuality = generationOptions?.quality ?? "medium";
@@ -663,85 +774,131 @@ async function runGenerationPipeline(
     // RLHF Feature 3 tracking
     let debugInvoked = false;
     let debugResolved = false;
+    // True when the LLM pipeline was bypassed and we rendered the guaranteed fallback scene
+    let usingFallback = false;
     const originalCodeForReflect = { value: "" };
     const debugHistory: DebugHistoryEntry[] = [];
 
-    // Initial code generation
-    let codeCallError: string | undefined;
-    let codeResponse: Awaited<ReturnType<typeof agentClient.code>> | undefined;
-    try {
-        codeResponse = await withStep(
-            jobCtx,
-            "agent_code",
-            { "scene.index": 0, model: modelConfig.coder.model, voiceover: true },
-            () =>
-                agentClient.code(
-                    {
-                        prompt: effectivePrompt,
-                        examples: ragExamples,
-                        requiredApis: ragRequiredApis,
-                        voiceover: true,
-                        styleManifest: null,
-                        // Complex prompts make a single-shot completion run >120s; give the
-                        // agent room (HTTP client waits 330s, see agentClient.code).
-                        limits: { timeoutSec: 300 },
-                        modelConfig: {
-                            coder: modelConfig.coder,
-                            validator: modelConfig.validator,
+    // Run one codegen attempt with a given coder config. Records its own
+    // agent_code stage (attempt index distinguishes primary vs fallback) and
+    // persists the LLM I/O. Returns the response + error string (if any).
+    async function runCodeGen(
+        coderCfg: LlmRoleConfig,
+        attempt: number
+    ): Promise<{ response: Awaited<ReturnType<typeof agentClient.code>> | undefined; error: string | undefined }> {
+        let err: string | undefined;
+        let resp: Awaited<ReturnType<typeof agentClient.code>> | undefined;
+        try {
+            resp = await withStep(
+                jobCtx,
+                "agent_code",
+                { "scene.index": 0, model: coderCfg.model, voiceover: true, attempt },
+                () =>
+                    agentClient.code(
+                        {
+                            prompt: effectivePrompt,
+                            examples: ragExamples,
+                            requiredApis: ragRequiredApis,
+                            requiredPlugins: ragRequiredPlugins,
+                            voiceover: true,
+                            styleManifest: null,
+                            // Complex prompts make a single-shot completion run >120s; give the
+                            // agent room (HTTP client waits 330s, see agentClient.code).
+                            limits: { timeoutSec: 300 },
+                            modelConfig: {
+                                coder: coderCfg,
+                                validator: modelConfig.validator,
+                            },
+                            meta: { traceId },
+                            coderMemory: coderMemory.length > 0 ? coderMemory : undefined,
                         },
-                        meta: { traceId },
-                        coderMemory: coderMemory.length > 0 ? coderMemory : undefined,
+                        traceId
+                    ),
+                {
+                    jobId,
+                    stageId: "agent_code",
+                    sceneIndex: 0,
+                    onSuccess: (r) => {
+                        tokens.add(r.tokensUsed, coderCfg.model);
+                        const codeTokens = r.tokensUsed
+                            ? { input: r.tokensUsed.input, output: r.tokensUsed.output, total: r.tokensUsed.total }
+                            : undefined;
+                        const cls = r.output?.sceneClass ?? "?";
+                        const codeLen = r.output?.code?.length ?? 0;
+                        return {
+                            tokens: codeTokens,
+                            model: coderCfg.model,
+                            outputSummary: `${attempt > 0 ? "[fallback] " : ""}${cls} ${codeLen}chars`,
+                        };
                     },
-                    traceId
-                ),
-            {
-                jobId,
-                stageId: "agent_code",
-                sceneIndex: 0,
-                onSuccess: (r) => {
-                    tokens.add(r.tokensUsed, modelConfig.coder.model);
-                    const codeTokens = r.tokensUsed
-                        ? { input: r.tokensUsed.input, output: r.tokensUsed.output, total: r.tokensUsed.total }
-                        : undefined;
-                    const cls = r.output?.sceneClass ?? "?";
-                    const codeLen = r.output?.code?.length ?? 0;
-                    return {
-                        tokens: codeTokens,
-                        model: modelConfig.coder.model,
-                        outputSummary: `${cls} ${codeLen}chars`,
-                    };
-                },
-                onFail: () => ({
-                    model: modelConfig.coder.model,
-                    outputSummary: "code generation failed",
-                }),
-            }
-        );
-    } catch (codeErr) {
-        codeCallError = String(codeErr);
+                    onFail: () => ({
+                        model: coderCfg.model,
+                        outputSummary: `${attempt > 0 ? "[fallback] " : ""}code generation failed`,
+                    }),
+                }
+            );
+        } catch (codeErr) {
+            err = String(codeErr);
+        }
+
+        // Persist LLM I/O for this attempt (success OR failure) — best-effort
+        void persistLlmIO({
+            jobId,
+            chatId,
+            stage: "agent_code",
+            attempt,
+            sceneIndex: 0,
+            entries: resp?.llmCallLog,
+            error: err ?? (!resp?.success ? (resp?.error?.summary) : undefined),
+        });
+
+        return { response: resp, error: err };
     }
 
-    // Persist LLM I/O for agent_code (success OR failure) — best-effort
-    void persistLlmIO({
-        jobId,
-        chatId,
-        stage: "agent_code",
-        attempt: 0,
-        sceneIndex: 0,
-        entries: codeResponse?.llmCallLog,
-        error: codeCallError ?? (!codeResponse?.success ? (codeResponse?.error?.summary) : undefined),
-    });
+    const codeIsEmpty = (r: { response: Awaited<ReturnType<typeof agentClient.code>> | undefined; error: string | undefined }) =>
+        !!r.error || !r.response?.success || !r.response?.output?.code;
 
-    if (codeCallError || !codeResponse?.success || !codeResponse?.output?.code) {
-        throw new AppError(
-            502,
-            `Code generation failed: ${codeCallError ?? codeResponse?.error?.summary ?? "unknown"}`,
-            "code_failed"
-        );
+    // Resilience telemetry persisted on the job for the admin "real vs fallback"
+    // visibility (set below + at final persist).
+    let usedFallbackLlm = false;
+
+    // Primary codegen attempt
+    let codeResult = await runCodeGen(modelConfig.coder, 0);
+
+    // LLM FALLBACK: if the primary coder failed/returned empty AND an admin
+    // fallback is configured, retry the whole codegen with the fallback provider
+    // before giving up to the guaranteed title-card. This is what keeps real
+    // animations flowing when one LLM backend (codex token, opencode key, …) dies.
+    if (codeIsEmpty(codeResult) && coderFallbackCfg) {
+        logger.warn({
+            message: "[worker] primary coder failed — retrying with fallback provider",
+            jobId, traceId,
+            primaryModel: modelConfig.coder.model,
+            fallbackModel: coderFallbackCfg.model,
+            error: codeResult.error ?? codeResult.response?.error?.summary ?? "empty",
+        });
+        progress("planning", "agent_code", { fallback: true, model: coderFallbackCfg.model });
+        codeResult = await runCodeGen(coderFallbackCfg, 1);
+        // The fallback LLM produced usable code → record it engaged successfully.
+        if (!codeIsEmpty(codeResult)) usedFallbackLlm = true;
     }
 
-    currentCode = codeResponse.output.code;
-    currentSceneClass = codeResponse.output.sceneClass;
+    const codeResponse = codeResult.response;
+    const codeCallError = codeResult.error;
+
+    if (codeIsEmpty(codeResult)) {
+        logger.warn({
+            message: "[worker] codegen failed (all providers) — falling back to guaranteed title-card scene",
+            jobId, traceId,
+            error: codeCallError ?? codeResponse?.error?.summary ?? "unknown",
+        });
+        currentCode = buildFallbackSceneCode(prompt);
+        currentSceneClass = FALLBACK_SCENE_CLASS;
+        usingFallback = true;
+    } else {
+        currentCode = codeResponse!.output!.code!;
+        currentSceneClass = codeResponse!.output!.sceneClass;
+    }
     // Remember first code for reflection
     originalCodeForReflect.value = currentCode;
     progress("scene_code_complete", "agent_code", { sceneClass: currentSceneClass });
@@ -754,17 +911,41 @@ async function runGenerationPipeline(
 
     const voiceoverTexts = extractVoiceoverTexts(currentCode);
     if (voiceoverTexts.length > 0) {
+        phase("voiceover");
         try {
             const voiceoverOpts = {
                 provider: generationOptions?.voiceover?.provider,
                 voice: generationOptions?.voiceover?.voice,
                 lang: generationOptions?.voiceover?.language,
             };
+            // One TTS attempt with a given config, bounded by a 90s timeout.
+            const synth = (ttsCfg: ResolvedTtsConfig) => Promise.race([
+                buildAudioBundle(voiceoverTexts, voiceoverOpts, ttsCfg),
+                new Promise<never>((_, rej) => setTimeout(() => rej(new Error("TTS timeout (90s)")), 90_000)),
+            ]);
             const audioEntries = await withStep(
                 jobCtx,
                 "tts",
                 { "scene.index": 0, beats: voiceoverTexts.length },
-                () => buildAudioBundle(voiceoverTexts, voiceoverOpts, resolvedTtsConfig),
+                async () => {
+                    try {
+                        return await synth(resolvedTtsConfig);
+                    } catch (primaryErr) {
+                        // TTS FALLBACK: retry with the admin-defined fallback provider
+                        // (e.g. azure → gtts) before giving up on audio entirely.
+                        if (resolvedTtsFallbackConfig) {
+                            logger.warn({
+                                message: "[worker] primary TTS failed — retrying with fallback provider",
+                                traceId,
+                                primary: resolvedTtsConfig.provider,
+                                fallback: resolvedTtsFallbackConfig.provider,
+                                error: String(primaryErr),
+                            });
+                            return await synth(resolvedTtsFallbackConfig);
+                        }
+                        throw primaryErr;
+                    }
+                },
                 {
                     jobId,
                     stageId: "tts",
@@ -795,48 +976,63 @@ async function runGenerationPipeline(
     let finalUrl: string | undefined;
     let thumbnailUrl: string | undefined;
     let durationSec = 0;
+    let renderBytes = 0; // real output size for storage metrics (was hardcoded 0)
 
     // Loop: initial render + up to MAX_DEBUG_ATTEMPTS debug-retry cycles
     // Each cycle: render → on failure → debug → update code → try render again
     for (let attempt = 0; attempt <= MAX_DEBUG_ATTEMPTS; attempt++) {
+        phase("render");
         const renderStartedAt = new Date();
 
-        const renderResponse = await withStep(
-            jobCtx,
-            "render",
-            { "scene.index": 0, attempt },
-            () =>
-                renderClient.render({
-                    code: currentCode,
-                    sceneClass: currentSceneClass,
-                    render: { quality: renderQuality },
-                    // Include the voiceover bundle if TTS succeeded.
-                    // Reused across debug retries — debugger preserves narration beats.
-                    ...(voiceoverBundle ? { voiceover: voiceoverBundle } : {}),
-                    storage: {
-                        // Render to the service's local store (reachable from the worker
-                        // inside docker); the worker then uploads the final video to
-                        // Cloudinary below so the URL is reachable from the browser.
-                        backend: "local",
-                        folder: `stitcher/scenes/${projectId ?? userId}`,
-                        public: false,
-                        generateThumbnail: true,
-                        thumbnailAt: 1,
-                    },
-                    limits: { timeoutSec: 300 },
-                    meta: { traceId },
-                }),
-            {
-                jobId,
-                stageId: "render",
-                sceneIndex: 0,
-                // onSuccess not provided — manual rows handle both domain paths below
-                onFail: () => ({
-                    failedCode: currentCode.slice(0, 8192),
-                    outputSummary: "render service unreachable",
-                }),
-            }
-        );
+        let renderResponse: Awaited<ReturnType<typeof renderClient.render>>;
+        try {
+            renderResponse = await withStep(
+                jobCtx,
+                "render",
+                { "scene.index": 0, attempt },
+                () =>
+                    renderClient.render({
+                        code: currentCode,
+                        sceneClass: currentSceneClass,
+                        render: { quality: renderQuality },
+                        // Include the voiceover bundle if TTS succeeded.
+                        // Reused across debug retries — debugger preserves narration beats.
+                        ...(voiceoverBundle ? { voiceover: voiceoverBundle } : {}),
+                        storage: {
+                            // Render to the service's local store (reachable from the worker
+                            // inside docker); the worker then uploads the final video to
+                            // Cloudinary below so the URL is reachable from the browser.
+                            backend: "local",
+                            folder: `stitcher/scenes/${projectId ?? userId}`,
+                            public: false,
+                            generateThumbnail: true,
+                            thumbnailAt: 1,
+                        },
+                        limits: { timeoutSec: 300 },
+                        meta: { traceId },
+                    }),
+                {
+                    jobId,
+                    stageId: "render",
+                    sceneIndex: 0,
+                    // onSuccess not provided — manual rows handle both domain paths below
+                    onFail: () => ({
+                        failedCode: currentCode.slice(0, 8192),
+                        outputSummary: "render service unreachable",
+                    }),
+                }
+            );
+        } catch (renderErr) {
+            // Render THREW (HTTP 0 / unreachable / pipeline timeout) = an INFRA failure,
+            // not a code bug. Debugging or regenerating the code (the latter is what a
+            // BullMQ whole-job retry would do) cannot fix an infra timeout and wastes a
+            // full RAG + codegen. Skip debug and break to the guaranteed fallback scene
+            // below — so infra timeouts yield a title-card video instead of a hard fail,
+            // and we never re-spend codegen tokens re-hitting the same timeout.
+            lastError = `render service error: ${String(renderErr)}`.slice(0, 300);
+            logger.warn({ message: "[worker] render infra error — skipping debug + code regen, going to fallback scene", attempt, traceId, error: String(renderErr) });
+            break; // withStep already recorded the failed render stage on throw
+        }
 
         const renderEndedAt = new Date();
         const renderDurationMs = renderEndedAt.getTime() - renderStartedAt.getTime();
@@ -855,6 +1051,7 @@ async function runGenerationPipeline(
             finalUrl = renderResponse.render.url;
             thumbnailUrl = renderResponse.render.thumbnailUrl;
             durationSec = renderResponse.render.durationSec;
+            renderBytes = renderResponse.render.bytes ?? 0;
             void incrementJobScene(jobId);
             progress("scene_render_complete", "render", { url: finalUrl, attempt });
             break; // success — exit loop
@@ -885,81 +1082,106 @@ async function runGenerationPipeline(
             break; // exhausted debug budget
         }
 
+        // The fallback scene is known-good; never spend a debug call on it.
+        if (usingFallback) break;
+
         // Debug: ask agent to fix the code, then loop back to render
         debugAttempts++;
         debugInvoked = true;
+        phase("debug");
         const codeBeforeDebug = currentCode;
         const errorForDebug = lastError;
-        let debugCallError: string | undefined;
-        let debugResponse: Awaited<ReturnType<typeof agentClient.debug>> | undefined;
-        try {
-            debugResponse = await withStep(
-                jobCtx,
-                "agent_debug",
-                { "scene.index": 0, attempt, model: modelConfig.debugger.model },
-                () =>
-                    agentClient.debug(
-                        {
-                            brokenCode: currentCode,
-                            sceneClass: currentSceneClass,
-                            error: {
-                                stderr: renderResponse.error.stderr,
-                                summary: renderResponse.error.summary,
-                                line: renderResponse.error.line,
-                                category: renderResponse.error.category,
-                            },
-                            originalPrompt: prompt,
-                            modelConfig: {
-                                debugger: modelConfig.debugger,
-                                validator: modelConfig.validator,
-                            },
-                            // Always keep VoiceoverScene shape + preserve narration beats
-                            voiceover: true,
-                            meta: { traceId },
-                        },
-                        traceId
-                    ),
-                {
-                    jobId,
-                    stageId: "agent_debug",
-                    sceneIndex: 0,
-                    onSuccess: (r) => {
-                        tokens.add(r.tokensUsed, modelConfig.debugger.model);
-                        const debugTokens = r.tokensUsed
-                            ? { input: r.tokensUsed.input, output: r.tokensUsed.output, total: r.tokensUsed.total }
-                            : undefined;
-                        return {
-                            tokens: debugTokens,
-                            model: modelConfig.debugger.model,
-                            outputSummary: r.output?.changeSummary ?? "debugged",
-                        };
-                    },
-                    onFail: () => ({
-                        model: modelConfig.debugger.model,
-                        outputSummary: "debug call failed",
-                        failedCode: currentCode.slice(0, 8192),
-                    }),
-                }
-            );
-        } catch (debugErr) {
-            debugCallError = String(debugErr);
-            logger.warn({
-                message: "[worker] debug call threw (non-fatal); re-rendering with unchanged code",
-                traceId,
-                error: debugCallError,
-            });
-        }
 
-        // Persist LLM I/O for agent_debug (success OR failure) — best-effort
-        void persistLlmIO({
-            jobId,
-            chatId,
-            stage: "agent_debug",
-            attempt,
-            sceneIndex: 0,
-            entries: debugResponse?.llmCallLog,
-            error: debugCallError ?? (!debugResponse?.success ? String(debugResponse?.error ?? "") : undefined),
-        });
+        // One debug attempt with a given debugger config (primary or fallback).
+        const callDebug = async (
+            dbgCfg: LlmRoleConfig,
+            dbgAttempt: number
+        ): Promise<{ resp: Awaited<ReturnType<typeof agentClient.debug>> | undefined; err: string | undefined }> => {
+            let dErr: string | undefined;
+            let dResp: Awaited<ReturnType<typeof agentClient.debug>> | undefined;
+            try {
+                dResp = await withStep(
+                    jobCtx,
+                    "agent_debug",
+                    { "scene.index": 0, attempt, model: dbgCfg.model, dbgAttempt },
+                    () =>
+                        agentClient.debug(
+                            {
+                                brokenCode: currentCode,
+                                sceneClass: currentSceneClass,
+                                error: {
+                                    stderr: renderResponse.error.stderr,
+                                    summary: renderResponse.error.summary,
+                                    line: renderResponse.error.line,
+                                    category: renderResponse.error.category,
+                                },
+                                originalPrompt: prompt,
+                                modelConfig: {
+                                    debugger: dbgCfg,
+                                    validator: modelConfig.validator,
+                                },
+                                // Always keep VoiceoverScene shape + preserve narration beats
+                                voiceover: true,
+                                meta: { traceId },
+                            },
+                            traceId
+                        ),
+                    {
+                        jobId,
+                        stageId: "agent_debug",
+                        sceneIndex: 0,
+                        onSuccess: (r) => {
+                            tokens.add(r.tokensUsed, dbgCfg.model);
+                            const debugTokens = r.tokensUsed
+                                ? { input: r.tokensUsed.input, output: r.tokensUsed.output, total: r.tokensUsed.total }
+                                : undefined;
+                            return {
+                                tokens: debugTokens,
+                                model: dbgCfg.model,
+                                outputSummary: `${dbgAttempt > 0 ? "[fallback] " : ""}${r.output?.changeSummary ?? "debugged"}`,
+                            };
+                        },
+                        onFail: () => ({
+                            model: dbgCfg.model,
+                            outputSummary: `${dbgAttempt > 0 ? "[fallback] " : ""}debug call failed`,
+                            failedCode: currentCode.slice(0, 8192),
+                        }),
+                    }
+                );
+            } catch (debugErr) {
+                dErr = String(debugErr);
+                logger.warn({
+                    message: "[worker] debug call threw (non-fatal); re-rendering with unchanged code",
+                    traceId,
+                    error: dErr,
+                });
+            }
+            void persistLlmIO({
+                jobId,
+                chatId,
+                stage: "agent_debug",
+                attempt,
+                sceneIndex: 0,
+                entries: dResp?.llmCallLog,
+                error: dErr ?? (!dResp?.success ? String(dResp?.error ?? "") : undefined),
+            });
+            return { resp: dResp, err: dErr };
+        };
+
+        let { resp: debugResponse, err: debugCallError } = await callDebug(modelConfig.debugger, 0);
+
+        // LLM FALLBACK for the debugger: if the primary produced no usable fix
+        // and an admin fallback is configured, try once more with the fallback.
+        if ((debugCallError || !debugResponse?.success || !debugResponse?.output?.code) && debuggerFallbackCfg) {
+            logger.warn({
+                message: "[worker] primary debugger failed — retrying with fallback provider",
+                jobId, traceId,
+                primaryModel: modelConfig.debugger.model,
+                fallbackModel: debuggerFallbackCfg.model,
+            });
+            ({ resp: debugResponse, err: debugCallError } = await callDebug(debuggerFallbackCfg, 1));
+        }
+        void debugCallError;
 
         // Track debug history for reflection
         debugHistory.push({
@@ -1029,6 +1251,39 @@ async function runGenerationPipeline(
         }
     }
 
+    // Last-resort fallback render: if real code exhausted debug budget without a
+    // successful render, swap in the guaranteed title-card scene and try once more.
+    if (!finalUrl && !usingFallback) {
+        logger.warn({ message: "[worker] render+debug exhausted — rendering guaranteed fallback scene", jobId, traceId, lastError });
+        usingFallback = true;
+        currentCode = buildFallbackSceneCode(prompt);
+        currentSceneClass = FALLBACK_SCENE_CLASS;
+        phase("render");
+        const fbStartedAt = new Date();
+        const fbResponse = await withStep(
+            jobCtx, "render", { "scene.index": 0, attempt: "fallback" },
+            () => renderClient.render({
+                code: currentCode,
+                sceneClass: currentSceneClass,
+                render: { quality: renderQuality },
+                storage: { backend: "local", folder: `stitcher/scenes/${projectId ?? userId}`, public: false, generateThumbnail: true, thumbnailAt: 1 },
+                limits: { timeoutSec: 120 },
+                meta: { traceId },
+            }),
+            { jobId, stageId: "render", sceneIndex: 0, onFail: () => ({ outputSummary: "fallback render failed" }) }
+        );
+        if (fbResponse.success) {
+            finalUrl = fbResponse.render.url;
+            thumbnailUrl = fbResponse.render.thumbnailUrl;
+            durationSec = fbResponse.render.durationSec;
+            renderBytes = fbResponse.render.bytes ?? 0;
+            void appendJobStage(jobId, { stage: "render", service: "stitcher-render", sceneIndex: 0, status: "ok", startedAt: fbStartedAt, endedAt: new Date(), durationMs: Date.now() - fbStartedAt.getTime(), outputSummary: `fallback ${finalUrl}` });
+            progress("scene_render_complete", "render", { url: finalUrl, attempt: "fallback" });
+        } else {
+            lastError = fbResponse.error.summary;
+        }
+    }
+
     if (!finalUrl) {
         // Persist partial token spend, finalCode, and debug flags before throwing
         try {
@@ -1039,7 +1294,7 @@ async function runGenerationPipeline(
         try {
             await GenerationJob.updateOne(
                 { jobId },
-                { $set: { finalCode: currentCode || undefined, debugInvoked, debugResolved } }
+                { $set: { finalCode: currentCode || undefined, debugInvoked, debugResolved, usedFallbackLlm, usedFallbackScene: usingFallback } }
             );
         } catch { /* non-fatal */ }
 
@@ -1055,6 +1310,7 @@ async function runGenerationPipeline(
     // URL the browser can't reach. The single-scene flow has no concat-upload step,
     // so download the render and push it to Cloudinary here for a public URL.
     {
+        phase("upload");
         const uploadStartedAt = new Date();
         try {
             const resp = await fetch(finalUrl);
@@ -1100,7 +1356,7 @@ async function runGenerationPipeline(
             url: finalUrl,
             thumbnail: thumbnailUrl ?? finalUrl,
             duration: durationSec,
-            bytes: 0,
+            bytes: renderBytes,
             metadata: { traceId },
             projectId: new Types.ObjectId(projectId ?? userId),
             isOnTimeline: false,
@@ -1118,6 +1374,8 @@ async function runGenerationPipeline(
             finalCode: currentCode,
             debugInvoked,
             debugResolved,
+            usedFallbackLlm,
+            usedFallbackScene: usingFallback,
         };
         await GenerationJob.updateOne({ jobId }, { $set: jobUpdate });
     } catch { /* non-fatal */ }
@@ -1129,13 +1387,14 @@ async function runGenerationPipeline(
             "messages.$[last].generatorOutput": true,
             "messages.$[last].error": "none",
             "messages.$[last].content.llmResponse": finalUrl,
+            "messages.$[last].generationMs": Date.now() - pipelineStartMs,
         },
     }, {
         arrayFilters: [{ "last.role": "assistant", "last.completed": false }],
     });
 
-    // Decrement credits (skip for test accounts and BYOK-only runs)
-    if (!user.isTestAccount && !runOnOwnKeys) {
+    // Decrement credits (skip for test accounts, BYOK-only runs, and fallback-only renders)
+    if (!user.isTestAccount && !runOnOwnKeys && !usingFallback) {
         await User.updateOne(
             { _id: userId, "credits.generation": { $gt: 0 } },
             { $inc: { "credits.generation": -1 } }

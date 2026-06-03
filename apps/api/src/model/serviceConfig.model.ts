@@ -43,11 +43,30 @@ export interface IServiceConfig extends Document {
     modelId:   string | null;
     /** Freeform provider params: temperature, maxTokens, enable_thinking, region, voice, … */
     params:    Record<string, unknown>;
+    /**
+     * Optional fallback provider. When the PRIMARY provider above errors or
+     * returns empty output, the worker retries the same call with this config.
+     * Same field shape as the primary (apiKey encrypted at rest). Only used
+     * when `fallback.enabled === true` AND `fallback.provider` is non-empty.
+     */
+    fallback?: IServiceConfigFallback;
     enabled:   boolean;
     updatedAt: Date;
     updatedBy: Types.ObjectId | null;
     /** Returns decrypted plaintext apiKey (empty string when no key stored). */
     getDecryptedApiKey(): string;
+}
+
+/** Fallback provider config — mirrors the primary fields (no nested fallback). */
+export interface IServiceConfigFallback {
+    /** When true, the worker will use this config if the primary fails. */
+    enabled:  boolean;
+    provider: string;
+    /** AES-256-GCM encrypted at rest (same as the primary apiKey). */
+    apiKey:   string;
+    baseURL:  string | null;
+    modelId:  string | null;
+    params:   Record<string, unknown>;
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -86,6 +105,22 @@ const ServiceConfigSchema = new Schema<IServiceConfig>(
             type: Schema.Types.Mixed,
             default: {},
         },
+        // Optional fallback provider (same shape as primary, no nested fallback).
+        // _id:false keeps it a plain embedded object. apiKey encrypted at rest.
+        fallback: {
+            type: new Schema<IServiceConfigFallback>(
+                {
+                    enabled:  { type: Boolean, default: false },
+                    provider: { type: String, default: "" },
+                    apiKey:   { type: String, default: "" },
+                    baseURL:  { type: String, default: null },
+                    modelId:  { type: String, default: null },
+                    params:   { type: Schema.Types.Mixed, default: {} },
+                },
+                { _id: false }
+            ),
+            default: undefined,
+        },
         enabled: {
             type: Boolean,
             default: true,
@@ -108,6 +143,11 @@ ServiceConfigSchema.index({ service: 1, tier: 1 }, { unique: true });
 ServiceConfigSchema.pre("save", function (next) {
     if (this.isModified("apiKey") && this.apiKey && !isEncrypted(this.apiKey)) {
         this.apiKey = encrypt(this.apiKey);
+    }
+    // Encrypt the fallback apiKey too (defensive — the admin controller also
+    // encrypts manually since it uses findOneAndUpdate, which skips this hook).
+    if (this.fallback?.apiKey && !isEncrypted(this.fallback.apiKey)) {
+        this.fallback.apiKey = encrypt(this.fallback.apiKey);
     }
     next();
 });

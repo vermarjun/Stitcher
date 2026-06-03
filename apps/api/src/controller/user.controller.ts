@@ -115,6 +115,11 @@ export const authWithGoogle = async (req: Request, res: Response) => {
       void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
     }
 
+    // Reject banned users before issuing a token.
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Your account has been banned.", banned: true });
+    }
+
     // ✅ STEP 5: Generate JWT
     const token = jwt.sign(
       { userId: user._id?.toString() },
@@ -213,6 +218,10 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
 
     if (user.usedOAuth) {
       return res.status(401).json({ message: "This account uses Google OAuth. Please login using Google." });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Your account has been banned.", banned: true });
     }
 
     // Compare passwords

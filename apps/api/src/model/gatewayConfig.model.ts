@@ -18,6 +18,8 @@ export interface IGatewayConfig extends Document {
     encryptedRefreshToken?: string;
     /** Token expiry hint (informational; not enforced automatically) */
     expiresAt?: Date;
+    /** ChatGPT account id (UUID) for the chatgpt-account-id header. Not secret. */
+    accountId?: string;
     updatedAt: Date;
     updatedBy?: string | null;
 }
@@ -28,6 +30,7 @@ const GatewayConfigSchema = new Schema<IGatewayConfig>(
         encryptedToken: { type: String, required: true },
         encryptedRefreshToken: { type: String },
         expiresAt: { type: Date },
+        accountId: { type: String },
         updatedBy: { type: String, default: null },
     },
     { timestamps: { createdAt: false, updatedAt: 'updatedAt' } }

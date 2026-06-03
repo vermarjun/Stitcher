@@ -19,6 +19,13 @@ import {
     getRevenueMetrics,
     getCostMetrics,
 } from "../controller/adminMetrics.controller";
+import { getPipelineMetrics } from "../controller/adminPipeline.controller";
+import {
+    getAnalyticsOverview,
+    getAnalyticsPages,
+    getAnalyticsRetention,
+    getAnalyticsUsers,
+} from "../controller/adminAnalytics.controller";
 
 const router = Router();
 
@@ -51,5 +58,16 @@ router.get("/revenue", getRevenueMetrics);
 
 // GET /admin/metrics/cost
 router.get("/cost", getCostMetrics);
+
+// ── Pipeline ops health (per-stage latency, fallback rate, per-model cost) ──
+// GET /admin/metrics/pipeline
+router.get("/pipeline", getPipelineMetrics);
+
+// ── User-behaviour analytics ────────────────────────────────────────────────
+// GET /admin/metrics/analytics/overview | /pages | /retention | /users
+router.get("/analytics/overview", getAnalyticsOverview);
+router.get("/analytics/pages", getAnalyticsPages);
+router.get("/analytics/retention", getAnalyticsRetention);
+router.get("/analytics/users", getAnalyticsUsers);
 
 export default router;

@@ -209,7 +209,30 @@ const QuickActions = ({ navigate }: Props3) => {
               guided cat-meme tour from here; finishing Act 1 arms the editor leg
               to auto-run once the user opens a project. */}
           <Card
-            onClick={() => { startReplayTour(); }}
+            onClick={() => {
+              const autoOpen = async () => {
+                try {
+                  const userStr = localStorage.getItem("user");
+                  const u = userStr ? JSON.parse(userStr) : null;
+                  const res = await api.get<any[]>(`/project/user/${u?._id}`);
+                  const projects = res.data;
+                  if (projects && projects.length > 0) {
+                    const sorted = [...projects].sort(
+                      (a, b) =>
+                        new Date(b.updatedAt ?? b.createdAt).getTime() -
+                        new Date(a.updatedAt ?? a.createdAt).getTime()
+                    );
+                    navigate(`/dashboard/${sorted[0]._id}`);
+                  } else {
+                    const created = await api.post<any>("/project", { name: "demo" });
+                    navigate(`/dashboard/${created.data._id}`);
+                  }
+                } catch {
+                  // silent fallback
+                }
+              };
+              startReplayTour(autoOpen);
+            }}
             className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full">
               <div className="flex flex-col items-center text-center space-y-3">

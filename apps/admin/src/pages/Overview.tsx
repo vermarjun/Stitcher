@@ -405,6 +405,29 @@ export default function OverviewPage() {
                 {health.services.map((svc) => (
                   <ServiceHealthRow key={svc.name} service={svc} />
                 ))}
+
+                {/* LLM background call rate — catches runaway processes */}
+                {health.llmUsage != null && (
+                  <div className={`mt-3 flex items-center gap-3 rounded-md border px-3 py-2 text-xs ${
+                    health.llmUsage.count >= health.llmUsage.cap
+                      ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+                      : health.llmUsage.count > health.llmUsage.cap * 0.7
+                      ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20'
+                      : 'border-border bg-muted/30'
+                  }`}>
+                    <span className="font-medium text-foreground">Background LLM calls</span>
+                    <span className="font-mono ml-auto">
+                      {health.llmUsage.count} / {health.llmUsage.cap} this hour
+                    </span>
+                    {health.llmUsage.count >= health.llmUsage.cap && (
+                      <span className="text-red-600 dark:text-red-400 font-semibold">⚠ cap hit — calls being skipped</span>
+                    )}
+                    {health.llmUsage.count > health.llmUsage.cap * 0.7 && health.llmUsage.count < health.llmUsage.cap && (
+                      <span className="text-amber-600 dark:text-amber-400">↑ elevated</span>
+                    )}
+                  </div>
+                )}
+
                 <p className="mt-3 text-xs text-muted-foreground">
                   Snapshot generated {new Date(health.generatedAt).toLocaleTimeString()} · refreshes every 30 s
                 </p>

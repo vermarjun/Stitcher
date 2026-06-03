@@ -31,6 +31,8 @@ export interface IGenerateChatMessage {
     error: string;
     requestType: string | undefined;
     assetsToEdit: Types.ObjectId[]; // If the request is to edit a video, the user must have passed an array of assets he wants to edit, so save their ID
+    generationMs?: number; // Wall-clock time the pipeline took to produce this video (ms). Persisted so "time taken" survives reloads.
+    rating?: number | null;
 }
 
 // Interface representing a Chat document in MongoDB
@@ -69,6 +71,8 @@ const ChatMessageSchema = new Schema<IGenerateChatMessage>({
         ref: 'Asset',
         default: []
     }],
+    generationMs: { type: Number, required: false },
+    rating: { type: Number, default: null, required: false },
 }, { _id: false });
 
 // Chat Schema

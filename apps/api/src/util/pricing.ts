@@ -24,6 +24,25 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
     // ── GLM (Zhipu AI) ──────────────────────────────────────────────────────
     "glm-4-5": { inputPer1M: 0.14, outputPer1M: 0.14 },
     "glm-4-5-flash": { inputPer1M: 0.14, outputPer1M: 0.14 },
+    "glm-5.1": { inputPer1M: 0.14, outputPer1M: 0.55 },
+
+    // ── OpenCode Go subscription models (flat-fee subscription; per-token
+    // values below are usage-VALUE estimates so cost.byModel populates — NOT a
+    // metered bill. Update if you move off the subscription.) ─────────────────
+    "deepseek-v4-flash": { inputPer1M: 0.14, outputPer1M: 0.28 },
+    "deepseek-v4-pro": { inputPer1M: 0.28, outputPer1M: 1.10 },
+    "deepseek-v4": { inputPer1M: 0.28, outputPer1M: 1.10 },
+    "kimi-k2.5": { inputPer1M: 0.15, outputPer1M: 2.50 },
+    "minimax-m2": { inputPer1M: 0.30, outputPer1M: 1.20 },
+    "qwen3-max": { inputPer1M: 0.30, outputPer1M: 1.20 },
+
+    // ── OpenAI / Codex (gpt-5.x via the ChatGPT subscription gateway). Values
+    // are estimates aligned to the gpt-5 tier for usage visibility. ───────────
+    "gpt-5.5": { inputPer1M: 1.25, outputPer1M: 10.00 },
+    "gpt-5.4": { inputPer1M: 1.25, outputPer1M: 10.00 },
+    "gpt-5.4-mini": { inputPer1M: 0.25, outputPer1M: 2.00 },
+    "gpt-5.3-codex": { inputPer1M: 1.25, outputPer1M: 10.00 },
+    "gpt-5": { inputPer1M: 1.25, outputPer1M: 10.00 },
 
     // ── OpenAI ───────────────────────────────────────────────────────────────
     "gpt-4.1": { inputPer1M: 2.00, outputPer1M: 8.00 },

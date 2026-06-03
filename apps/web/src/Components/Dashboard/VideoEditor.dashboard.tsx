@@ -343,6 +343,27 @@ const VideoEditor = ({ currentProject }: Props) => {
     [collabDoc]
   );
 
+  // ─── Add asset item: optimistic React-only update ────────────────────────
+  // Server already injects the item into the Y.Doc (so collaborators see it via
+  // the observer). We must NOT write to the Y.Doc here — that would duplicate
+  // the clip. We only update local React state so the drop is instant for the
+  // dropping client instead of waiting on the racy server→Y.Doc→observer path.
+  const handleAddAssetItem = useCallback(
+    (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
+      setTimeline((prev) =>
+        prev
+          ? {
+              ...prev,
+              tracks: (prev.tracks as ITrack[]).map((t) =>
+                t._id === trackId ? { ...t, items: [...t.items, item] } : t
+              ),
+            }
+          : prev
+      );
+    },
+    []
+  );
+
   // ─── Add text item (called from TimelineEditor) ───────────────────────────
   const handleAddTextItem = useCallback(
     (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
@@ -398,6 +419,7 @@ const VideoEditor = ({ currentProject }: Props) => {
             onSync={syncToBackend}
             onDeleteItem={handleDeleteItem}
             onAddTextItem={handleAddTextItem}
+            onAddAssetItem={handleAddAssetItem}
             canEdit={canEdit}
             collabDoc={collabDoc}
             localOrigin={LOCAL_ORIGIN}

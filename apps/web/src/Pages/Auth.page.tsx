@@ -55,6 +55,7 @@ const AuthPage: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [dustParticles, setDustParticles] = useState<DustParticle[]>([]);
   const [isLoading, setLoading] = useState(false);
+  const [isBanned, setIsBanned] = useState(false);
   // Which method the user last authenticated with on this device ("google" |
   // "password"), read from localStorage. Drives the "Last used" hint badge.
   const [lastMethod, setLastMethod] = useState<string | null>(null);
@@ -227,7 +228,9 @@ const AuthPage: React.FC = () => {
       );
 
       // Handle specific error cases
-      if (error.response?.status === 401) {
+      if (error.response?.status === 403 && error.response?.data?.banned) {
+        setIsBanned(true);
+      } else if (error.response?.status === 401) {
         toast.error(
           error.response?.data.message ||
             "Invalid credentials. Please try again."
@@ -317,7 +320,9 @@ const AuthPage: React.FC = () => {
       );
 
       // Handle specific error cases
-      if (error.response?.status === 401) {
+      if (error.response?.status === 403 && error.response?.data?.banned) {
+        setIsBanned(true);
+      } else if (error.response?.status === 401) {
         toast.error(
           error.response?.data.message ||
             "Invalid credentials. Please try again."
@@ -366,6 +371,21 @@ const AuthPage: React.FC = () => {
         >
           {/* Card */}
           <div className="relative bg-gray-950 border border-gray-800 rounded-2xl p-8 shadow-2xl shadow-black/50 overflow-hidden">
+            {/* Banned screen — replaces the entire form */}
+            {isBanned && (
+              <div className="flex flex-col items-center justify-center py-8 text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white mb-1">You've been banned</h2>
+                  <p className="text-gray-400 text-sm font-light">Your account has been suspended. If you believe this is a mistake, please contact support.</p>
+                </div>
+              </div>
+            )}
+            {!isBanned && <>
             {/* Header */}
             <div className="text-center mb-4">
               <h1 className="text-2xl font-semibold text-white mb-1 tracking-tight">
@@ -633,6 +653,7 @@ const AuthPage: React.FC = () => {
                 {isLogin ? "Sign up" : "Sign in"}
               </button>
             </div>
+            </>}
           </div>
         </div>
       </div>

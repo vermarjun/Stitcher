@@ -15,7 +15,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { ExternalLink, Activity, Clock, RotateCcw, Film, XCircle, CheckCircle2, Hash, Star, Check, X, Bug, RefreshCw } from 'lucide-react';
+import { ExternalLink, Activity, Clock, RotateCcw, Film, XCircle, CheckCircle2, Hash, Star, Check, X, Bug, RefreshCw, Sparkles, LayoutTemplate, LifeBuoy } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -717,6 +717,38 @@ export default function GenerationPage() {
               description={'description' in kpi ? kpi.description : undefined}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Resilience KPIs ────────────────────────────────────────────────── */}
+      {!metricsLoading && !metricsError && metrics && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiCard
+            label="Real-animation rate"
+            value={`${((metrics.realRate ?? 0) * 100).toFixed(1)}%`}
+            icon={Sparkles}
+            deltaPositive={(metrics.realRate ?? 0) >= 0.8}
+            delta={`${formatNumber(metrics.realCount ?? 0)} real animations`}
+          />
+          <KpiCard
+            label="Fallback title-cards"
+            value={formatNumber(metrics.fallbackSceneCount ?? 0)}
+            icon={LayoutTemplate}
+            description="Static cards shown when render failed"
+          />
+          <KpiCard
+            label="Fallback-LLM saves"
+            value={formatNumber(metrics.fallbackLlmCount ?? 0)}
+            icon={LifeBuoy}
+            description="Jobs rescued by an LLM fallback"
+          />
+          <KpiCard
+            label="Debug-resolve rate"
+            value={`${((metrics.debugResolveRate ?? 0) * 100).toFixed(1)}%`}
+            icon={Bug}
+            deltaPositive={(metrics.debugResolveRate ?? 0) >= 0.5}
+            delta={`${((metrics.debugInvokedRate ?? 0) * 100).toFixed(1)}% jobs hit the debugger`}
+          />
         </div>
       )}
 

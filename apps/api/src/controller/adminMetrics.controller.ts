@@ -26,7 +26,24 @@ import ProjectCollaborator from "../model/projectCollaborator.model";
 import Feedback from "../model/feedback.model";
 import { generationQueue } from "../queue/generationQueue";
 import { editQueue } from "../queue/editQueue";
+import { MODEL_PRICING } from "../util/pricing";
 import logger from "../util/logger.util";
+
+// Map a pipeline stage name → the LLM "role" it represents (for cost-by-role).
+const STAGE_ROLE: Record<string, string> = {
+    agent_code: "coder",
+    agent_debug: "debugger",
+    agent_plan: "planner",
+    rag_enhance: "query_transform",
+    query_transform: "query_transform",
+    tts: "tts",
+};
+
+function priceFor(model: string, input: number, output: number): { usd: number; known: boolean } {
+    const p = MODEL_PRICING[model];
+    if (!p) return { usd: 0, known: false };
+    return { usd: (input / 1e6) * p.inputPer1M + (output / 1e6) * p.outputPer1M, known: true };
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -159,7 +176,10 @@ export async function getOverview(_req: Request, res: Response) {
         const succeeded24h = last24hJobs.filter((j) => j.status === "complete").length;
         const failed24h = last24hJobs.filter((j) => j.status === "failed").length;
         const total24h = last24hJobs.length;
-        const successRate24h = total24h > 0 ? succeeded24h / total24h : 0;
+        // Success rate over TERMINAL jobs only (complete+failed) so in-flight jobs
+        // don't artificially depress it. Was succeeded/total (understated under load).
+        const terminal24h = succeeded24h + failed24h;
+        const successRate24h = terminal24h > 0 ? succeeded24h / terminal24h : 0;
 
         // Queue counts
         const [genCounts, editCounts] = await Promise.all([
@@ -168,19 +188,19 @@ export async function getOverview(_req: Request, res: Response) {
         ]);
 
         // Content stats
-        const [projectCount, compiledCount, generatedVideoCount, postCount, storageAgg] =
+        const [projectCount, videoAssetCount, postCount, storageAgg] =
             await Promise.all([
                 Project.countDocuments(),
-                Project.countDocuments({ compiled: true }),
-                Asset.countDocuments({ origin: "generated_video" }),
+                // Real video count = video-type assets (no double-count of compiled
+                // projects + their generated_video asset, which are the same video).
+                Asset.countDocuments({ type: "video" }),
                 CommunityPost.countDocuments(),
                 Asset.aggregate([
                     { $group: { _id: null, total: { $sum: "$bytes" } } },
                 ]),
             ]);
 
-        // "videos" = compiled projects OR generated_video assets (union, deduplicated by counting separately and noting overlap is negligible at admin level)
-        const videos = compiledCount + generatedVideoCount;
+        const videos = videoAssetCount;
         const storageBytes: number = storageAgg[0]?.total ?? 0;
 
         // Feedback stats
@@ -431,7 +451,7 @@ export async function getGenerationsMetrics(req: Request, res: Response) {
             ]),
             // All jobs in range for JS-side percentile + terms computation
             GenerationJob.find({ createdAt: { $gte: from, $lte: to } })
-                .select("status queue prompt error sceneProgress startedAt completedAt")
+                .select("status queue prompt error sceneProgress startedAt completedAt debugInvoked debugResolved usedFallbackLlm usedFallbackScene")
                 .lean(),
             // Recent prompts
             GenerationJob.find({ createdAt: { $gte: from, $lte: to } })
@@ -445,8 +465,15 @@ export async function getGenerationsMetrics(req: Request, res: Response) {
         const total = jobs.length;
         const completeCount = jobs.filter((j) => j.status === "complete").length;
         const failedCount = jobs.filter((j) => j.status === "failed").length;
-        const successRate = total > 0 ? completeCount / total : 0;
-        const failureRate = total > 0 ? failedCount / total : 0;
+        // Rates over TERMINAL jobs (complete+failed) so in-flight jobs don't skew them.
+        const terminalCount = completeCount + failedCount;
+        const successRate = terminalCount > 0 ? completeCount / terminalCount : 0;
+        const failureRate = terminalCount > 0 ? failedCount / terminalCount : 0;
+        // Resilience rates (real animation vs fallback title-card, fallback-LLM saves).
+        const realCount = jobs.filter((j) => j.status === "complete" && !(j as Record<string, unknown>).usedFallbackScene).length;
+        const fallbackSceneCount = jobs.filter((j) => (j as Record<string, unknown>).usedFallbackScene).length;
+        const fallbackLlmCount = jobs.filter((j) => (j as Record<string, unknown>).usedFallbackLlm).length;
+        const realRate = completeCount > 0 ? realCount / completeCount : 0;
 
         // Duration percentiles (only jobs that have both startedAt and completedAt)
         const durations: number[] = jobs
@@ -460,11 +487,11 @@ export async function getGenerationsMetrics(req: Request, res: Response) {
             ? durations.reduce((s, v) => s + v, 0) / durations.length
             : 0;
 
-        // Retry rate: jobs where attemptsMade (on IGenerationJob — guard it) > 1
-        const retried = jobs.filter((j) => {
-            const am = (j as Record<string, unknown>).attemptsMade;
-            return typeof am === "number" && am > 1;
-        }).length;
+        // Retry rate = fraction of jobs that needed the debug loop (the real
+        // "retry" in this pipeline). attemptsMade was never persisted → always 0.
+        const debugInvokedCount = jobs.filter((j) => (j as Record<string, unknown>).debugInvoked).length;
+        const debugResolvedCount = jobs.filter((j) => (j as Record<string, unknown>).debugResolved).length;
+        const retried = debugInvokedCount;
         const retryRate = total > 0 ? retried / total : 0;
 
         // Avg scenes
@@ -500,6 +527,14 @@ export async function getGenerationsMetrics(req: Request, res: Response) {
             duration: { p50Ms, p95Ms, avgMs },
             retryRate,
             avgScenes,
+            // Resilience visibility (real animation vs guaranteed title-card; how
+            // often the LLM fallback or debug loop saved a generation).
+            realRate,
+            realCount,
+            fallbackSceneCount,
+            fallbackLlmCount,
+            debugInvokedRate: total > 0 ? debugInvokedCount / total : 0,
+            debugResolveRate: debugInvokedCount > 0 ? debugResolvedCount / debugInvokedCount : 0,
             failureReasons,
             queueSplit: { generation: genJobs, edit: editJobs },
             recentPrompts: recentJobs.map((j) => ({
@@ -1009,22 +1044,21 @@ export async function getCostMetrics(req: Request, res: Response) {
             const jobs = await GenerationJob.find({
                 createdAt: { $gte: from, $lte: to },
             })
-                .select("tokens costUsd createdAt")
-                .lean();
+                .select("tokens costUsd createdAt stages")
+                .lean<Array<{
+                    tokens?: { input?: number; output?: number };
+                    costUsd?: number;
+                    createdAt: Date;
+                    stages?: Array<{ stage: string; model?: string; tokens?: { input?: number; output?: number } }>;
+                }>>();
 
-            // Guard: tokens/costUsd may not exist on the model yet (added by Health+Actions agent)
             const jobsWithData = jobs.filter(
-                (j) =>
-                    (j as Record<string, unknown>).tokens !== undefined ||
-                    (j as Record<string, unknown>).costUsd !== undefined
+                (j) => j.tokens !== undefined || j.costUsd !== undefined || (j.stages?.length ?? 0) > 0
             );
 
             if (jobsWithData.length === 0) {
                 return res.status(200).json(
-                    emptyCostShape(
-                        "none",
-                        "Agent service not yet emitting token metrics; see ADMIN_PORTAL_SPEC §5."
-                    )
+                    emptyCostShape("none", "No generation jobs with token usage in this range yet.")
                 );
             }
 
@@ -1032,42 +1066,73 @@ export async function getCostMetrics(req: Request, res: Response) {
             let totalOutput = 0;
             let totalCostUsd = 0;
             const seriesMap: Record<string, { input: number; output: number }> = {};
+            // Per-model + per-role token accumulation from stages[] (the source of
+            // truth the old code ignored). Cost recomputed from the pricing table so
+            // a single unmapped model no longer zeroes the whole job's cost.
+            const modelAgg = new Map<string, { input: number; output: number }>();
+            const roleAgg = new Map<string, number>();
+            const unknownModels = new Set<string>();
 
             for (const j of jobsWithData) {
-                const tokens = (j as Record<string, unknown>).tokens as
-                    | { input?: number; output?: number }
-                    | undefined;
-                const costUsd = (j as Record<string, unknown>).costUsd as number | undefined;
-                const inp = tokens?.input ?? 0;
-                const out = tokens?.output ?? 0;
+                const inp = j.tokens?.input ?? 0;
+                const out = j.tokens?.output ?? 0;
                 totalInput += inp;
                 totalOutput += out;
-                totalCostUsd += costUsd ?? 0;
 
                 const date = new Date(j.createdAt).toISOString().slice(0, 10);
                 if (!seriesMap[date]) seriesMap[date] = { input: 0, output: 0 };
                 seriesMap[date].input += inp;
                 seriesMap[date].output += out;
+
+                let jobCost = 0;
+                for (const s of j.stages ?? []) {
+                    if (!s.model || !s.tokens) continue;
+                    const si = s.tokens.input ?? 0;
+                    const so = s.tokens.output ?? 0;
+                    const m = modelAgg.get(s.model) ?? { input: 0, output: 0 };
+                    m.input += si; m.output += so;
+                    modelAgg.set(s.model, m);
+
+                    const role = STAGE_ROLE[s.stage] ?? s.stage;
+                    roleAgg.set(role, (roleAgg.get(role) ?? 0) + si + so);
+
+                    const pr = priceFor(s.model, si, so);
+                    if (!pr.known) unknownModels.add(s.model);
+                    jobCost += pr.usd;
+                }
+                // Prefer the worker's persisted costUsd; fall back to our stage-sum
+                // (which is non-zero even when the worker stored null).
+                totalCostUsd += (typeof j.costUsd === "number" && j.costUsd > 0) ? j.costUsd : jobCost;
             }
 
             const series = Object.entries(seriesMap)
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([date, v]) => ({ date, input: v.input, output: v.output }));
 
-            const perJobAvgUsd =
-                jobsWithData.length > 0 ? totalCostUsd / jobsWithData.length : 0;
+            const byModel = Array.from(modelAgg.entries())
+                .map(([model, v]) => ({ model, input: v.input, output: v.output }))
+                .sort((a, b) => (b.input + b.output) - (a.input + a.output));
+            const costByModel = Array.from(modelAgg.entries())
+                .map(([model, v]) => ({ model, usd: Number(priceFor(model, v.input, v.output).usd.toFixed(6)) }))
+                .sort((a, b) => b.usd - a.usd);
+            const byRole = Array.from(roleAgg.entries())
+                .map(([role, tokens]) => ({ role, tokens }))
+                .sort((a, b) => b.tokens - a.tokens);
+
+            const perJobAvgUsd = jobsWithData.length > 0 ? totalCostUsd / jobsWithData.length : 0;
 
             return res.status(200).json({
                 tokens: {
                     input: totalInput,
                     output: totalOutput,
                     total: totalInput + totalOutput,
-                    byModel: [],
-                    byRole: [],
+                    byModel,
+                    byRole,
                 },
                 series,
-                cost: { totalUsd: totalCostUsd, perJobAvgUsd, byModel: [] },
+                cost: { totalUsd: Number(totalCostUsd.toFixed(6)), perJobAvgUsd: Number(perJobAvgUsd.toFixed(6)), byModel: costByModel },
                 source: "persisted" as const,
+                ...(unknownModels.size > 0 ? { unknownModels: Array.from(unknownModels) } : {}),
             });
         } catch (dbErr) {
             logger.error({ message: "getCostMetrics persisted fallback failed", error: String(dbErr) });

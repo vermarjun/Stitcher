@@ -1,17 +1,43 @@
 import { useRef, useEffect, useImperativeHandle, useState } from "react";
 import { ScrollArea } from "@/Components/ui/scroll-area";
-import { AlertCircle, ChevronDown, ChevronUp, Copy, Mic, Lock, Star } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp, Copy, Lock, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { messageActions, type Message } from "./Main.rightsidebar";
 import EmptyState from "./EmptyState.rightsidebar";
 import MessageBubble from "./MessageBubble.rightsidebar";
 import QuickPrompts from "./QuickPrompts.rightsidebar";
 import MessageInput from "./MessageInput.rightsidebar";
+import GenerationProgress from "./GenerationProgress.rightsidebar";
 import api from "@/api";
 import { toast } from "sonner";
-import type { Project, IUser, Asset, GenerationOptions } from "@/State/Types";
+import type { Project, IUser, Asset } from "@/State/Types";
 import { useRefreshAssetStash } from "../RefreshContextProvider";
 import { useRefreshHeader } from "../context";
 import { socket, setActiveChat } from "@/socket";
+import { trackAction } from "@/lib/analytics";
+
+/**
+ * Live pipeline progress shown as the animated step label + progress bar.
+ * Mirrors the backend's GenerationJob.progress / `progress` socket event so the
+ * frontend renders exactly what the pipeline reports (real, live, reload-safe).
+ */
+type LiveProgress = { phase: string; label: string; percent: number; ceil: number };
+
+/**
+ * Map an edit-pipeline phase (separate worker, different event vocabulary) onto
+ * the same progress bar. The generate pipeline drives the bar from the backend;
+ * the edit pipeline only emits coarse `edit_started` phases, so we assign
+ * sensible client-side percents here.
+ */
+function mapEditPhase(p: string | undefined): LiveProgress {
+  switch (p) {
+    case "load_asset":  return { phase: "edit", label: "Loading your video…",                 percent: 8,  ceil: 18 };
+    case "rag_enhance": return { phase: "edit", label: "Looking up relevant Manim examples…", percent: 22, ceil: 36 };
+    case "agent_code":  return { phase: "edit", label: "Applying your edit…",                  percent: 40, ceil: 60 };
+    case "render":      return { phase: "edit", label: "Rendering your animation…",            percent: 64, ceil: 88 };
+    default:            return { phase: "edit", label: "Editing your video…",                  percent: 10, ceil: 20 };
+  }
+}
 
 interface Props {
   currentProject?: Project;
@@ -54,41 +80,55 @@ const StarRatingWidget = ({
 }) => {
   const [hovered, setHovered] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const [selected, setSelected] = useState(0);
 
   const handleClick = async (n: number) => {
-    if (submitting) return;
+    if (submitting || exiting) return;
+    setSelected(n);
     setSubmitting(true);
     try {
       await api.patch(`/generatechat/${chatId}/rating`, { rating: n });
     } catch {
       // best-effort — hide widget regardless
     }
-    onRated();
+    setExiting(true);
+    setTimeout(() => onRated(), 350);
   };
 
+  const isActive = exiting || submitting;
+
   return (
-    <div className="flex items-center gap-1.5 mt-1 mb-2 ml-9">
-      <span className="text-xs text-zinc-500">How would you rate this video?</span>
-      <div className="flex items-center gap-0.5">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            disabled={submitting}
-            onMouseEnter={() => setHovered(n)}
-            onMouseLeave={() => setHovered(0)}
-            onClick={() => handleClick(n)}
-            className="p-0.5 text-zinc-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
-            aria-label={`Rate ${n} star${n !== 1 ? "s" : ""}`}
-          >
-            <Star
-              className="w-3.5 h-3.5"
-              fill={hovered >= n ? "#facc15" : "none"}
-              stroke={hovered >= n ? "#facc15" : "currentColor"}
-            />
-          </button>
-        ))}
+    <div
+      className={cn(
+        "overflow-hidden transition-all duration-300 ease-out mt-2 mb-2",
+        exiting ? "opacity-0 scale-95 max-h-0 -translate-y-1" : "opacity-100 max-h-24"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-zinc-400 whitespace-nowrap">How would you rate this video?</span>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              disabled={isActive}
+              onMouseEnter={() => !isActive && setHovered(n)}
+              onMouseLeave={() => !isActive && setHovered(0)}
+              onClick={() => handleClick(n)}
+              className="p-0.5 text-zinc-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
+              aria-label={`Rate ${n} star${n !== 1 ? "s" : ""}`}
+            >
+              <Star
+                className="w-3.5 h-3.5"
+                fill={hovered >= n || selected >= n ? "#facc15" : "none"}
+                stroke={hovered >= n || selected >= n ? "#facc15" : "currentColor"}
+              />
+            </button>
+          ))}
+        </div>
       </div>
+      <p className="text-[10px] text-zinc-600 mt-0.5">Your rating helps improve Stitcher through our RLHF loop</p>
     </div>
   );
 };
@@ -162,9 +202,9 @@ const GenerateComponent = ({
   setIsProcessing,
   currentChatId,
   setCurrentChatId,
-  onAssetDrop, 
-  droppedItems, 
-  onRemoveItem
+  onAssetDrop: _onAssetDrop,
+  droppedItems: _droppedItems,
+  onRemoveItem: _onRemoveItem
 }: Props) => {
   const { triggerHeaderRefresh } = useRefreshHeader()
   // Viewers are read-only: they cannot spend credits / generate. Default
@@ -173,44 +213,34 @@ const GenerateComponent = ({
   const plannerOutputRef = useRef("");
   const streamSummaryRef = useRef(false);
   const llmSummaryRef = useRef("");
+  const genStartRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { triggerRefresh } = useRefreshAssetStash();
-  // Socket-based status management instead of polling
-  const [pollingStatus, setPollingStatus] = useState<
-    "generating" | "planning" | "generating-scenes" | "concat" | null
-  >(null);
+  // Live pipeline progress (drives the animated step label + progress bar).
+  // Sourced from the backend `progress` socket event AND the status endpoint, so
+  // a page reload restores the exact phase + percent the job was on.
+  const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
   // Ref to the active resumable-poll interval so we can cancel it.
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Tracks whether a job_complete/job_failed was received (idempotency guard).
   const jobCompletedRef = useRef(false);
   // Tracks which chatId the current poll is running for (avoids cross-chat leaks).
   const pollChatIdRef = useRef<string | null>(null);
-  // Rich live progress: stable log of step events shown beneath the spinner.
-  type ProgressStep = {
-    id: string;
-    label: string;
-    state: "active" | "done" | "failed";
-  };
-  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
-  const [totalScenes, setTotalScenes] = useState<number | null>(null);
-  const [completedScenes, setCompletedScenes] = useState<number>(0);
-  // Voiceover narration toggle (off by default). When on, the generate
-  // request carries generationOptions.voiceover = { enabled: true }.
-  const [voiceoverEnabled, setVoiceoverEnabled] = useState(false);
-
-  const resetProgress = () => {
-    setProgressSteps([]);
-    setTotalScenes(null);
-    setCompletedScenes(0);
-  };
-  // Insert / promote / fail steps without producing duplicates.
-  const upsertStep = (id: string, label: string, state: ProgressStep["state"]) => {
-    setProgressSteps((prev) => {
-      const idx = prev.findIndex((s) => s.id === id);
-      if (idx === -1) return [...prev, { id, label, state }];
-      const next = [...prev];
-      next[idx] = { id, label, state };
-      return next;
+  const resetProgress = () => setLiveProgress(null);
+  // Apply a live-progress snapshot. Missing fields fall back to the previous
+  // snapshot, and the percent is clamped monotonic (the debug→re-render loop
+  // re-enters a lower phase floor; the bar must never jump backward). The merge
+  // runs inside the functional updater so it always sees the freshest state.
+  const applyLiveProgress = (p: Partial<LiveProgress> & { phase: string }) => {
+    setLiveProgress((prev) => {
+      const merged: LiveProgress = {
+        phase: p.phase,
+        label: p.label ?? prev?.label ?? "Working…",
+        percent: typeof p.percent === "number" ? p.percent : prev?.percent ?? 0,
+        ceil: typeof p.ceil === "number" ? p.ceil : prev?.ceil ?? 0,
+      };
+      if (prev && merged.percent < prev.percent) merged.percent = prev.percent;
+      return merged;
     });
   };
   /** Stop the running resumable-poll interval (if any). */
@@ -239,10 +269,9 @@ const GenerateComponent = ({
       }
       return updated;
     });
-    upsertStep("failed", `Generation failed: ${errMsg}`, "failed");
     toast.error(`Generation failed: ${errMsg}`);
     setIsProcessing(false);
-    setPollingStatus(null);
+    setLiveProgress(null);
     jobCompletedRef.current = true;
     stopPoll();
   };
@@ -252,7 +281,8 @@ const GenerateComponent = ({
    * assistant message.  Idempotent — safe to call from both paths.
    * If the message is already completed (socket beat us), this is a no-op.
    */
-  const applyCompletionResult = (finalUrl: string | undefined) => {
+  const applyCompletionResult = (finalUrl: string | undefined, generationMs?: number) => {
+    const ms = generationMs ?? (genStartRef.current ? Date.now() - genStartRef.current : undefined);
     setMessages((prevMessages) => {
       const updated = [...prevMessages];
       const lastIdx = updated.length - 1;
@@ -269,20 +299,20 @@ const GenerateComponent = ({
             llmResponse: finalUrl || "Video ready.",
           },
           completed: true,
+          ...(ms ? { generationMs: ms } : {}),
         };
       }
       return updated;
     });
-    upsertStep("done", "Generation complete ✓", "done");
     toast.success("Video generated!");
     // A final video URL renders as a <video> player (not streamed text), so the
     // LiveTextStream onStreamingComplete callback never fires.  Clear loading
     // state explicitly here so the spinner does not persist after completion.
     setIsProcessing(false);
-    setPollingStatus(null);
     resetProgress();
     triggerRefresh();
     triggerHeaderRefresh();
+    genStartRef.current = null;
     jobCompletedRef.current = true;
     stopPoll();
   };
@@ -313,13 +343,21 @@ const GenerateComponent = ({
         return;
       }
       try {
-        const res = await api.get<{ success: boolean; data?: { status?: string; finalUrl?: string } }>(
+        const res = await api.get<{ success: boolean; data?: { status?: string; finalUrl?: string; progress?: LiveProgress | null; startedAt?: string; completedAt?: string } }>(
           `/generatechat/${chatId}/status`
         );
         const statusData = res.data?.data;
         const status = statusData?.status;
+        // Safety-net refresh of the live bar even if a socket `progress` event was
+        // missed — keeps the bar advancing from the persisted snapshot.
+        if (statusData?.progress && !jobCompletedRef.current) {
+          applyLiveProgress(statusData.progress);
+        }
         if (status === "completed" || status === "complete") {
-          applyCompletionResult(statusData?.finalUrl);
+          const startedAt = (statusData as any)?.startedAt;
+          const completedAt = (statusData as any)?.completedAt;
+          const serverMs = startedAt && completedAt ? new Date(completedAt).getTime() - new Date(startedAt).getTime() : undefined;
+          applyCompletionResult(statusData?.finalUrl, serverMs);
         } else if (status === "failed" || status === "cancelled") {
           applyFailure(status === "cancelled" ? "cancelled" : "Generation failed.");
         }
@@ -355,8 +393,6 @@ const GenerateComponent = ({
 
   const handleStreamingComplete = () => {
       // Only called when final LLM response finishes streaming
-      console.log("Streaming complete - removing progress bar"); // Log to verify
-      setPollingStatus(null);
       setIsProcessing(false);
       resetProgress();
       triggerRefresh();
@@ -382,7 +418,7 @@ const GenerateComponent = ({
       try {
         const res = await api.get<{
           success: boolean;
-          data?: { jobId?: string; status?: string; finalUrl?: string; sceneProgress?: unknown };
+          data?: { jobId?: string; status?: string; finalUrl?: string; progress?: LiveProgress | null; sceneProgress?: unknown; startedAt?: string; completedAt?: string };
         }>(`/generatechat/${currentChatId}/status`);
 
         if (cancelled) return;
@@ -422,7 +458,11 @@ const GenerateComponent = ({
             return [...prev, placeholder];
           });
           setIsProcessing(true);
-          setPollingStatus("planning"); // generic in-progress label until socket events arrive
+          // Restore the exact phase + percent the job was on (reload-safe). Falls
+          // back to a generic queued state if no snapshot exists yet.
+          setLiveProgress(
+            statusData.progress ?? { phase: "queued", label: "Working…", percent: 5, ceil: 12 }
+          );
           // Re-join the socket room so live events resume.
           socket.emit("join_chat", currentChatId);
           setActiveChat(currentChatId);
@@ -432,6 +472,11 @@ const GenerateComponent = ({
           // Job already finished: ensure the last assistant message shows the video.
           // History from the parent usually already has it; this is a defensive patch.
           if (statusData.finalUrl) {
+            const reconcileStartedAt = statusData.startedAt;
+            const reconcileCompletedAt = statusData.completedAt;
+            const reconcileMs = reconcileStartedAt && reconcileCompletedAt
+              ? new Date(reconcileCompletedAt).getTime() - new Date(reconcileStartedAt).getTime()
+              : undefined;
             setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
@@ -446,6 +491,7 @@ const GenerateComponent = ({
                     llmResponse: statusData.finalUrl!,
                   },
                   completed: true,
+                  ...(reconcileMs ? { generationMs: reconcileMs } : {}),
                 };
               }
               return updated;
@@ -492,86 +538,25 @@ const GenerateComponent = ({
     setActiveChat(currentChatId);
 
   const handleUpdate = (event: any) => {
-    console.log("Socket Event:", event);
     const { type, phase, data } = event ?? {};
 
-    // ─── Backend event vocabulary (eventPublisher.util.ts) ─────────────
-    //   planning            (phase: rag_enhance | agent_plan)
-    //   plan_complete       (data: { sceneCount })
-    //   scene_started       (data: { index })
-    //   scene_code_complete (data: { index, sceneClass })
-    //   scene_render_complete (data: { index, url, attempt })
-    //   scene_failed        (data: { index, error })
-    //   concat_started
-    //   job_complete        (data: result with finalUrl)
-    //   job_failed          (data: { error, retryable, jobId })
-    //   edit_started, edit_render_complete, edit_complete, edit_failed
-    // ───────────────────────────────────────────────────────────────────
-
-    if (type === "planning") {
-      setPollingStatus("planning");
-      streamSummaryRef.current = true;
-      plannerOutputRef.current = "";
-      llmSummaryRef.current = "";
-      if (phase === "rag_enhance") {
-        upsertStep("rag", "Looking up relevant Manim examples…", "active");
-      } else if (phase === "agent_plan") {
-        upsertStep("rag", "Looked up relevant Manim examples", "done");
-        upsertStep("plan", "Planning scenes…", "active");
-      } else {
-        upsertStep("plan", "Planning scenes…", "active");
-      }
-      return;
-    }
-
-    if (type === "plan_complete") {
-      const n = data?.sceneCount ?? 0;
-      setTotalScenes(n);
-      setPollingStatus("generating");
-      upsertStep("plan", `Planned ${n} scene${n === 1 ? "" : "s"}`, "done");
-      return;
-    }
-
-    if (type === "scene_started") {
-      const i = (data?.index ?? 0) as number;
-      const total = totalScenes ?? "?";
-      setPollingStatus("generating-scenes");
-      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: writing code…`, "active");
-      return;
-    }
-
-    if (type === "scene_code_complete") {
-      const i = (data?.index ?? 0) as number;
-      const total = totalScenes ?? "?";
-      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: code ready, rendering…`, "active");
-      return;
-    }
-
-    if (type === "scene_render_complete") {
-      const i = (data?.index ?? 0) as number;
-      const total = totalScenes ?? "?";
-      setCompletedScenes((c) => c + 1);
-      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: rendered ✓`, "done");
-      return;
-    }
-
-    if (type === "scene_failed") {
-      const i = (data?.index ?? 0) as number;
-      const total = totalScenes ?? "?";
-      const err = data?.error ?? "unknown error";
-      upsertStep(`scene-${i}`, `Scene ${i + 1}/${total}: failed — ${err}`, "failed");
-      toast.error(`Scene ${i + 1} failed: ${err}`);
-      return;
-    }
-
-    if (type === "concat_started") {
-      setPollingStatus("concat");
-      upsertStep("concat", "Stitching scenes together…", "active");
+    // ─── Live pipeline progress (the REAL backend phase) ───────────────
+    // Emitted by the worker at every transition: queued → rag → code →
+    // voiceover → render → debug → upload. Carries { phase, label, percent,
+    // ceil } straight from the canonical PIPELINE_PHASES map, so the frontend
+    // just renders what it's told.
+    if (type === "progress") {
+      const d = (data ?? {}) as Partial<LiveProgress>;
+      applyLiveProgress({
+        phase: d.phase ?? (typeof phase === "string" ? phase : "queued"),
+        label: d.label,
+        percent: d.percent,
+        ceil: d.ceil,
+      });
       return;
     }
 
     if (type === "job_complete") {
-      upsertStep("concat", "Stitched final video", "done");
       const finalUrl: string | undefined = data?.finalUrl ?? data?.cloudinaryUrl;
       // Funnel into shared idempotent handler (clears loading, stops poll, etc.)
       applyCompletionResult(finalUrl);
@@ -580,24 +565,21 @@ const GenerateComponent = ({
 
     if (type === "job_failed") {
       const err = data?.error ?? "unknown error";
-      // Funnel into shared idempotent handler.
       applyFailure(String(err));
       return;
     }
 
-    // ─── Edit-flow events (different vocabulary on backend) ────────────
+    // ─── Edit-flow events (separate worker, mapped onto the same bar) ──
     if (type === "edit_started") {
-      setPollingStatus("planning");
-      upsertStep("edit", "Editing video…", "active");
+      applyLiveProgress(mapEditPhase(typeof phase === "string" ? phase : undefined));
       return;
     }
     if (type === "edit_render_complete") {
-      upsertStep("edit", "Re-rendered ✓", "done");
+      applyLiveProgress({ phase: "edit", label: "Rendering your animation…", percent: 80, ceil: 95 });
       return;
     }
     if (type === "edit_complete") {
-      upsertStep("edit", "Edit complete ✓", "done");
-      const finalUrl: string | undefined = data?.url ?? data?.finalUrl;
+      const finalUrl: string | undefined = data?.url ?? data?.finalUrl ?? data?.newAssetUrl;
       setMessages((prevMessages) => {
         const updated = [...prevMessages];
         const lastIdx = updated.length - 1;
@@ -617,19 +599,20 @@ const GenerateComponent = ({
         return updated;
       });
       toast.success("Video edited successfully!");
+      setIsProcessing(false);
+      setLiveProgress(null);
       return;
     }
     if (type === "edit_failed") {
       const err = data?.error ?? "unknown error";
-      upsertStep("edit", `Edit failed: ${err}`, "failed");
       toast.error(`Edit failed: ${err}`);
       setIsProcessing(false);
-      setPollingStatus(null);
+      setLiveProgress(null);
       return;
     }
 
-    // Unknown event — log so we don't drop it silently.
-    console.warn("[chat_update] unhandled event type:", type, event);
+    // Legacy generation events (planning / plan_complete / scene_* /
+    // concat_started / job_queued) are superseded by `progress` — safely ignored.
   };
 
     socket.on('chat_update', handleUpdate);
@@ -657,30 +640,23 @@ const GenerateComponent = ({
     const userInput = input.trim();
     setInput("");
     setIsProcessing(true);
-    // processing request — show immediate feedback before first socket event lands
-    setPollingStatus("planning");
-    resetProgress();
-    upsertStep("submit", "Submitting prompt…", "active");
-
-    const assetsAttached = [];
-    for (const asset of droppedItems || []){
-      assetsAttached.push(asset._id)
-    }
+    genStartRef.current = Date.now();
+    // Key conversion event: a user submitted a generation prompt.
+    trackAction("generate_submit", { isNewChat: !currentChatId });
+    // Reset any streaming refs from a prior generation in this chat.
+    streamSummaryRef.current = true;
+    plannerOutputRef.current = "";
+    llmSummaryRef.current = "";
+    // Immediate feedback before the first socket event lands.
+    setLiveProgress({ phase: "submitting", label: "Submitting your prompt…", percent: 3, ceil: 10 });
 
     try {
       const requestData = {
         projectId: currentProject?._id,
         prompt: userInput,
         userId: user?._id,
-        assetId: assetsAttached,
+        assetId: [],
         ...(currentChatId && { chatId: currentChatId }),
-        // Only attach voiceover when the user turns it on; otherwise omit so
-        // the request body is unchanged from the default behaviour.
-        ...(voiceoverEnabled && {
-          generationOptions: {
-            voiceover: { enabled: true },
-          } as GenerationOptions,
-        }),
       };
 
       const response = await api.post(`/generatechat/`, requestData);
@@ -712,8 +688,7 @@ const GenerateComponent = ({
 
         setMessages((prev: Message[]) => [...prev, placeholderMessage]);
 
-        // Change status to planning. Socket connection in useEffect will handle updates
-        setPollingStatus("planning");
+        // Socket connection in useEffect will handle live progress updates.
         socket.emit('join_chat', chatIdToUse);
         setActiveChat(chatIdToUse);
 
@@ -740,7 +715,7 @@ const GenerateComponent = ({
       );
       setMessages((prev: Message[]) => [...prev, errorMessage]);
       setIsProcessing(false);
-      setPollingStatus(null);
+      setLiveProgress(null);
     }
   };
 
@@ -755,7 +730,7 @@ const GenerateComponent = ({
         jobCompletedRef.current = true;
         stopPoll();
         setIsProcessing(false);
-        setPollingStatus(null);
+        setLiveProgress(null);
 
         // Update the last message to show it was cancelled
         setMessages((prevMessages) => {
@@ -823,37 +798,6 @@ const GenerateComponent = ({
   const getPlaceholder = () => {
     return "Describe the animation...";
   };
-
-  // Small, self-contained voiceover toggle rendered just above the input.
-  // Off by default; flips the `voiceoverEnabled` state consumed in handleSubmit.
-  const VoiceoverToggle = () => (
-    <div className="px-3 pt-2 bg-zinc-800 flex-shrink-0">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={voiceoverEnabled}
-        onClick={() => setVoiceoverEnabled((v) => !v)}
-        disabled={isProcessing}
-        className="flex w-full items-center gap-2 text-xs text-neutral-300 hover:text-neutral-100 disabled:opacity-50 transition-colors"
-      >
-        <Mic className="w-3.5 h-3.5 text-emerald-400" />
-        <span className="font-medium">Voiceover narration</span>
-        <span
-          className={
-            "ml-auto relative inline-flex h-4 w-7 items-center rounded-full transition-colors " +
-            (voiceoverEnabled ? "bg-emerald-600" : "bg-neutral-600")
-          }
-        >
-          <span
-            className={
-              "inline-block h-3 w-3 transform rounded-full bg-white transition-transform " +
-              (voiceoverEnabled ? "translate-x-3.5" : "translate-x-0.5")
-            }
-          />
-        </span>
-      </button>
-    </div>
-  );
 
   // Custom error message component
   const ErrorMessageBubble = ({ message }: { message: Message }) => {
@@ -986,45 +930,6 @@ const GenerateComponent = ({
     }
   };
 
-  // Headline + percent for the spinner bar. The detailed per-step log
-  // below the bar comes from `progressSteps`.
-  const getLoadingStatus = () => {
-    // Compute a smooth percent from real progress when we have scene info.
-    const stagePct = {
-      planning: 15,
-      generating: 30,
-      "generating-scenes": 50,
-      concat: 90,
-    } as const;
-
-    let progress: number = (pollingStatus && stagePct[pollingStatus]) ?? 0;
-    let text = "Processing…";
-
-    switch (pollingStatus) {
-      case "planning":
-        text = "Planning…";
-        break;
-      case "generating":
-        text = totalScenes
-          ? `Generating code (${completedScenes}/${totalScenes})…`
-          : "Generating code…";
-        break;
-      case "generating-scenes":
-        text = totalScenes
-          ? `Rendering scenes (${completedScenes}/${totalScenes})…`
-          : "Rendering scenes…";
-        if (totalScenes && totalScenes > 0) {
-          // 30 → 90 across all scenes.
-          progress = 30 + Math.floor((completedScenes / totalScenes) * 60);
-        }
-        break;
-      case "concat":
-        text = "Stitching final video…";
-        break;
-    }
-    return { text, progress };
-  };
-
   // Read-only bar shown in place of the message input for viewers.
   const ViewerLockedBar = () => (
     <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400">
@@ -1044,9 +949,6 @@ const GenerateComponent = ({
       isProcessing={isProcessing}
       placeholder={getPlaceholder()}
       onCancel={handleCancelGeneration}
-      onAssetDrop={onAssetDrop}
-      droppedItems={droppedItems}
-      onRemoveItem={onRemoveItem}
     />
   ) : (
     <ViewerLockedBar />
@@ -1060,7 +962,6 @@ const GenerateComponent = ({
             <EmptyState mode="generate" onPromptSelect={handlePromptSelect} />
             <QuickPrompts mode="generate" onPromptSelect={handlePromptSelect} />
           </div>
-          <VoiceoverToggle />
           {inputBar}
         </>
       ) : (
@@ -1068,16 +969,17 @@ const GenerateComponent = ({
           <ScrollArea className="flex-1 min-h-0">
             <div className="px-4 space-y-4 pt-4">
               {messages.map((message, index) => {
-                // Skip the last assistant message if it's being processed
+                // Hide the empty in-progress assistant placeholder for the whole
+                // generation; the live GenerationProgress indicator stands in for it.
                 const isLastMessage = index === messages.length - 1;
                 const isAssistantProcessing =
                   isLastMessage &&
                   message.role === "assistant" &&
                   isProcessing &&
-                  pollingStatus === "planning";
+                  !message.completed;
 
                 if (isAssistantProcessing) {
-                  return null; // Don't render the last assistant message while processing
+                  return null;
                 }
 
                 // Determine whether to show the RLHF star-rating widget.
@@ -1111,6 +1013,7 @@ const GenerateComponent = ({
                         llmSummaryRef={llmSummaryRef}
                         isProcessing={isProcessing}
                         onStreamingComplete={handleStreamingComplete}
+                        projectId={currentProject?._id}
                       />
                     )}
                     {showRating && (
@@ -1130,84 +1033,17 @@ const GenerateComponent = ({
               })}
 
               {isProcessing && (
-                <div className="flex w-full gap-3 text-sm">
-                  <div className="flex-shrink-0">
-                    <img
-                      src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760610643/loading_animation_phpia7.gif"
-                      alt="Loading..."
-                      className="w-14 h-14 rounded-full"
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <span className="text-xs text-zinc-200 animate-pulse mb-2">
-                      {getLoadingStatus().text}
-                    </span>
-
-                    {/* Enhanced Progress Bar */}
-                    <div className="w-full bg-zinc-700 rounded-full h-1.5 relative overflow-hidden mb-3">
-                      <div
-                        className="bg-white h-1.5 rounded-full transition-all duration-300 ease-in-out absolute top-0 left-0 z-10"
-                        style={{ width: `${getLoadingStatus().progress}%` }}
-                      ></div>
-                      <div
-                        className="h-1.5 rounded-full absolute top-0 left-0 animate-pulse"
-                        style={{
-                          width: `${Math.min(
-                            getLoadingStatus().progress + 20,
-                            100
-                          )}%`,
-                          background:
-                            "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 25%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.3) 75%, transparent 100%)",
-                          animation: "shimmer 2s infinite",
-                        }}
-                      ></div>
-                    </div>
-
-                    {/* Step-by-step live log driven by Socket.IO chat_update events */}
-                    {progressSteps.length > 0 && (
-                      <ul className="space-y-1 text-xs text-zinc-400">
-                        {progressSteps.map((s) => (
-                          <li key={s.id} className="flex items-center gap-2">
-                            <span
-                              className={
-                                s.state === "done"
-                                  ? "text-emerald-400"
-                                  : s.state === "failed"
-                                  ? "text-rose-400"
-                                  : "text-zinc-300 animate-pulse"
-                              }
-                              aria-hidden
-                            >
-                              {s.state === "done"
-                                ? "✓"
-                                : s.state === "failed"
-                                ? "✗"
-                                : "•"}
-                            </span>
-                            <span
-                              className={
-                                s.state === "failed"
-                                  ? "text-rose-300"
-                                  : s.state === "done"
-                                  ? "text-zinc-300"
-                                  : "text-zinc-200"
-                              }
-                            >
-                              {s.label}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
+                <GenerationProgress
+                  label={liveProgress?.label ?? "Submitting your prompt…"}
+                  percent={liveProgress?.percent ?? 3}
+                  ceil={liveProgress?.ceil ?? 10}
+                  phase={liveProgress?.phase ?? "submitting"}
+                />
               )}
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
 
-          <VoiceoverToggle />
           {inputBar}
         </>
       )}

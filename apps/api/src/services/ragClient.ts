@@ -117,6 +117,10 @@ export interface EnhanceResponse {
         similarScripts: unknown[];
         styleRecommendations: unknown[];
         pitfalls: unknown[];
+        /** CONTRACT 1: APIs query-transform flagged as likely needed. */
+        requiredApis?: string[];
+        /** Plugin slugs the request maps to, e.g. ["manim-chess"]. */
+        requiredPlugins?: string[];
     };
     retrievalTrace: {
         denseCandidates: number;
