@@ -1401,22 +1401,9 @@ async function runGenerationPipeline(
         );
     }
 
-    // Best-effort RAG corpus storage
-    let ragCorpusStored = false;
-    try {
-        const corpusResult = await ragClient.corpusAdd(
-            {
-                documents: [{
-                    child: { prompt, code: currentCode, sceneClass: currentSceneClass },
-                    metadata: { traceId, chatId, projectId },
-                }],
-            },
-            traceId
-        );
-        ragCorpusStored = corpusResult.allSucceeded;
-    } catch (ragErr) {
-        logger.warn({ message: "[worker] RAG corpusAdd failed (non-fatal)", traceId, error: String(ragErr) });
-    }
+    // RAG corpus is populated exclusively via admin RLHF approval (Admin → Generation → Approve → Sync).
+    // Auto-adding here would bypass quality control and pollute the corpus with unreviewed code.
+    const ragCorpusStored = false;
 
     // Memory reflection (fire-and-forget)
     reflect(userId, {
@@ -1452,7 +1439,7 @@ export const generationWorker = new Worker<VideoGenerationJobData, VideoGenerati
     processGenerationJob,
     {
         connection: redisConnection,
-        concurrency: 4,
+        concurrency: 2,
         lockDuration: 600_000, // 10 minutes — render is synchronous and slow
     }
 );

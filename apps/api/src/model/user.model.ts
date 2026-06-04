@@ -52,7 +52,7 @@ export interface IUser extends Document {
     type: String;
     enum: ['user', 'admin']
   }
-  plan: 'free' | 'basic' | 'plus' | 'max';
+  plan: 'free' | 'starter' | 'creator' | 'pro';
   credits: {
     generation: number;
     editing: number;
@@ -151,13 +151,13 @@ const UserSchema = new Schema<IUser>({
   },
   plan: {
     type: String,
-    enum: ['free', 'basic', 'plus', 'max'],
+    enum: ['free', 'starter', 'creator', 'pro'],
     default: 'free'
   },
   credits: {
-    generation: { type: Number, default: 5 },
-    editing: { type: Number, default: 10 },
-    expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
+    generation: { type: Number, default: 10 },
+    editing: { type: Number, default: 0 },
+    expiresAt: { type: Date, default: null }
   },
   payments: [
     {

@@ -293,8 +293,8 @@ export async function resolveServiceConfig(
 
 /**
  * Map a User doc (or its plan string) to a canonical TierKey.
- * User.plan values: 'free' | 'basic' | 'plus' | 'max'
- * Mapping:  free → free,  basic → free,  plus → plus,  max → master,  unknown → free
+ * User.plan values: 'free' | 'starter' | 'creator' | 'pro'
+ * Mapping:  free/starter → free,  creator → plus,  pro → master,  unknown → free
  */
 export function tierForUser(
     userOrPlan: Pick<IUser, "plan"> | string | null | undefined
@@ -305,12 +305,15 @@ export function tierForUser(
             : (userOrPlan as Pick<IUser, "plan"> | null | undefined)?.plan ?? "";
 
     switch (plan) {
+        case "creator":
         case "plus":
             return "plus";
+        case "pro":
         case "max":
         case "master":
             return "master";
         case "free":
+        case "starter":
         case "basic":
         default:
             return "free";

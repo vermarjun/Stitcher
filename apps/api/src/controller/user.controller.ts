@@ -183,7 +183,7 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 3, editing: 5, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } });
+    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 10, editing: 0, expiresAt: null } });
     const verifyToken = issueEmailVerificationToken(user);
     await user.save();
 

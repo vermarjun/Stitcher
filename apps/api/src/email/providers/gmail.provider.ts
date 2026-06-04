@@ -30,7 +30,7 @@ export class GmailProvider implements EmailProvider {
     } else {
       logger.warn({
         message:
-          "[email] Gmail provider has no EMAIL_APP_PASSWORD — set it, or set " +
+          "[email] Gmail provider has no EMAIL_APP_PASSWORD — set it in API/.env.docker, or set " +
           "EMAIL_PROVIDER=console for local dev. Email sends will fail until configured.",
       });
     }
@@ -41,12 +41,15 @@ export class GmailProvider implements EmailProvider {
     if (this.transporter) return this.transporter;
 
     if (!this.configured) {
-      throw new Error("Gmail email provider is not configured (missing EMAIL_APP_PASSWORD).");
+      throw new Error("Gmail email provider is not configured (missing EMAIL_APP_PASSWORD in API/.env.docker).");
     }
+
+    // Google displays app passwords with spaces for readability — strip them.
+    const pass = EMAIL_CONFIG.pass.replace(/\s/g, "");
 
     this.transporter = nodemailer.createTransport({
       service: "gmail",
-      auth: { user: EMAIL_CONFIG.user, pass: EMAIL_CONFIG.pass },
+      auth: { user: EMAIL_CONFIG.user, pass },
     });
 
     return this.transporter;

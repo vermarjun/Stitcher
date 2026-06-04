@@ -177,20 +177,15 @@ export async function syncRagCandidates(_req: Request, res: Response) {
 
         for (const candidate of pending) {
             try {
-                // Build corpus document: code + prompt as description + metadata
+                // Build corpus document: code + prompt as content + curated source
                 const corpusDoc = {
-                    child: {
-                        code: candidate.code,
-                        sceneClass: candidate.sceneClass,
-                        prompt: candidate.prompt,
-                    },
-                    metadata: {
-                        source: "curated",
-                        apisUsed: candidate.apisUsed ?? [],
-                        rating: candidate.rating,
-                        jobId: (candidate.jobId as Types.ObjectId).toString(),
-                        userId: (candidate.userId as Types.ObjectId).toString(),
-                    },
+                    content: candidate.prompt,
+                    code: candidate.code,
+                    title: (candidate.prompt ?? "").slice(0, 120),
+                    source: "curated",
+                    docType: "script" as const,
+                    apisUsed: candidate.apisUsed ?? [],
+                    quality: candidate.rating ?? 4,
                 };
                 await ragClient.corpusAdd({ documents: [corpusDoc] });
                 await RagCandidate.updateOne(

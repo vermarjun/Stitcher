@@ -148,9 +148,19 @@ export interface EnhanceResponse {
 
 export interface CorpusDocument {
     id?: string;
-    parent?: Record<string, unknown>;
-    child?: Record<string, unknown>;
-    metadata?: Record<string, unknown>;
+    docType?: "api" | "script";
+    title?: string;
+    content?: string;
+    code?: string;
+    source?: string;
+    apisUsed?: string[];
+    animationTypes?: string[];
+    category?: string;
+    domain?: string;
+    tags?: string[];
+    complexity?: "beginner" | "intermediate" | "expert";
+    quality?: number;
+    manimVersion?: string;
 }
 
 export interface CorpusAddInput {

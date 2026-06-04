@@ -13,6 +13,7 @@ import {
   Scissors,
   Plug,
   Brain,
+  Mail,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
   { label: 'Live', href: '/live', icon: Radio },
   { label: 'Providers', href: '/providers', icon: Plug },
   { label: 'Coder Memory', href: '/memory', icon: Brain },
+  { label: 'Email', href: '/email', icon: Mail },
 ];
 
 export function AppShell() {

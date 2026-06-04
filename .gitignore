@@ -27,3 +27,5 @@ Client/public/plugin-demos/
 
 # Build artifacts
 *.tsbuildinfo
+
+StitcherRelaunch.pem

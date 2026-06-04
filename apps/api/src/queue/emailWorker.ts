@@ -13,6 +13,7 @@ import { getEmailProvider } from "../email/providers";
 import logger from "../util/logger.util";
 import { EMAIL_QUEUE_NAME } from "./emailQueue";
 import type { EmailJobData } from "../email/types";
+import { EmailLog } from "../model/emailLog.model";
 
 async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   const provider = getEmailProvider();
@@ -26,6 +27,17 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
     messageId: result.id,
     jobId: job.id,
   });
+  await EmailLog.create({
+    kind,
+    to,
+    subject,
+    provider: result.provider,
+    messageId: result.id,
+    status: "sent",
+    attemptsMade: job.attemptsMade + 1,
+    jobId: job.id,
+    sentAt: new Date(),
+  }).catch(() => {});
 }
 
 export const emailWorker = new Worker<EmailJobData>(EMAIL_QUEUE_NAME, processEmailJob, {
@@ -42,6 +54,19 @@ emailWorker.on("failed", (job, err) => {
     attemptsMade: job?.attemptsMade,
     error: String(err),
   });
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
+    EmailLog.create({
+      kind: job.data.kind,
+      to: job.data.to,
+      subject: job.data.subject,
+      provider: "unknown",
+      status: "failed",
+      error: String(err),
+      attemptsMade: job.attemptsMade,
+      jobId: job.id,
+      sentAt: new Date(),
+    }).catch(() => {});
+  }
 });
 
 emailWorker.on("error", (err) => {

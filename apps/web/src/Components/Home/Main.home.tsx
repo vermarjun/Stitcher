@@ -42,11 +42,9 @@ const Main = () => {
     try {
       const response = await api.get<Project[]>(`/project/user/${user._id}`);
       setRecentProjects(response.data);
-      console.log(response.data)
     } catch (error: any) {
       const errorMessage = error.message || "Failed to fetch recent projects";
       toast.error(errorMessage);
-      console.log(errorMessage);
     } finally {
       setIsLoading(false);
     }

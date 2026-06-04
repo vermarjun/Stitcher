@@ -55,7 +55,7 @@ export interface IUser {
         type: string;
         enum: ['user', 'admin'];
     };
-    plan: 'free' | 'basic' | 'plus' | 'max';
+    plan: 'free' | 'starter' | 'creator' | 'pro';
     credits: {
         generation: number;
         editing: number;

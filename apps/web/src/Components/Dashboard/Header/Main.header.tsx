@@ -43,21 +43,9 @@ function Header({ currentProject, user, onShowPossibilities }: Props) {
 
         {/* Right */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Collaborators button — only when a project is loaded */}
           {/* Live presence avatars — shown when collaborators are connected */}
           {others.length > 0 && (
             <PresenceAvatars others={others} />
-          )}
-
-          {currentProject?._id && onShowPossibilities && (
-            <button
-              onClick={onShowPossibilities}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
-              title="See what you can create with Stitcher"
-            >
-              <Lightbulb className="w-4 h-4" />
-              <span>What can I create?</span>
-            </button>
           )}
 
           {currentProject?._id && (
@@ -69,6 +57,17 @@ function Header({ currentProject, user, onShowPossibilities }: Props) {
             >
               <Users className="w-3.5 h-3.5" />
               <span>Collaborators</span>
+            </button>
+          )}
+
+          {currentProject?._id && onShowPossibilities && (
+            <button
+              onClick={onShowPossibilities}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
+              title="See what you can create with Stitcher"
+            >
+              <Lightbulb className="w-4 h-4" />
+              <span>What can I create?</span>
             </button>
           )}
           <UserSection user={user} />

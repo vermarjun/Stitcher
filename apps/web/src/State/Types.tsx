@@ -59,7 +59,7 @@ export type IUser = {
   isActive?: boolean;
   bio: string;
   role?: string | 'user' | 'admin';
-  plan?: 'free' | 'basic' | 'plus' | 'max';
+  plan?: 'free' | 'starter' | 'creator' | 'pro';
   credits?: {
     generation: number;
     editing: number;

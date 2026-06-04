@@ -67,7 +67,7 @@ const CTA: React.FC = () => {
     <section id="endpagecta" className="relative w-full h-full px-4 rounded-b-2xl">
       <div className="max-w-5xl py-18 px-4 mx-auto text-center">
         <div className="pointer-events-none absolute inset-0 z-0">
-          <Prism {...prismProps}/>
+          <Prism {...prismProps} suspendWhenOffscreen />
         </div>
         <h2 className="text-5xl font-bold md:text-6xl mb-6 text-neutral-200 md:flex justify-center items-center">
           Don't just tell.

@@ -6,20 +6,20 @@ import User from "../model/user.model";
 
 // All are in rupees
 const PACKS = {
-    basic: 600,
-    plus: 3000,
-    max: 8000,
+    starter: 299,
+    creator: 799,
+    pro: 1999,
 };
 
-// Credits per plan
+// Videos (generation credits) per pack — credits never expire
 const PLAN_CREDITS = {
-    basic: { generation: 50, editing: 100 },
-    plus: { generation: 200, editing: 400 },
-    max: { generation: 500, editing: 1000 }
+    starter: { generation: 25 },
+    creator: { generation: 75 },
+    pro: { generation: 250 },
 };
 
 interface RequestProps {
-    pack: "basic" | "plus" | "max";
+    pack: "starter" | "creator" | "pro";
     currency: string;
 }
 
@@ -145,13 +145,12 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
         user.payments[paymentIndex].status = 'paid' as any;
 
         // Get the plan from payment record
-        const plan = user.payments[paymentIndex].plan as "basic" | "plus" | "max";
+        const plan = user.payments[paymentIndex].plan as "starter" | "creator" | "pro";
 
-        // Upgrade user plan and add credits
+        // Upgrade user plan and add credits — credits never expire
         user.plan = plan;
         user.credits.generation += PLAN_CREDITS[plan].generation;
-        user.credits.editing += PLAN_CREDITS[plan].editing;
-        user.credits.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        user.credits.expiresAt = null as any;
 
         await user.save();
 

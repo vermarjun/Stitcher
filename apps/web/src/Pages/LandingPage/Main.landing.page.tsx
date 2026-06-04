@@ -2,13 +2,14 @@ import React, { Suspense, lazy } from "react";
 import LazyWrapper from "./LazyWrapper.landing.page";
 import GlassyNavbar from "./Navbar.landing.page";
 import PaymentPage from "./Pricing.landing.page";
-import RevealFooter from "./RevealFooter.landing.page";
 
 // Lazy load all components except Navbar (which should load immediately)
 const Hero = lazy(() => import("./Hero.landing.page"));
 const Features = lazy(() => import("./Features.landing.page"));
-const Examples = lazy(() => import("./Examples.landing.page"));
+const PluginShowcase = lazy(() => import("./PluginShowcase.landing.page"));
 const Testimonials = lazy(() => import("./Testimonials.landing.page"));
+// Agents now lives inside the Features banner; standalone section disabled below.
+// const Agents = lazy(() => import("./Agents.landing.page"));
 const Footer = lazy(() => import("./Footer.landing.page"));
 const EndPageCTA = lazy(() => import("./EndpageCTA.landing.page"));
 
@@ -38,46 +39,54 @@ const LandingPage: React.FC = () => {
         <Hero />
       </section>
 
-      <LazyWrapper fallback={<LoadingFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
+      <LazyWrapper fallback={<LoadingFallback height="min-h-screen" />}>
+        <Suspense fallback={<LoadingFallback height="min-h-screen" />}>
            <section id="features" className="snap-always w-full min-h-screen flex flex-col justify-center">
              <Features />
            </section>
         </Suspense>
       </LazyWrapper>
 
-      <LazyWrapper fallback={<LoadingFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
-           <section id="examples" className="w-full min-h-screen flex flex-col justify-center">
-             <Examples />
+      <LazyWrapper fallback={<LoadingFallback height="min-h-screen" />}>
+        <Suspense fallback={<LoadingFallback height="min-h-screen" />}>
+           <section id="examples" className="w-full">
+             <PluginShowcase />
            </section>
         </Suspense>
       </LazyWrapper>
 
-      <LazyWrapper fallback={<LoadingFallback />}>
-        <Suspense fallback={<LoadingFallback />}>
+      <LazyWrapper fallback={<LoadingFallback height="h-96" />}>
+        <Suspense fallback={<LoadingFallback height="h-96" />}>
            <section className="w-full flex flex-col justify-center">
              <Testimonials />
            </section>
         </Suspense>
       </LazyWrapper>
 
-      <LazyWrapper fallback={<LoadingFallback />}>
+      {/* <LazyWrapper fallback={<LoadingFallback />}>
         <Suspense fallback={<LoadingFallback />}>
+           <section id="agents" className="w-full">
+             <Agents />
+           </section>
+        </Suspense>
+      </LazyWrapper> */}
+
+      <LazyWrapper fallback={<LoadingFallback height="min-h-screen" />}>
+        <Suspense fallback={<LoadingFallback height="min-h-screen" />}>
            <section className="w-full min-h-screen flex flex-col justify-center">
              <PaymentPage/>
            </section>
         </Suspense>
       </LazyWrapper>
 
-      <RevealFooter>
-        <Suspense fallback={<LoadingFallback height="h-screen" />}>
-          <div className="relative flex min-h-0 flex-1 flex-col justify-center">
+      <LazyWrapper fallback={<LoadingFallback height="h-64" />}>
+        <Suspense fallback={<LoadingFallback height="h-64" />}>
+           <section id="endpagecta" className="w-full flex flex-col justify-center">
             <EndPageCTA />
-          </div>
-          <Footer />
+            <Footer />
+           </section>
         </Suspense>
-      </RevealFooter>
+      </LazyWrapper>
     </div>
   );
 };

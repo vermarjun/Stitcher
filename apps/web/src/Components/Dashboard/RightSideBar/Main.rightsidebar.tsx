@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { AISidebarHeader, ConfirmationDialog } from './Header.rightsidebar';
+import { AISidebarHeader, ConfirmationDialog, ChatHistoryComponent } from './Header.rightsidebar';
 import GenerateComponent from './Generate.rightsidebar';
 import type { Project, IUser, Asset } from '@/State/Types';
 import api from '@/api';
@@ -114,6 +114,7 @@ const AISidebar = ({
   const [currentGenerateChatId, setCurrentGenerateChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   
   // Fetch the latest generate chat for the current project
   async function fetchLatestGenerateChat() {
@@ -250,28 +251,40 @@ const AISidebar = ({
         fixed top-[57px] md:top-0 right-0 bottom-0 w-[85%] z-[60]
         ${isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
       `}>
-        <AISidebarHeader 
-          mode={mode} 
-          setMode={setMode} 
-          onNewChatClick={handleNewChatClick}
-          onClearChat={() => {}}
-          onExportChat={handleExportChat}
-          messageCount={getMessageCount()}
-          onSelectHistory={handleSelectHistory}
-          currentProject={currentProject}
-        />
-        
-        {/* Show loading state while fetching chats */}
-        {isLoadingChats ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex items-center gap-2 text-zinc-400">
-              <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
-              <span>Loading chats...</span>
-            </div>
-          </div>
+        {showHistory ? (
+          <ChatHistoryComponent
+            mode={mode}
+            onGoBack={() => setShowHistory(false)}
+            onSelectHistory={(messages) => {
+              handleSelectHistory(messages);
+              setShowHistory(false);
+            }}
+            currentProject={currentProject}
+          />
         ) : (
           <>
-            <GenerateComponent
+            <AISidebarHeader
+              mode={mode}
+              setMode={setMode}
+              onNewChatClick={handleNewChatClick}
+              onClearChat={() => {}}
+              onExportChat={handleExportChat}
+              messageCount={getMessageCount()}
+              onSelectHistory={handleSelectHistory}
+              currentProject={currentProject}
+              onShowHistory={() => setShowHistory(true)}
+            />
+
+            {/* Show loading state while fetching chats */}
+            {isLoadingChats ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="flex items-center gap-2 text-zinc-400">
+                  <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
+                  <span>Loading chats...</span>
+                </div>
+              </div>
+            ) : (
+              <GenerateComponent
                 currentProject={currentProject}
                 ref={generateRef}
                 messages={generateMessages}
@@ -287,19 +300,20 @@ const AISidebar = ({
                 droppedItems={droppedItems}
                 onRemoveItem={onRemoveItem}
               />
+            )}
+
+            {/* Confirmation Dialog - positioned relative to entire sidebar */}
+            <ConfirmationDialog
+              isOpen={showConfirmation}
+              onClose={() => setShowConfirmation(false)}
+              onConfirm={handleNewChat}
+              title="Start New Chat?"
+              description={`This will reset the context and start a fresh chat. If you want to work on current scene continue here.`}
+              confirmText="New Chat"
+              cancelText="Cancel"
+            />
           </>
         )}
-        
-        {/* Confirmation Dialog - positioned relative to entire sidebar */}
-        <ConfirmationDialog
-          isOpen={showConfirmation}
-          onClose={() => setShowConfirmation(false)}
-          onConfirm={handleNewChat}
-          title="Start New Chat?"
-          description={`This will reset the context and start a fresh chat. If you want to work on current scene continue here.`}
-          confirmText="New Chat"
-          cancelText="Cancel"
-        />
       </div>
     </>
   );

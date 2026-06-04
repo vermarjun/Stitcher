@@ -826,3 +826,53 @@ export interface AnalyticsUserRow {
 export interface AnalyticsUsersResponse {
   users: AnalyticsUserRow[];
 }
+
+// --------------- Email observability ---------------
+
+export type EmailKind = 'welcome' | 'verify_email' | 'collab_invite' | 'password_reset';
+export type EmailStatus = 'sent' | 'failed';
+
+export interface EmailLogEntry {
+  _id: string;
+  kind: EmailKind;
+  to: string;
+  subject: string;
+  provider: string;
+  messageId?: string;
+  status: EmailStatus;
+  error?: string;
+  attemptsMade: number;
+  jobId?: string;
+  sentAt: string;
+}
+
+export interface EmailSeriesPoint {
+  date: string;
+  sent: number;
+  failed: number;
+}
+
+export interface EmailKindBreakdown {
+  kind: EmailKind;
+  total: number;
+  sent: number;
+  failed: number;
+}
+
+export interface EmailMetrics {
+  totals: {
+    total: number;
+    sent: number;
+    failed: number;
+    deliveryRate: number;
+  };
+  byKind: EmailKindBreakdown[];
+  series: EmailSeriesPoint[];
+}
+
+export interface EmailListResponse {
+  logs: EmailLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}

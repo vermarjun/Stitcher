@@ -88,9 +88,9 @@ const ChatHistoryComponent = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-black">
+    <div className="flex flex-col flex-1 min-h-0 bg-black">
       {/* Header */}
-      <div className="flex items-center gap-3 p-3 border-b border-zinc-800">
+      <div className="flex items-center gap-3 p-3 border-b border-zinc-800 flex-shrink-0">
         <Button
           variant="ghost"
           size="sm"
@@ -108,7 +108,7 @@ const ChatHistoryComponent = ({
       </div>
 
       {/* Chat List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-3">
           {loading ? (
             <div className="flex items-center justify-center py-8">
@@ -215,31 +215,18 @@ const AISidebarHeader = ({
   onNewChatClick,
   onExportChat,
   messageCount,
-  onSelectHistory,
-  currentProject
-}: { 
-  mode: 'generate' | 'edit', 
+  onShowHistory,
+}: {
+  mode: 'generate' | 'edit',
   setMode: (mode: 'generate' | 'edit') => void,
   onNewChatClick: () => void,
   onClearChat: () => void,
   onExportChat: () => void,
   messageCount: number,
   onSelectHistory: (messages: Message[]) => void,
-  currentProject?: any
+  currentProject?: any,
+  onShowHistory: () => void,
 }) => {
-  const [showHistory, setShowHistory] = useState(false);
-
-  if (showHistory) {
-    return (
-      <ChatHistoryComponent
-        mode={mode}
-        onGoBack={() => setShowHistory(false)}
-        onSelectHistory={onSelectHistory}
-        currentProject={currentProject}
-      />
-    );
-  }
-  
   return (
     <div className="border-b border-zinc-600 bg-zinc-800">
       <div className="flex items-center justify-between px-3 py-2">
@@ -263,7 +250,7 @@ const AISidebarHeader = ({
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-            onClick={() => setShowHistory(true)}
+            onClick={onShowHistory}
             title="Chat History"
           >
             <History className="w-3 h-3" />
@@ -283,4 +270,4 @@ const AISidebarHeader = ({
   );
 };
 
-export { AISidebarHeader, ConfirmationDialog };
+export { AISidebarHeader, ConfirmationDialog, ChatHistoryComponent };

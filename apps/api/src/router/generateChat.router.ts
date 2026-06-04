@@ -9,7 +9,6 @@ import {
     getChatStatus,
     stopGeneration,
     completeGeneration,
-    generateGuestChatResponse,
     rateChatGeneration,
 } from '../controller/generateChat.controller';
 import auth from "../middleware/auth.middleware";
@@ -19,12 +18,6 @@ import { requireProjectEditor } from '../middleware/access.middleware';
 
 const router = Router();
 
-/**
- * @route   POST /api/generate-chat/guest
- * @desc    Generate chat response for unauthenticated (guest) users
- * @access  Public
- */
-router.post('/guest', generateGuestChatResponse);
 
 /**
  * @route   POST /api/generate-chat

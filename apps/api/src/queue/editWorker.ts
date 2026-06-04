@@ -439,22 +439,7 @@ async function runEditPipeline(
         );
     }
 
-    // ── Step 12: Best-effort RAG corpusAdd ───────────────────────────────────
-    try {
-        await ragClient.corpusAdd(
-            {
-                documents: [
-                    {
-                        child: { prompt: editPrompt, code: newCode, sceneClass: newSceneClass },
-                        metadata: { traceId, editChatId, projectId, parentAssetId: assetId },
-                    },
-                ],
-            },
-            traceId
-        );
-    } catch (ragErr) {
-        logger.warn({ message: "[editWorker] RAG corpusAdd failed (non-fatal)", traceId, error: String(ragErr) });
-    }
+    // RAG corpus is populated exclusively via admin RLHF approval — no auto-add here.
 
     // ── Step 13: Memory reflection (fire-and-forget; never blocks the result) ─
     reflect(userId, {

@@ -7,10 +7,10 @@ interface LazyWrapperProps {
   fallback?: React.ReactNode;
 }
 
-const LazyWrapper: React.FC<LazyWrapperProps> = ({ 
-  children, 
-  threshold = 0.1, 
-  rootMargin = '50px',
+const LazyWrapper: React.FC<LazyWrapperProps> = ({
+  children,
+  threshold = 0.1,
+  rootMargin = '300px',
   fallback = <div className="h-64 bg-gray-900"></div>
 }) => {
   const [isVisible, setIsVisible] = useState(false);

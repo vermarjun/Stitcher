@@ -26,6 +26,7 @@ import {
     getAnalyticsRetention,
     getAnalyticsUsers,
 } from "../controller/adminAnalytics.controller";
+import { getEmailMetrics, getEmailList } from "../controller/adminEmail.controller";
 
 const router = Router();
 
@@ -69,5 +70,11 @@ router.get("/analytics/overview", getAnalyticsOverview);
 router.get("/analytics/pages", getAnalyticsPages);
 router.get("/analytics/retention", getAnalyticsRetention);
 router.get("/analytics/users", getAnalyticsUsers);
+
+// ── Email observability ──────────────────────────────────────────────────────
+// GET /admin/metrics/email
+router.get("/email", getEmailMetrics);
+// GET /admin/metrics/email/list
+router.get("/email/list", getEmailList);
 
 export default router;

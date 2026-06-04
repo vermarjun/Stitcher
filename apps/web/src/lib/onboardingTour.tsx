@@ -164,9 +164,9 @@ function buildDriver(
   const d: Driver = driver({
     showProgress: true,
     progressText: "{{current}} of {{total}}",
-    nextBtnText: "Next →",
-    prevBtnText: "← Back",
-    doneBtnText: "Let's go 🚀",
+    nextBtnText: "Next",
+    prevBtnText: "Back",
+    doneBtnText: "Let's go",
     allowClose: false, // must complete or reach the last step to exit
     // Read-only walkthrough: don't let clicks fall through to the highlighted
     // element. Otherwise tapping (say) the "Collaborators" button mid-tour opens
@@ -213,9 +213,9 @@ const cat = (file: string, line: string, extraClass = "") =>
 const ACT1_WELCOME: DriveStep[] = [
   {
     popover: {
-      title: "Stitcher just entered the chat 🎬",
-      description: cat("big-grin.png", "AI video editor. Describe what you want — it builds the whole thing. No cap.", "cat-photo"),
-      doneBtnText: "Take me in →",
+      title: "Welcome to Stitcher",
+      description: cat("big-grin.png", "Describe what you want to make and Stitcher builds the video for you. Let's take a quick look around.", "cat-photo"),
+      doneBtnText: "Take me in",
     },
   },
 ];
@@ -233,17 +233,17 @@ function buildEditorSteps(): DriveStep[] {
   const all: (DriveStep & { _need?: string })[] = [
     {
       popover: {
-        title: "Sheesh, you're in 🎉",
-        description: cat("headset-cockpit.png", "Timeline at the bottom, asset stash left, AI chat right. These 4 zones run your whole workflow.", "cat-photo"),
-        nextBtnText: "Tour it →",
+        title: "You're in",
+        description: cat("headset-cockpit.png", "Timeline at the bottom, assets on the left, AI chat on the right. These four panels are your whole workspace.", "cat-photo"),
+        nextBtnText: "Show me around",
       },
     },
     {
       _need: '[data-tour="timeline"]',
       element: '[data-tour="timeline"]',
       popover: {
-        title: "This IS your video 🎞️",
-        description: cat("pointing-watch.png", "Drag clips, AI scenes, and audio here in order. Trim, reorder, stack layers — the timeline is everything."),
+        title: "The timeline",
+        description: cat("pointing-watch.png", "Drag clips, scenes, and audio here in order. Trim and reorder them however you like. This is your video."),
         side: "top",
         align: "center",
       },
@@ -253,8 +253,8 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="sidebar-assetstash"]',
       onHighlightStarted: openRailTab("assetstash"),
       popover: {
-        title: "The plug for your media 🧩",
-        description: cat("nerd-pointing.png", "All your uploads live here. Drag images, video, or audio onto the timeline — instant W."),
+        title: "Your media",
+        description: cat("nerd-pointing.png", "All your uploads live here. Drag images, video, or audio directly onto the timeline to use them."),
         side: "right",
         align: "start",
       },
@@ -263,8 +263,8 @@ function buildEditorSteps(): DriveStep[] {
       _need: '[data-tour="ai-chat"]',
       element: '[data-tour="ai-chat"]',
       popover: {
-        title: "Rizz the AI into cooking 🪄",
-        description: cat("amazed-glasses.png", "Type what you want, AI generates an actual video scene. Not mid. Genuinely bussin'."),
+        title: "Generate a scene",
+        description: cat("amazed-glasses.png", "Type what you want and the AI builds a video scene for you. Just describe it in plain language."),
         side: "left",
         align: "start",
       },
@@ -274,8 +274,8 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="sidebar-memory"]',
       onHighlightStarted: openRailTab("memory"),
       popover: {
-        title: "It lowkey never forgets 🧠",
-        description: cat("thinking-suit-dog.png", "Drop your brand, style refs, and recurring context here. AI stays on theme — zero delulu outputs."),
+        title: "Style memory",
+        description: cat("thinking-suit-dog.png", "Drop your brand guidelines, style references, and recurring context here. The AI picks them up automatically."),
         side: "right",
         align: "start",
       },
@@ -284,17 +284,17 @@ function buildEditorSteps(): DriveStep[] {
       _need: '[data-tour="collaborators"]',
       element: '[data-tour="collaborators"]',
       popover: {
-        title: "Bring the whole fam 👥",
-        description: cat("tongue-shaka.png", "Invite your crew and edit the same project live. You'll see their cursors moving IRL. Squad goals, fr."),
+        title: "Collaborate",
+        description: cat("tongue-shaka.png", "Invite others and edit the same project together. You'll see each other's changes as they happen."),
         side: "bottom",
         align: "end",
       },
     },
     {
       popover: {
-        title: "You understood the assignment 🎓",
-        description: cat("empty-wallet.png", "Tour's done. Go make something that hits different. The timeline's yours, bestie."),
-        doneBtnText: "Let's go 🚀",
+        title: "That's the tour",
+        description: cat("empty-wallet.png", "You know the essentials now. The rest you'll pick up as you go. Good luck."),
+        doneBtnText: "Get started",
       },
     },
   ];

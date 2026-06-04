@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
+import PageLoader from '../Components/PageLoader';
 import ErrorPage from '../Pages/Error.page';
 import ErrorBoundary from '../Components/ErrorBoundary';
 
@@ -151,7 +152,11 @@ const router = createBrowserRouter([
 ]);
 
 const RouterConfig = () => {
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
 };
 
 export default RouterConfig;

@@ -14,6 +14,7 @@ import FeedbackPage from '@/pages/Feedback';
 import LivePage from '@/pages/Live';
 import ProvidersPage from '@/pages/Providers';
 import CoderMemoryPage from '@/pages/CoderMemory';
+import EmailPage from '@/pages/Email';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/live" element={<LivePage />} />
           <Route path="/providers" element={<ProvidersPage />} />
           <Route path="/memory" element={<CoderMemoryPage />} />
+          <Route path="/email" element={<EmailPage />} />
         </Route>
       </Route>
 

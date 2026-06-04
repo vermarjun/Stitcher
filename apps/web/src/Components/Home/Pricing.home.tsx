@@ -10,12 +10,15 @@ import {
   Github,
   Linkedin,
   X,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { ShimmerButton } from "../magicui/shimmer-button";
+import { ShineBorder } from "../magicui/shine-border";
 import api from "@/api";
 import { PlanBadge } from "@/Components/ui/PlanBadge";
+import { BackgroundGrid } from "@/components/ui/background-snippets";
 
 // Dialog component for social media modal
 const SocialModal = ({
@@ -28,18 +31,10 @@ const SocialModal = ({
   if (!isOpen) return null;
 
   const socialLinks = [
-    {
-      icon: Twitter,
-      label: "Twitter",
-      url: "https://twitter.com/yourusername",
-    },
-    { icon: Github, label: "GitHub", url: "https://github.com/yourusername" },
-    {
-      icon: Linkedin,
-      label: "LinkedIn",
-      url: "https://linkedin.com/in/yourusername",
-    },
-    { icon: Mail, label: "Email", url: "mailto:you@example.com" },
+    { icon: Twitter, label: "Twitter", url: "https://x.com/Arjunv3rm4" },
+    { icon: Github, label: "GitHub", url: "https://github.com/vermarjun" },
+    { icon: Linkedin, label: "LinkedIn", url: "https://www.linkedin.com/in/vermarjun" },
+    { icon: Mail, label: "Email", url: "mailto:vermarjun26@gmail.com" },
   ];
 
   return (
@@ -168,11 +163,55 @@ declare global {
   }
 }
 
+const TestModeModal = ({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-zinc-900/95 border border-zinc-800/50 rounded-2xl p-7 max-w-sm w-full shadow-2xl relative overflow-hidden">
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex flex-col items-center text-center gap-4 relative z-10">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center">
+            <Clock className="w-6 h-6 text-zinc-300" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-1">Payments coming soon</h3>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              We're currently in <span className="text-white font-medium">test mode</span> while Razorpay reviews our account. You'll be able to buy credit packs in about a week.
+            </p>
+          </div>
+          <p className="text-zinc-500 text-xs">
+            In the meantime, your 10 free videos are ready to use.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-100 transition-colors"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PaymentPage = () => {
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSocialModal, setShowSocialModal] = useState(false);
+  const [showTestModeModal, setShowTestModeModal] = useState(false);
 
   const [userData, setUserData] = useState<{
     plan: string;
@@ -210,47 +249,47 @@ const PaymentPage = () => {
 
   const plans = [
     {
-      id: "basic",
-      name: "Basic",
-      price: 600,
+      id: "starter",
+      name: "Starter",
+      price: 299,
       icon: Zap,
       features: [
-        "50 Generation Credits",
-        "100 Editing Credits",
-        "Valid for 30 days",
-        "Email Support",
-        "Basic Templates",
+        "25 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Email support",
+        "BYOK — bring your own API key",
       ],
       popular: false,
     },
     {
-      id: "plus",
-      name: "Plus",
-      price: 3000,
+      id: "creator",
+      name: "Creator",
+      price: 799,
       icon: Crown,
       features: [
-        "200 Generation Credits",
-        "400 Editing Credits",
-        "Valid for 30 days",
-        "Priority Support",
-        "Premium Templates",
-        "Advanced Features",
+        "75 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
       ],
       popular: true,
     },
     {
-      id: "max",
-      name: "Max",
-      price: 8000,
+      id: "pro",
+      name: "Pro",
+      price: 1999,
       icon: Rocket,
       features: [
-        "500 Generation Credits",
-        "1000 Editing Credits",
-        "Valid for 30 days",
-        "24/7 Support",
-        "All Templates",
-        "All Features",
-        "API Access",
+        "250 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
+        "Early access to new features",
       ],
       popular: false,
     },
@@ -271,6 +310,8 @@ const PaymentPage = () => {
   };
 
   const handlePayment = async (planId: string) => {
+    setShowTestModeModal(true);
+    return;
     setLoading(true);
     setSelectedPlan(planId);
 
@@ -360,6 +401,7 @@ const PaymentPage = () => {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-[#19E5A1]/30 overflow-x-hidden relative">
+      <BackgroundGrid />
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
@@ -376,6 +418,10 @@ const PaymentPage = () => {
       <SocialModal
         isOpen={showSocialModal}
         onClose={() => setShowSocialModal(false)}
+      />
+      <TestModeModal
+        isOpen={showTestModeModal}
+        onClose={() => setShowTestModeModal(false)}
       />
 
       <div className="max-w-7xl mx-auto px-6 py-12 lg:py-20 relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]">
@@ -414,13 +460,20 @@ const PaymentPage = () => {
                 key={plan.id}
                 className={`group relative flex flex-col p-8 rounded-3xl border transition-all duration-500 ${
                   plan.popular
-                    ? "bg-zinc-900/60 border-[#19E5A1]/30 shadow-2xl shadow-[#19E5A1]/10 scale-105 z-10 ring-1 ring-[#19E5A1]/20"
-                    : "bg-zinc-900/20 border-zinc-800 hover:border-zinc-700/80 hover:bg-zinc-900/40"
+                    ? "bg-zinc-950 border-transparent shadow-2xl shadow-black/30 scale-105 z-10"
+                    : "bg-zinc-950 border-zinc-800 hover:border-zinc-700/80"
                 }`}
               >
+                {plan.popular && (
+                  <ShineBorder
+                    shineColor={["#a0c4ff", "#ffffff", "#c8b6ff"]}
+                    borderWidth={1.5}
+                    duration={10}
+                  />
+                )}
                 {/* Popular Badge */}
                 {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#19E5A1] text-black px-4 py-1.5 text-xs font-bold rounded-full shadow-[0_0_20px_rgba(25,229,161,0.3)] tracking-wide">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-white via-zinc-200 to-white text-black px-4 py-1.5 text-xs font-bold rounded-full shadow-[0_0_20px_rgba(255,255,255,0.25)] tracking-wide">
                     MOST POPULAR
                   </div>
                 )}

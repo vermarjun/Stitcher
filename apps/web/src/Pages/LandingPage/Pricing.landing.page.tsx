@@ -1,77 +1,117 @@
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   Check,
   Zap,
   Crown,
   Rocket,
   ExternalLink,
+  X,
+  Clock,
 } from "lucide-react";
 import { ShineBorder } from "../../Components/magicui/shine-border";
+import { BackgroundGrid } from "@/components/ui/background-snippets";
 
-// Razorpay type declaration
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+const TestModeModal = ({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-zinc-900/95 border border-zinc-800/50 rounded-2xl p-7 max-w-sm w-full shadow-2xl relative overflow-hidden">
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex flex-col items-center text-center gap-4 relative z-10">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center">
+            <Clock className="w-6 h-6 text-zinc-300" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-1">Payments coming soon</h3>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              We're currently in <span className="text-white font-medium">test mode</span> while Razorpay reviews our account. You'll be able to buy credit packs in about a week.
+            </p>
+          </div>
+          <p className="text-zinc-500 text-xs">
+            In the meantime, your 10 free videos are ready to use.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-100 transition-colors"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const PaymentPage = () => {
-  const navigate = useNavigate();
+  const [showTestModeModal, setShowTestModeModal] = useState(false);
   const plans = [
     {
-      id: "basic",
-      name: "Basic",
-      price: 600,
+      id: "starter",
+      name: "Starter",
+      price: 299,
       icon: Zap,
       features: [
-        "50 Generation Credits",
-        "100 Editing Credits",
-        "Valid for 30 days",
-        "Email Support",
-        "Basic Templates",
+        "25 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Email support",
+        "BYOK — bring your own API key",
       ],
       popular: false,
     },
     {
-      id: "plus",
-      name: "Plus",
-      price: 3000,
+      id: "creator",
+      name: "Creator",
+      price: 799,
       icon: Crown,
       features: [
-        "200 Generation Credits",
-        "400 Editing Credits",
-        "Valid for 30 days",
-        "Priority Support",
-        "Premium Templates",
-        "Advanced Features",
+        "75 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
       ],
       popular: true,
     },
     {
-      id: "max",
-      name: "Max",
-      price: 8000,
+      id: "pro",
+      name: "Pro",
+      price: 1999,
       icon: Rocket,
       features: [
-        "500 Generation Credits",
-        "1000 Editing Credits",
-        "Valid for 30 days",
-        "24/7 Support",
-        "All Templates",
-        "All Features",
-        "API Access",
+        "250 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
+        "Early access to new features",
       ],
       popular: false,
     },
   ];
 
   const handleGetStarted = () => {
-      // Redirect to home/signup instead of direct payment
-      navigate("/home");
+    setShowTestModeModal(true);
   };
 
   return (
     <div className="min-h-screen md:h-screen bg-black text-white selection:bg-[#19E5A1]/30 overflow-x-hidden overflow-y-auto md:overflow-hidden relative flex flex-col justify-center py-12 md:py-0">
+      <TestModeModal isOpen={showTestModeModal} onClose={() => setShowTestModeModal(false)} />
+      <BackgroundGrid />
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
       <div className="fixed bottom-0 right-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />

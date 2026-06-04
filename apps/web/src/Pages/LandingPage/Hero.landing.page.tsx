@@ -1,16 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShimmerButton } from "@/Components/magicui/shimmer-button";
-import { ArrowRightIcon, StarHalf, X, ArrowUp, RotateCw, Menu } from "lucide-react";
-import { LandingRightSideBar } from "./RightSideBar";
+import { ArrowRightIcon, StarHalf, ArrowUp, RotateCw } from "lucide-react";
 import { useScroll, useTransform, MotionValue } from "motion/react";
 import { Marquee } from "@/Components/magicui/marquee";
-import Prism from "./Prism.landing.page";
 import { Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import api from "@/api";
+import StaticGlow from "./StaticGlow.landing.page";
 
 interface FlipWordsProps {
   words: string[];
@@ -360,29 +359,50 @@ interface FeaturedTemplateApi {
 
 
 const DraggableVideoCard = ({ template }: { template: FeaturedTemplate }) => {
-    return (
-      <div 
-        className="relative w-40 md:w-60 aspect-video rounded-lg overflow-hidden border border-neutral-800 cursor-grab active:cursor-grabbing group"
-        draggable="true"
-        onDragStart={(e) => {
-            e.dataTransfer.setData("video_url", template.url);
-            e.dataTransfer.setData("asset_id", template.assetId);
-            e.dataTransfer.effectAllowed = "copy";
-        }}
-      >
-        <video
-          src={template.url}
-          muted
-          loop
-          autoPlay
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-        />
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Drag Me</span>
-        </div>
-      </div>
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(() => {});
+        } else {
+          el.pause();
+        }
+      },
+      { threshold: 0.1 }
     );
-  };
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      className="relative w-40 md:w-60 aspect-video rounded-lg overflow-hidden border border-neutral-800 cursor-grab active:cursor-grabbing group"
+      draggable="true"
+      onDragStart={(e) => {
+        e.dataTransfer.setData("video_url", template.url);
+        e.dataTransfer.setData("asset_id", template.assetId);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+    >
+      <video
+        ref={videoRef}
+        src={template.url}
+        muted
+        loop
+        playsInline
+        preload="none"
+        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+      />
+      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+        <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Drag Me</span>
+      </div>
+    </div>
+  );
+};
 
 const Hero = () => {
   const navigate = useNavigate();
@@ -396,9 +416,6 @@ const Hero = () => {
     { label: "Boolean operations", fullPrompt: "Create a clean, visually striking Manim animation that demonstrates Boolean set operations using overlapping 2D shapes." },
   ];
   
-  const [prompt, setPrompt] = useState("");
-  const [dragActive, setDragActive] = useState(false);
-  const [attachedTemplate, setAttachedTemplate] = useState<FeaturedTemplate | null>(null);
 
   // Real featured templates fetched from the public API on mount.
   const [templateVideos, setTemplateVideos] = useState<FeaturedTemplate[]>([]);
@@ -431,87 +448,20 @@ const Hero = () => {
   }, []);
 
 
-  // Responsive Prism dimensions
-  const [prismDimensions, setPrismDimensions] = useState({ height: 20, baseWidth: 7 });
-  
-  useEffect(() => {
-    const updatePrismDimensions = () => {
-      if (window.innerWidth < 768) {
-        setPrismDimensions({ height: 20, baseWidth: 4 });
-      } else {
-        setPrismDimensions({ height: 20, baseWidth: 7 });
-      }
-    };
-    
-    updatePrismDimensions();
-    window.addEventListener("resize", updatePrismDimensions);
-    return () => window.removeEventListener("resize", updatePrismDimensions);
-  }, []);
-
-  /* Sidebar Logic */
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [chatStarted, setChatStarted] = useState(false);
-  const [sidebarInitialPrompt, setSidebarInitialPrompt] = useState("");
-  const [sidebarAssetId, setSidebarAssetId] = useState<string | undefined>(undefined);
-
-  const handleHeroSubmit = () => {
-    if (!prompt.trim()) return;
-    setSidebarInitialPrompt(prompt);
-    setSidebarAssetId(attachedTemplate?.assetId);
-    setChatStarted(true);
-    setShowSidebar(true);
-    setPrompt(""); // Clear hero prompt
-    setAttachedTemplate(null); // Clear attachment
-  };
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    // Check for dragged string data (video url and assetId)
-    const videoUrl = e.dataTransfer.getData("video_url");
-    const assetId = e.dataTransfer.getData("asset_id");
-    if (videoUrl && assetId) {
-        setAttachedTemplate({ url: videoUrl, assetId });
-    }
-  };
-
+  // The hero prompt bar is intentionally a decoy: any interaction routes users
+  // to sign-up so they reach the real product, instead of "trying it" here
+  // (which previously made people think the landing demo was the whole product).
+  const handleHeroSubmit = () => navigate("/auth");
 
   return (
     <section
       id="home"
       className="relative w-full min-h-screen md:rounded-b-4xl overflow-hidden bg-black flex flex-col items-center justify-center pt-20"
     >
-      {/* Prism animated background */}
+      {/* Hero background — static cyan-glow shader: drawn once and frozen, so it
+          has zero ongoing GPU cost (cannot heat or lag the device). */}
       <div className="absolute inset-0 z-0 opacity-60">
-        <Prism
-          animationType="rotate"
-          height={prismDimensions.height}
-          baseWidth={prismDimensions.baseWidth}
-          scale={3.6}
-          hueShift={0}
-          colorFrequency={0.8}
-          // Safari-specific settings (darker/less bright)
-          safariGlow={0.14}
-          safariNoise={0.05}
-          // Chrome-specific settings (brighter)
-          chromeGlow={1.2}
-          chromeNoise={0.2}
-          // Mobile
-          mobileGlow={1.2}
-          mobileNoise={0.2}
-        />
+        <StaticGlow />
       </div>
 
       {/* Math Theme Overlays - Left */}
@@ -520,6 +470,8 @@ const Hero = () => {
           className="h-40 object-cover object-left scale-125 -translate-x-10"
           src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094972/image-removebg-preview_fshtui.png"
           alt="math-theme-left"
+          loading="lazy"
+          fetchPriority="low"
         />
         <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-r from-transparent to-black" />
       </div>
@@ -531,6 +483,8 @@ const Hero = () => {
           className="h-40 object-cover object-right scale-125 translate-x-10"
           src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
           alt="math-theme-right"
+          loading="lazy"
+          fetchPriority="low"
         />
       </div>
 
@@ -568,63 +522,36 @@ const Hero = () => {
             <div className="w-full max-w-3xl flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-200">
                 
                 {/* Prompt Input Box */}
-                <div 
-                    className={cn(
-                        "relative w-full rounded-2xl md:rounded-3xl transition-all duration-300",
-                        dragActive ? "scale-[1.01] ring-2 ring-blue-500/50" : "hover:shadow-lg"
-                    )}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
+                <div
+                    className="relative w-full rounded-2xl md:rounded-3xl transition-all duration-300 hover:shadow-lg cursor-pointer"
+                    onClick={handleHeroSubmit}
                 >
                     {/* Glassmorphism Background */}
-                    <div className="bg-neutral-900/40 backdrop-blur-xl border border-white/10 rounded-2xl md:rounded-3xl overflow-hidden flex flex-col w-full relative z-10 shadow-2xl">
+                    <div className="bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl md:rounded-3xl overflow-hidden flex flex-col w-full relative z-10 shadow-2xl">
                         
                         {/* Input Area */}
                         <div className="relative w-full p-4 md:p-5 flex items-end gap-3 md:gap-4">
-                            
-                            {/* Inline Attachment Thumbnail */}
-                            {attachedTemplate && (
-                                <div className="relative group shrink-0 animate-in fade-in zoom-in duration-200 self-center">
-                                    <div className="h-9 w-16 md:h-12 md:w-20 rounded-lg overflow-hidden bg-black border border-white/10 relative shadow-sm">
-                                        <video src={attachedTemplate.url} className="w-full h-full object-cover opacity-90" />
-                                    </div>
-                                    <button 
-                                        onClick={() => setAttachedTemplate(null)}
-                                        className="absolute -top-2 -right-2 bg-neutral-800 text-white border border-neutral-700 rounded-full p-0.5 shadow-md hover:bg-neutral-600 transition-colors z-10"
-                                    >
-                                        <X size={10} />
-                                    </button>
-                                </div>
-                            )}
 
                             <div className="relative flex-1 self-center">
-                                    {/* Disappearing Placeholder */}
-                                {!prompt && (
+                                    {/* Animated placeholder (decorative) */}
                                     <div className="absolute inset-0 top-0 pointer-events-none opacity-40 flex items-start pt-1">
                                         <span className="mr-2 text-neutral-500 text-lg md:text-xl font-light whitespace-nowrap">Try:</span>
-                                        <FlipWords 
-                                            words={promptExamples} 
+                                        <FlipWords
+                                            words={promptExamples}
                                             className="text-neutral-400 text-lg md:text-xl font-light -ml-2"
                                             duration={2500}
                                         />
                                     </div>
-                                )}
-                                <textarea 
-                                    value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
+                                {/* Decoy input: read-only; clicking anywhere routes to sign-up */}
+                                <textarea
+                                    value=""
+                                    readOnly
+                                    tabIndex={-1}
                                     placeholder=""
-                                    className="w-full bg-transparent border-none outline-none text-white text-lg md:text-xl resize-none placeholder-transparent z-10 font-light leading-relaxed min-h-[40px] md:min-h-[50px] py-1"
-                                    autoComplete="off"
-                                    rows={Math.min(3, Math.max(2, (prompt.match(/\n/g) || []).length + 1))}
+                                    aria-hidden="true"
+                                    className="w-full bg-transparent border-none outline-none text-white text-lg md:text-xl resize-none placeholder-transparent z-10 font-light leading-relaxed min-h-[40px] md:min-h-[50px] py-1 cursor-pointer pointer-events-none"
+                                    rows={2}
                                     style={{ height: 'auto' }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter" && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleHeroSubmit();
-                                      }
-                                    }}
                                 />
                             </div>
                             
@@ -643,7 +570,7 @@ const Hero = () => {
                 <div className="w-full relative">
                   <div className="flex flex-nowrap md:flex-wrap items-center gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar md:justify-center scroll-smooth -mx-4 md:mx-0 px-4 md:px-0">
                       {quickPrompts.map((item, i) => (
-                      <button key={i} onClick={() => setPrompt(item.fullPrompt)} className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 hover:border-white/10 text-neutral-400 hover:text-white text-xs md:text-sm transition-all group backdrop-blur-sm whitespace-nowrap">
+                      <button key={i} onClick={handleHeroSubmit} className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/30 hover:bg-neutral-800 border border-white/5 hover:border-white/10 text-neutral-400 hover:text-white text-xs md:text-sm transition-all group backdrop-blur-sm whitespace-nowrap">
                           <span>{item.label}</span>
                           <ArrowUp size={12} className="opacity-50 group-hover:opacity-100 rotate-45" />
                       </button>
@@ -685,26 +612,6 @@ const Hero = () => {
           </div>
         ) : null}
       </div>
-
-
-      {chatStarted && (
-        <button 
-            onClick={() => setShowSidebar(true)} 
-            className="fixed top-24 right-6 z-40 p-3 bg-neutral-900/80 backdrop-blur-md rounded-full border border-white/10 text-white shadow-lg hover:bg-neutral-800 transition-all hover:scale-105 animate-in fade-in zoom-in duration-300"
-        >
-            <Menu className="w-6 h-6" />
-        </button>
-      )}
-
-      <LandingRightSideBar 
-        isOpen={showSidebar} 
-        onClose={() => setShowSidebar(false)}
-        initialPrompt={sidebarInitialPrompt}
-        assetId={sidebarAssetId}
-        onLimitReached={() => {
-            // Optional: could redirect or show modal here, but mostly handled in sidebar for now
-        }}
-      />
     </section>
   );
 };
