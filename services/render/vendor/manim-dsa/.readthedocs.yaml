@@ -1,0 +1,29 @@
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+
+# Required
+version: 2
+
+# Set the OS, Python version, and other tools you might need
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.12"
+  apt_packages:
+    - libcairo2-dev
+    - libpango1.0-dev
+    - ffmpeg
+  jobs:
+    post_build:
+      - python docs/script.py $READTHEDOCS_OUTPUT/html
+
+# Optionally set the version of Sphinx, if you want to build with a different version
+sphinx:
+  configuration: docs/source/conf.py
+
+# Optionally declare the Python requirements required to build your docs
+python:
+  install:
+    - requirements: docs/requirements.txt
+    - method: pip
+      path: .

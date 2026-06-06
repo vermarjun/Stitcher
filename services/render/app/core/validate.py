@@ -35,6 +35,11 @@ ALLOWED_TOP_LEVEL_IMPORTS: frozenset[str] = frozenset({
     # cached mp3s only). The `VoiceoverScene` base class is a plain Name reference,
     # already permitted by the guard.
     "manim_voiceover", "stitcher_voiceover",
+    # Vendored Manim plugins (patched + installed at build time — see vendor/).
+    "manim_chess", "manim_physics", "manim_chemistry",
+    "manim_ml", "manim_dsa", "manim_Astronomy",
+    # Extra deps pulled in by plugins (networkx for DSA, PIL/Pillow for ML).
+    "networkx", "PIL", "pymunk", "shapely", "pandas", "xmltodict",
     "__future__",
 })
 
@@ -48,6 +53,24 @@ BANNED_ATTRIBUTES: frozenset[str] = frozenset({
     "system", "popen", "spawn", "spawnl", "spawnv",
     "fork", "forkpty", "execv", "execve", "execvp",
     "load_module",
+})
+
+# Plugin constructs that are broken/unsafe IN THIS render environment — a
+# RELIABILITY guard, not a security one. Rejected fast so the job falls back to a
+# title card instead of hanging a render slot or crash-looping the debugger:
+#   - manim_chemistry molecule_from_pubchem / *_from_pubchem → live PubChem HTTP
+#     with NO timeout; with the sandbox off (network open) it can tie up a render
+#     slot for the full wall-clock timeout.
+#   - manim_chemistry file-based constructors (from_*_file) → the CSV/.mol/.sdf
+#     data files are not packaged in the wheel → FileNotFoundError every time.
+#   - ThreeDMolecule / PeriodicTable → require an OpenGL context (headless = fail)
+#     or a data file that isn't installed.
+UNSUPPORTED_PLUGIN_CALLS: frozenset[str] = frozenset({
+    "molecule_from_pubchem", "from_pubchem",
+    "from_mol_file", "from_sdf_file", "from_csv_file", "from_pdb_file",
+})
+UNSUPPORTED_PLUGIN_NAMES: frozenset[str] = frozenset({
+    "ThreeDMolecule", "PeriodicTable",
 })
 
 
@@ -89,6 +112,16 @@ def validate(code: str) -> list[ValidationIssue]:
             elif isinstance(callee, ast.Attribute) and callee.attr in BANNED_ATTRIBUTES:
                 issues.append(ValidationIssue(
                     node.lineno, f"call to '*.{callee.attr}' is not permitted"
+                ))
+            elif isinstance(callee, ast.Name) and callee.id in UNSUPPORTED_PLUGIN_NAMES:
+                issues.append(ValidationIssue(
+                    node.lineno,
+                    f"'{callee.id}' is not supported in this renderer (OpenGL/data-file dependency) — use a 2D Cairo-safe alternative",
+                ))
+            elif isinstance(callee, ast.Attribute) and callee.attr in UNSUPPORTED_PLUGIN_CALLS:
+                issues.append(ValidationIssue(
+                    node.lineno,
+                    f"'.{callee.attr}(...)' is not supported in this renderer (network/data-file dependency) — build the molecule from inline data instead",
                 ))
         elif (
             isinstance(node, ast.Attribute)

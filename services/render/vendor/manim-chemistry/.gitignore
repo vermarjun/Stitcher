@@ -1,0 +1,8 @@
+media
+__pycache__
+Pipfile
+*egg
+.pytest_cache
+.vscode
+src/manim_chemistry.egg-info
+test.py
