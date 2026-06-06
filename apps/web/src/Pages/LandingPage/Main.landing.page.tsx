@@ -71,6 +71,7 @@ const LandingPage: React.FC = () => {
         </Suspense>
       </LazyWrapper> */}
 
+      {/* PRICING SECTION — hidden for sideproject mode; uncomment to re-enable
       <LazyWrapper fallback={<LoadingFallback height="min-h-screen" />}>
         <Suspense fallback={<LoadingFallback height="min-h-screen" />}>
            <section className="w-full min-h-screen flex flex-col justify-center">
@@ -78,6 +79,7 @@ const LandingPage: React.FC = () => {
            </section>
         </Suspense>
       </LazyWrapper>
+      */}
 
       <LazyWrapper fallback={<LoadingFallback height="h-64" />}>
         <Suspense fallback={<LoadingFallback height="h-64" />}>

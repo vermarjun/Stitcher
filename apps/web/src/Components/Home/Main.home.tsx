@@ -128,8 +128,9 @@ const Main = () => {
         return FEATURES.community ? <NotificationsComponent /> : (
           <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
         );
-      case "pricing":
-        return <PricingPage />;
+      // PRICING — hidden for sideproject mode; uncomment to re-enable
+      // case "pricing":
+      //   return <PricingPage />;
 
       default:
         return (

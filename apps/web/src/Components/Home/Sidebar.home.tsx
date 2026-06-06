@@ -158,7 +158,8 @@ const Sidebar: React.FC<Props> = ({
       ] : []),
     ],
     api_keys: [
-      { icon: CreditCard, label: "Pricing", key: "pricing" },
+      // PRICING — hidden for sideproject mode; uncomment to re-enable
+      // { icon: CreditCard, label: "Pricing", key: "pricing" },
       // API Keys (BYOT) hidden for v1 relaunch — provided keys are enforced.
     ],
     browse: [{ icon: LayoutTemplate, label: "Templates", key: "templates" }],
