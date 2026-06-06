@@ -1,6 +1,7 @@
 import { chatText } from "../providers/llm.js";
 import { log } from "../logger.js";
 import { withTimeout } from "../util/retry.js";
+import { recordLlmTokens } from "../observability/rag.js";
 import type { ScoredDoc } from "../types.js";
 import type { ResolvedSettings } from "./settings.js";
 
@@ -38,7 +39,7 @@ export async function rerank(
     `[{"index": <number>, "score": <0..1>}]. Include every index exactly once. No prose, no markdown.`;
 
   try {
-    const raw = await withTimeout(
+    const { result: raw, usage } = await withTimeout(
       chatText({
         target: settings.reranker,
         messages: [{ role: "user", content: prompt }],
@@ -47,6 +48,9 @@ export async function rerank(
       settings.timeouts.rerankMs,
       "rerank"
     );
+
+    // Emit stitcher.llm.tokens metric for the reranker LLM call.
+    recordLlmTokens(settings.reranker.model, "reranker", usage);
 
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) throw new Error(`no JSON array in reranker response: ${raw.slice(0, 160)}`);

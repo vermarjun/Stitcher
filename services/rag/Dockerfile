@@ -11,7 +11,6 @@ RUN npm ci --ignore-scripts
 # Copy source
 COPY tsconfig.json tsup.config.ts ./
 COPY src ./src
-COPY cli.ts ./
 COPY data ./data
 COPY prompts ./prompts
 

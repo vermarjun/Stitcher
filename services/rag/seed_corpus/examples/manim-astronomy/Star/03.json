@@ -1,0 +1,31 @@
+{
+  "api": "Star",
+  "plugin": "manim-astronomy",
+  "scene_class": "StarBlueDwarf",
+  "description": "Render a blue/white hot star (blue dwarf) with small radius and high temperature to contrast against a red giant in comparisons.",
+  "code": "from manim import *\nfrom manim_Astronomy import Star\n\nclass StarBlueDwarf(Scene):\n    def construct(self):\n        star = Star(\n            radius=0.3,\n            num_of_particles=400,\n            size_of_particle=0.004,\n            colors=[BLUE, WHITE],\n            temperature=25000,\n        )\n        star.move_to(ORIGIN)\n        label = Text(\"Blue Dwarf\", font_size=28).next_to(star, DOWN)\n        self.add(star, label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Star"
+    ],
+    "category": "scenes",
+    "tags": [
+      "astronomy",
+      "star",
+      "blue-dwarf",
+      "hot-star",
+      "manim-astronomy"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

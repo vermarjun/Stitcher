@@ -1,0 +1,34 @@
+{
+  "api": "Board",
+  "plugin": "manim-chess",
+  "scene_class": "ChessBoardMoveAnimated",
+  "description": "Animate a chess move: set up starting position, then animate the white pawn moving from e2 to e4.",
+  "code": "from manim import *\nfrom manim_chess import Board\n\nDEFAULT_FEN = \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\"\n\nclass ChessBoardMoveAnimated(Scene):\n    def construct(self):\n        board = Board()\n        board.set_board_from_FEN(DEFAULT_FEN)\n        self.add(board)\n        self.wait(0.2)\n        self.play(board.move_piece('e2', 'e4', instant=False))\n        self.wait(0.3)\n",
+  "metadata": {
+    "domain": "general",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#769656",
+      "#eeeed2"
+    ],
+    "animationTypes": [
+      "Transform"
+    ],
+    "apisUsed": [
+      "Board"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chess",
+      "board",
+      "move",
+      "animation",
+      "pawn",
+      "manim-chess"
+    ],
+    "quality": 5,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

@@ -1,0 +1,32 @@
+{
+  "api": "BohrAtom",
+  "plugin": "manim-chemistry",
+  "scene_class": "BohrAtomOxygen",
+  "description": "Bohr atom for Oxygen with custom electron (blue) and proton (red) colors, showing 8 electrons across two shells.",
+  "code": "from manim import *\nfrom manim_chemistry import BohrAtom\n\nclass BohrAtomOxygen(Scene):\n    def construct(self):\n        atom = BohrAtom(\n            e=8, p=8, n=8,\n            electron_color=BLUE,\n            proton_color=RED,\n            orbit_color=GREY,\n        )\n        label = Text(\"Oxygen (O)\", font_size=28).next_to(atom, DOWN)\n        self.add(atom, label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "chemistry",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FC6255",
+      "#888888"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "BohrAtom"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chemistry",
+      "bohr-atom",
+      "oxygen",
+      "custom-colors",
+      "manim-chemistry"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

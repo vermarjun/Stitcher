@@ -1,0 +1,33 @@
+{
+  "api": "MStack",
+  "plugin": "manim-dsa",
+  "scene_class": "MStackBasic",
+  "description": "Create a basic stack data structure visualization with push (append) and pop operations using the GREEN style.",
+  "code": "from manim import *\nfrom manim_dsa import MStack, MStackStyle\n\nclass MStackBasic(Scene):\n    def construct(self):\n        stack = (\n            MStack([1, 2, 3], style=MStackStyle.GREEN)\n            .add_label(Text(\"Stack\", font_size=28))\n        )\n        self.play(Create(stack))\n        self.wait(0.3)\n        self.play(stack.animate.append(4))\n        self.wait(0.3)\n        self.play(stack.animate.pop())\n        self.wait(0.3)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#4CAF50"
+    ],
+    "animationTypes": [
+      "Create"
+    ],
+    "apisUsed": [
+      "MStack",
+      "MStackStyle"
+    ],
+    "category": "scenes",
+    "tags": [
+      "data-structures",
+      "stack",
+      "push",
+      "pop",
+      "manim-dsa"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

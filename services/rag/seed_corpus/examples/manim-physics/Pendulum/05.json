@@ -1,0 +1,31 @@
+{
+  "api": "Pendulum",
+  "plugin": "manim-physics",
+  "scene_class": "PendulumNearVertical",
+  "description": "Pendulum starting nearly vertical (initial_theta=1.4 radians), showing large-amplitude non-linear swing behavior.",
+  "code": "from manim import *\nfrom manim_physics import *\n\nclass PendulumNearVertical(SpaceScene):\n    def construct(self):\n        p = Pendulum(\n            length=2.5,\n            initial_theta=1.4,\n            pivot_point=UP * 2,\n        )\n        self.add(p)\n        self.make_rigid_body(*p.bobs)\n        p.start_swinging()\n        self.wait(2)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FF862F"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Pendulum",
+      "SpaceScene"
+    ],
+    "category": "scenes",
+    "tags": [
+      "physics",
+      "pendulum",
+      "nonlinear",
+      "large-amplitude",
+      "manim-physics"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

@@ -349,7 +349,7 @@ async function enrichDescriptions(recs: ScriptRecord[]): Promise<void> {
     while (idx < recs.length) {
       const r = recs[idx++]!;
       try {
-        const desc = await chatText({
+        const { result: desc } = await chatText({
           target,
           timeoutMs: config.RERANK_TIMEOUT_MS,
           messages: [

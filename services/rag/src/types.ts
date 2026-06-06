@@ -61,6 +61,10 @@ export interface ScoredDoc {
 export interface TransformedQuery {
   transformedQuery: string;
   suggestedApis: string[];
+  /** CONTRACT 1: APIs the coder likely needs (from query-transform). */
+  requiredApis: string[];
+  /** Plugin slugs the request maps to, e.g. ["manim-chess"]. Drives skill injection. */
+  requiredPlugins: string[];
   domain: string;
   tags: string[];
   estimatedComplexity: Complexity;
@@ -99,6 +103,10 @@ export interface StructuredContext {
   similarScripts: SimilarScript[];
   styleRecommendations: string[];
   pitfalls: string[];
+  /** CONTRACT 1: APIs identified by query-transform as likely needed. */
+  requiredApis: string[];
+  /** Plugin slugs the request maps to, e.g. ["manim-chess"]. */
+  requiredPlugins: string[];
 }
 
 export interface RetrievalTrace {
@@ -110,6 +118,8 @@ export interface RetrievalTrace {
   rerankModel: string;
   store: string;
   queryTransformed: boolean;
+  /** Number of distinct APIs covered by the coverage-greedy selection. */
+  coveredApis?: number;
   stages: {
     queryTransform: boolean;
     sparse: boolean;
@@ -128,16 +138,118 @@ export interface ExecutionTimings {
   llmCalls: number;
 }
 
+// ─── Pipeline trace (admin visibility into /enhance internals) ───────────────
+
+export interface TraceQueryTransform {
+  ran: boolean;
+  provider: string;
+  model: string;
+  /** Full system prompt sent to the LLM (static API list + instructions). */
+  systemPrompt: string;
+  /** Full user message sent to the LLM. */
+  userPrompt: string;
+  /** Raw verbatim LLM response text. */
+  rawOutput: string;
+  /** The manim-language translation produced. */
+  transformedQuery: string;
+  /** APIs selected by the query-transform LLM. */
+  requiredApis: string[];
+  /** Plugin slugs selected by the query-transform LLM. */
+  requiredPlugins: string[];
+  tokensUsed: { input: number; output: number };
+  durationMs: number;
+}
+
+export interface TraceEmbed {
+  provider: string;
+  model: string;
+  dims: number;
+  durationMs: number;
+}
+
+export interface TraceRetrieveCandidate {
+  id: string;
+  /** Short title / description, truncated to ~120 chars. No full code. */
+  title: string;
+  score: number;
+  apisUsed?: string[];
+}
+
+export interface TraceRetrieve {
+  /** Exact text passed into the vector search (transformedQuery or raw prompt). */
+  searchQuery: string;
+  /** Top dense/vector candidates (capped at 20). */
+  dense: TraceRetrieveCandidate[];
+  /** Top sparse/BM25 candidates (empty when sparse is disabled). */
+  sparse: TraceRetrieveCandidate[];
+  /** RRF-merged candidate pool (all). */
+  merged: TraceRetrieveCandidate[];
+  topK: number;
+}
+
+export interface TraceSelectCandidate {
+  id: string;
+  title: string;
+  apisUsed: string[];
+}
+
+export interface TraceSelect {
+  method: "coverage-greedy";
+  selected: TraceSelectCandidate[];
+  coveredApis: string[];
+}
+
+export interface PipelineTrace {
+  queryTransform?: TraceQueryTransform;
+  embed?: TraceEmbed;
+  retrieve?: TraceRetrieve;
+  select?: TraceSelect;
+}
+
 export interface EnhanceResult {
   groundedPrompt: string;
   structuredContext: StructuredContext;
   retrievalTrace: RetrievalTrace;
   execution: ExecutionTimings;
+  /** Full pipeline trace for admin visibility. All steps are optional/defensive. */
+  trace: PipelineTrace;
+}
+
+// ─── Per-request provider config override (CONTRACT 2) ───────────────────────
+// Passed in the /enhance body as `providerConfig`. Both sub-keys are optional;
+// absent → env default is used for that service.
+
+// NOTE: string fields are `string | null` because the API resolves them from
+// ServiceConfig as `string | null` (null = "use provider default") and sends them
+// verbatim. The consumers all use `field ?? default`, so null is handled.
+export interface QueryTransformProviderOverride {
+  provider?: string | null;
+  apiKey?: string | null;
+  baseURL?: string | null;
+  model?: string | null;
+  /** Freeform provider params (e.g. temperature, max_tokens). */
+  params?: Record<string, unknown>;
+}
+
+export interface EmbedderProviderOverride {
+  provider?: string | null;
+  apiKey?: string | null;
+  /** Ordered backup API keys, tried after `apiKey` and before the env-default key. */
+  backupApiKeys?: string[];
+  baseURL?: string | null;
+  model?: string | null;
+}
+
+export interface ProviderConfig {
+  queryTransform?: QueryTransformProviderOverride;
+  embedder?: EmbedderProviderOverride;
 }
 
 export interface EnhanceInput {
   prompt: string;
   topK?: number;
+  /** Optional per-request provider overrides (CONTRACT 2). */
+  providerConfig?: ProviderConfig;
 }
 
 // ─── /health ─────────────────────────────────────────────────────────────────

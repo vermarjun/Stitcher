@@ -1,0 +1,33 @@
+{
+  "api": "FeedForward",
+  "plugin": "manim-ml",
+  "scene_class": "FFNBasic",
+  "description": "Display a simple 3-layer feed-forward neural network [3, 5, 2] as a static diagram using NeuralNetwork and FeedForwardLayer.",
+  "code": "from manim import *\nfrom manim_ml.neural_network import NeuralNetwork, FeedForwardLayer\n\nclass FFNBasic(ThreeDScene):\n    def construct(self):\n        nn = NeuralNetwork([\n            FeedForwardLayer(num_nodes=3),\n            FeedForwardLayer(num_nodes=5),\n            FeedForwardLayer(num_nodes=2),\n        ])\n        nn.move_to(ORIGIN)\n        self.add(nn)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FF862F",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "NeuralNetwork",
+      "FeedForwardLayer"
+    ],
+    "category": "scenes",
+    "tags": [
+      "machine-learning",
+      "neural-network",
+      "feedforward",
+      "static",
+      "manim-ml"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

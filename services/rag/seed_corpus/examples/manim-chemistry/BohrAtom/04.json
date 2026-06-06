@@ -1,0 +1,32 @@
+{
+  "api": "BohrAtom",
+  "plugin": "manim-chemistry",
+  "scene_class": "BohrAtomSilicon",
+  "description": "Bohr atom for Silicon (e=14, p=14, n=14) \u2014 three electron shells, commonly used in semiconductor education.",
+  "code": "from manim import *\nfrom manim_chemistry import BohrAtom\n\nclass BohrAtomSilicon(Scene):\n    def construct(self):\n        atom = BohrAtom(e=14, p=14, n=10)\n        label = Text(\"Silicon (Si)\", font_size=28).next_to(atom, DOWN)\n        self.add(atom, label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "chemistry",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FC6255",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "BohrAtom"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chemistry",
+      "bohr-atom",
+      "silicon",
+      "semiconductor",
+      "manim-chemistry"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

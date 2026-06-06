@@ -1,0 +1,33 @@
+{
+  "api": "MStack",
+  "plugin": "manim-dsa",
+  "scene_class": "MStackCallStack",
+  "description": "Simulate a call stack with string frame names, demonstrating function call and return via push and pop.",
+  "code": "from manim import *\nfrom manim_dsa import MStack, MStackStyle\n\nclass MStackCallStack(Scene):\n    def construct(self):\n        stack = (\n            MStack([\"main\"], style=MStackStyle.BLUE)\n            .add_label(Text(\"Call Stack\", font_size=24))\n            .to_edge(RIGHT)\n        )\n        self.play(Create(stack))\n        self.wait(0.2)\n        self.play(stack.animate.append(\"foo\"))\n        self.wait(0.2)\n        self.play(stack.animate.append(\"bar\"))\n        self.wait(0.2)\n        self.play(stack.animate.pop())\n        self.wait(0.2)\n        self.play(stack.animate.pop())\n        self.wait(0.3)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD"
+    ],
+    "animationTypes": [
+      "Create"
+    ],
+    "apisUsed": [
+      "MStack",
+      "MStackStyle"
+    ],
+    "category": "scenes",
+    "tags": [
+      "data-structures",
+      "stack",
+      "call-stack",
+      "function",
+      "manim-dsa"
+    ],
+    "quality": 5,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

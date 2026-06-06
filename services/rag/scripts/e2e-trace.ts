@@ -131,6 +131,8 @@ async function main() {
   const transformed: TransformedQuery = {
     transformedQuery: tArgs.transformedQuery ?? PROMPT,
     suggestedApis: tArgs.suggestedApis ?? [],
+    requiredApis: tArgs.requiredApis ?? [],
+    requiredPlugins: tArgs.requiredPlugins ?? [],
     domain: tArgs.domain ?? "general",
     tags: tArgs.tags ?? [],
     estimatedComplexity: tArgs.estimatedComplexity ?? "intermediate",

@@ -15,6 +15,7 @@
 import { config, embedderKeys } from "../config.js";
 import { log } from "../logger.js";
 import { withRetry, isTransient } from "../util/retry.js";
+import type { EmbedderProviderOverride } from "../types.js";
 
 export type EmbedTaskType =
   | "RETRIEVAL_QUERY"
@@ -189,6 +190,155 @@ export async function embedQuery(
   if (PROVIDER === "ollama") return (await ollamaEmbed([text], config.EMBED_TIMEOUT_MS))[0]!;
   if (PROVIDER === "gemini") return geminiEmbedSingle(text, taskType);
   throw new Error(`Unsupported EMBEDDER_PROVIDER: ${config.EMBEDDER_PROVIDER}`);
+}
+
+// ─── Single-attempt embed helpers (one key / one endpoint, raw un-normalized vector) ───
+
+/** One Gemini embedContent call with a SPECIFIC key (own retry/backoff). Throws on failure. */
+async function geminiEmbedOnce(
+  text: string,
+  taskType: EmbedTaskType,
+  model: string,
+  baseURL: string,
+  apiKey: string
+): Promise<number[]> {
+  return withRetry(
+    async () => {
+      const resp = await postJson(
+        `${baseURL}/models/${model}:embedContent?key=${apiKey}`,
+        { model: `models/${model}`, content: { parts: [{ text }] }, taskType, outputDimensionality: config.EMBEDDING_DIM },
+        config.EMBED_TIMEOUT_MS
+      );
+      const values: number[] | undefined = resp?.embedding?.values;
+      if (!values?.length) throw new Error("Gemini returned empty embedding");
+      return values;
+    },
+    { retries: config.RETRY_MAX, baseMs: config.RETRY_BASE_MS, label: "gemini.embed.override", shouldRetry: isTransient }
+  );
+}
+
+/** One Ollama /api/embed call with overridden base/model. Throws on failure. */
+async function ollamaEmbedOnce(text: string, model: string, baseURL: string): Promise<number[]> {
+  const data = await withRetry(
+    () => postJson(`${baseURL}/api/embed`, { model, input: [text] }, config.EMBED_TIMEOUT_MS),
+    {
+      retries: config.RETRY_MAX,
+      baseMs: config.RETRY_BASE_MS,
+      label: "ollama.embed.override",
+      shouldRetry: isTransient,
+      onRetry: (err, attempt, delay) =>
+        log.warn({ attempt, delay, err: String(err) }, "Retrying Ollama embedding (override)"),
+    }
+  );
+  const embeddings: number[][] | undefined = data?.embeddings;
+  if (!embeddings || embeddings.length !== 1) {
+    throw new Error(`Ollama override returned ${embeddings?.length ?? 0} embeddings for 1 input`);
+  }
+  return embeddings[0]!;
+}
+
+/** One OpenAI-compatible /embeddings call. Throws on failure. */
+async function openaiEmbedOnce(text: string, model: string, baseURL: string, apiKey: string): Promise<number[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), config.EMBED_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${baseURL}/embeddings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+      body: JSON.stringify({ model, input: text }),
+      signal: ctrl.signal,
+    });
+    const txt = await res.text();
+    if (!res.ok) throw new Error(`embedder override (openai) ${res.status}: ${txt.slice(0, 300)}`);
+    const raw = JSON.parse(txt);
+    const values: number[] | undefined = raw?.data?.[0]?.embedding;
+    if (!values?.length) throw new Error("embedder override (openai) returned empty embedding");
+    return values;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Embed a single text using a per-request provider override (CONTRACT 2), with a
+ * resilient FAILOVER CHAIN so RAG never goes dark on a single bad/rate-limited key:
+ *
+ *   primary admin key → admin backup key(s) → ENV-default embedder (EMBEDDER_API_KEY)
+ *
+ * Each attempt is tried in order; on ANY failure (network, 401/403 invalid key,
+ * 429 rate-limit, empty/wrong-dim vector) we log and advance to the next. The
+ * ENV-default attempt is ALWAYS appended last — the admin can configure Gemini
+ * keys in the panel, but if they're all rate-limited (gemini-embedding-001 is
+ * free-tier) or wrong, the .env key still serves the request. Only when EVERY
+ * attempt fails do we throw (→ the pipeline falls back to the raw prompt).
+ *
+ * A returned vector whose dim != EMBEDDING_DIM is treated as a failure so a
+ * mismatched provider (e.g. a 1024-dim model against a 3072-dim index) falls
+ * through to the dimension-correct env default rather than poisoning retrieval.
+ */
+export async function embedQueryWithOverride(
+  text: string,
+  override?: EmbedderProviderOverride,
+  taskType: EmbedTaskType = "RETRIEVAL_QUERY"
+): Promise<number[]> {
+  // No override at all: use the env-default path directly.
+  const hasOverride =
+    !!override &&
+    (!!override.provider || !!override.apiKey || !!override.baseURL || !!override.model ||
+      (Array.isArray(override.backupApiKeys) && override.backupApiKeys.length > 0));
+  if (!hasOverride) return embedQuery(text, taskType);
+
+  const provider = (override!.provider ?? config.EMBEDDER_PROVIDER).toLowerCase();
+  const model = override!.model ?? config.EMBEDDER_MODEL;
+  const baseURL = override!.baseURL;
+
+  // Build the ordered attempt chain.
+  const attempts: Array<{ label: string; run: () => Promise<number[]> }> = [];
+
+  if (provider === "gemini") {
+    const geminiBase = baseURL ?? config.GEMINI_BASE_URL;
+    const keys = [override!.apiKey, ...(override!.backupApiKeys ?? [])]
+      .map((k) => (k ?? "").trim())
+      .filter(Boolean);
+    const seen = new Set<string>();
+    for (const k of keys) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const label = seen.size === 1 ? "gemini.override.primary" : `gemini.override.backup#${seen.size - 1}`;
+      attempts.push({ label, run: () => geminiEmbedOnce(text, taskType, model, geminiBase, k) });
+    }
+  } else if (provider === "ollama") {
+    const ollamaBase = baseURL ?? config.OLLAMA_BASE_URL;
+    attempts.push({ label: "ollama.override", run: () => ollamaEmbedOnce(text, model, ollamaBase) });
+  } else if (baseURL) {
+    attempts.push({ label: `${provider}.override`, run: () => openaiEmbedOnce(text, model, baseURL, override!.apiKey ?? "") });
+  }
+
+  // FINAL fallback — the env-default embedder (EMBEDDER_API_KEY/-KEYS). This is the
+  // ".env key" backstop: even if every admin key fails, RAG still gets a vector.
+  attempts.push({ label: "env-default", run: () => embedQuery(text, taskType) });
+
+  let lastErr: unknown;
+  for (let i = 0; i < attempts.length; i++) {
+    const a = attempts[i]!;
+    try {
+      const vec = await a.run();
+      if (vec.length !== config.EMBEDDING_DIM) {
+        throw new Error(`embedding dim ${vec.length} != EMBEDDING_DIM ${config.EMBEDDING_DIM}`);
+      }
+      if (i > 0) {
+        log.warn({ usedAttempt: a.label, attemptIndex: i, total: attempts.length }, "embedder failed over to a later key/provider");
+      }
+      return l2normalize(vec);
+    } catch (err) {
+      lastErr = err;
+      log.warn(
+        { attempt: a.label, hasNext: i < attempts.length - 1, err: String(err) },
+        "embedder attempt failed; advancing to next key/provider"
+      );
+    }
+  }
+  throw lastErr;
 }
 
 /** Embed many texts (seed-time, document side). */

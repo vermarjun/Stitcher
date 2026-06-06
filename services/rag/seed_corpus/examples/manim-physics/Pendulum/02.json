@@ -1,0 +1,31 @@
+{
+  "api": "Pendulum",
+  "plugin": "manim-physics",
+  "scene_class": "PendulumLarge",
+  "description": "Pendulum with longer rod (length=4) and larger initial displacement (0.6 rad) showing more energetic oscillation.",
+  "code": "from manim import *\nfrom manim_physics import *\n\nclass PendulumLarge(SpaceScene):\n    def construct(self):\n        p = Pendulum(\n            length=4,\n            initial_theta=0.6,\n            pivot_point=UP * 3,\n            bob_style={\"radius\": 0.3, \"color\": BLUE, \"fill_opacity\": 1},\n        )\n        self.add(p)\n        self.make_rigid_body(*p.bobs)\n        p.start_swinging()\n        self.wait(2)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Pendulum",
+      "SpaceScene"
+    ],
+    "category": "scenes",
+    "tags": [
+      "physics",
+      "pendulum",
+      "mechanics",
+      "simulation",
+      "manim-physics"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

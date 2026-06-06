@@ -24,6 +24,7 @@ import { embedBatch, embedQuery, embedderInfo } from "./providers/embedder.js";
 import { llmInfo, rerankerInfo } from "./providers/llm.js";
 import { config } from "./config.js";
 import { log } from "./logger.js";
+import { traceMiddleware } from "./middleware/trace.js";
 import type { CorpusDoc, CorpusDocWithEmbedding } from "./types.js";
 
 const VERSION = process.env["npm_package_version"] ?? "2.0.0";
@@ -77,10 +78,48 @@ const OverridesSchema = z
   })
   .strict();
 
+// Per-request provider config override (CONTRACT 2).
+// Internal, admin-controlled config resolved by the API — keep validation lenient
+// (allow empty strings, non-URL endpoints, extra fields) so the worker can pass
+// the resolved service config verbatim without 400s.
+// NOTE: baseURL/model/apiKey/provider use .nullish() (accept null | undefined |
+// string) because the API resolves these from ServiceConfig as `string | null`
+// (null = "use the provider default") and sends them verbatim. Plain .optional()
+// rejects null → the whole /enhance request 400s. nullish keeps it tolerant.
+const QueryTransformProviderOverrideSchema = z
+  .object({
+    provider: z.string().max(64).nullish(),
+    apiKey: z.string().max(512).nullish(),
+    baseURL: z.string().max(300).nullish(),
+    model: z.string().max(120).nullish(),
+    params: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+const EmbedderProviderOverrideSchema = z
+  .object({
+    provider: z.string().max(64).nullish(),
+    apiKey: z.string().max(512).nullish(),
+    // Ordered backup keys, tried after apiKey and before the env-default key.
+    backupApiKeys: z.array(z.string().max(512)).max(20).optional(),
+    baseURL: z.string().max(300).nullish(),
+    model: z.string().max(120).nullish(),
+    params: z.record(z.unknown()).optional(),
+  })
+  .passthrough();
+
+const ProviderConfigSchema = z
+  .object({
+    queryTransform: QueryTransformProviderOverrideSchema.optional(),
+    embedder: EmbedderProviderOverrideSchema.optional(),
+  })
+  .passthrough();
+
 const EnhanceBodySchema = z.object({
   prompt: z.string().min(1, "prompt is required"),
   options: z.object({ topK: z.number().int().positive().max(20).optional() }).optional(),
   overrides: OverridesSchema.optional(),
+  providerConfig: ProviderConfigSchema.optional(),
 });
 
 const CorpusDocSchema = z.object({
@@ -121,6 +160,10 @@ export async function buildApp() {
       retryAfter: ctx.ttl,
     }),
   });
+
+  // Read X-Trace-Id from the API and stamp it on the active span so Tempo is
+  // searchable by the human-facing trace ID (OBSERVABILITY_PLAN §3 Phase 1.2).
+  app.addHook("onRequest", traceMiddleware);
 
   async function requireApiKey(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const key = request.headers["x-api-key"];
@@ -209,7 +252,14 @@ export async function buildApp() {
     }
 
     try {
-      const result = await enhance({ prompt: parsed.data.prompt, topK: parsed.data.options?.topK }, settings);
+      const result = await enhance(
+        {
+          prompt: parsed.data.prompt,
+          topK: parsed.data.options?.topK,
+          providerConfig: parsed.data.providerConfig,
+        },
+        settings
+      );
       return reply.send(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -332,10 +382,16 @@ async function main() {
   }
 }
 
-// Run only when executed directly (not when imported by tests).
+// Run when executed directly.
+// ESM path (tsx dev): check import.meta.url against argv.
+// CJS path (compiled Dockerfile bundle): import.meta.url is undefined — in that case
+// the server file IS always the entry point, so just call main().
+const _importMetaUrl: string | undefined =
+  typeof import.meta !== "undefined" ? import.meta.url : undefined;
 const isMain =
-  process.argv[1] &&
-  (import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]));
+  !_importMetaUrl ||
+  (_importMetaUrl === `file://${process.argv[1]}`) ||
+  _importMetaUrl.endsWith(process.argv[1] ?? "");
 if (isMain) {
   main().catch((err) => {
     console.error("Fatal startup error:", err);

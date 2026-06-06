@@ -1,0 +1,32 @@
+{
+  "api": "BohrAtom",
+  "plugin": "manim-chemistry",
+  "scene_class": "BohrAtomCarbon",
+  "description": "Bohr atom diagram for Carbon: 6 electrons, 6 protons, 6 neutrons \u2014 showing two electron shells.",
+  "code": "from manim import *\nfrom manim_chemistry import BohrAtom\n\nclass BohrAtomCarbon(Scene):\n    def construct(self):\n        atom = BohrAtom(e=6, p=6, n=6)\n        label = Text(\"Carbon (C)\", font_size=28).next_to(atom, DOWN)\n        self.add(atom, label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "chemistry",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FC6255",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "BohrAtom"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chemistry",
+      "bohr-atom",
+      "carbon",
+      "electron-shells",
+      "manim-chemistry"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

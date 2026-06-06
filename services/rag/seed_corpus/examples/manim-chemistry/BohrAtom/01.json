@@ -1,0 +1,32 @@
+{
+  "api": "BohrAtom",
+  "plugin": "manim-chemistry",
+  "scene_class": "BohrAtomHydrogen",
+  "description": "Bohr atom diagram for Hydrogen: 1 electron, 1 proton, 0 neutrons \u2014 the simplest element.",
+  "code": "from manim import *\nfrom manim_chemistry import BohrAtom\n\nclass BohrAtomHydrogen(Scene):\n    def construct(self):\n        atom = BohrAtom(e=1, p=1, n=0)\n        label = Text(\"Hydrogen\", font_size=28).next_to(atom, DOWN)\n        self.add(atom, label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "chemistry",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FC6255",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "BohrAtom"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chemistry",
+      "bohr-atom",
+      "hydrogen",
+      "atomic-model",
+      "manim-chemistry"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

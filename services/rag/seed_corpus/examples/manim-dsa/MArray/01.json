@@ -1,0 +1,33 @@
+{
+  "api": "MArray",
+  "plugin": "manim-dsa",
+  "scene_class": "MArrayBasicCreate",
+  "description": "Create a simple integer array [1, 2, 3, 4, 5] with default blue style, add index labels, and animate its creation.",
+  "code": "from manim import *\nfrom manim_dsa import MArray, MArrayStyle\n\nclass MArrayBasicCreate(Scene):\n    def construct(self):\n        arr = (\n            MArray([1, 2, 3, 4, 5], style=MArrayStyle.BLUE)\n            .add_indexes()\n        )\n        self.play(Create(arr))\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#1C1C1C"
+    ],
+    "animationTypes": [
+      "Create"
+    ],
+    "apisUsed": [
+      "MArray",
+      "MArrayStyle"
+    ],
+    "category": "scenes",
+    "tags": [
+      "data-structures",
+      "array",
+      "manim-dsa",
+      "visualization"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

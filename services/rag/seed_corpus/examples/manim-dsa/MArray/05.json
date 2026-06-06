@@ -1,0 +1,33 @@
+{
+  "api": "MArray",
+  "plugin": "manim-dsa",
+  "scene_class": "MArraySwapElements",
+  "description": "Create a PURPLE-styled array [3, 1, 4, 1, 5] with indexes, then swap elements at positions 1 and 3 to show an in-place sort step.",
+  "code": "from manim import *\nfrom manim_dsa import MArray, MArrayStyle\n\nclass MArraySwapElements(Scene):\n    def construct(self):\n        arr = (\n            MArray([3, 1, 4, 1, 5], style=MArrayStyle.PURPLE)\n            .add_indexes()\n            .add_label(Text(\"data\", font_size=24))\n        )\n        self.play(Create(arr))\n        self.wait(0.3)\n        self.play(arr.animate.swap(1, 3))\n        self.wait(0.3)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#7E57C2"
+    ],
+    "animationTypes": [
+      "Create"
+    ],
+    "apisUsed": [
+      "MArray",
+      "MArrayStyle"
+    ],
+    "category": "scenes",
+    "tags": [
+      "data-structures",
+      "array",
+      "swap",
+      "sorting",
+      "manim-dsa"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

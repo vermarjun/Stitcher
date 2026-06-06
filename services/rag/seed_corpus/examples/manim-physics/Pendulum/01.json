@@ -1,0 +1,32 @@
+{
+  "api": "Pendulum",
+  "plugin": "manim-physics",
+  "scene_class": "PendulumSimple",
+  "description": "Simple pendulum simulation with length 3 and small initial angle 0.3 radians, swinging for 2 seconds.",
+  "code": "from manim import *\nfrom manim_physics import *\n\nclass PendulumSimple(SpaceScene):\n    def construct(self):\n        p = Pendulum(length=3, initial_theta=0.3)\n        self.add(p)\n        self.make_rigid_body(*p.bobs)\n        p.start_swinging()\n        self.wait(2)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FF862F",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Pendulum",
+      "SpaceScene"
+    ],
+    "category": "scenes",
+    "tags": [
+      "physics",
+      "pendulum",
+      "mechanics",
+      "simulation",
+      "manim-physics"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

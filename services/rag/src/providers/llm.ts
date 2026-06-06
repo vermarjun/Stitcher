@@ -8,6 +8,9 @@
  *    the LLM reranker.
  *
  * Provider/model/baseURL are all config-driven; nothing is hardcoded.
+ *
+ * Both functions now also return the raw `usage` field from the OpenAI-compat
+ * response so callers can emit `stitcher.llm.tokens` via recordLlmTokens().
  */
 
 import { config } from "../config.js";
@@ -67,8 +70,22 @@ async function postChat(
   }
 }
 
+/** Raw token usage from an OpenAI-compat `/chat/completions` response. */
+export interface LlmUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
+/** Result wrapper that carries both the parsed output and raw LLM usage. */
+export interface LlmResult<T> {
+  result: T;
+  usage: LlmUsage | undefined;
+}
+
 /**
- * Structured output via forced tool call. Returns the parsed arguments object.
+ * Structured output via forced tool call. Returns the parsed arguments object
+ * AND the raw token usage from the LLM response (for `stitcher.llm.tokens` emission).
  * `schema` is a JSON Schema for the tool parameters.
  */
 export async function chatStructured<T = Record<string, unknown>>(opts: {
@@ -78,7 +95,7 @@ export async function chatStructured<T = Record<string, unknown>>(opts: {
   toolName?: string;
   timeoutMs: number;
   temperature?: number;
-}): Promise<T> {
+}): Promise<LlmResult<T>> {
   const target = opts.target;
   const toolName = opts.toolName ?? "emit";
 
@@ -104,16 +121,17 @@ export async function chatStructured<T = Record<string, unknown>>(opts: {
         opts.timeoutMs
       );
       const msg = data?.choices?.[0]?.message;
+      const usage: LlmUsage | undefined = data?.usage ?? undefined;
       const argStr = msg?.tool_calls?.[0]?.function?.arguments;
       if (!argStr) {
         // Some models echo JSON in content instead of a tool call — try that.
         if (typeof msg?.content === "string") {
           const m = msg.content.match(/\{[\s\S]*\}/);
-          if (m) return JSON.parse(m[0]) as T;
+          if (m) return { result: JSON.parse(m[0]) as T, usage };
         }
         throw new Error("LLM returned no tool call / parseable JSON");
       }
-      return JSON.parse(argStr) as T;
+      return { result: JSON.parse(argStr) as T, usage };
     },
     {
       retries: config.RETRY_MAX,
@@ -124,13 +142,13 @@ export async function chatStructured<T = Record<string, unknown>>(opts: {
   );
 }
 
-/** Plain text completion (any model). */
+/** Plain text completion (any model). Returns text + raw LLM usage. */
 export async function chatText(opts: {
   target: LlmTarget;
   messages: ChatMessage[];
   timeoutMs: number;
   temperature?: number;
-}): Promise<string> {
+}): Promise<LlmResult<string>> {
   const target = opts.target;
   return withRetry(
     async () => {
@@ -143,7 +161,8 @@ export async function chatText(opts: {
       if (typeof content !== "string" || content.length === 0) {
         throw new Error("LLM returned empty content");
       }
-      return content;
+      const usage: LlmUsage | undefined = data?.usage ?? undefined;
+      return { result: content, usage };
     },
     {
       retries: config.RETRY_MAX,

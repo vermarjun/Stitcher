@@ -1,0 +1,31 @@
+{
+  "api": "Board",
+  "plugin": "manim-chess",
+  "scene_class": "ChessBoardAddPiece",
+  "description": "Start with an empty board and manually place pieces \u2014 a queen on d4 and a knight on f6.",
+  "code": "from manim import *\nfrom manim_chess import Board\n\nclass ChessBoardAddPiece(Scene):\n    def construct(self):\n        board = Board()\n        board.add_piece('Q', True, 'd4')\n        board.add_piece('N', False, 'f6')\n        board.add_piece('K', True, 'e1')\n        board.add_piece('K', False, 'e8')\n        self.add(board)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "general",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#769656",
+      "#eeeed2"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Board"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chess",
+      "board",
+      "add-piece",
+      "placement",
+      "manim-chess"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

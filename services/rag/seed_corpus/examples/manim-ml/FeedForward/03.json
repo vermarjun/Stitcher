@@ -1,0 +1,32 @@
+{
+  "api": "FeedForward",
+  "plugin": "manim-ml",
+  "scene_class": "FFNDeep",
+  "description": "Show a deeper 5-layer network [2, 4, 8, 4, 2] as a static architecture diagram \u2014 good for illustrating encoder-decoder symmetry.",
+  "code": "from manim import *\nfrom manim_ml.neural_network import NeuralNetwork, FeedForwardLayer\n\nclass FFNDeep(ThreeDScene):\n    def construct(self):\n        nn = NeuralNetwork([\n            FeedForwardLayer(2),\n            FeedForwardLayer(4),\n            FeedForwardLayer(8),\n            FeedForwardLayer(4),\n            FeedForwardLayer(2),\n        ], layer_spacing=0.2)\n        nn.scale(0.9)\n        nn.move_to(ORIGIN)\n        title = Text(\"Autoencoder\", font_size=28).to_edge(UP)\n        self.add(nn, title)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FF862F"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "NeuralNetwork",
+      "FeedForwardLayer"
+    ],
+    "category": "scenes",
+    "tags": [
+      "machine-learning",
+      "neural-network",
+      "autoencoder",
+      "architecture",
+      "manim-ml"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

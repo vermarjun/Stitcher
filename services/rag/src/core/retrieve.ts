@@ -8,6 +8,10 @@ import type { ResolvedSettings } from "./settings.js";
 
 export interface RetrieveOutput {
   merged: ScoredDoc[];
+  /** Raw dense candidates (before RRF merge) — used for pipeline trace. */
+  denseRaw: ScoredDoc[];
+  /** Raw sparse candidates (before RRF merge) — used for pipeline trace. */
+  sparseRaw: ScoredDoc[];
   denseCount: number;
   sparseCount: number;
   vectorSearchMs: number;
@@ -71,6 +75,8 @@ export async function retrieve(
 
   return {
     merged,
+    denseRaw: dense,
+    sparseRaw: sparse,
     denseCount: dense.length,
     sparseCount: sparse.length,
     vectorSearchMs,

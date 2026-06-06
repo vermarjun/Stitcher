@@ -1,0 +1,31 @@
+{
+  "api": "Star",
+  "plugin": "manim-astronomy",
+  "scene_class": "StarRedGiant",
+  "description": "Render a red giant star with a larger radius and orange-red color palette \u2014 demonstrates how to simulate different stellar classes.",
+  "code": "from manim import *\nfrom manim_Astronomy import Star\n\nclass StarRedGiant(Scene):\n    def construct(self):\n        star = Star(\n            radius=0.9,\n            num_of_particles=800,\n            size_of_particle=0.006,\n            colors=[RED, ORANGE],\n            temperature=3500,\n        )\n        star.move_to(ORIGIN)\n        label = Text(\"Red Giant\", font_size=28).next_to(star, DOWN)\n        self.add(star, label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FC6255",
+      "#FF862F"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Star"
+    ],
+    "category": "scenes",
+    "tags": [
+      "astronomy",
+      "star",
+      "red-giant",
+      "stellar-class",
+      "manim-astronomy"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

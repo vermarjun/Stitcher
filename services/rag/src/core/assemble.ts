@@ -63,8 +63,16 @@ export function assemble(
   const apiExamples = apiDocs.slice(0, topK).map(toApiExample);
   const similarScripts = scriptDocs.slice(0, topK).map(toSimilarScript);
 
-  // Detected APIs = LLM suggestions ∪ APIs referenced by retrieved docs.
-  const detectedApis = new Set<string>(transformed.suggestedApis);
+  // requiredApis from query-transform (CONTRACT 1)
+  const requiredApis: string[] = transformed.requiredApis?.length
+    ? transformed.requiredApis
+    : transformed.suggestedApis ?? [];
+
+  // requiredPlugins from query-transform — plugin slugs the request maps to.
+  const requiredPlugins: string[] = transformed.requiredPlugins ?? [];
+
+  // Detected APIs = requiredApis ∪ APIs referenced by retrieved docs.
+  const detectedApis = new Set<string>(requiredApis);
   for (const s of ranked.slice(0, topK * 2)) for (const a of s.doc.apisUsed) detectedApis.add(a);
 
   const domain =
@@ -82,6 +90,8 @@ export function assemble(
     similarScripts,
     styleRecommendations,
     pitfalls,
+    requiredApis,
+    requiredPlugins,
   };
 
   const groundedPrompt = buildGroundedPrompt(rawQuery, transformed, structuredContext, [
@@ -109,6 +119,14 @@ function buildGroundedPrompt(
   L.push("");
   L.push(`Generate a complete, runnable Manim Community v0.19 Python scene for the task above.`);
   L.push("");
+
+  if (ctx.requiredPlugins.length) {
+    L.push(`## Preferred plugins`);
+    L.push(
+      `This request maps to: ${ctx.requiredPlugins.join(", ")}. Use the plugin(s) instead of re-building the domain object in core Manim.`
+    );
+    L.push("");
+  }
 
   if (detectedApis.length) {
     L.push(`## Likely-relevant Manim APIs`);
