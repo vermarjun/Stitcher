@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Menu } from "lucide-react";
 import Header from "./Header/Main.header";
 import LeftSideBar from "./LeftSideBar/Main.leftsidebar";
 import RightSideBar from "./RightSideBar/Main.rightsidebar";
@@ -32,7 +33,6 @@ const DashboardLayout = () => {
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
   
   // Right Sidebar State
-  const [rightSidebarMode, setRightSidebarMode] = useState<'generate' | 'edit'>('generate');
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
   const handleAssetDrop = (asset: Asset) => {
@@ -130,26 +130,16 @@ const DashboardLayout = () => {
                     <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
                     <PossibilitiesDialog open={showPossibilities} onClose={() => setShowPossibilities(false)} />
                     <Header currentProject={project} user={user} onShowPossibilities={openPossibilities} />
-                    
-                    {/* Mobile Only: Generate / Edit Buttons */}
-                    <div className="md:hidden flex w-full border-b border-zinc-800 bg-black">
-                      <button 
-                        onClick={() => {
-                          setRightSidebarMode('generate');
-                          setIsRightSidebarOpen(true);
-                        }}
-                        className="flex-1 py-3 text-sm font-medium border-r border-zinc-800 hover:bg-zinc-900 transition-colors"
+
+                    {/* Mobile: AI chat trigger bar — sits just below the header */}
+                    <div className="md:hidden flex items-center gap-3 px-4 h-11 border-b border-zinc-800 bg-neutral-950 flex-shrink-0">
+                      <button
+                        data-tour="ai-trigger"
+                        onClick={() => setIsRightSidebarOpen(true)}
+                        className="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors"
                       >
-                        Generate
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setRightSidebarMode('edit');
-                          setIsRightSidebarOpen(true);
-                        }}
-                        className="flex-1 py-3 text-sm font-medium hover:bg-zinc-900 transition-colors"
-                      >
-                        Edit
+                        <Menu className="w-5 h-5" />
+                        <span className="text-sm font-medium text-zinc-300">Generate animation</span>
                       </button>
                     </div>
 
@@ -167,8 +157,7 @@ const DashboardLayout = () => {
                         onRemoveItem={handleRemoveAsset}
                         currentProject={project}
                         user={user}
-                        mode={rightSidebarMode}
-                        setMode={setRightSidebarMode}
+                        mode="generate"
                         isOpen={isRightSidebarOpen}
                         onClose={() => setIsRightSidebarOpen(false)}
                       />

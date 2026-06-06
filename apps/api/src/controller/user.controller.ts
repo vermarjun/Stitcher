@@ -6,8 +6,10 @@ import crypto from 'crypto';
 import {
   sendWelcomeEmail,
   sendVerificationEmail,
+  sendSignupOtpEmail,
   sendPasswordResetEmail,
 } from '../email/email.service';
+import { pubClient } from '../queue/connection';
 import { JWT_CONFIG, PASSWORD_RESET_CONFIG, EMAIL_VERIFICATION_CONFIG, API_PREFIX, PUBLIC_APP_URL } from '../config';
 import cloudinary from '../util/cloudinary.util';
 import mongoose from 'mongoose';
@@ -105,6 +107,10 @@ export const authWithGoogle = async (req: Request, res: Response) => {
         email,
         profilePhoto: picture,
         usedOAuth: true,
+        plan: 'free',
+        // New signups get free generation credits to try it out. Password signups
+        // grant the same below — keep these two in sync.
+        credits: { generation: 10, editing: 10, expiresAt: null },
         // Google has already verified the address — no verification email needed.
         emailVerified: true,
       });
@@ -183,7 +189,7 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 10, editing: 0, expiresAt: null } });
+    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 10, editing: 10, expiresAt: null } });
     const verifyToken = issueEmailVerificationToken(user);
     await user.save();
 
@@ -194,6 +200,156 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
     void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
 
     return res.status(201).json({ message: 'User created successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── OTP-gated signup (email + password) ──────────────────────────────────────
+// No User doc is created until the email is verified by OTP. The pending
+// registration (username, email, bcrypt hash, code) lives in Redis with a 10-min
+// TTL, so abandoned signups self-clean and never leave half-built accounts.
+const SIGNUP_OTP_TTL_SECONDS = 600; // 10 minutes
+const SIGNUP_OTP_MAX_ATTEMPTS = 5;
+const signupOtpKey = (email: string): string => `signup:otp:${email}`;
+
+function sixDigitCode(): string {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+interface PendingSignup { username: string; email: string; passwordHash: string; code: string; attempts: number; }
+
+// POST /users/signup/start — validate, stash a pending registration in Redis, email an OTP.
+export const startSignup = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+    username = username.trim();
+    email = email.trim().toLowerCase();
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+    if (await User.findOne({ email })) {
+      return res.status(409).json({ message: 'Email already exists. Try logging in instead.' });
+    }
+    if (await User.findOne({ username })) {
+      return res.status(409).json({ message: 'Username already taken. Try a different one.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const code = sixDigitCode();
+    const pending: PendingSignup = { username, email, passwordHash, code, attempts: 0 };
+    await pubClient.set(signupOtpKey(email), JSON.stringify(pending), 'EX', SIGNUP_OTP_TTL_SECONDS);
+
+    // Fire-and-forget via the email queue (the worker sends within ~1s).
+    void sendSignupOtpEmail({ to: email, username, code });
+
+    return res.status(200).json({ message: 'otp_sent', email });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// POST /users/signup/verify — check the OTP, then create the account + grant credits + log in.
+export const verifySignupOtp = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { email, code } = req.body as { email?: string; code?: string };
+    email = email?.trim().toLowerCase();
+    code = String(code ?? '').trim();
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and code are required.' });
+    }
+
+    const raw = await pubClient.get(signupOtpKey(email));
+    if (!raw) {
+      return res.status(400).json({ message: 'Your code expired. Please start signup again.' });
+    }
+    const pending = JSON.parse(raw) as PendingSignup;
+
+    if (pending.code !== code) {
+      pending.attempts += 1;
+      if (pending.attempts >= SIGNUP_OTP_MAX_ATTEMPTS) {
+        await pubClient.del(signupOtpKey(email));
+        return res.status(429).json({ message: 'Too many incorrect attempts. Please start signup again.' });
+      }
+      const ttl = await pubClient.ttl(signupOtpKey(email));
+      await pubClient.set(signupOtpKey(email), JSON.stringify(pending), 'EX', ttl > 0 ? ttl : SIGNUP_OTP_TTL_SECONDS);
+      return res.status(400).json({ message: 'Incorrect code. Please try again.', attemptsLeft: SIGNUP_OTP_MAX_ATTEMPTS - pending.attempts });
+    }
+
+    // Race/double-submit guard: re-check uniqueness at creation time.
+    if (await User.findOne({ email })) {
+      await pubClient.del(signupOtpKey(email));
+      return res.status(409).json({ message: 'Email already exists. Try logging in instead.' });
+    }
+
+    const user = new User({
+      username: pending.username,
+      email: pending.email,
+      password: pending.passwordHash,
+      usedOAuth: false,
+      plan: 'free',
+      isTestAccount: false,
+      emailVerified: true,
+      credits: { generation: 10, editing: 10, expiresAt: null },
+    });
+    await user.save();
+    await pubClient.del(signupOtpKey(email));
+
+    void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
+
+    const token = jwt.sign(
+      { userId: user._id?.toString() },
+      JWT_CONFIG.secret,
+      { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions
+    );
+    return res.status(201).json({
+      token,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        plan: user.plan,
+        role: user.role,
+        credits: user.credits,
+        isTestAccount: user.isTestAccount,
+        bio: user.bio,
+        profilePhoto: user.profilePhoto,
+        profileBanner: user.profileBanner,
+        aura: user.aura,
+        stats: user.stats,
+        followersCount: user.stats?.followersCount || 0,
+        followingCount: user.stats?.followingCount || 0,
+        createdAt: user.createdAt,
+        lastActive: user.lastActive,
+        isActive: user.isActive,
+        onboardingTourCompletedAt: user.onboardingTourCompletedAt ?? null,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// POST /users/signup/resend — re-issue a fresh OTP for an in-flight signup.
+export const resendSignupOtp = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { email } = req.body as { email?: string };
+    email = email?.trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Email is required.' });
+
+    const raw = await pubClient.get(signupOtpKey(email));
+    if (!raw) return res.status(400).json({ message: 'Your session expired. Please start signup again.' });
+
+    const pending = JSON.parse(raw) as PendingSignup;
+    pending.code = sixDigitCode();
+    pending.attempts = 0;
+    await pubClient.set(signupOtpKey(email), JSON.stringify(pending), 'EX', SIGNUP_OTP_TTL_SECONDS);
+    void sendSignupOtpEmail({ to: email, username: pending.username, code: pending.code });
+
+    return res.status(200).json({ message: 'otp_resent', email });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }

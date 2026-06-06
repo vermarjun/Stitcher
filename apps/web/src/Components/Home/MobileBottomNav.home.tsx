@@ -6,6 +6,8 @@ import {
   LayoutTemplate,
   Settings,
   LogOut,
+  FolderOpen,
+  Clapperboard,
 } from "lucide-react";
 import type { IUser } from "@/State/Types";
 import { FEATURES } from "@/config/features";
@@ -43,6 +45,8 @@ const MobileBottomNav: React.FC<Props> = ({
 
   const navItems = [
     { icon: Home, label: "Home", key: "home" },
+    { icon: FolderOpen, label: "Projects", key: "projects" },
+    { icon: Clapperboard, label: "Generations", key: "generations" },
     ...(FEATURES.community ? [
       { icon: Users, label: "Community", key: "community" },
       { icon: Backpack, label: "Backpack", key: "backpack" },

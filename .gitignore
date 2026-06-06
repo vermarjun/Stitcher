@@ -17,15 +17,22 @@ scripts/
 # Secrets / local backups — never commit (contain API keys + DB creds)
 OPENCODE_GO.md
 *.bak
+rzp-key.csv
 
 # Internal reports / working notes — keep local, not on GitHub
 E2E_TEST_REPORT.md
 PLUGIN_STRESS_TEST_REPORT.md
 CODEGEN_PLUGIN_ROOTCAUSE.md
+DEPLOY_VERCEL.md
+LANDING_PAGE_BRIEF.md
 landing-assets/
 Client/public/plugin-demos/
+
+# Separate projects / unrelated directories
+SecureFaceOffline/
 
 # Build artifacts
 *.tsbuildinfo
 
 StitcherRelaunch.pem
+StitcherRelaunchv2.pem

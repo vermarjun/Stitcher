@@ -105,7 +105,23 @@ function markTourComplete() {
 
 // ─── Small DOM helpers ───────────────────────────────────────────────────────
 
-const exists = (selector: string) => Boolean(document.querySelector(selector));
+/**
+ * The first *visible* element matching `selector`, or null.
+ *
+ * Why "visible" and not a plain querySelector: the responsive editor renders the
+ * same data-tour anchor twice — once in a mobile subtree, once in a desktop one —
+ * and hides the inactive layout with `display:none`. `[data-tour="timeline"]`
+ * matches both, and the mobile one comes first in the DOM, so on desktop a plain
+ * querySelector returns a 0×0 (hidden) node. That made waitForElements() never
+ * resolve and the timeline step target a ghost. Selecting the first non-zero-size
+ * match always lands on the layout that's actually on screen.
+ */
+const visibleEl = (selector: string): HTMLElement | null => {
+  const els = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+  return els.find((el) => el.offsetWidth > 0 && el.offsetHeight > 0) ?? null;
+};
+
+const exists = (selector: string) => Boolean(visibleEl(selector));
 
 /** Resolve once every required selector is in the DOM (or bail after a timeout). */
 function waitForElements(selectors: string[], timeoutMs = 6000): Promise<boolean> {
@@ -260,12 +276,16 @@ function buildEditorSteps(): DriveStep[] {
       },
     },
     {
-      _need: '[data-tour="ai-chat"]',
-      element: '[data-tour="ai-chat"]',
+      _need: typeof window !== 'undefined' && window.innerWidth < 768
+        ? '[data-tour="ai-trigger"]'
+        : '[data-tour="ai-chat"]',
+      element: typeof window !== 'undefined' && window.innerWidth < 768
+        ? '[data-tour="ai-trigger"]'
+        : '[data-tour="ai-chat"]',
       popover: {
         title: "Generate a scene",
-        description: cat("amazed-glasses.png", "Type what you want and the AI builds a video scene for you. Just describe it in plain language."),
-        side: "left",
+        description: cat("amazed-glasses.png", "Tap here to open the AI panel. Type what you want and Stitcher builds a video for you."),
+        side: typeof window !== 'undefined' && window.innerWidth < 768 ? "bottom" : "left",
         align: "start",
       },
     },
@@ -299,10 +319,20 @@ function buildEditorSteps(): DriveStep[] {
     },
   ];
 
-  // Drop steps whose anchor element isn't present (mobile / hidden rails).
+  // Drop steps whose anchor element isn't present (mobile / hidden rails), then
+  // pin each remaining step to the *visible* DOM node. The editor renders some
+  // anchors (e.g. the timeline) in both a mobile and a desktop subtree; resolving
+  // to the on-screen element here stops driver.js from grabbing the first
+  // selector match, which on desktop is the hidden mobile copy.
   return all
     .filter((s) => !s._need || exists(s._need))
-    .map(({ _need, ...step }) => step);
+    .map(({ _need, ...step }) => {
+      if (typeof step.element === "string") {
+        const el = visibleEl(step.element);
+        if (el) return { ...step, element: el };
+      }
+      return step;
+    });
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────

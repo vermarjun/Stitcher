@@ -195,13 +195,20 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
       });
     }
 
-    const audioClips: ExportAudioClip[] = ((audioTrack?.items ?? []) as any[])
-      .filter((it) => it.assetId?.url && !it.muted)
+    // All non-muted external audio clips (e.g. uploaded music/SFX). Each carries its
+    // timeline position + trim + volume/fades so the export mixes them exactly where
+    // the editor plays them. A muted audio TRACK drops them all.
+    const audioClips: ExportAudioClip[] = (audioTrack?.muted ? [] : ((audioTrack?.items ?? []) as any[]))
+      .filter((it) => it.assetId?.url)
       .sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0))
       .map((it) => ({
         url: it.assetId.url as string,
+        startTime: it.startTime ?? 0,
         sourceStartTime: it.sourceStartTime ?? 0,
         sourceEndTime: it.sourceEndTime ?? it.assetId.duration ?? 0,
+        volume: typeof it.volume === 'number' ? it.volume : 1,
+        fadeIn: it.fadeIn ?? 0,
+        fadeOut: it.fadeOut ?? 0,
       }));
 
     const textClips: ExportTextClip[] = ((textTrack?.items ?? []) as any[])
@@ -319,11 +326,17 @@ export const getSharedVideo = async (req: Request, res: Response) => {
     if (!shareId) {
       return res.status(400).json({ success: false, message: 'shareId is required' });
     }
-    const shared = await SharedVideo.findOneAndUpdate(
-      { shareId },
-      { $inc: { views: 1 } },
-      { new: true }
-    ).lean();
+    // Only count a view for an actual watch (?count=1, sent by the player). Link-preview
+    // crawlers and the server-side meta-tag injection read without it, so unfurls and
+    // page loads don't inflate the counter.
+    const countView = req.query.count === '1';
+    const shared = countView
+      ? await SharedVideo.findOneAndUpdate(
+          { shareId },
+          { $inc: { views: 1 } },
+          { new: true }
+        ).lean()
+      : await SharedVideo.findOne({ shareId }).lean();
 
     if (!shared) {
       return res.status(404).json({ success: false, message: 'This shared video does not exist or was removed' });

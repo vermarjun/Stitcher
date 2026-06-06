@@ -10,7 +10,6 @@ import {
   Github,
   Linkedin,
   X,
-  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import Confetti from "react-confetti";
@@ -18,7 +17,7 @@ import { ShimmerButton } from "../magicui/shimmer-button";
 import { ShineBorder } from "../magicui/shine-border";
 import api from "@/api";
 import { PlanBadge } from "@/Components/ui/PlanBadge";
-import { BackgroundGrid } from "@/components/ui/background-snippets";
+import { BackgroundGrid } from "@/Components/ui/background-snippets";
 
 // Dialog component for social media modal
 const SocialModal = ({
@@ -163,55 +162,11 @@ declare global {
   }
 }
 
-const TestModeModal = ({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900/95 border border-zinc-800/50 rounded-2xl p-7 max-w-sm w-full shadow-2xl relative overflow-hidden">
-        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-        <div className="flex flex-col items-center text-center gap-4 relative z-10">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center">
-            <Clock className="w-6 h-6 text-zinc-300" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-1">Payments coming soon</h3>
-            <p className="text-zinc-400 text-sm leading-relaxed">
-              We're currently in <span className="text-white font-medium">test mode</span> while Razorpay reviews our account. You'll be able to buy credit packs in about a week.
-            </p>
-          </div>
-          <p className="text-zinc-500 text-xs">
-            In the meantime, your 10 free videos are ready to use.
-          </p>
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-100 transition-colors"
-          >
-            Got it
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const PaymentPage = () => {
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSocialModal, setShowSocialModal] = useState(false);
-  const [showTestModeModal, setShowTestModeModal] = useState(false);
 
   const [userData, setUserData] = useState<{
     plan: string;
@@ -310,10 +265,15 @@ const PaymentPage = () => {
   };
 
   const handlePayment = async (planId: string) => {
-    setShowTestModeModal(true);
-    return;
     setLoading(true);
     setSelectedPlan(planId);
+
+    let storedUser: { username?: string; email?: string } = {};
+    try {
+      storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      storedUser = {};
+    }
 
     try {
       const scriptLoaded = await loadRazorpayScript();
@@ -354,6 +314,16 @@ const PaymentPage = () => {
             const verifyData = await verifyResponse.data;
 
             if (verifyData.success) {
+              // Reflect the newly granted credits/plan immediately.
+              setUserData((prev) => ({
+                plan: verifyData.plan ?? prev.plan,
+                credits: {
+                  generation:
+                    verifyData.credits?.generation ?? prev.credits.generation,
+                  editing: verifyData.credits?.editing ?? prev.credits.editing,
+                  expiresAt: verifyData.credits?.expiresAt ?? null,
+                },
+              }));
               setShowConfetti(true);
               toast.success(
                 `Payment successful! Welcome to ${planId.toUpperCase()} plan!`
@@ -370,9 +340,9 @@ const PaymentPage = () => {
           }
         },
         prefill: {
-          name: "User Name",
-          email: "user@example.com",
-          contact: "9999999999",
+          name: storedUser.username || "",
+          email: storedUser.email || "",
+          contact: "",
         },
         notes: {
           plan: planId,
@@ -418,10 +388,6 @@ const PaymentPage = () => {
       <SocialModal
         isOpen={showSocialModal}
         onClose={() => setShowSocialModal(false)}
-      />
-      <TestModeModal
-        isOpen={showTestModeModal}
-        onClose={() => setShowTestModeModal(false)}
       />
 
       <div className="max-w-7xl mx-auto px-6 py-12 lg:py-20 relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]">

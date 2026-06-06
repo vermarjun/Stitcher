@@ -9,22 +9,49 @@ export function welcomeTemplate(params: { username: string; appUrl: string }): R
   const url = esc(appUrl);
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Welcome to Stitcher, ${name}</p>
-    <p style="margin:0 0 12px;color:#374151;">You're all set. Stitcher turns a prompt into animated, code-driven videos. Describe a scene and let it generate, then refine on the timeline.</p>
-    <p style="margin:0 0 4px;color:#374151;">A good first step: open a new project and try generating your first clip.</p>
-    ${renderButton("Open Stitcher", url)}
-    <p style="margin:0;color:#6b7280;font-size:13px;">Reply to this email if you get stuck — a real person reads it.</p>`;
+    <p style="margin:0 0 16px;font-size:18px;font-weight:700;">you're in, ${name}</p>
+    <p style="margin:0 0 12px;color:#374151;">Stitcher turns a prompt into an actual animated video. You describe the scene, it writes the code and renders it, and you tweak the rest on the timeline.</p>
+    <p style="margin:0 0 4px;color:#374151;">Easiest way to get it is to just make something. Open a project and generate your first clip. Way more fun than reading this email anyway.</p>
+    ${renderButton("Make something", url)}
+    <p style="margin:0;color:#6b7280;font-size:13px;">If something breaks or you get stuck, just reply here. A real person reads these.</p>`;
 
   const text = [
-    `Welcome to Stitcher, ${username}!`,
+    `you're in, ${username}.`,
     ``,
-    `You're all set. Stitcher turns a prompt into animated, code-driven videos.`,
-    `Get started: ${appUrl}`,
+    `Stitcher turns a prompt into an actual animated video. You describe the scene, it writes the code and renders it, and you tweak the rest on the timeline.`,
+    ``,
+    `Easiest way to get it is to just make something: ${appUrl}`,
+    ``,
+    `If something breaks or you get stuck, just reply here. A real person reads these.`,
   ].join("\n");
 
   return {
-    subject: "Welcome to Stitcher",
-    html: renderLayout({ bodyHtml, preheader: "You're all set — let's make your first video." }),
+    subject: "you're in",
+    html: renderLayout({ bodyHtml, preheader: "Make your first video whenever you're ready." }),
+    text,
+  };
+}
+
+export function signupOtpTemplate(params: { username: string; code: string }): RenderedEmail {
+  const name = esc(params.username);
+  const code = esc(params.code);
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Confirm your email</p>
+    <p style="margin:0 0 16px;color:#374151;">Hey ${name}, enter this code on the signup screen to confirm your email and finish creating your account.</p>
+    <p style="margin:0 0 16px;font-size:30px;font-weight:800;letter-spacing:8px;color:#111827;">${code}</p>
+    <p style="margin:0;color:#6b7280;font-size:13px;">It expires in 10 minutes. If you didn't try to sign up, just ignore this.</p>`;
+
+  const text = [
+    `Your Stitcher code is ${params.code}.`,
+    ``,
+    `Enter it on the signup screen to confirm your email. It expires in 10 minutes.`,
+    `If you didn't try to sign up, ignore this.`,
+  ].join("\n");
+
+  return {
+    subject: `${params.code} is your Stitcher code`,
+    html: renderLayout({ bodyHtml, preheader: "Your Stitcher verification code." }),
     text,
   };
 }

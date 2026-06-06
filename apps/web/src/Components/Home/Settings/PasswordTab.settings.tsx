@@ -97,7 +97,7 @@ const PasswordTab: React.FC<PasswordTabProps> = ({
               type="submit"
               size="sm"
               disabled={loading}
-              className="order-1 h-9 min-w-[150px] bg-white text-black hover:bg-zinc-200 sm:order-2"
+              className="order-1 h-9 w-full sm:w-auto sm:min-w-[150px] bg-white text-black hover:bg-zinc-200 sm:order-2"
             >
               {loading ? (
                 <>

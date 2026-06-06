@@ -253,7 +253,7 @@ const QuickActions = ({ navigate }: Props3) => {
 
           <Card
             onClick={() => { window.open(LINKS.docs, "_blank"); }}
-            className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px] col-span-2 md:col-span-1">
+            className="hidden md:flex flex-col border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full w-full">
               <div className="flex flex-col items-center text-center space-y-3">
                 <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">

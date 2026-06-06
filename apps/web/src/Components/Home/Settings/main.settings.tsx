@@ -104,7 +104,7 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
       <Header user={user} />
 
       {/* Single-column settings: Profile, Security, then Danger Zone */}
-      <div className="mx-auto max-w-3xl space-y-5 px-4 pb-20 md:px-6">
+      <div className="mx-auto max-w-3xl space-y-5 px-4 pb-24 md:pb-20 md:px-6">
         <ProfileTab />
         <PasswordTab
           passwordData={passwordData}

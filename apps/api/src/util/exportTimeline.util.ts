@@ -4,8 +4,10 @@
  * Renders the CURRENT timeline state (after user edits) into a single mp4:
  *   - video track items are trimmed to [sourceStartTime, sourceEndTime],
  *     normalized to a common resolution/fps, then concatenated in order
- *   - the first audio track item (if any) is muxed over the result, trimmed
- *     to the video length
+ *   - each clip's OWN audio (e.g. the baked-in voiceover) is preserved; clips
+ *     without audio get a silent track so stream-copy concat stays uniform
+ *   - a separate audio track item (if any) is mixed OVER the result, so adding
+ *     background music never silences the narration
  *   - the result is uploaded to Cloudinary and the secure URL returned
  *
  * Design notes:
@@ -36,8 +38,15 @@ export interface ExportVideoClip {
 
 export interface ExportAudioClip {
     url: string;
+    /** Position on the timeline, in seconds, where this clip starts playing. */
+    startTime?: number;
     sourceStartTime: number;
     sourceEndTime: number;
+    /** Linear gain; 1 = unchanged. Defaults to 1. */
+    volume?: number;
+    /** Fade in/out durations in seconds; 0/undefined = no fade. */
+    fadeIn?: number;
+    fadeOut?: number;
 }
 
 export interface ExportTextClip {
@@ -196,6 +205,24 @@ function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null
     return filters.join(",");
 }
 
+// Return true if the file has at least one audio stream. Uses ffprobe (present in
+// the same container as ffmpeg); on any failure returns false, matching the
+// convention in ffmpegConcat.util.ts. A clip reported as silent gets a synthetic
+// silent track added so concat stays uniform.
+function probeHasAudio(filePath: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const proc = spawn(
+            "ffprobe",
+            ["-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type", "-of", "csv=p=0", filePath],
+            { stdio: ["ignore", "pipe", "pipe"] }
+        );
+        const out: Buffer[] = [];
+        proc.stdout?.on("data", (c: Buffer) => out.push(c));
+        proc.on("close", () => resolve(Buffer.concat(out).toString("utf8").includes("audio")));
+        proc.on("error", () => resolve(false));
+    });
+}
+
 function downloadFile(url: string, destPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
         const proto = url.startsWith("https:") ? https : http;
@@ -273,15 +300,40 @@ export async function exportTimeline(
             if (end !== undefined) trimArgs.push("-to", String(end));
             totalDuration += end !== undefined ? end - start : 0;
 
-            await runFfmpeg([
-                "-y",
-                ...trimArgs,
-                "-i", raw,
-                "-vf", `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease,pad=${OUT_W}:${OUT_H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${OUT_FPS}`,
-                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                "-an", // drop original audio; timeline audio is muxed separately
-                seg,
-            ]);
+            // Preserve the clip's own audio (the voiceover is baked into the video
+            // track) re-encoded to a uniform AAC layout. Clips that genuinely have no
+            // audio get a synthetic silent track so every segment carries exactly one
+            // matching audio stream — required for the stream-copy concat below to keep
+            // audio instead of silently dropping it.
+            const segHasAudio = await probeHasAudio(raw);
+            const vfChain = `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease,pad=${OUT_W}:${OUT_H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${OUT_FPS}`;
+            const audioCodecArgs = ["-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "192k"];
+
+            await runFfmpeg(
+                segHasAudio
+                    ? [
+                        "-y",
+                        ...trimArgs,
+                        "-i", raw,
+                        "-vf", vfChain,
+                        "-map", "0:v:0", "-map", "0:a:0",
+                        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                        ...audioCodecArgs,
+                        seg,
+                    ]
+                    : [
+                        "-y",
+                        ...trimArgs,
+                        "-i", raw,
+                        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+                        "-vf", vfChain,
+                        "-map", "0:v:0", "-map", "1:a:0",
+                        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                        ...audioCodecArgs,
+                        "-shortest",
+                        seg,
+                    ]
+            );
             segPaths.push(seg);
         }
 
@@ -304,8 +356,9 @@ export async function exportTimeline(
                     "-y",
                     "-i", concatPath,
                     "-vf", drawChain,
+                    "-map", "0:v:0", "-map", "0:a:0?",
                     "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                    "-an",
+                    "-c:a", "copy", // keep the concatenated audio (voiceover) through the text burn-in
                     titled,
                 ]);
                 videoPath = titled;
@@ -322,19 +375,58 @@ export async function exportTimeline(
             warnings.push(msg);
         }
 
-        // 3. Mux the first audio clip over the video, trimmed to video length.
+        // 3. Mix the video's existing audio (the baked-in voiceover) with EVERY external
+        //    audio-track clip. Each clip is trimmed to its source range, positioned at its
+        //    timeline startTime (adelay), volume-scaled and optionally faded — matching how
+        //    the editor's player layers them. Mixing (not replacing) with normalize=0 keeps
+        //    the narration at full level under any added music/SFX.
         let finalPath = videoPath;
         if (audioClips.length > 0) {
-            const audio = audioClips[0];
-            const araw = path.join(tmpDir, "audio.src");
-            await downloadFile(audio.url, araw);
+            const STD_FMT = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo";
+            const inputArgs: string[] = ["-i", videoPath];
+            // Normalize the video's own audio so all mix inputs share one format.
+            const filterParts: string[] = [`[0:a]${STD_FMT}[a0]`];
+            const mixLabels: string[] = ["[a0]"];
+
+            for (let i = 0; i < audioClips.length; i++) {
+                const a = audioClips[i];
+                const ss = Math.max(0, a.sourceStartTime || 0);
+                const end = a.sourceEndTime && a.sourceEndTime > ss ? a.sourceEndTime : undefined;
+                const dur = end !== undefined ? end - ss : undefined;
+
+                const araw = path.join(tmpDir, `audio-${i}.src`);
+                await downloadFile(a.url, araw);
+
+                // Trim the source range via fast input seeking.
+                inputArgs.push("-ss", String(ss));
+                if (dur !== undefined) inputArgs.push("-t", String(dur));
+                inputArgs.push("-i", araw);
+
+                const inIdx = i + 1; // input 0 is the video
+                const vol = typeof a.volume === "number" && a.volume >= 0 ? a.volume : 1;
+                const delayMs = Math.max(0, Math.round((a.startTime || 0) * 1000));
+                const chain = [`[${inIdx}:a]${STD_FMT}`, `volume=${vol}`];
+                if (a.fadeIn && a.fadeIn > 0) chain.push(`afade=t=in:st=0:d=${a.fadeIn}`);
+                if (a.fadeOut && a.fadeOut > 0 && dur !== undefined) {
+                    chain.push(`afade=t=out:st=${Math.max(0, dur - a.fadeOut)}:d=${a.fadeOut}`);
+                }
+                // Position the clip on the timeline. adelay needs a per-channel value.
+                if (delayMs > 0) chain.push(`adelay=${delayMs}|${delayMs}`);
+                const label = `[a${inIdx}]`;
+                filterParts.push(`${chain.join(",")}${label}`);
+                mixLabels.push(label);
+            }
+
+            filterParts.push(
+                `${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=first:dropout_transition=0:normalize=0[aout]`
+            );
+
             const withAudio = path.join(tmpDir, "final.mp4");
-            const aStart = Math.max(0, audio.sourceStartTime || 0);
             await runFfmpeg([
                 "-y",
-                "-i", videoPath,
-                "-ss", String(aStart), "-i", araw,
-                "-map", "0:v:0", "-map", "1:a:0",
+                ...inputArgs,
+                "-filter_complex", filterParts.join(";"),
+                "-map", "0:v:0", "-map", "[aout]",
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                 "-shortest",
                 withAudio,

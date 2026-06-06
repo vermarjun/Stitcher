@@ -600,11 +600,11 @@ const VideoPlayer = ({
   const overlays = getActiveTextOverlays();
 
   return (
-    <div className="bg-black p-3 h-full flex flex-col">
-      {/* Video Container */}
+    <div className="bg-black p-2 md:p-3 h-full flex flex-col">
+      {/* Video Container — on mobile fills remaining space above controls */}
       <div
         ref={containerRef}
-        className="relative bg-black rounded-lg overflow-hidden mb-3 flex-1"
+        className="relative bg-black rounded-lg overflow-hidden mb-2 md:mb-3 flex-1 min-h-0"
       >
         <video
           ref={videoRef}
@@ -642,34 +642,34 @@ const VideoPlayer = ({
       </div>
 
       {/* Player Controls */}
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between mt-1 md:mt-2 gap-1">
+        <div className="flex items-center gap-1 md:gap-1.5">
           <button
             onClick={() => handleSkip(-5)}
-            className="p-1.5 hover:bg-zinc-800 rounded transition-colors"
+            className="p-1 md:p-1.5 hover:bg-zinc-800 rounded transition-colors"
           >
-            <SkipBack className="w-4 h-4 text-zinc-300" />
+            <SkipBack className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-300" />
           </button>
           <button
             onClick={onPlayPause}
-            className="p-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+            className="p-1.5 md:p-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
           >
             {isPlaying ? (
-              <Pause className="w-4 h-4 text-white" />
+              <Pause className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
             ) : (
-              <Play className="w-4 h-4 text-white ml-0.5" />
+              <Play className="w-3.5 h-3.5 md:w-4 md:h-4 text-white ml-0.5" />
             )}
           </button>
           <button
             onClick={() => handleSkip(5)}
-            className="p-1.5 hover:bg-zinc-800 rounded transition-colors"
+            className="p-1 md:p-1.5 hover:bg-zinc-800 rounded transition-colors"
           >
-            <SkipForward className="w-4 h-4 text-zinc-300" />
+            <SkipForward className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-300" />
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Volume2 className="w-4 h-4 text-zinc-400" />
+        <div className="flex items-center gap-1 md:gap-1.5">
+          <Volume2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-400" />
           <input
             type="range"
             min="0"
@@ -677,11 +677,11 @@ const VideoPlayer = ({
             step="0.1"
             value={volume}
             onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-20 bg-zinc-700 rounded-full h-1 appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+            className="w-14 md:w-20 bg-zinc-700 rounded-full h-1 appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
           />
         </div>
 
-        <div className="text-zinc-300 text-xs">
+        <div className="text-zinc-300 text-[10px] md:text-xs tabular-nums">
           {formatTime(currentTime)} / {formatTime(Number(timeline.duration))}
         </div>
       </div>

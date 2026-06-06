@@ -488,7 +488,7 @@ const ProfileTab: React.FC = () => {
                   type="submit"
                   size="sm"
                   disabled={loading}
-                  className="h-9 min-w-[120px] bg-white text-black hover:bg-zinc-200"
+                  className="h-9 w-full sm:w-auto sm:min-w-[120px] bg-white text-black hover:bg-zinc-200"
                 >
                   {loading ? (
                     <div className="mr-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />

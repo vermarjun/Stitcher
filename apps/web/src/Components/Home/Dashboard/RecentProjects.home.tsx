@@ -139,8 +139,8 @@ const RecentProjects = ({
           </div>
         </div>
 
-        {/* Loading Table */}
-        <div className="bg-black border border-zinc-800 rounded-lg shadow-2xl relative">
+        {/* Loading skeleton — table on desktop, stacked cards on mobile */}
+        <div className="hidden md:block bg-black border border-zinc-800 rounded-lg shadow-2xl relative">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -161,6 +161,12 @@ const RecentProjects = ({
               </tbody>
             </table>
           </div>
+        </div>
+        {/* Mobile skeleton */}
+        <div className="md:hidden space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-20 bg-zinc-900/50 rounded-lg border border-zinc-800 animate-pulse" />
+          ))}
         </div>
       </div>
     );

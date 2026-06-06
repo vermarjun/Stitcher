@@ -387,50 +387,77 @@ const VideoEditor = ({ currentProject }: Props) => {
     return { video: 58, timeline: 42 };
   });
 
+  const sharedPlayerProps = {
+    timeline: timeline!,
+    currentTime,
+    isPlaying,
+    onTimeUpdate: handleTimeUpdate,
+    onPlayPause: handlePlayPause,
+    onUpdateTextItem: handleUpdateTextItem,
+    editingTextId,
+    setEditingTextId,
+  };
+
+  const sharedTimelineProps = {
+    timeline: timeline!,
+    currentTime,
+    onTimeUpdate: handleTimeUpdate,
+    onTimelineUpdate: handleTimelineUpdate,
+    onSync: syncToBackend,
+    onDeleteItem: handleDeleteItem,
+    onAddTextItem: handleAddTextItem,
+    onAddAssetItem: handleAddAssetItem,
+    canEdit,
+    collabDoc,
+    localOrigin: LOCAL_ORIGIN,
+    awareness: collabDoc?.awareness ?? null,
+    setAwarenessCursor: collabDoc?.setAwarenessCursor ?? null,
+    setAwarenessSelection: collabDoc?.setAwarenessSelection ?? null,
+  };
+
   return (
-    <ResizablePanelGroup direction="vertical" className="h-full w-full">
-      <ResizablePanel defaultSize={defaultLayout.video}>
-        {isLoading || !timeline ? (
-          <VideoPlayerLoading />
-        ) : (
-          <VideoPlayer
-            timeline={timeline}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            onTimeUpdate={handleTimeUpdate}
-            onPlayPause={handlePlayPause}
-            onUpdateTextItem={handleUpdateTextItem}
-            editingTextId={editingTextId}
-            setEditingTextId={setEditingTextId}
-          />
-        )}
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={defaultLayout.timeline}>
-        <div data-tour="timeline" className="h-full w-full">
-        {isLoading || !timeline ? (
-          <TimelineEditorLoading />
-        ) : (
-          <TimelineEditor
-            timeline={timeline}
-            currentTime={currentTime}
-            onTimeUpdate={handleTimeUpdate}
-            onTimelineUpdate={handleTimelineUpdate}
-            onSync={syncToBackend}
-            onDeleteItem={handleDeleteItem}
-            onAddTextItem={handleAddTextItem}
-            onAddAssetItem={handleAddAssetItem}
-            canEdit={canEdit}
-            collabDoc={collabDoc}
-            localOrigin={LOCAL_ORIGIN}
-            awareness={collabDoc?.awareness ?? null}
-            setAwarenessCursor={collabDoc?.setAwarenessCursor ?? null}
-            setAwarenessSelection={collabDoc?.setAwarenessSelection ?? null}
-          />
-        )}
+    <>
+      {/* ── Mobile layout: fixed-height stacked panels (no resizable handle on touch) ── */}
+      <div className="md:hidden flex flex-col h-full">
+        {/* Video player: ~45vh */}
+        <div className="h-[45vh] flex-shrink-0">
+          {isLoading || !timeline ? (
+            <VideoPlayerLoading />
+          ) : (
+            <VideoPlayer {...sharedPlayerProps} />
+          )}
         </div>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+        {/* Timeline: fills remaining space, scrolls internally */}
+        <div data-tour="timeline" className="flex-1 min-h-0">
+          {isLoading || !timeline ? (
+            <TimelineEditorLoading />
+          ) : (
+            <TimelineEditor {...sharedTimelineProps} />
+          )}
+        </div>
+      </div>
+
+      {/* ── Desktop layout: resizable panels ── */}
+      <ResizablePanelGroup direction="vertical" className="hidden md:flex h-full w-full">
+        <ResizablePanel defaultSize={defaultLayout.video}>
+          {isLoading || !timeline ? (
+            <VideoPlayerLoading />
+          ) : (
+            <VideoPlayer {...sharedPlayerProps} />
+          )}
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={defaultLayout.timeline}>
+          <div data-tour="timeline" className="h-full w-full">
+            {isLoading || !timeline ? (
+              <TimelineEditorLoading />
+            ) : (
+              <TimelineEditor {...sharedTimelineProps} />
+            )}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </>
   );
 };
 

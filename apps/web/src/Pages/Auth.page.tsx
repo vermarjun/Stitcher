@@ -12,6 +12,8 @@ interface AuthResponse {
   user: IUser;
 }
 
+export type SignupStep = "form" | "confirm" | "otp";
+
 const AuthPage: React.FC = () => {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [formData, setFormData] = useState<AuthFormData>({
@@ -22,6 +24,10 @@ const AuthPage: React.FC = () => {
   });
   const [isLoading, setLoading] = useState(false);
   const [isBanned, setIsBanned] = useState(false);
+  const [signupStep, setSignupStep] = useState<SignupStep>("form");
+  const [otpCode, setOtpCode] = useState("");
+  const [isResending, setIsResending] = useState(false);
+
   // Which method the user last authenticated with on this device ("google" |
   // "password"), read from localStorage. Drives the "Last used" hint badge.
   const [lastMethod, setLastMethod] = useState<string | null>(null);
@@ -41,12 +47,58 @@ const AuthPage: React.FC = () => {
     setLastMethod(localStorage.getItem("lastAuthMethod"));
   }, []);
 
+  // Reset OTP step when switching modes
+  const handleModeChange = (newMode: "login" | "signup") => {
+    setMode(newMode);
+    setSignupStep("form");
+    setOtpCode("");
+  };
+
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+  };
+
+  // Helper: store auth response and navigate home
+  const finalizeLogin = (token: string, rawUser: IUser): void => {
+    const createdAt = rawUser.createdAt
+      ? new Date(rawUser.createdAt).toISOString()
+      : new Date().toISOString();
+
+    const normalizedUser: IUser = {
+      _id: rawUser._id || "",
+      username: rawUser.username || "",
+      email: rawUser.email || "",
+      profilePhoto:
+        rawUser.profilePhoto || "https://www.gravatar.com/avatar/?d=mp",
+      profileBanner: rawUser.profileBanner || "",
+      createdAt,
+      bio: rawUser.bio || "",
+      role: rawUser.role,
+      plan: rawUser.plan || "free",
+      credits: rawUser.credits,
+      aura: typeof rawUser.aura === "number" ? rawUser.aura : 0,
+      stats: rawUser.stats || {
+        totalPosts: 0,
+        totalLikes: 0,
+        totalComments: 0,
+        totalViews: 0,
+        followersCount: 0,
+        followingCount: 0,
+        lastUpdated: new Date(),
+      },
+      followers: rawUser.followers || [],
+      following: rawUser.following || [],
+    };
+
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(normalizedUser));
+    localStorage.setItem("lastAuthMethod", "password");
+    if (socket.connected) socket.disconnect();
+    socket.connect();
   };
 
   const handleSubmit = async (): Promise<void> => {
@@ -69,67 +121,13 @@ const AuthPage: React.FC = () => {
         toast.success("Welcome back!");
         navigate("/home", { replace: true });
       } else {
-        // Basic client-side guard: passwords must match on sign-up.
+        // Signup: step "form" — validate passwords, then advance to "confirm"
         if (formData.password !== formData.confirmPassword) {
           toast.error("Passwords do not match.");
           setLoading(false);
           return;
         }
-
-        // Signup request
-        await api.post<any>("/users/signup", {
-          username: formData.name,
-          email: formData.email,
-          password: formData.password,
-        });
-
-        // After successful registration, automatically log the user in
-        const loginResponse = await api.post<AuthResponse>("/users/login", {
-          email: formData.email,
-          password: formData.password,
-        });
-
-        const data = loginResponse.data.user;
-
-        // normalize createdAt to string
-        const createdAt = data.createdAt
-          ? new Date(data.createdAt).toISOString()
-          : new Date().toISOString();
-
-        const normalizedUser: IUser = {
-          _id: data._id || "",
-          username: data.username || "",
-          email: data.email || "",
-          profilePhoto:
-            data.profilePhoto || "https://www.gravatar.com/avatar/?d=mp",
-          profileBanner: data.profileBanner || "",
-          createdAt,
-          bio: data.bio || "",
-          role: data.role,
-          plan: data.plan || "free",
-          credits: data.credits,
-          aura: typeof data.aura === "number" ? data.aura : 0,
-          stats: data.stats || {
-            totalPosts: 0,
-            totalLikes: 0,
-            totalComments: 0,
-            totalViews: 0,
-            followersCount: 0,
-            followingCount: 0,
-            lastUpdated: new Date(),
-          },
-          followers: data.followers || [],
-          following: data.following || [],
-        };
-
-        localStorage.setItem("token", loginResponse.data.token);
-        localStorage.setItem("user", JSON.stringify(normalizedUser));
-        localStorage.setItem("lastAuthMethod", "password");
-
-        if (socket.connected) socket.disconnect();
-        socket.connect();
-        toast.success("Registered Successfully!");
-        navigate("/home");
+        setSignupStep("confirm");
       }
     } catch (error: any) {
       console.error(
@@ -157,6 +155,78 @@ const AuthPage: React.FC = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Step "confirm" → call /signup/start
+  const handleConfirmEmail = async (): Promise<void> => {
+    setLoading(true);
+    try {
+      await api.post("/users/signup/start", {
+        username: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+      setSignupStep("otp");
+      setOtpCode("");
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.message ||
+        "Failed to send verification code. Please try again.";
+      toast.error(msg);
+      // On any error (e.g. email/username taken) go back to the form so the
+      // user can correct their details.
+      setSignupStep("form");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step "otp" → call /signup/verify
+  const handleVerifyOtp = async (): Promise<void> => {
+    if (otpCode.length !== 6) {
+      toast.error("Please enter the 6-digit code.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await api.post<AuthResponse>("/users/signup/verify", {
+        email: formData.email,
+        code: otpCode,
+      });
+      const { token, user } = response.data;
+      finalizeLogin(token, user);
+      toast.success("Registered Successfully!");
+      navigate("/home");
+    } catch (error: any) {
+      const status = error.response?.status;
+      const msg = error.response?.data?.message || "Verification failed.";
+      if (status === 429) {
+        // Too many attempts — send back to the form
+        toast.error(msg);
+        setSignupStep("form");
+        setOtpCode("");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step "otp" → resend code
+  const handleResendOtp = async (): Promise<void> => {
+    setIsResending(true);
+    try {
+      await api.post("/users/signup/resend", { email: formData.email });
+      toast.success("A new code has been sent to your email.");
+      setOtpCode("");
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.message || "Failed to resend code. Try again.";
+      toast.error(msg);
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -219,7 +289,7 @@ const AuthPage: React.FC = () => {
   return (
     <SignInPage
       mode={mode}
-      onModeChange={setMode}
+      onModeChange={handleModeChange}
       formData={formData}
       onInputChange={handleInputChange}
       onSubmit={handleSubmit}
@@ -230,6 +300,14 @@ const AuthPage: React.FC = () => {
       isLoading={isLoading}
       isBanned={isBanned}
       lastMethod={lastMethod}
+      signupStep={signupStep}
+      onConfirmEmail={handleConfirmEmail}
+      onBackToForm={() => setSignupStep("form")}
+      otpCode={otpCode}
+      onOtpChange={setOtpCode}
+      onVerifyOtp={handleVerifyOtp}
+      onResendOtp={handleResendOtp}
+      isResending={isResending}
     />
   );
 };

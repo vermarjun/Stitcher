@@ -8,7 +8,7 @@ import { Button } from "@/Components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { Badge } from "@/Components/ui/badge";
 import { PlanBadge } from "@/Components/ui/PlanBadge";
-import { LogOut, RotateCcw } from "lucide-react";
+import { LogOut, RotateCcw, Zap } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -58,15 +58,18 @@ function UserSection({ user }: UserSectionProps) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="hidden md:flex items-center gap-1">
-        <p className="text-xs flex gap-1 border-r px-2 py-0.5 border-zinc-500">
-          <span className="text-[#19E5A1]">{generationCredits}</span>
-          <span className="capitalize">generations</span>
-        </p>
-        <p className="text-xs flex gap-1 border-r px-2 py-0.5 border-zinc-500">
-          <span className="text-[#19E5A1]">{editingCredits}</span>
-          <span className="capitalize">edits</span>
-        </p>
+      <div className="flex items-center gap-1">
+        {/* Generation credits — always visible (icon-only on phones) */}
+        <span className="text-xs flex items-center gap-1 border-r pr-2 md:px-2 py-0.5 border-zinc-500">
+          <Zap className="w-3 h-3 text-[#19E5A1]" />
+          <span className="text-[#19E5A1] font-medium">{generationCredits}</span>
+          <span className="capitalize text-zinc-400 hidden sm:inline">gen</span>
+        </span>
+        {/* Editing credits — desktop only */}
+        <span className="text-xs items-center gap-1 border-r px-2 py-0.5 border-zinc-500 hidden md:flex">
+          <span className="text-[#19E5A1] font-medium">{editingCredits}</span>
+          <span className="capitalize text-zinc-400">edits</span>
+        </span>
       </div>
 
       {/* Plan Badge */}

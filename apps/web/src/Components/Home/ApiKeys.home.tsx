@@ -237,7 +237,7 @@ export default function ApiKeyManager() {
   const totalAgents = agents.length;
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white pb-24 md:pb-0">
       {/* Header */}
       <div className="flex items-center justify-between h-14 border-b border-zinc-800 px-4">
           <h1 className="text-xl font-semibold text-white">
@@ -283,7 +283,7 @@ export default function ApiKeyManager() {
       </div>
 
       {/* Progress Indicator */}
-      <div className="mb-4 px-4">
+      <div className="mb-4 px-3 md:px-4">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-lg font-medium text-zinc-300">
             Configuration Progress
@@ -302,7 +302,7 @@ export default function ApiKeyManager() {
 
       {/* General Purpose Agent */}
       {generalAgent && (
-        <div className="mb-4 px-4">
+        <div className="mb-4 px-3 md:px-4">
           {loading ? (
             <AgentCardSkeleton />
           ) : (
@@ -373,7 +373,7 @@ export default function ApiKeyManager() {
                         )
                       }
                       placeholder="sk-..."
-                      className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-7 text-xs"
+                      className="w-full bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-7 text-xs"
                     />
                   </div>
 
@@ -392,7 +392,7 @@ export default function ApiKeyManager() {
                         )
                       }
                       placeholder="https://api.openai.com/v1"
-                      className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-7 text-xs"
+                      className="w-full bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-7 text-xs"
                     />
                   </div>
 
@@ -411,7 +411,7 @@ export default function ApiKeyManager() {
                         )
                       }
                       placeholder="gpt-4-turbo"
-                      className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-7 text-xs"
+                      className="w-full bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-7 text-xs"
                     />
                   </div>
                 </div>
@@ -431,9 +431,9 @@ export default function ApiKeyManager() {
       )}
 
       {/* Optional Agents Grid */}
-      <div className="mb-4 px-4">
-        <h2 className="text-lg font-medium text-white mb-2">Optional Agents</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="mb-4 px-3 md:px-4">
+        <h2 className="text-base md:text-lg font-medium text-white mb-2">Optional Agents</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {loading
             ? otherAgents.map((agent) => <AgentCardSkeleton key={agent.id} />)
             : otherAgents.map((agent) => (
@@ -478,7 +478,7 @@ export default function ApiKeyManager() {
                             )
                           }
                           placeholder="Leave empty to use General Agent"
-                          className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-6 text-xs flex-1"
+                          className="w-full bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-6 text-xs flex-1 min-w-0"
                         />
                         <Button
                           variant="outline"
@@ -510,7 +510,7 @@ export default function ApiKeyManager() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <label className="text-xs text-zinc-400">
                           Base URL

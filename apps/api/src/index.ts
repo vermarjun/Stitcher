@@ -75,7 +75,7 @@ import analyticsRoutes from "./router/analytics.router";
 import { codexAuthCallback } from "./controller/gateway.controller";
 import { startHealthPoller, stopHealthPoller } from "./services/adminHealth.service";
 import { startStuckJobCleaner, stopStuckJobCleaner } from "./util/stuckJobCleaner.util";
-import { isAdminUser } from "./middleware/admin.middleware";
+import { isAdminUser, requireAdmin } from "./middleware/admin.middleware";
 import { initYjsServer } from "./collab/yjs.server";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
@@ -95,6 +95,7 @@ const corsOptions: cors.CorsOptions = {
 
 // ─── App & HTTP server ────────────────────────────────────────────────────────
 const app = express();
+app.set("trust proxy", 1); // trust Caddy reverse proxy for real client IPs
 const httpServer = createServer(app);
 
 // ─── Socket.IO ────────────────────────────────────────────────────────────────
@@ -118,7 +119,18 @@ app.use((req: Request & { id?: string }, _res: Response, next: NextFunction) => 
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json({ limit: "1mb" }));
+app.use(
+    express.json({
+        limit: "1mb",
+        // Stash the exact raw request bytes on req.rawBody so the Razorpay
+        // webhook handler can verify X-Razorpay-Signature against the original
+        // payload. Re-stringifying the parsed body does NOT reproduce the bytes
+        // Razorpay signed, so signature verification must use the raw buffer.
+        verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
+            req.rawBody = buf;
+        },
+    })
+);
 app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
 // ─── Global rate limit ────────────────────────────────────────────────────────
@@ -140,6 +152,31 @@ const authLimiter = rateLimit({
 });
 app.use(`${API_PREFIX}/users/login`, authLimiter);
 app.use(`${API_PREFIX}/users/signup`, authLimiter);
+
+// Stricter per-IP cap on the account-creation entry point: each /signup/start
+// sends an OTP email and can mint a (free-credit) account, so throttle hard to
+// blunt scripted throwaway-account abuse on the public launch.
+const signupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    limit: 6,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: { message: "Too many signup attempts. Please try again later." } },
+});
+app.use(`${API_PREFIX}/users/signup/start`, signupLimiter);
+
+// Email-sending endpoints (password reset, resend verification/OTP) — strict cap
+// to prevent email-bombing and exhausting the single Gmail App Password quota.
+const mailerLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 min
+    limit: 5,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: { message: "Too many requests. Please try again later." } },
+});
+app.use(`${API_PREFIX}/users/request-password-reset`, mailerLimiter);
+app.use(`${API_PREFIX}/users/resend-verification`, mailerLimiter);
+app.use(`${API_PREFIX}/users/signup/resend`, mailerLimiter);
 
 // ─── Socket.IO auth middleware ────────────────────────────────────────────────
 io.use((socket, next) => {
@@ -362,8 +399,11 @@ if (ADMIN_DASHBOARD_ENABLED) {
         serverAdapter,
     });
 
-    app.use(bullBoardPath, auth, serverAdapter.getRouter());
-    logger.info({ message: "bull-board mounted (auth-gated)", path: bullBoardPath });
+    // Gated by auth + requireAdmin (role check) — NOT just a valid JWT. This surface
+    // exposes/controls job payloads, so any logged-in non-admin (e.g. a launch tester)
+    // must NOT reach it.
+    app.use(bullBoardPath, auth, requireAdmin, serverAdapter.getRouter());
+    logger.info({ message: "bull-board mounted (auth + admin gated)", path: bullBoardPath });
 }
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────

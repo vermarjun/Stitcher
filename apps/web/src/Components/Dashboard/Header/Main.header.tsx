@@ -32,15 +32,6 @@ function Header({ currentProject, user, onShowPossibilities }: Props) {
           </div>
         </div>
 
-        {/* Middle (ABSOLUTELY CENTERED) */}
-        {/* <div className="absolute left-1/2 -translate-x-1/2 w-96">
-          <SearchSection
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            projectId={currentProject?._id}
-          />
-        </div> */}
-
         {/* Right */}
         <div className="ml-auto flex items-center gap-2">
           {/* Live presence avatars — shown when collaborators are connected */}
@@ -52,11 +43,11 @@ function Header({ currentProject, user, onShowPossibilities }: Props) {
             <button
               data-tour="collaborators"
               onClick={() => setCollabOpen(true)}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 p-2 md:px-3 md:py-1.5 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
               title="Manage collaborators"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Collaborators</span>
+              <span className="hidden md:inline">Collaborators</span>
             </button>
           )}
 

@@ -1,5 +1,10 @@
 {
+  "framework": "vite",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/v/:shareId", "destination": "/api/share-meta?shareId=:shareId" },
+    { "source": "/embed/:shareId", "destination": "/api/embed?shareId=:shareId" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }

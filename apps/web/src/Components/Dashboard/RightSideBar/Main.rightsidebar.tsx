@@ -236,8 +236,8 @@ const AISidebar = ({
     <>
       {/* Mobile Overlay Background */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-[55] md:hidden"
+        <div
+          className="fixed inset-0 bg-black/50 z-[75] md:hidden"
           onClick={onClose}
         />
       )}
@@ -247,8 +247,8 @@ const AISidebar = ({
         className={`
         bg-black border-l border-zinc-700 flex flex-col
         transition-transform duration-300 ease-in-out
-        md:w-80 md:relative md:translate-x-0 md:flex
-        fixed top-[57px] md:top-0 right-0 bottom-0 w-[85%] z-[60]
+        md:w-80 md:relative md:translate-x-0 md:flex md:z-[65]
+        fixed top-0 right-0 bottom-0 w-full z-[80]
         ${isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
       `}>
         {showHistory ? (
@@ -273,6 +273,7 @@ const AISidebar = ({
               onSelectHistory={handleSelectHistory}
               currentProject={currentProject}
               onShowHistory={() => setShowHistory(true)}
+              onClose={onClose}
             />
 
             {/* Show loading state while fetching chats */}

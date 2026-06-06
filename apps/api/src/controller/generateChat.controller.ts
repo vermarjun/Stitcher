@@ -13,7 +13,29 @@ import { publishProgress } from '../queue/eventPublisher.util';
 import { createJobRecord } from '../queue/jobTracker.util';
 import { getPhaseMeta } from '../queue/pipelinePhases';
 import { markCancelled } from '../queue/generationWorker';
+import { redisConnection } from '../queue/connection';
+import { config } from '../config';
 import type { Document } from 'mongoose';
+
+/**
+ * Global daily ceiling on FREE-tier generations — a public-launch budget/abuse
+ * guard. Increments a per-UTC-day Redis counter; returns false once the cap
+ * (config.DAILY_FREE_GEN_CAP) is exceeded. FAILS OPEN: any Redis error returns
+ * true so a cache hiccup never blocks all generations. Cap of 0 = disabled.
+ */
+async function underDailyFreeCap(): Promise<boolean> {
+    const cap = config.DAILY_FREE_GEN_CAP;
+    if (!cap || cap <= 0) return true;
+    try {
+        const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+        const key = `stitcher:freegen:${day}`;
+        const n = await redisConnection.incr(key);
+        if (n === 1) await redisConnection.expire(key, 60 * 60 * 48); // 2-day TTL
+        return n <= cap;
+    } catch {
+        return true; // never block generations on a Redis error
+    }
+}
 
 // ─── POST / — main generation entry ──────────────────────────────────────────
 // Validates input, creates/finds the GenerateChat doc, enqueues a BullMQ job,
@@ -51,9 +73,21 @@ export const generateChatResponse = async (req: Request, res: Response) => {
     }
 
     // Credit pre-check (atomic deduction happens inside the worker after success)
-    const user = await User.findById(userId).select('credits isTestAccount').lean();
+    const user = await User.findById(userId).select('credits isTestAccount plan').lean();
     if (!user) {
         res.status(404).json({ success: false, message: 'User not found' });
+        return;
+    }
+
+    // Public-launch budget guard: cap total FREE-tier generations per day across all
+    // users so scripted/abusive signups can't drain the shared LLM budget. Paid and
+    // test accounts are exempt (they don't draw on the free pool). Fail-open.
+    const isFreeTier = (user.plan ?? 'free') === 'free' && !user.isTestAccount;
+    if (isFreeTier && !(await underDailyFreeCap())) {
+        res.status(429).json({
+            success: false,
+            message: 'We\'ve hit today\'s free-generation limit. Please try again tomorrow, or upgrade your plan for uninterrupted access.',
+        });
         return;
     }
     // BYOT exhaust path: once credits hit zero, users who supplied their own

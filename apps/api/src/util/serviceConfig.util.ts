@@ -33,6 +33,11 @@ export interface ResolvedServiceConfig {
     provider: string;
     /** Decrypted plaintext API key; empty string when none configured. */
     apiKey: string;
+    /**
+     * Decrypted ordered backup API keys. Tried after `apiKey`, before any
+     * service-side env-default key. Empty/absent when none configured.
+     */
+    backupApiKeys?: string[];
     /** Endpoint override; null = provider default. */
     baseURL: string | null;
     /** Model id; null = provider default / not applicable. */
@@ -80,10 +85,10 @@ function envDefaults(): Record<ServiceKey, ResolvedServiceConfig> {
             params:   { max_tokens: 4096, temperature: 0.1, thinking: { type: "disabled" } },
         },
         embedder: {
-            provider: "ollama",
-            apiKey:   "",
-            baseURL:  (config as unknown as Record<string, string>)["OLLAMA_BASE_URL"] ?? "http://localhost:11434",
-            model:    "bge-m3",
+            provider: (config as unknown as Record<string, string>)["EMBEDDER_PROVIDER"] ?? "gemini",
+            apiKey:   (config as unknown as Record<string, string>)["EMBEDDER_API_KEY"]  ?? "",
+            baseURL:  "",
+            model:    (config as unknown as Record<string, string>)["EMBEDDER_MODEL"]    ?? "gemini-embedding-001",
             params:   {},
         },
         tts: {
@@ -191,6 +196,7 @@ function safeDecrypt(enc: string | undefined | null): string {
 function rowToResolved(doc: {
     provider: string;
     apiKey: string;
+    backupApiKeys?: string[] | null;
     baseURL: string | null;
     modelId: string | null;
     params: Record<string, unknown>;
@@ -199,6 +205,9 @@ function rowToResolved(doc: {
     const resolved: ResolvedServiceConfig = {
         provider: doc.provider,
         apiKey:   safeDecrypt(doc.apiKey),
+        backupApiKeys: Array.isArray(doc.backupApiKeys)
+            ? doc.backupApiKeys.map(safeDecrypt).filter(Boolean)
+            : [],
         baseURL:  doc.baseURL,
         model:    doc.modelId,
         params:   doc.params ?? {},
@@ -248,6 +257,7 @@ export async function resolveServiceConfig(
             tier: TierKey;
             provider: string;
             apiKey: string;
+            backupApiKeys?: string[] | null;
             baseURL: string | null;
             modelId: string | null;
             params: Record<string, unknown>;

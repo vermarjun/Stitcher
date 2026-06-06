@@ -1,0 +1,16 @@
+services:
+  api:
+    image: stitcher-api
+    build: !reset null
+
+  agent-service:
+    image: stitcher-agent-service
+    build: !reset null
+
+  render-service:
+    image: stitcher-render-service
+    build: !reset null
+
+  rag-service:
+    image: stitcher-rag-service
+    build: !reset null

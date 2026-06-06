@@ -36,6 +36,8 @@ interface ServiceConfigDoc {
   provider: string;
   maskedKey: string;
   hasKey: boolean;
+  /** Masked backup API keys (ordered), tried after the primary before the env key. */
+  backupKeys?: Array<{ masked: string; hasKey: boolean }>;
   baseURL: string | null;
   model: string | null;
   params: Record<string, unknown>;
@@ -47,9 +49,22 @@ interface ServiceConfigDoc {
 }
 type ProvidersResponse = Record<ServiceKey, Record<Tier, ServiceConfigDoc>>;
 
+/**
+ * A backup-key row in the editor. An EXISTING key carries its original index
+ * (sent back as "__keep__:<i>" so the server preserves it) and a masked preview;
+ * a NEW key carries a plaintext `value`. Clearing the value of an existing row
+ * (or removing it) drops it.
+ */
+interface BackupKeyForm {
+  existingIndex?: number;
+  masked?: string;
+  value: string;
+}
+
 interface TierFormState {
   provider: string;
   apiKey: string;
+  backupKeys: BackupKeyForm[];
   baseURL: string;
   model: string;
   paramsJson: string;
@@ -87,8 +102,23 @@ interface GatewayStatusResponse {
 // ── Provider + model catalogue ─────────────────────────────────────────────────
 
 const LLM_PROVIDERS = ['opencodego', 'codex', 'openai', 'anthropic', 'gemini', 'ollama', 'azure'];
-const EMBEDDER_PROVIDERS = ['ollama', 'openai', 'azure'];
+const EMBEDDER_PROVIDERS = ['gemini', 'ollama', 'openai', 'azure'];
 const TTS_PROVIDERS = ['gtts', 'azure'];
+
+// Embedding models per provider (distinct from the chat models in PROVIDER_MODELS).
+// Gemini gemini-embedding-001 = 3072-dim, free-tier (rate-limited → use backup keys).
+const EMBEDDER_MODELS: Record<string, string[]> = {
+  gemini: ['gemini-embedding-001'],
+  openai: ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],
+  ollama: ['bge-m3', 'nomic-embed-text', 'mxbai-embed-large'],
+  azure: [],
+};
+
+/** Known models for a (provider, service-kind) — embedder uses EMBEDDER_MODELS. */
+function modelsForProvider(provider: string, kind: ServiceMeta['kind']): string[] {
+  if (kind === 'embedder') return EMBEDDER_MODELS[provider] ?? [];
+  return PROVIDER_MODELS[provider] ?? [];
+}
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   'opencodego': [
@@ -277,6 +307,7 @@ function docToFormState(doc: ServiceConfigDoc): TierFormState {
   return {
     provider: doc.provider ?? '',
     apiKey: '',
+    backupKeys: (doc.backupKeys ?? []).map((b, i) => ({ existingIndex: i, masked: b.masked, value: '' })),
     baseURL: doc.baseURL ?? '',
     model: doc.model ?? '',
     paramsJson: JSON.stringify(doc.params ?? {}, null, 2),
@@ -392,7 +423,7 @@ function ModelSelector({ provider, value, onChange, kind, serviceKey, onPresetAp
   serviceKey: ServiceKey;
   onPresetApply?: (params: Record<string, unknown>) => void;
 }) {
-  const knownModels = PROVIDER_MODELS[provider] ?? [];
+  const knownModels = modelsForProvider(provider, kind);
   const isKnown = knownModels.includes(value);
   const preset = MODEL_PARAM_PRESETS[value];
   const isQT = serviceKey === 'query_transform';
@@ -400,7 +431,7 @@ function ModelSelector({ provider, value, onChange, kind, serviceKey, onPresetAp
   if (kind === 'tts' || knownModels.length === 0) {
     return (
       <Input className="h-8 text-xs font-mono"
-        placeholder={kind === 'embedder' ? 'e.g. bge-m3' : 'e.g. custom-model-id'}
+        placeholder={kind === 'embedder' ? 'e.g. gemini-embedding-001' : 'e.g. custom-model-id'}
         value={value} onChange={(e) => onChange(e.target.value)} />
     );
   }
@@ -470,6 +501,7 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
     doc ? docToFormState(doc) : {
       provider: service.providers[0] ?? '',
       apiKey: '',
+      backupKeys: [],
       baseURL: '',
       model: '',
       paramsJson: '{}',
@@ -501,7 +533,7 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
 
       // Clear model if it's not valid for the new provider (compute first so we can
       // auto-apply the model's service-aware preset below).
-      const newModelList = PROVIDER_MODELS[newProvider] ?? [];
+      const newModelList = modelsForProvider(newProvider, service.kind);
       const newModel = newModelList.length > 0 && !newModelList.includes(prev.model)
         ? newModelList[0]
         : prev.model;
@@ -514,7 +546,10 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
         ([, def]) => JSON.stringify(def) === JSON.stringify(prevParamsParsed.ok ? prevParamsParsed.value : {})
       );
       const modelPreset = presetParamsFor(newModel, service.key);
-      if (newProvider === 'codex') {
+      if (service.kind === 'embedder') {
+        // Embedders take no generation params — dims/taskType are server-side.
+        if (isEmpty || wasDefault) newParamsJson = '{}';
+      } else if (newProvider === 'codex') {
         // Codex only accepts reasoning_effort — always override params
         newParamsJson = JSON.stringify(
           modelPreset ?? { reasoning_effort: service.key === 'query_transform' ? 'low' : 'medium' }, null, 2);
@@ -591,6 +626,18 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
       if (form.baseURL.trim()) body.baseURL = form.baseURL.trim();
       if (form.model.trim()) body.model = form.model.trim();
 
+      // Backup keys (embedder only): existing rows → "__keep__:<i>" (unless re-typed),
+      // new rows → plaintext. Cleared/removed rows are simply omitted.
+      if (service.kind === 'embedder') {
+        body.backupApiKeys = form.backupKeys
+          .map((b) =>
+            b.value.trim()
+              ? b.value.trim()
+              : (b.existingIndex != null ? `__keep__:${b.existingIndex}` : '')
+          )
+          .filter(Boolean);
+      }
+
       // Fallback provider (used if the primary fails). Same semantics as primary:
       // blank apiKey preserves the existing encrypted key, so only send it when typed.
       const fb = form.fallback;
@@ -610,13 +657,39 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
     },
     onSuccess: () => {
       toast.success(`Saved ${service.label} / ${tier}`);
-      setForm((f) => ({ ...f, apiKey: '', fallback: { ...f.fallback, apiKey: '' } }));
+      // Clear write-only key inputs; masked values refresh on the next list fetch.
+      setForm((f) => ({
+        ...f,
+        apiKey: '',
+        backupKeys: f.backupKeys.map((b) => ({ ...b, value: '' })),
+        fallback: { ...f.fallback, apiKey: '' },
+      }));
       onSaved();
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message
         : (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg ?? `Failed to save ${service.label} / ${tier}`);
+    },
+  });
+
+  // ── Embedder key test (real embedContent probe) ──────────────────────────────
+  interface EmbedTestResult { success: boolean; dims?: number | null; latencyMs?: number; httpStatus?: number; error?: string; model?: string }
+  const [testResult, setTestResult] = useState<EmbedTestResult | null>(null);
+  const testMutation = useMutation({
+    mutationFn: (keyOverride?: string) =>
+      api.post<EmbedTestResult>(`/admin/providers/${service.key}/test`, {
+        provider: form.provider,
+        // explicit key, else the primary input, else (undefined →) the stored tier key
+        apiKey: (keyOverride ?? form.apiKey.trim()) || undefined,
+        model: form.model.trim() || undefined,
+        baseURL: form.baseURL.trim() || undefined,
+        tier,
+      }).then((r) => r.data),
+    onSuccess: (data) => setTestResult(data),
+    onError: (err: unknown) => {
+      const apiErr = (err as { response?: { data?: EmbedTestResult } })?.response?.data;
+      setTestResult(apiErr ?? { success: false, error: String(err) });
     },
   });
 
@@ -700,7 +773,87 @@ function TierCell({ service, tier, doc, onSaved, proxyBase }: TierCellProps) {
               </p>
             )}
             <p className="text-[10px] text-muted-foreground">Write-only. Existing key shown masked above. Leave blank to keep.</p>
+
+            {/* Test key (embedder only) — real embedContent probe */}
+            {service.kind === 'embedder' && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button" variant="outline" size="sm" className="h-7 text-xs gap-1"
+                    disabled={testMutation.isPending}
+                    onClick={() => testMutation.mutate(undefined)}
+                  >
+                    <Play className="h-3 w-3" />
+                    {testMutation.isPending ? 'Testing…' : 'Test key'}
+                  </Button>
+                  <span className="text-[10px] text-muted-foreground">
+                    Embeds a probe string with the typed key (or the saved key if blank).
+                  </span>
+                </div>
+                {testResult && (
+                  <div className={`text-[10px] rounded border px-2 py-1.5 ${testResult.success
+                    ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400'
+                    : 'border-destructive/40 bg-destructive/10 text-destructive'}`}>
+                    {testResult.success
+                      ? <>✓ OK — {testResult.dims} dims{testResult.latencyMs != null ? ` · ${testResult.latencyMs}ms` : ''}{testResult.dims != null && testResult.dims !== 3072 ? ' ⚠ index expects 3072' : ''}</>
+                      : <>✗ {testResult.error ?? 'failed'}{testResult.httpStatus ? ` (HTTP ${testResult.httpStatus})` : ''}</>}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Backup API keys (embedder only) — tried after primary, before the env key */}
+          {service.kind === 'embedder' && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Backup API keys</Label>
+                <button
+                  type="button"
+                  className="text-[10px] text-sky-600 dark:text-sky-400 hover:underline"
+                  onClick={() => setForm((f) => ({ ...f, backupKeys: [...f.backupKeys, { value: '' }] }))}
+                >+ Add backup key</button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Tried in order if the primary key fails (e.g. rate-limited). After all of these,
+                RAG falls back to the server's <span className="font-mono">EMBEDDER_API_KEY</span> env key.
+              </p>
+              {form.backupKeys.length === 0 && (
+                <p className="text-[10px] text-muted-foreground italic">No backup keys.</p>
+              )}
+              {form.backupKeys.map((bk, idx) => (
+                <div key={idx} className="flex items-center gap-1.5">
+                  <Input
+                    type="password" className="h-7 text-xs font-mono flex-1"
+                    placeholder={bk.existingIndex != null ? `${bk.masked} — leave blank to keep` : 'Enter backup key'}
+                    value={bk.value}
+                    autoComplete="new-password"
+                    onChange={(e) => setForm((f) => {
+                      const next = [...f.backupKeys];
+                      next[idx] = { ...next[idx], value: e.target.value };
+                      return { ...f, backupKeys: next };
+                    })}
+                  />
+                  {bk.value.trim() && (
+                    <Button
+                      type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-[10px]"
+                      disabled={testMutation.isPending}
+                      onClick={() => testMutation.mutate(bk.value.trim())}
+                      title="Test this key"
+                    >
+                      <Play className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-destructive shrink-0 px-1"
+                    title="Remove"
+                    onClick={() => setForm((f) => ({ ...f, backupKeys: f.backupKeys.filter((_, i) => i !== idx) }))}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Base URL */}
           <div className="space-y-1.5">

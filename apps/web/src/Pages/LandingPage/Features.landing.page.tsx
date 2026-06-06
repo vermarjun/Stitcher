@@ -71,11 +71,11 @@ const Features = () => {
         className="absolute inset-0 h-full w-full object-cover"
       />
       <div className="absolute inset-0 bg-black/60" />
-      <div className="relative z-10 mx-auto max-w-6xl space-y-16 px-6">
+      <div className="relative z-10 mx-auto max-w-6xl space-y-16 px-4 md:px-6">
 
         {/* ---------------- HEADER (about-page two-column style) ---------------- */}
         <div className="grid gap-6 text-center md:grid-cols-2 md:gap-12 md:text-left">
-          <h1 className="text-4xl md:text-5xl font-semibold text-white">
+          <h1 className="text-3xl md:text-5xl font-semibold text-white">
             Everything you need to{" "}
             <span className="text-neutral-400">Stitch-it!</span>
           </h1>
@@ -189,7 +189,7 @@ const Features = () => {
           <SpotlightCard
             scale={1.01}
             spotlightSize={460}
-            className="w-full border-white/15 md:h-[340px]"
+            className="w-full border-white/15 min-h-[260px] md:h-[340px]"
           >
             <img
               src="/homepage.png"
@@ -202,8 +202,8 @@ const Features = () => {
                 leaving the bright glow at the bottom of the image visible. */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-transparent" />
             <div className="relative z-10 flex h-full flex-col">
-              <div className="p-6 md:p-8">
-                <h3 className="text-2xl font-bold text-white md:text-3xl">
+              <div className="p-4 md:p-8">
+                <h3 className="text-xl font-bold text-white md:text-3xl">
                   AI Animation Editing
                 </h3>
                 <p className="mt-2 max-w-xl text-sm text-gray-200">
@@ -212,7 +212,7 @@ const Features = () => {
                   video, all in the browser.
                 </p>
               </div>
-              <div className="mt-auto px-6 md:px-10">
+              <div className="mt-4 md:mt-auto px-4 md:px-10">
                 <img
                   src="/timeline.png"
                   alt="Stitcher timeline editor"

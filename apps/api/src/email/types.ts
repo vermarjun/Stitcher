@@ -36,6 +36,7 @@ export interface EmailProvider {
 export type EmailKind =
   | "welcome"
   | "verify_email"
+  | "signup_otp"
   | "collab_invite"
   | "password_reset";
 

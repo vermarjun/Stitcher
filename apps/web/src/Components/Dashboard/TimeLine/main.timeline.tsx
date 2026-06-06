@@ -855,107 +855,108 @@ const TimelineEditor = ({
   return (
     <div className="h-full flex flex-col bg-black border border-zinc-800 overflow-hidden shadow-2xl">
       {/* Header with enhanced visual hierarchy */}
-      <div className="flex items-center justify-between p-2.5 border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          {/* Tool Selection with bold visual feedback */}
-          <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800">
-            <Button
-              className={`p-1.5 rounded-md transition-all duration-200 ${
-                tool === "move"
-                  ? "bg-white text-black shadow-md scale-105"
-                  : "bg-transparent text-zinc-400 hover:text-white hover:bg-zinc-700"
-              }`}
-              title="Move tool"
-              onClick={() => setTool("move")}
-            >
-              <Move className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              className={`p-1.5 rounded-md transition-all duration-200 ${
-                tool === "crop"
-                  ? "bg-white text-black shadow-md scale-105"
-                  : "bg-transparent text-zinc-400 hover:text-white hover:bg-zinc-700"
-              }`}
-              title="Crop tool"
-              onClick={() => setTool("crop")}
-            >
-              <Scissors className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-
-          {/* Add Text Button with modern styling */}
-          {canEdit && (
-            <Button
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${
-                isAddingText
-                  ? "bg-green-600 text-white border-green-500 shadow-md shadow-green-600/25"
-                  : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 border-zinc-700 hover:border-zinc-600"
-              }`}
-              title="Add text overlay"
-              onClick={handleAddTextClick}
-            >
-              <Plus className="w-3 h-3" />
-              <Type className="w-3 h-3" />
-              <span>Add Text</span>
-            </Button>
-          )}
-
-          {/* Read-only badge for viewers */}
-          {!canEdit && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-md">
-              <Eye className="w-3 h-3 text-zinc-400" />
-              <span className="text-zinc-400 text-xs font-medium">View only</span>
-            </div>
-          )}
-
-          {/* Status indicator with better visibility */}
-          {isAddingText && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-md">
-              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-green-400 text-xs font-medium">
-                Click timeline to place text
-              </span>
-            </div>
-          )}
+      {/* On mobile: single scrollable row so all controls stay reachable */}
+      <div className="flex items-center gap-2 p-2 md:p-2.5 border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm overflow-x-auto scrollbar-none">
+        {/* Tool Selection with bold visual feedback */}
+        <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800 flex-shrink-0">
+          <Button
+            className={`p-1.5 rounded-md transition-all duration-200 ${
+              tool === "move"
+                ? "bg-white text-black shadow-md scale-105"
+                : "bg-transparent text-zinc-400 hover:text-white hover:bg-zinc-700"
+            }`}
+            title="Move tool"
+            onClick={() => setTool("move")}
+          >
+            <Move className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            className={`p-1.5 rounded-md transition-all duration-200 ${
+              tool === "crop"
+                ? "bg-white text-black shadow-md scale-105"
+                : "bg-transparent text-zinc-400 hover:text-white hover:bg-zinc-700"
+            }`}
+            title="Crop tool"
+            onClick={() => setTool("crop")}
+          >
+            <Scissors className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          {(selectedItem || isAddingText) && (
-            <Button
-              onClick={handleCancelAddTextOrDelete}
-              className="p-2 rounded-lg transition-all duration-200 shadow-md bg-zinc-700 text-white hover:bg-zinc-600 shadow-zinc-600/25 border border-zinc-600"
-              title={isAddingText ? "Cancel adding text" : "Deselect item"}
-            >
-              <X className="w-4 h-4" />
-              <span>Cancel</span>
-            </Button>
-          )}
+        {/* Add Text Button with modern styling */}
+        {canEdit && (
+          <Button
+            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex-shrink-0 ${
+              isAddingText
+                ? "bg-green-600 text-white border-green-500 shadow-md shadow-green-600/25"
+                : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 border-zinc-700 hover:border-zinc-600"
+            }`}
+            title="Add text overlay"
+            onClick={handleAddTextClick}
+          >
+            <Plus className="w-3 h-3" />
+            <Type className="w-3 h-3" />
+            <span className="hidden sm:inline">Add Text</span>
+          </Button>
+        )}
 
-          {selectedItem && canEdit && (
-            <Button
-              onClick={handleDeleteItem}
-              disabled={isDeleting}
-              className={`p-2 rounded-lg transition-all duration-200 shadow-md ${
-                isDeleting
-                  ? "text-white shadow-red-600/25 animate-pulse cursor-not-allowed"
-                  : "bg-zinc-600 text-white hover:bg-red-600"
-              }`}
-              title={isDeleting ? "Deleting..." : "Delete selected item"}
-            >
-              {isDeleting ? (
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-            </Button>
-          )}
+        {/* Read-only badge for viewers */}
+        {!canEdit && (
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-md flex-shrink-0">
+            <Eye className="w-3 h-3 text-zinc-400" />
+            <span className="text-zinc-400 text-xs font-medium hidden sm:inline">View only</span>
+          </div>
+        )}
 
-          {/* Sync Icon Button — writes to the project, so editors/owners only */}
-          {canEdit && (
+        {/* Status indicator with better visibility */}
+        {isAddingText && (
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-md flex-shrink-0">
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+            <span className="text-green-400 text-xs font-medium hidden sm:inline">
+              Click timeline to place text
+            </span>
+          </div>
+        )}
+
+        {/* Spacer pushes right-side controls to the end on desktop; on mobile everything scrolls */}
+        <div className="hidden md:flex flex-1" />
+
+        {(selectedItem || isAddingText) && (
+          <Button
+            onClick={handleCancelAddTextOrDelete}
+            className="p-2 rounded-lg transition-all duration-200 shadow-md bg-zinc-700 text-white hover:bg-zinc-600 shadow-zinc-600/25 border border-zinc-600 flex-shrink-0"
+            title={isAddingText ? "Cancel adding text" : "Deselect item"}
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Cancel</span>
+          </Button>
+        )}
+
+        {selectedItem && canEdit && (
+          <Button
+            onClick={handleDeleteItem}
+            disabled={isDeleting}
+            className={`p-2 rounded-lg transition-all duration-200 shadow-md flex-shrink-0 ${
+              isDeleting
+                ? "text-white shadow-red-600/25 animate-pulse cursor-not-allowed"
+                : "bg-zinc-600 text-white hover:bg-red-600"
+            }`}
+            title={isDeleting ? "Deleting..." : "Delete selected item"}
+          >
+            {isDeleting ? (
+              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+          </Button>
+        )}
+
+        {/* Sync Icon Button — writes to the project, so editors/owners only */}
+        {canEdit && (
           <Button
             onClick={handleSyncClick}
             disabled={isLoading}
-            className={`p-2 rounded-lg transition-all duration-200 shadow-md ${
+            className={`p-2 rounded-lg transition-all duration-200 shadow-md flex-shrink-0 ${
               isLoading
                 ? "bg-amber-600 text-white shadow-amber-600/25 animate-pulse cursor-not-allowed"
                 : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/25"
@@ -969,29 +970,28 @@ const TimelineEditor = ({
             ) : (
               <Save className="w-4 h-4" />
             )}
-            <span>{isLoading ? "Syncing..." : "Sync"}</span>
+            <span className="hidden sm:inline">{isLoading ? "Syncing..." : "Sync"}</span>
           </Button>
-          )}
+        )}
 
-          {/* Share Button — opens a dialog to download or get a shareable link */}
-          <Button
-            onClick={openShareDialog}
-            disabled={shareBusy || isLoading}
-            className={`p-2 rounded-lg transition-all duration-200 shadow-md flex items-center gap-1 ${
-              shareBusy
-                ? "bg-zinc-700 text-white animate-pulse cursor-not-allowed"
-                : "bg-zinc-100 text-black hover:bg-white shadow-white/10"
-            } border border-zinc-500/40`}
-            title="Share or download this video"
-          >
-            {shareBusy ? (
-              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Share2 className="w-4 h-4" />
-            )}
-            <span>{shareBusy ? "Working..." : "Share"}</span>
-          </Button>
-        </div>
+        {/* Share Button — opens a dialog to download or get a shareable link */}
+        <Button
+          onClick={openShareDialog}
+          disabled={shareBusy || isLoading}
+          className={`p-2 rounded-lg transition-all duration-200 shadow-md flex items-center gap-1 flex-shrink-0 ${
+            shareBusy
+              ? "bg-zinc-700 text-white animate-pulse cursor-not-allowed"
+              : "bg-zinc-100 text-black hover:bg-white shadow-white/10"
+          } border border-zinc-500/40`}
+          title="Share or download this video"
+        >
+          {shareBusy ? (
+            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+          ) : (
+            <Share2 className="w-4 h-4" />
+          )}
+          <span className="hidden sm:inline">{shareBusy ? "Working..." : "Share"}</span>
+        </Button>
       </div>
 
       {/* ── Share dialog ──────────────────────────────────────────────── */}

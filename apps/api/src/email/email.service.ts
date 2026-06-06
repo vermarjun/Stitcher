@@ -12,6 +12,7 @@ import logger from "../util/logger.util";
 import {
   welcomeTemplate,
   verifyEmailTemplate,
+  signupOtpTemplate,
   collabInviteTemplate,
   passwordResetTemplate,
 } from "./templates";
@@ -43,6 +44,11 @@ export function sendVerificationEmail(params: {
 }): Promise<void> {
   const { to, username, verifyUrl } = params;
   return enqueueSafe("verify_email", to, verifyEmailTemplate({ username, verifyUrl }));
+}
+
+export function sendSignupOtpEmail(params: { to: string; username: string; code: string }): Promise<void> {
+  const { to, username, code } = params;
+  return enqueueSafe("signup_otp", to, signupOtpTemplate({ username, code }));
 }
 
 export function sendCollabInviteEmail(params: {

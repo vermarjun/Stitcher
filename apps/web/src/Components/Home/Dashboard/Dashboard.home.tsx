@@ -24,13 +24,13 @@ const TopDesign = () => {
   const username = capitalizeFirstLetter(user.username) || "Guest";
   
   return (
-    <div className="relative w-full overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 h-32 md:h-40">
+    <div className="relative w-full overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 h-28 md:h-40">
        <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-green-500/10 rounded-full blur-3xl pointer-events-none"></div>
        <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
-       
-       <div className="relative z-10 p-6 md:p-8 flex items-center justify-between h-full">
-         <div className="space-y-1.5 max-w-xl">
-           <h1 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400 tracking-tight">
+
+       <div className="relative z-10 p-4 md:p-8 flex items-center justify-between h-full">
+         <div className="space-y-1 md:space-y-1.5 max-w-xl">
+           <h1 className="text-xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400 tracking-tight">
              Welcome back, {username}
            </h1>
            <p className="text-zinc-400 text-xs md:text-sm font-light max-w-sm md:max-w-none">
@@ -64,7 +64,7 @@ const Dashboard = ({
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-black p-4 md:p-6">
+    <div className="min-h-screen bg-black p-4 md:p-6 pb-24 md:pb-6">
       <div className="max-w-7xl mx-auto space-y-5">
         <TopDesign />
         <QuickActions navigate={navigate} onNavigate={onNavigate} />
@@ -107,8 +107,7 @@ const Dashboard = ({
         /> */}
         <GettingStarted onNavigate={onNavigate} />
         
-        {/* Bottom Nav Spacer */}
-        <div className="h-20 md:hidden"></div>
+        {/* Bottom Nav Spacer — handled by pb-24 on outer container */}
       </div>
     </div>
   );

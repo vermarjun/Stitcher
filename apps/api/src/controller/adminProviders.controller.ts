@@ -71,6 +71,45 @@ function maskApiKey(encryptedKey: string, provider: string): { masked: string; h
     return { masked: `${prefix}••••${last4}`, hasKey: true };
 }
 
+/** Mask a list of encrypted backup keys for UI display (preserving order/index). */
+function maskBackupKeys(
+    encryptedKeys: string[] | undefined | null,
+    provider: string
+): Array<{ masked: string; hasKey: boolean }> {
+    if (!Array.isArray(encryptedKeys)) return [];
+    return encryptedKeys
+        .filter((k) => typeof k === "string" && k)
+        .map((k) => maskApiKey(k, provider));
+}
+
+/**
+ * Resolve an incoming backupApiKeys array (from the admin UI) into the stored
+ * encrypted list. Each element is one of:
+ *   - "__keep__:<i>"  → preserve the existing encrypted key at original index i
+ *   - "" / blank      → dropped
+ *   - any other value → a new plaintext key (encrypted), or an already-encrypted
+ *                       enc:v1: blob (kept as-is)
+ * Order is preserved, so the UI fully controls add / remove / reorder.
+ */
+function resolveBackupApiKeys(incoming: unknown, existing: string[] | undefined): string[] {
+    if (!Array.isArray(incoming)) return existing ?? [];
+    const prev = Array.isArray(existing) ? existing : [];
+    const out: string[] = [];
+    for (const raw of incoming) {
+        if (typeof raw !== "string") continue;
+        const v = raw.trim();
+        if (!v) continue;
+        const keep = v.match(/^__keep__:(\d+)$/);
+        if (keep) {
+            const idx = parseInt(keep[1]!, 10);
+            if (prev[idx]) out.push(prev[idx]!);
+            continue;
+        }
+        out.push(isEncrypted(v) ? v : encrypt(v));
+    }
+    return out;
+}
+
 // ─── GET /admin/providers ─────────────────────────────────────────────────────
 
 export async function listProviders(req: Request, res: Response): Promise<Response> {
@@ -81,6 +120,7 @@ export async function listProviders(req: Request, res: Response): Promise<Respon
             tier: TierKey;
             provider: string;
             apiKey: string;
+            backupApiKeys?: string[] | null;
             baseURL: string | null;
             modelId: string | null;
             params: Record<string, unknown>;
@@ -119,6 +159,7 @@ export async function listProviders(req: Request, res: Response): Promise<Respon
                 provider:  doc.provider,
                 maskedKey: masked,
                 hasKey,
+                backupKeys: maskBackupKeys(doc.backupApiKeys, doc.provider),
                 baseURL:   doc.baseURL,
                 model:     doc.modelId,
                 params:    doc.params ?? {},
@@ -162,13 +203,14 @@ export async function upsertProvider(req: Request, res: Response): Promise<Respo
     }
 
     const body = req.body as {
-        provider?: unknown;
-        apiKey?:   unknown;
-        baseURL?:  unknown;
-        model?:    unknown;
-        params?:   unknown;
-        enabled?:  unknown;
-        fallback?: unknown;
+        provider?:      unknown;
+        apiKey?:        unknown;
+        backupApiKeys?: unknown;
+        baseURL?:       unknown;
+        model?:         unknown;
+        params?:        unknown;
+        enabled?:       unknown;
+        fallback?:      unknown;
     };
 
     // Provider is required on upsert
@@ -184,6 +226,11 @@ export async function upsertProvider(req: Request, res: Response): Promise<Respo
     // fallback must be a plain object if supplied
     if (body.fallback !== undefined && (typeof body.fallback !== "object" || Array.isArray(body.fallback) || body.fallback === null)) {
         return res.status(400).json({ error: { message: "fallback must be a plain object" } });
+    }
+
+    // backupApiKeys must be an array of strings if supplied
+    if (body.backupApiKeys !== undefined && !Array.isArray(body.backupApiKeys)) {
+        return res.status(400).json({ error: { message: "backupApiKeys must be an array of strings" } });
     }
 
     try {
@@ -205,6 +252,12 @@ export async function upsertProvider(req: Request, res: Response): Promise<Respo
             apiKey:    newEncryptedKey,
             updatedBy: new mongoose.Types.ObjectId(req.userId!),
         };
+
+        // Backup keys — resolve the incoming list (with __keep__:<i> preservation)
+        // against the existing stored keys. Omitted → keep existing untouched.
+        if (body.backupApiKeys !== undefined) {
+            updateFields["backupApiKeys"] = resolveBackupApiKeys(body.backupApiKeys, existing?.backupApiKeys);
+        }
 
         if (body.provider !== undefined) updateFields["provider"] = (body.provider as string).trim();
         if (body.baseURL  !== undefined) updateFields["baseURL"]  = (typeof body.baseURL === "string" && body.baseURL.trim()) ? body.baseURL.trim() : null;
@@ -276,6 +329,7 @@ export async function upsertProvider(req: Request, res: Response): Promise<Respo
                 provider:  doc.provider,
                 maskedKey: masked,
                 hasKey,
+                backupKeys: maskBackupKeys(doc.backupApiKeys, doc.provider),
                 baseURL:   doc.baseURL,
                 model:     doc.modelId,
                 params:    doc.params,
@@ -295,5 +349,107 @@ export async function upsertProvider(req: Request, res: Response): Promise<Respo
     } catch (err) {
         logger.error({ message: "upsertProvider failed", error: String(err), service, tier });
         return res.status(500).json({ error: { message: "Failed to update provider config" } });
+    }
+}
+
+// ─── POST /admin/providers/:service/test ──────────────────────────────────────
+
+interface EmbedTestResult {
+    success: boolean;
+    provider: string;
+    model: string;
+    httpStatus?: number;
+    latencyMs?: number;
+    /** Embedding dimensions returned (must match your index numDimensions). */
+    dims?: number | null;
+    error?: string;
+}
+
+/**
+ * Test an embedder provider key by making a REAL embedding call. Currently
+ * supports gemini (embedContent), ollama (/api/embed) and OpenAI-compatible
+ * (/embeddings) providers.
+ *
+ * Always responds HTTP 200 — the probe result lives in the body so the admin
+ * panel's 401 interceptor never logs the user out on a bad/expired key.
+ *
+ * Body: { provider?, apiKey?, model?, baseURL?, tier?, dim? }
+ *   - apiKey: plaintext key to test. If omitted and `tier` is supplied, the
+ *     stored embedder PRIMARY key for that tier is decrypted and tested.
+ */
+export async function testEmbedderKey(req: Request, res: Response): Promise<Response> {
+    const { service } = req.params as { service: string };
+    if (service !== "embedder") {
+        return res.status(400).json({ success: false, error: "Key testing is only available for the embedder service" });
+    }
+
+    const body = req.body as {
+        provider?: string; apiKey?: string; model?: string; baseURL?: string; tier?: string; dim?: number;
+    };
+    const provider = (body.provider || "gemini").toLowerCase();
+    const model = (typeof body.model === "string" && body.model.trim()) || "gemini-embedding-001";
+    const dim = typeof body.dim === "number" && body.dim > 0 ? Math.floor(body.dim) : 3072;
+
+    // Resolve the key: explicit plaintext, else the stored primary key for the tier.
+    let key = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+    if (!key && body.tier && isValidTierKey(body.tier)) {
+        const existing = await ServiceConfig.findOne({ service: "embedder", tier: body.tier }).lean<{ apiKey?: string } | null>();
+        if (existing?.apiKey) { try { key = decrypt(existing.apiKey); } catch { key = ""; } }
+    }
+
+    const TEXT = "stitcher embedder key test";
+    const started = Date.now();
+    try {
+        if (provider === "gemini") {
+            if (!key) return res.status(200).json({ success: false, provider, model, error: "No API key to test (enter a key or pick a tier with a stored key)" });
+            const base = (typeof body.baseURL === "string" && body.baseURL.trim()) || "https://generativelanguage.googleapis.com/v1beta";
+            const resp = await fetch(`${base}/models/${model}:embedContent?key=${encodeURIComponent(key)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: `models/${model}`, content: { parts: [{ text: TEXT }] }, taskType: "RETRIEVAL_QUERY", outputDimensionality: dim }),
+            });
+            const text = await resp.text();
+            const latencyMs = Date.now() - started;
+            let dims: number | null = null, errMsg: string | undefined;
+            try {
+                const j = JSON.parse(text);
+                dims = Array.isArray(j?.embedding?.values) ? j.embedding.values.length : null;
+                if (!resp.ok) errMsg = j?.error?.message || `HTTP ${resp.status}`;
+            } catch { if (!resp.ok) errMsg = `HTTP ${resp.status}: ${text.slice(0, 200)}`; }
+            const success = resp.ok && dims != null;
+            const result: EmbedTestResult = { success, provider, model, httpStatus: resp.status, latencyMs, dims, error: success ? undefined : (errMsg || "embedding failed") };
+            return res.status(200).json(result);
+        }
+
+        if (provider === "ollama") {
+            const base = (typeof body.baseURL === "string" && body.baseURL.trim()) || "http://localhost:11434";
+            const resp = await fetch(`${base}/api/embed`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model, input: [TEXT] }),
+            });
+            const text = await resp.text();
+            const latencyMs = Date.now() - started;
+            let dims: number | null = null;
+            try { const j = JSON.parse(text); dims = Array.isArray(j?.embeddings?.[0]) ? j.embeddings[0].length : null; } catch { /* noop */ }
+            const success = resp.ok && dims != null;
+            return res.status(200).json({ success, provider, model, httpStatus: resp.status, latencyMs, dims, error: success ? undefined : `HTTP ${resp.status}: ${text.slice(0, 200)}` } as EmbedTestResult);
+        }
+
+        // OpenAI-compatible (/embeddings)
+        const base = typeof body.baseURL === "string" ? body.baseURL.trim() : "";
+        if (!base) return res.status(200).json({ success: false, provider, model, error: `baseURL is required to test provider "${provider}"` });
+        const resp = await fetch(`${base}/embeddings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+            body: JSON.stringify({ model, input: TEXT }),
+        });
+        const text = await resp.text();
+        const latencyMs = Date.now() - started;
+        let dims: number | null = null;
+        try { const j = JSON.parse(text); dims = Array.isArray(j?.data?.[0]?.embedding) ? j.data[0].embedding.length : null; } catch { /* noop */ }
+        const success = resp.ok && dims != null;
+        return res.status(200).json({ success, provider, model, httpStatus: resp.status, latencyMs, dims, error: success ? undefined : `HTTP ${resp.status}: ${text.slice(0, 200)}` } as EmbedTestResult);
+    } catch (err) {
+        return res.status(200).json({ success: false, provider, model, latencyMs: Date.now() - started, error: String(err) } as EmbedTestResult);
     }
 }

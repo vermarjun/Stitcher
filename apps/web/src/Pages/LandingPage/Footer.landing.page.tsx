@@ -16,7 +16,7 @@ const Footer: React.FC = () => {
             </p>
           </div>
           
-          <div className="flex space-x-6">
+          <div className="flex flex-wrap justify-center md:justify-end gap-x-6 gap-y-2">
             <button
               onClick={()=>window.location.href = "https://linkedin.com/in/vermarjun"}
               className= "hover:cursor-pointer text-gray-400 hover:text-white transition-colors duration-200 text-sm"

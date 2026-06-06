@@ -1,61 +1,16 @@
-import { useState } from "react";
 import {
   Check,
   Zap,
   Crown,
   Rocket,
   ExternalLink,
-  X,
-  Clock,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { ShineBorder } from "../../Components/magicui/shine-border";
-import { BackgroundGrid } from "@/components/ui/background-snippets";
-
-const TestModeModal = ({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900/95 border border-zinc-800/50 rounded-2xl p-7 max-w-sm w-full shadow-2xl relative overflow-hidden">
-        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-        <div className="flex flex-col items-center text-center gap-4 relative z-10">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center">
-            <Clock className="w-6 h-6 text-zinc-300" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-1">Payments coming soon</h3>
-            <p className="text-zinc-400 text-sm leading-relaxed">
-              We're currently in <span className="text-white font-medium">test mode</span> while Razorpay reviews our account. You'll be able to buy credit packs in about a week.
-            </p>
-          </div>
-          <p className="text-zinc-500 text-xs">
-            In the meantime, your 10 free videos are ready to use.
-          </p>
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-100 transition-colors"
-          >
-            Got it
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+import { BackgroundGrid } from "@/Components/ui/background-snippets";
 
 const PaymentPage = () => {
-  const [showTestModeModal, setShowTestModeModal] = useState(false);
+  const navigate = useNavigate();
   const plans = [
     {
       id: "starter",
@@ -105,12 +60,13 @@ const PaymentPage = () => {
   ];
 
   const handleGetStarted = () => {
-    setShowTestModeModal(true);
+    // Logged-out marketing surface — send visitors to sign up, then they can
+    // buy credit packs from the in-app pricing page.
+    navigate("/auth");
   };
 
   return (
     <div className="min-h-screen md:h-screen bg-black text-white selection:bg-[#19E5A1]/30 overflow-x-hidden overflow-y-auto md:overflow-hidden relative flex flex-col justify-center py-12 md:py-0">
-      <TestModeModal isOpen={showTestModeModal} onClose={() => setShowTestModeModal(false)} />
       <BackgroundGrid />
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
@@ -129,7 +85,7 @@ const PaymentPage = () => {
         </div>
 
         {/* Pricing Cards Grid with 3D Effect (desktop only) */}
-        <div className="flex flex-col md:flex-row justify-center items-stretch md:items-center gap-4 md:gap-6 w-full max-w-6xl mx-auto md:perspective-[1200px]">
+        <div className="flex flex-col md:flex-row justify-center items-stretch md:items-center gap-4 md:gap-6 w-full max-w-6xl mx-auto md:perspective-[1200px] px-2 md:px-0">
           {plans.map((plan, index) => {
             const Icon = plan.icon;
             // Determine rotation based on position (desktop only)
@@ -138,17 +94,17 @@ const PaymentPage = () => {
             const isCenter = index === 1;
 
             return (
-              <div 
-                key={plan.id} 
+              <div
+                key={plan.id}
                 className={`relative group transition-all duration-500 ease-out flex-1 w-full max-w-sm mx-auto ${plan.popular ? 'md:z-20' : 'md:z-10'}`}
                 style={{
                    // Only apply 3D transforms on medium screens and up
-                   transform: window.innerWidth >= 768 ? `
+                   transform: typeof window !== 'undefined' && window.innerWidth >= 768 ? `
                      ${isLeft ? 'rotateY(10deg) translateX(10px) scale(0.95)' : ''}
                      ${isRight ? 'rotateY(-10deg) translateX(-10px) scale(0.95)' : ''}
                      ${isCenter ? 'translateZ(20px) scale(1.0)' : ''}
                    ` : 'none',
-                   transformStyle: window.innerWidth >= 768 ? 'preserve-3d' : 'flat'
+                   transformStyle: typeof window !== 'undefined' && window.innerWidth >= 768 ? 'preserve-3d' : 'flat'
                 }}
               >
                 {plan.popular && (

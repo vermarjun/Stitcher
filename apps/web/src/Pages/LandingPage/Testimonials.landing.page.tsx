@@ -104,7 +104,7 @@ function Marquee({
     <div
       {...props}
       className={cn(
-        "group flex overflow-hidden p-2 [--duration:40s] [--gap:1rem] gap-16",
+        "group flex overflow-hidden p-2 [--duration:40s] [--gap:1rem] gap-4 md:gap-16",
         "flex-row",
         className
       )}
@@ -115,7 +115,7 @@ function Marquee({
           <div
             key={i}
             className={cn(
-              "flex shrink-0 justify-around gap-16 flex-row",
+              "flex shrink-0 justify-around gap-4 md:gap-16 flex-row",
               "animate-[marquee_var(--duration)_linear_infinite]",
               pauseOnHover && "group-hover:[animation-play-state:paused]",
               reverse && "[animation-direction:reverse]"
@@ -169,10 +169,10 @@ export function ProductVideos() {
       </Marquee>
 
       {/* Left gradient fade */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-black to-transparent z-10"></div>
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-8 md:w-32 bg-gradient-to-r from-black to-transparent z-10"></div>
 
       {/* Right gradient fade */}
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-black to-transparent z-10"></div>
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-8 md:w-32 bg-gradient-to-l from-black to-transparent z-10"></div>
     </div>
   );
 }

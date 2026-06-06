@@ -39,6 +39,8 @@ export interface RagProviderConfig {
     embedder?: {
         provider: string;
         apiKey: string;
+        /** Ordered backup keys, tried after apiKey and before RAG's env-default key. */
+        backupApiKeys?: string[];
         baseURL: string | null;
         model: string | null;
         params?: Record<string, unknown>;

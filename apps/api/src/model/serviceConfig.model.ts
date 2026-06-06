@@ -33,6 +33,12 @@ export interface IServiceConfig extends Document {
     provider:  string;
     /** AES-256-GCM encrypted at rest.  Use getDecryptedApiKey() for plaintext. */
     apiKey:    string;
+    /**
+     * Ordered backup API keys (each AES-256-GCM encrypted at rest). Tried in
+     * order after the primary `apiKey` and before the env-default key — used to
+     * survive per-key rate limits (e.g. free-tier Gemini embeddings).
+     */
+    backupApiKeys: string[];
     /** Endpoint override; null means use the provider's default. */
     baseURL:   string | null;
     /**
@@ -92,6 +98,11 @@ const ServiceConfigSchema = new Schema<IServiceConfig>(
             type: String,
             default: "",
         },
+        // Ordered backup keys (each encrypted at rest). See IServiceConfig.
+        backupApiKeys: {
+            type: [String],
+            default: [],
+        },
         baseURL: {
             type: String,
             default: null,
@@ -143,6 +154,12 @@ ServiceConfigSchema.index({ service: 1, tier: 1 }, { unique: true });
 ServiceConfigSchema.pre("save", function (next) {
     if (this.isModified("apiKey") && this.apiKey && !isEncrypted(this.apiKey)) {
         this.apiKey = encrypt(this.apiKey);
+    }
+    // Encrypt any plaintext backup keys (defensive — admin controller also encrypts).
+    if (this.isModified("backupApiKeys") && Array.isArray(this.backupApiKeys)) {
+        this.backupApiKeys = this.backupApiKeys
+            .filter((k) => typeof k === "string" && k.trim())
+            .map((k) => (isEncrypted(k) ? k : encrypt(k)));
     }
     // Encrypt the fallback apiKey too (defensive — the admin controller also
     // encrypts manually since it uses findOneAndUpdate, which skips this hook).

@@ -25,7 +25,9 @@ const WatchPage = () => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base.replace(/\/$/, "")}/share/${shareId}`);
+        // ?count=1 → this is a real watch, so the view counter increments here (the
+        // link-preview function reads without it, so unfurls/crawlers don't inflate views).
+        const res = await fetch(`${base.replace(/\/$/, "")}/share/${shareId}?count=1`);
         const json = await res.json();
         if (cancelled) return;
         if (!res.ok || !json.success) {
@@ -41,6 +43,13 @@ const WatchPage = () => {
     })();
     return () => { cancelled = true; };
   }, [shareId]);
+
+  // Keep the tab title in sync for in-app navigation (direct loads already get the
+  // right <title> server-injected by the /v/:id preview function).
+  useEffect(() => {
+    if (data?.projectName) document.title = `${data.projectName} · Stitcher`;
+    else if (error) document.title = "Video unavailable · Stitcher";
+  }, [data, error]);
 
   const metaDate = data?.createdAt
     ? new Intl.DateTimeFormat(undefined, {

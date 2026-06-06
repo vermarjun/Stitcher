@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { History, PlusIcon, Download, ArrowLeft } from 'lucide-react';
+import { History, PlusIcon, Download, ArrowLeft, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/Components/ui/button';
 import { ScrollArea } from '@/Components/ui/scroll-area';
@@ -211,11 +211,12 @@ const ConfirmationDialog = ({
 // Header Component
 const AISidebarHeader = ({
   mode,
-  setMode: _setMode,
+  setMode,
   onNewChatClick,
   onExportChat,
   messageCount,
   onShowHistory,
+  onClose,
 }: {
   mode: 'generate' | 'edit',
   setMode: (mode: 'generate' | 'edit') => void,
@@ -226,10 +227,12 @@ const AISidebarHeader = ({
   onSelectHistory: (messages: Message[]) => void,
   currentProject?: any,
   onShowHistory: () => void,
+  onClose?: () => void,
 }) => {
   return (
-    <div className="border-b border-zinc-600 bg-zinc-800">
+    <div className="border-b border-zinc-600 bg-zinc-800 flex-shrink-0">
       <div className="flex items-center justify-between px-3 py-2">
+        {/* Left: brand label */}
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-white">Stitcher</span>
         </div>
@@ -264,6 +267,18 @@ const AISidebarHeader = ({
           >
             <Download className="w-3 h-3" />
           </Button>
+          {/* Close button — mobile only */}
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="md:hidden h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+              onClick={onClose}
+              title="Close"
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

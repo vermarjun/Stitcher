@@ -46,6 +46,11 @@ const envSchema = z.object({
 
     RZP_KEY_ID: z.string().min(1),
     RZP_KEY_SECRET: z.string().min(1),
+    // Razorpay webhook signing secret — configured in the Razorpay dashboard
+    // (Webhooks → Secret). Used to verify the X-Razorpay-Signature header on
+    // incoming webhook POSTs. Optional so boot never fails; when empty the
+    // webhook handler logs a warning and skips signature verification (dev only).
+    RAZORPAY_WEBHOOK_SECRET: z.string().optional().default(""),
 
     REDIS_HOST: z.string().min(1),
     REDIS_PORT: z
@@ -87,6 +92,19 @@ const envSchema = z.object({
     // Must be "true" AND the request must pass JWT auth to access the board.
     ADMIN_DASHBOARD_ENABLED: z.string().optional().default("false"),
 
+    // Global daily ceiling on FREE-tier generations (abuse / budget-drain guard for
+    // the public launch). 0 = disabled. Counts accepted free generations per UTC day
+    // across ALL free users; paid/BYOK/test accounts are exempt. Tune to your LLM
+    // budget (~1150 videos/mo capacity ≈ ~38/day sustainable).
+    DAILY_FREE_GEN_CAP: z
+        .string()
+        .optional()
+        .default("0")
+        .transform((v) => {
+            const n = parseInt(v, 10);
+            return isNaN(n) || n < 0 ? 0 : n;
+        }),
+
     // ── Native voiceover (TTS) — all optional; voiceover is feature-flagged OFF
     //    by default at the request layer, so missing Azure keys NEVER break boot.
     //    TTS_PROVIDER picks the default adapter; a per-request override
@@ -121,6 +139,7 @@ export const MICROSERVICE_BASE_URL = config.AGENT_SERVICE_URL;
 
 export const RZP_KEY_ID = config.RZP_KEY_ID;
 export const RZP_KEY_SECRET = config.RZP_KEY_SECRET;
+export const RAZORPAY_WEBHOOK_SECRET = config.RAZORPAY_WEBHOOK_SECRET;
 export const GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID;
 export const GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET;
 export const PORT = config.PORT;

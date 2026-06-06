@@ -8,6 +8,7 @@
  *   removeOnFail: 500      — keep last 500 failed jobs for post-mortem
  */
 
+import { randomUUID } from "crypto";
 import { Queue } from "bullmq";
 import { context, propagation } from "@opentelemetry/api";
 import { redisConnection } from "./connection";
@@ -32,6 +33,17 @@ export async function enqueueGeneration(data: VideoGenerationJobData): Promise<s
     // worker can make its spans children of the originating request trace.
     const otelCarrier: Record<string, string> = {};
     propagation.inject(context.active(), otelCarrier);
-    const job = await generationQueue.add("generate", { ...data, otelCarrier });
+    // Assign a globally-unique job id instead of letting BullMQ use its
+    // per-queue sequential counter (bull:video-generation:id). That counter
+    // lives in Redis and resets to 1 whenever Redis loses its data (volume
+    // wipe / fresh deploy), which made ids "1","2","3" collide across
+    // different generations in the durable Atlas history (GenerationJob /
+    // GenerationLlmIO are keyed by this string). A UUID never repeats, so the
+    // admin per-job view can never conflate two runs again.
+    const job = await generationQueue.add(
+        "generate",
+        { ...data, otelCarrier },
+        { jobId: randomUUID() }
+    );
     return job.id ?? "";
 }

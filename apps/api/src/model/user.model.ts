@@ -156,7 +156,7 @@ const UserSchema = new Schema<IUser>({
   },
   credits: {
     generation: { type: Number, default: 10 },
-    editing: { type: Number, default: 0 },
+    editing: { type: Number, default: 10 },
     expiresAt: { type: Date, default: null }
   },
   payments: [
