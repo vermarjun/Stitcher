@@ -7,7 +7,8 @@ import {
 import { Button } from "@/Components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { Badge } from "@/Components/ui/badge";
-import { LogOut, Crown, Rocket, Zap } from "lucide-react";
+import { PlanBadge } from "@/Components/ui/PlanBadge";
+import { LogOut, RotateCcw, Zap } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -15,6 +16,7 @@ import api from "@/api";
 import type { IUser } from "@/State/Types";
 import type { UserCreditsResponse } from "@/types/api.types";
 import { useRefreshHeader } from "../context";
+import { replayEditorTour } from "@/lib/onboardingTour";
 
 interface UserSectionProps {
   user?: IUser;
@@ -56,61 +58,22 @@ function UserSection({ user }: UserSectionProps) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="hidden md:flex items-center gap-1">
-        <p className="text-xs flex gap-1 border-r px-2 py-0.5 border-zinc-500">
-          <span className="text-[#19E5A1]">{generationCredits}</span>
-          <span className="capitalize">generations</span>
-        </p>
-        <p className="text-xs flex gap-1 border-r px-2 py-0.5 border-zinc-500">
-          <span className="text-[#19E5A1]">{editingCredits}</span>
-          <span className="capitalize">edits</span>
-        </p>
+      <div className="flex items-center gap-1">
+        {/* Generation credits — always visible (icon-only on phones) */}
+        <span className="text-xs flex items-center gap-1 border-r pr-2 md:px-2 py-0.5 border-zinc-500">
+          <Zap className="w-3 h-3 text-[#19E5A1]" />
+          <span className="text-[#19E5A1] font-medium">{generationCredits}</span>
+          <span className="capitalize text-zinc-400 hidden sm:inline">gen</span>
+        </span>
+        {/* Editing credits — desktop only */}
+        <span className="text-xs items-center gap-1 border-r px-2 py-0.5 border-zinc-500 hidden md:flex">
+          <span className="text-[#19E5A1] font-medium">{editingCredits}</span>
+          <span className="capitalize text-zinc-400">edits</span>
+        </span>
       </div>
 
       {/* Plan Badge */}
-      {tier === "max" && (
-        <Badge
-          variant="secondary"
-          className="bg-gradient-to-r from-teal-500/20 to-cyan-500/20 
-               text-cyan-300 border-cyan-500/30"
-        >
-          <Rocket className="w-3 h-3 mr-1 text-cyan-300" />
-          Max Tier
-        </Badge>
-      )}
-
-      {tier === "plus" && (
-        <Badge
-          variant="secondary"
-          className="bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 
-               text-purple-300 border-purple-500/30"
-        >
-          <Crown className="w-3 h-3 mr-1 text-purple-300" />
-          Plus Tier
-        </Badge>
-      )}
-
-      {tier === "basic" && (
-        <Badge
-          variant="secondary"
-          className="bg-gradient-to-r from-blue-500/20 to-sky-500/20 
-               text-blue-300 border-blue-500/30"
-        >
-          <Zap className="w-3 h-3 mr-1 text-blue-300" />
-          Basic Tier
-        </Badge>
-      )}
-
-      {(!tier || user?.plan === "free") && (
-        <Badge
-          variant="outline"
-          className="bg-gradient-to-r from-zinc-700/30 to-zinc-800/20 
-               text-zinc-300 border-zinc-600/40"
-        >
-          <Crown className="w-3 h-3 mr-1 text-zinc-400" />
-          Free Tier
-        </Badge>
-      )}
+      <PlanBadge plan={tier} />
 
       {/* User Dropdown Menu */}
       <DropdownMenu>
@@ -159,13 +122,22 @@ function UserSection({ user }: UserSectionProps) {
                     variant="secondary"
                     className="text-xs bg-gradient-to-r from-green-500/30 to-green-500/20 text-neutral-200 border-green-500/30"
                   >
-                    {user?.plan || "Free"}
+                    {tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "Free"}
                   </Badge>
                 </div>
               </div>
             </div>
           </div>
           <div className="py-1">
+            {/* Replay the editor walkthrough on demand — a refresher for users,
+                and the easiest way to re-test the tour. */}
+            <DropdownMenuItem
+              className="focus:text-white focus:bg-zinc-700/60 cursor-pointer text-zinc-300 py-2.5 px-3"
+              onClick={() => replayEditorTour()}
+            >
+              <RotateCcw className="mr-3 h-4 w-4" />
+              <span>Replay tour</span>
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="focus:text-red-100 focus:bg-red-700/40 cursor-pointer text-red-400 py-2.5 px-3"
               onClick={handleLogout}

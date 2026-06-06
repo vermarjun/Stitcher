@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Home,
   FolderOpen,
-  Key,
   Settings,
   CreditCard,
   ChevronLeft,
@@ -20,6 +19,7 @@ import { AuroraText } from "../magicui/aurora-text";
 import api from "@/api";
 import { Card, CardContent } from "@/Components/ui/card";
 import { FEATURES } from "@/config/features";
+import { PlanBadge } from "@/Components/ui/PlanBadge";
 
 const UserSidebarInfo = () => {
   const [tier, setTier] = useState("free");
@@ -35,7 +35,7 @@ const UserSidebarInfo = () => {
       setTier((response.data as any).message.plan)
       setEditingCredits((response.data as any).message.credits.editing);
       setGenerationCredits((response.data as any).message.credits.generation);
-      setExpiresAt((response.data as any).credits.message.expiresAt);
+      setExpiresAt((response.data as any).message.credits.expiresAt);
     }
   }
 
@@ -48,7 +48,7 @@ const UserSidebarInfo = () => {
       <CardContent className="space-y-3 p-0 text-sm">
         <div className="flex items-center justify-between">
           <p className="text-zinc-500 text-xs">Current Plan</p>
-          <p className="font-medium text-white capitalize px-2.5 py-0.5 bg-zinc-800 rounded-full text-xs">{tier}</p>
+          <PlanBadge plan={tier} />
         </div>
 
         <div className="border-t border-zinc-800 pt-3 space-y-2.5">
@@ -159,7 +159,7 @@ const Sidebar: React.FC<Props> = ({
     ],
     api_keys: [
       { icon: CreditCard, label: "Pricing", key: "pricing" },
-      { icon: Key, label: "API Keys", key: "api-keys" },
+      // API Keys (BYOT) hidden for v1 relaunch — provided keys are enforced.
     ],
     browse: [{ icon: LayoutTemplate, label: "Templates", key: "templates" }],
   };

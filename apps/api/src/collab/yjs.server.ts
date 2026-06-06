@@ -24,7 +24,7 @@ import { Types } from 'mongoose';
 import { removeAwarenessStates } from 'y-protocols/awareness';
 
 import { JWT_CONFIG } from '../config';
-import { canAccessProject } from '../util/projectAccess.util';
+import { getProjectRole } from '../util/projectAccess.util';
 import { YDocModel } from '../model/ydoc.model';
 import Timeline from '../model/timeline.model';
 import Track from '../model/track.model';
@@ -276,16 +276,19 @@ async function materializeToMongo(projectId: string, doc: Y.Doc): Promise<void> 
     // meta update
     const meta = timelineMap.get('meta') as Y.Map<unknown> | undefined;
     if (meta) {
-      const dur = meta.get('duration');
       const fps = meta.get('fps');
       const res = meta.get('resolution') as { width: number; height: number } | undefined;
-      if (dur != null) timeline.duration = dur as number;
       if (fps != null) timeline.fps = fps as number;
       if (res) timeline.resolution = res;
     }
 
     const yjsTrackIds: string[] = [];
     const yjsItemIdsByTrack = new Map<string, string[]>();
+    // Track the furthest clip end so we can recompute timeline.duration. The
+    // meta.duration value goes stale (it's only set at seed time), so basing
+    // export/playback on it would clip off items placed past it. Source of
+    // truth = max(item.endTime) across all tracks.
+    let maxItemEndTime = 0;
 
     for (let i = 0; i < tracksArray.length; i++) {
       const trackMap = tracksArray.get(i) as Y.Map<unknown>;
@@ -318,11 +321,15 @@ async function materializeToMongo(projectId: string, doc: Y.Doc): Promise<void> 
           trackItemIds.push(itemId);
 
           const itemType = itemMap.get('type') as string;
+          const itemEndTime = (itemMap.get('endTime') as number) ?? 0;
+          if (typeof itemEndTime === 'number' && itemEndTime > maxItemEndTime) {
+            maxItemEndTime = itemEndTime;
+          }
           const setFields: Record<string, unknown> = {
             type: itemType,
             trackId: new Types.ObjectId(trackId),
             startTime: itemMap.get('startTime') ?? 0,
-            endTime: itemMap.get('endTime') ?? 0,
+            endTime: itemEndTime,
           };
 
           if (itemMap.has('assetId')) {
@@ -368,6 +375,11 @@ async function materializeToMongo(projectId: string, doc: Y.Doc): Promise<void> 
       await TimelineItem.deleteMany({ trackId: { $in: deletedTrackIds } });
       await Track.deleteMany({ _id: { $in: deletedTrackIds } });
     }
+
+    // Recompute the stored duration from the furthest clip end so export and
+    // any duration-bounded consumer cover every placed clip (not the stale
+    // seed-time meta.duration).
+    timeline.duration = maxItemEndTime;
 
     // Update timeline.tracks array to reflect Y.Doc order
     timeline.tracks = yjsTrackIds.map((id) => new Types.ObjectId(id));
@@ -429,16 +441,18 @@ async function yjsAuthMiddleware(socket: Socket, next: (err?: Error) => void): P
       return next(new Error('Unauthorized'));
     }
 
-    const ok = await canAccessProject(userId, projectId);
-    if (!ok) {
+    const role = await getProjectRole(userId, projectId);
+    if (!role) {
       logger.warn({ message: 'Yjs auth: access denied', userId, projectId });
       return next(new Error('Unauthorized'));
     }
 
-    // Store userId on socket.data so disconnectProjectUser can match by userId
+    // Store identity + role on socket.data so disconnectProjectUser can match by
+    // userId, and the connection handler can enforce viewer read-only.
     socket.data.userId = userId;
+    socket.data.role = role;
 
-    logger.debug({ message: 'Yjs auth: OK', userId, projectId });
+    logger.debug({ message: 'Yjs auth: OK', userId, projectId, role });
     next();
   } catch (err) {
     logger.error({ message: 'Yjs auth middleware error', error: String(err) });
@@ -542,6 +556,25 @@ export function initYjsServer(io: Server): void {
     // broadcast the removal to remaining room members.
     nsp.on('connection', (socket: Socket) => {
       const projectId = socket.nsp.name.replace(/^\/yjs\|/, '');
+
+      // ── Viewer read-only enforcement ────────────────────────────────────────
+      // A 'viewer' collaborator may receive the shared doc and broadcast presence
+      // (awareness), but must not mutate it. y-socket.io applies document changes
+      // via the 'sync-update' event (incremental edits) and 'sync-step-2' (the
+      // handshake step where a client pushes its local updates to the server).
+      // Drop just those inbound packets for viewers so their edits never reach the
+      // shared Y.Doc — they can still load the doc (server→client sync is
+      // untouched) and appear in presence.
+      if ((socket.data as { role?: string } | undefined)?.role === 'viewer') {
+        socket.use((packet: unknown[], nextPkt: (err?: Error) => void) => {
+          const event = Array.isArray(packet) ? packet[0] : undefined;
+          if (event === 'sync-update' || event === 'sync-step-2') {
+            return nextPkt(new Error('read-only'));
+          }
+          nextPkt();
+        });
+      }
+
       // Set of awareness clientIDs owned by this socket connection
       const socketClientIds = new Set<number>();
 

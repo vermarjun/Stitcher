@@ -1,10 +1,12 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
+import PageLoader from '../Components/PageLoader';
 import ErrorPage from '../Pages/Error.page';
 import ErrorBoundary from '../Components/ErrorBoundary';
 
 import AuthRoute from './ProtectedRoute.tsx';
 import PublicRoute from './PublicRoute.tsx';
+import RouteTracker from '../Components/RouteTracker.tsx';
 
 import TermsAndConditions from '@/Pages/TermsConditions.page.tsx';
 import PrivacyPolicy from '@/Pages/PrivacyPolicy.page.tsx';
@@ -21,6 +23,12 @@ const WatchPage = lazy(() => import('../Pages/Watch.page.tsx'));
 const AdminLivePage = lazy(() => import('../Pages/AdminLive.page.tsx'));
 
 const router = createBrowserRouter([
+  // Pathless root layout: renders <RouteTracker/> which fires a page_view on
+  // every route change (covering all authenticated + public routes via a single
+  // insertion point) and an <Outlet/> so nested routes render normally.
+  {
+    element: <RouteTracker />,
+    children: [
 // LANDING PAGE
   {
     path: '/',
@@ -139,10 +147,16 @@ const router = createBrowserRouter([
     path: '*',
     element: <Navigate to="/home" replace />,
   },
+    ],
+  },
 ]);
 
 const RouterConfig = () => {
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
 };
 
 export default RouterConfig;

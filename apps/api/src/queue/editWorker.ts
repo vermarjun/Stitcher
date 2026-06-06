@@ -43,24 +43,9 @@ import User from "../model/user.model";
 import logger from "../util/logger.util";
 import { AppError } from "../util/AppError";
 import type { EditJobData, EditJobResult } from "./editTypes";
-import type { SceneSpec, StyleManifest } from "../services/agentClient";
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_RENDER_ATTEMPTS = 2;
-
-// Default style manifest — used when no stored style is available for the asset.
-// The coder will override specifics based on the edit prompt anyway.
-const DEFAULT_STYLE_MANIFEST: StyleManifest = {
-    primaryColor: "#FFFFFF",
-    secondaryColor: "#AAAAAA",
-    backgroundColor: "#000000",
-    accentColor: "#58C4DD",
-    fontFamily: "LaTeX",
-    animationPace: "medium",
-    positioningZones: {},
-    elementNaming: {},
-};
 
 // ─── OTel tracing helper ──────────────────────────────────────────────────────
 // See OBSERVABILITY §3a/§3b. Lighter instrumentation than the generation worker.
@@ -202,16 +187,6 @@ async function runEditPipeline(
         ? sourceAsset.duration
         : 6;
 
-    // ── Step 4: Build synthetic SceneSpec ────────────────────────────────────
-    const syntheticScene: SceneSpec = {
-        index: 0,
-        prompt: editPrompt,
-        durationSec,
-        manimFeatures: [],
-        requiredSymbols: [],
-        description: sceneDescription,
-    };
-
     // ── Step 5: RAG enhance ──────────────────────────────────────────────────
     progress("edit_started", "rag_enhance");
 
@@ -267,9 +242,11 @@ async function runEditPipeline(
         () =>
             agentClient.code(
                 {
-                    scenePlan: { ...syntheticScene, prompt: groundedPrompt },
-                    styleManifest: DEFAULT_STYLE_MANIFEST,
-                    codeExamples: ragCodeExamples,
+                    prompt: groundedPrompt,
+                    examples: ragCodeExamples,
+                    requiredApis: [],
+                    voiceover: true,
+                    styleManifest: null,
                     modelConfig: {
                         coder: modelConfig.coder,
                         validator: modelConfig.validator,
@@ -462,22 +439,7 @@ async function runEditPipeline(
         );
     }
 
-    // ── Step 12: Best-effort RAG corpusAdd ───────────────────────────────────
-    try {
-        await ragClient.corpusAdd(
-            {
-                documents: [
-                    {
-                        child: { prompt: editPrompt, code: newCode, sceneClass: newSceneClass },
-                        metadata: { traceId, editChatId, projectId, parentAssetId: assetId },
-                    },
-                ],
-            },
-            traceId
-        );
-    } catch (ragErr) {
-        logger.warn({ message: "[editWorker] RAG corpusAdd failed (non-fatal)", traceId, error: String(ragErr) });
-    }
+    // RAG corpus is populated exclusively via admin RLHF approval — no auto-add here.
 
     // ── Step 13: Memory reflection (fire-and-forget; never blocks the result) ─
     reflect(userId, {

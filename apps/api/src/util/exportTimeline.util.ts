@@ -4,8 +4,10 @@
  * Renders the CURRENT timeline state (after user edits) into a single mp4:
  *   - video track items are trimmed to [sourceStartTime, sourceEndTime],
  *     normalized to a common resolution/fps, then concatenated in order
- *   - the first audio track item (if any) is muxed over the result, trimmed
- *     to the video length
+ *   - each clip's OWN audio (e.g. the baked-in voiceover) is preserved; clips
+ *     without audio get a silent track so stream-copy concat stays uniform
+ *   - a separate audio track item (if any) is mixed OVER the result, so adding
+ *     background music never silences the narration
  *   - the result is uploaded to Cloudinary and the secure URL returned
  *
  * Design notes:
@@ -36,8 +38,15 @@ export interface ExportVideoClip {
 
 export interface ExportAudioClip {
     url: string;
+    /** Position on the timeline, in seconds, where this clip starts playing. */
+    startTime?: number;
     sourceStartTime: number;
     sourceEndTime: number;
+    /** Linear gain; 1 = unchanged. Defaults to 1. */
+    volume?: number;
+    /** Fade in/out durations in seconds; 0/undefined = no fade. */
+    fadeIn?: number;
+    fadeOut?: number;
 }
 
 export interface ExportTextClip {
@@ -91,9 +100,32 @@ const FFMPEG_BIN = process.env["EXPORT_FFMPEG_PATH"] || "ffmpeg";
 const PREVIEW_REF_HEIGHT = 405;
 const FONT_SCALE = OUT_H / PREVIEW_REF_HEIGHT;
 
+// Recursively find the first .ttf/.otf under `dir` (bounded depth), preferring
+// a common sans-serif face. Lets us locate a usable font no matter which font
+// package the host/container happens to ship or where it installs it.
+function findFontInDir(dir: string, depth: number): string | null {
+    if (depth < 0) return null;
+    let entries: import("fs").Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch { return null; }
+    const isFont = (n: string) => /\.(ttf|otf)$/i.test(n);
+    const preferred = (n: string) => /(dejavusans|liberationsans|arial|helvetica|noto.*sans|sans)/i.test(n);
+    const files = entries.filter((e) => e.isFile() && isFont(e.name));
+    const pref = files.find((e) => preferred(e.name));
+    if (pref) return path.join(dir, pref.name);
+    if (files.length) return path.join(dir, files[0]!.name);
+    for (const e of entries) {
+        if (e.isDirectory()) {
+            const found = findFontInDir(path.join(dir, e.name), depth - 1);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
 // First existing font wins. Override with EXPORT_FONT_PATH.
 function resolveFontFile(): string | null {
-    const candidates = [
+    const explicit = [
         process.env["EXPORT_FONT_PATH"],
         "/System/Library/Fonts/Supplemental/Arial.ttf",      // macOS
         "/Library/Fonts/Arial.ttf",                          // macOS (user)
@@ -101,8 +133,19 @@ function resolveFontFile(): string | null {
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",            // Alpine/Fedora
     ].filter(Boolean) as string[];
-    for (const p of candidates) {
+    for (const p of explicit) {
         try { if (fs.existsSync(p)) return p; } catch { /* ignore */ }
+    }
+    // Fallback: scan common font directories for any usable face.
+    const fontDirs = [
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        "/System/Library/Fonts",
+        "/Library/Fonts",
+    ];
+    for (const dir of fontDirs) {
+        const found = findFontInDir(dir, 4);
+        if (found) return found;
     }
     return null;
 }
@@ -131,9 +174,12 @@ function normalizeColor(c: string | undefined): string {
     return hex; // named color (white, red, …)
 }
 
-// Build a drawtext filter chain for the text overlays. Empty string if none.
+// Build a drawtext filter chain for the text overlays. Empty string if there
+// are no text clips OR no usable font — drawtext without an explicit fontfile
+// falls back to the fontconfig family "Sans", which fails on hosts that don't
+// ship it (e.g. a bare Alpine container), so we never emit that form.
 function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null): string {
-    if (textClips.length === 0) return "";
+    if (textClips.length === 0 || !fontFile) return "";
     const filters = textClips
         .filter((t) => (t.content ?? "").trim().length > 0)
         .map((t) => {
@@ -143,7 +189,7 @@ function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null
             const xFrac = Math.min(1, Math.max(0, (t.x ?? 50) / 100));
             const yFrac = Math.min(1, Math.max(0, (t.y ?? 50) / 100));
             const parts = [
-                fontFile ? `fontfile='${fontFile}'` : null,
+                `fontfile='${fontFile}'`,
                 `text='${text}'`,
                 `fontsize=${fontsize}`,
                 `fontcolor=${color}`,
@@ -157,6 +203,24 @@ function buildDrawTextChain(textClips: ExportTextClip[], fontFile: string | null
             return `drawtext=${parts.join(":")}`;
         });
     return filters.join(",");
+}
+
+// Return true if the file has at least one audio stream. Uses ffprobe (present in
+// the same container as ffmpeg); on any failure returns false, matching the
+// convention in ffmpegConcat.util.ts. A clip reported as silent gets a synthetic
+// silent track added so concat stays uniform.
+function probeHasAudio(filePath: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const proc = spawn(
+            "ffprobe",
+            ["-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type", "-of", "csv=p=0", filePath],
+            { stdio: ["ignore", "pipe", "pipe"] }
+        );
+        const out: Buffer[] = [];
+        proc.stdout?.on("data", (c: Buffer) => out.push(c));
+        proc.on("close", () => resolve(Buffer.concat(out).toString("utf8").includes("audio")));
+        proc.on("error", () => resolve(false));
+    });
 }
 
 function downloadFile(url: string, destPath: string): Promise<void> {
@@ -236,15 +300,40 @@ export async function exportTimeline(
             if (end !== undefined) trimArgs.push("-to", String(end));
             totalDuration += end !== undefined ? end - start : 0;
 
-            await runFfmpeg([
-                "-y",
-                ...trimArgs,
-                "-i", raw,
-                "-vf", `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease,pad=${OUT_W}:${OUT_H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${OUT_FPS}`,
-                "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                "-an", // drop original audio; timeline audio is muxed separately
-                seg,
-            ]);
+            // Preserve the clip's own audio (the voiceover is baked into the video
+            // track) re-encoded to a uniform AAC layout. Clips that genuinely have no
+            // audio get a synthetic silent track so every segment carries exactly one
+            // matching audio stream — required for the stream-copy concat below to keep
+            // audio instead of silently dropping it.
+            const segHasAudio = await probeHasAudio(raw);
+            const vfChain = `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease,pad=${OUT_W}:${OUT_H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${OUT_FPS}`;
+            const audioCodecArgs = ["-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "192k"];
+
+            await runFfmpeg(
+                segHasAudio
+                    ? [
+                        "-y",
+                        ...trimArgs,
+                        "-i", raw,
+                        "-vf", vfChain,
+                        "-map", "0:v:0", "-map", "0:a:0",
+                        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                        ...audioCodecArgs,
+                        seg,
+                    ]
+                    : [
+                        "-y",
+                        ...trimArgs,
+                        "-i", raw,
+                        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+                        "-vf", vfChain,
+                        "-map", "0:v:0", "-map", "1:a:0",
+                        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+                        ...audioCodecArgs,
+                        "-shortest",
+                        seg,
+                    ]
+            );
             segPaths.push(seg);
         }
 
@@ -257,7 +346,9 @@ export async function exportTimeline(
         // 2b. Burn in text overlays (drawtext), timed to the timeline.
         const warnings: string[] = [];
         let videoPath = concatPath;
-        const drawChain = buildDrawTextChain(textClips, resolveFontFile());
+        const fontFile = resolveFontFile();
+        const hasText = textClips.some((t) => (t.content ?? "").trim().length > 0);
+        const drawChain = buildDrawTextChain(textClips, fontFile);
         if (drawChain) {
             if (await hasDrawText()) {
                 const titled = path.join(tmpDir, "titled.mp4");
@@ -265,8 +356,9 @@ export async function exportTimeline(
                     "-y",
                     "-i", concatPath,
                     "-vf", drawChain,
+                    "-map", "0:v:0", "-map", "0:a:0?",
                     "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-                    "-an",
+                    "-c:a", "copy", // keep the concatenated audio (voiceover) through the text burn-in
                     titled,
                 ]);
                 videoPath = titled;
@@ -275,21 +367,66 @@ export async function exportTimeline(
                 logger.warn({ message: "[export] " + msg });
                 warnings.push(msg);
             }
+        } else if (hasText && !fontFile) {
+            // Text exists but no usable font on this host — skip the overlay
+            // rather than emitting a drawtext that crashes the whole render.
+            const msg = "Text overlays were skipped: no usable font found on the render host. Install a font (e.g. `apk add font-dejavu`) or set EXPORT_FONT_PATH.";
+            logger.warn({ message: "[export] " + msg });
+            warnings.push(msg);
         }
 
-        // 3. Mux the first audio clip over the video, trimmed to video length.
+        // 3. Mix the video's existing audio (the baked-in voiceover) with EVERY external
+        //    audio-track clip. Each clip is trimmed to its source range, positioned at its
+        //    timeline startTime (adelay), volume-scaled and optionally faded — matching how
+        //    the editor's player layers them. Mixing (not replacing) with normalize=0 keeps
+        //    the narration at full level under any added music/SFX.
         let finalPath = videoPath;
         if (audioClips.length > 0) {
-            const audio = audioClips[0];
-            const araw = path.join(tmpDir, "audio.src");
-            await downloadFile(audio.url, araw);
+            const STD_FMT = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo";
+            const inputArgs: string[] = ["-i", videoPath];
+            // Normalize the video's own audio so all mix inputs share one format.
+            const filterParts: string[] = [`[0:a]${STD_FMT}[a0]`];
+            const mixLabels: string[] = ["[a0]"];
+
+            for (let i = 0; i < audioClips.length; i++) {
+                const a = audioClips[i];
+                const ss = Math.max(0, a.sourceStartTime || 0);
+                const end = a.sourceEndTime && a.sourceEndTime > ss ? a.sourceEndTime : undefined;
+                const dur = end !== undefined ? end - ss : undefined;
+
+                const araw = path.join(tmpDir, `audio-${i}.src`);
+                await downloadFile(a.url, araw);
+
+                // Trim the source range via fast input seeking.
+                inputArgs.push("-ss", String(ss));
+                if (dur !== undefined) inputArgs.push("-t", String(dur));
+                inputArgs.push("-i", araw);
+
+                const inIdx = i + 1; // input 0 is the video
+                const vol = typeof a.volume === "number" && a.volume >= 0 ? a.volume : 1;
+                const delayMs = Math.max(0, Math.round((a.startTime || 0) * 1000));
+                const chain = [`[${inIdx}:a]${STD_FMT}`, `volume=${vol}`];
+                if (a.fadeIn && a.fadeIn > 0) chain.push(`afade=t=in:st=0:d=${a.fadeIn}`);
+                if (a.fadeOut && a.fadeOut > 0 && dur !== undefined) {
+                    chain.push(`afade=t=out:st=${Math.max(0, dur - a.fadeOut)}:d=${a.fadeOut}`);
+                }
+                // Position the clip on the timeline. adelay needs a per-channel value.
+                if (delayMs > 0) chain.push(`adelay=${delayMs}|${delayMs}`);
+                const label = `[a${inIdx}]`;
+                filterParts.push(`${chain.join(",")}${label}`);
+                mixLabels.push(label);
+            }
+
+            filterParts.push(
+                `${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=first:dropout_transition=0:normalize=0[aout]`
+            );
+
             const withAudio = path.join(tmpDir, "final.mp4");
-            const aStart = Math.max(0, audio.sourceStartTime || 0);
             await runFfmpeg([
                 "-y",
-                "-i", videoPath,
-                "-ss", String(aStart), "-i", araw,
-                "-map", "0:v:0", "-map", "1:a:0",
+                ...inputArgs,
+                "-filter_complex", filterParts.join(";"),
+                "-map", "0:v:0", "-map", "[aout]",
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                 "-shortest",
                 withAudio,

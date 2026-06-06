@@ -67,9 +67,9 @@ const CTA: React.FC = () => {
     <section id="endpagecta" className="relative w-full h-full px-4 rounded-b-2xl">
       <div className="max-w-5xl py-18 px-4 mx-auto text-center">
         <div className="pointer-events-none absolute inset-0 z-0">
-          <Prism {...prismProps}/>
+          <Prism {...prismProps} suspendWhenOffscreen />
         </div>
-        <h2 className="text-5xl font-bold md:text-6xl mb-6 text-neutral-200 md:flex justify-center items-center">
+        <h2 className="text-3xl font-bold md:text-5xl lg:text-6xl mb-6 text-neutral-200 md:flex justify-center items-center">
           Don't just tell.
           <div className="md:w-fit md:mt-0 mt-2 w-full flex justify-center items-center">
             <div className="relative overflow-hidden w-fit">
@@ -93,10 +93,10 @@ const CTA: React.FC = () => {
             </div>
           </div>
         </h2>
-        <p className="text-neutral-200 text-xl md:text-2xl mb-10 opacity-90 max-w-3xl mx-auto">
+        <p className="text-neutral-200 text-base md:text-xl lg:text-2xl mb-10 opacity-90 max-w-3xl mx-auto">
           Create captivating videos & GIFs that explain, engage, and convert.
         </p>
-        <button onClick={() => navigate("/home")} className="cursor-pointer z-50 text-white px-12 py-4 rounded-lg border-1 tracking-widest font-normal bg-transparent hover:bg-[#b2bbc3] hover:text-black transition duration-500">
+        <button onClick={() => navigate("/home")} className="cursor-pointer z-50 text-white px-8 md:px-12 py-3 md:py-4 rounded-lg border-1 tracking-widest font-normal bg-transparent hover:bg-[#b2bbc3] hover:text-black transition duration-500">
           Start Creating Now
         </button>
       </div>

@@ -63,22 +63,26 @@ export const processEditChat = async (req: Request, res: Response) => {
         return;
     }
 
-    // ── Verify project exists (ownership already enforced by middleware) ──────
+    // ── Verify project exists (access already enforced by middleware) ─────────
     const project = await Project.findById(projectId);
     if (!project) {
         res.status(404).json({ success: false, error: "Project not found" });
         return;
     }
 
-    // ── Get or create EditChat for this project ───────────────────────────────
-    let editChat;
-    if (project.edit_chat) {
-        editChat = await EditChat.findById(project.edit_chat);
-    }
+    // ── Get or create THIS USER's private EditChat for this project ───────────
+    // Edit chats are per-user (like memory): each collaborator has their own
+    // conversation and spends their own editing credits (userId === req.userId).
+    let editChat = await EditChat.findOne({
+        projectId: new Types.ObjectId(projectId),
+        userId: new Types.ObjectId(userId),
+    });
     if (!editChat) {
-        editChat = await EditChat.create({ messages: [] });
-        project.edit_chat = editChat._id as Types.ObjectId;
-        await project.save();
+        editChat = await EditChat.create({
+            projectId: new Types.ObjectId(projectId),
+            userId: new Types.ObjectId(userId),
+            messages: [],
+        });
     }
 
     const editChatId = (editChat._id as Types.ObjectId).toString();
@@ -129,24 +133,22 @@ export const processEditChat = async (req: Request, res: Response) => {
 
 export const getEditChatHistory = async (req: Request, res: Response) => {
     const { projectId } = req.params;
+    const userId = req.userId;
 
     if (!Types.ObjectId.isValid(projectId)) {
         res.status(400).json({ success: false, error: "Invalid project ID format" });
         return;
     }
-
-    const project = await Project.findById(projectId).populate("edit_chat");
-    if (!project) {
-        res.status(404).json({ success: false, error: "Project not found" });
+    if (!userId) {
+        res.status(401).json({ success: false, error: "User not authenticated" });
         return;
     }
 
-    if (!project.edit_chat) {
-        res.json({ success: true, messages: [], chatId: null });
-        return;
-    }
-
-    const editChat = await EditChat.findById(project.edit_chat);
+    // Return only THIS user's private edit chat for the project.
+    const editChat = await EditChat.findOne({
+        projectId: new Types.ObjectId(projectId),
+        userId: new Types.ObjectId(userId),
+    });
 
     res.json({
         success: true,
@@ -208,15 +210,13 @@ export const rollbackTimeline = async (req: Request, res: Response) => {
         return;
     }
 
-    // ── Load EditChat ─────────────────────────────────────────────────────────
-    if (!project.edit_chat) {
-        res.status(404).json({ success: false, error: "No edit chat found for this project" });
-        return;
-    }
-
-    const editChat = await EditChat.findById(project.edit_chat);
+    // ── Load THIS user's private EditChat ─────────────────────────────────────
+    const editChat = await EditChat.findOne({
+        projectId: new Types.ObjectId(projectId),
+        userId: new Types.ObjectId(userId),
+    });
     if (!editChat) {
-        res.status(404).json({ success: false, error: "EditChat document not found" });
+        res.status(404).json({ success: false, error: "No edit chat found for you on this project" });
         return;
     }
 

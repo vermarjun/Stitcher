@@ -1,37 +1,40 @@
-import {cn} from "@/lib/utils"
-import { 
-  Video,
-  Edit3,
-} from 'lucide-react';
+import { cn } from "@/lib/utils";
+import { Edit3 } from 'lucide-react';
 
-// Empty State Component
-const EmptyState = ({ mode, }: {
+// Clapperboard icon from Tabler Icons (tabler.io/icons, MIT)
+const IconClapperboard = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <path d="M4 4a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-16z" />
+    <path d="M4 8h16" />
+    <path d="M8 4l4 4" />
+    <path d="M14 4l4 4" />
+    <path d="M2 4l2 0" />
+  </svg>
+);
+
+const EmptyState = ({ mode }: {
   mode: 'generate' | 'edit',
   onPromptSelect: (prompt: string) => void
 }) => (
   <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
     <div className={cn(
-      "w-12 h-12 rounded-xl border flex items-center justify-center mb-4 transition-all duration-300",
+      "w-12 h-12 rounded-xl border flex items-center justify-center mb-4",
       mode === 'generate'
-        ? "bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_15px_-3px_rgba(16,185,129,0.15)]"
-        : "bg-blue-500/10 border-blue-500/20 shadow-[0_0_15px_-3px_rgba(59,130,246,0.15)]"
+        ? "bg-zinc-800/60 border-zinc-700/50 text-zinc-300"
+        : "bg-zinc-800/60 border-zinc-700/50 text-zinc-300"
     )}>
-      {mode === 'generate' ? (
-        <Video className="w-5 h-5 text-emerald-400" />
-      ) : (
-        <Edit3 className="w-5 h-5 text-blue-400" />
-      )}
+      {mode === 'generate' ? <IconClapperboard /> : <Edit3 className="w-5 h-5" />}
     </div>
     <h3 className="text-sm font-semibold text-white mb-2">
-      {mode === 'generate' ? 'Generate Animations' : 'Edit Templates'}
+      {mode === 'generate' ? 'Generate a video' : 'Edit Templates'}
     </h3>
     <p className="text-xs text-zinc-400 mb-6 max-w-[240px] leading-relaxed">
-      {mode === 'generate' 
-        ? 'Describe the math-based animation or pattern you want to create and I\'ll generate the code for you.'
-        : 'You can edit templates by importing them to assets sidebar, then dragging and dropping them into the message box below.'
+      {mode === 'generate'
+        ? 'Describe what you want to explain. Chess games, physics simulations, algorithms, molecules — type it in plain language.'
+        : 'Import a template to the assets panel, then drag it into the message box below.'
       }
     </p>
   </div>
 );
 
-export default EmptyState
+export default EmptyState;

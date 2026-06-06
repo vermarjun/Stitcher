@@ -50,6 +50,15 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --animate-flicker: flicker 4s ease-in-out infinite;
+  @keyframes flicker {
+  0%, 100% {
+    opacity: 0.12;
+    }
+  50% {
+    opacity: 0.5;
+    }
+  }
   --animate-shine: shine var(--duration) infinite linear;
   @keyframes shine {
   0% {
@@ -141,6 +150,27 @@
   100% {
     transform: translateZ(0) rotate(360deg);
     }
+  }
+  @keyframes fadeSlideIn {
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0px);
+    }
+  }
+  @keyframes slideRightIn {
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateX(0px);
+    }
+  }
+  @keyframes testimonialIn {
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0px) scale(1);
+    }
   }}
 
 :root {
@@ -231,6 +261,22 @@
   }
 }
 
+/* ─── Hide scrollbars app-wide (scrolling still works everywhere) ─── */
+* {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE 10+ / legacy Edge */
+}
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none;                /* Chrome, Safari, Edge, Opera */
+}
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 @keyframes metallicGlare {
                   0% { 
                     transform: translateX(-100%) skewX(-15deg);
@@ -254,3 +300,204 @@
                     transform: translateX(100%);
                   }
                 }
+
+                /* Live generation step-label entrance (blur + rise + fade).
+                   Pure CSS — no motion/AnimatePresence dependency. */
+                @keyframes step-label-in {
+                  from {
+                    opacity: 0;
+                    filter: blur(5px);
+                    transform: translateY(7px);
+                  }
+                  to {
+                    opacity: 1;
+                    filter: blur(0);
+                    transform: translateY(0);
+                  }
+                }
+/* ─── Onboarding product tour (driver.js) — side-by-side layout ─── */
+/* Left: glassmorphic card with title + subtitle + nav buttons. Right: cat PNG (transparent). */
+/* All spacing uses !important — driver.js does all:unset then re-applies its own       */
+/* padding/margins, so higher specificity alone is not reliable enough.                  */
+.driver-popover.stitcher-tour {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  max-width: 560px !important;
+  min-width: 400px !important;
+  /* Right padding reserves the cat column (240px) so text never flows under it. */
+  padding: 28px 244px 28px 28px !important;
+  isolation: isolate;
+  overflow: visible;
+}
+/* Glassmorphic card — covers only the left text area, leaves the cat column open. */
+.driver-popover.stitcher-tour::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 220px;
+  bottom: 0;
+  background: linear-gradient(145deg, rgba(15, 18, 28, 0.95) 0%, rgba(9, 11, 18, 0.95) 100%);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 16px;
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  z-index: -1;
+  pointer-events: none;
+}
+/* Cat column: pinned to the right, spans the full popover (= card) height.
+   The image fills this box (height:100%), so since each PNG's subject has been
+   trimmed to fill its own canvas, every cat ends up matching the card height —
+   regardless of the original artwork's proportions. */
+.driver-popover.stitcher-tour .stitcher-tour-cat-float {
+  position: absolute;
+  right: 8px;
+  top: 0;
+  bottom: 0;
+  width: 212px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.driver-popover.stitcher-tour .stitcher-tour-cat {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+  user-select: none;
+  filter: drop-shadow(0 6px 20px rgba(0,0,0,0.45));
+}
+/* Images that keep their original (opaque) background: frame them as a photo. */
+.driver-popover.stitcher-tour .stitcher-tour-cat.cat-photo {
+  max-height: 90%;
+  max-width: 96%;
+  border-radius: 14px;
+  filter: none;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+/* Left-side text */
+.driver-popover.stitcher-tour .driver-popover-title {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  margin: 0 0 12px 0 !important;
+  line-height: 1.35 !important;
+}
+.driver-popover.stitcher-tour .driver-popover-description {
+  font-size: 13px;
+  color: #a1a1aa;
+  display: block !important;
+  margin: 0 0 6px 0 !important;
+}
+.driver-popover.stitcher-tour .stitcher-tour-line {
+  font-size: 14px !important;
+  font-weight: 500;
+  color: #d4d4d8;
+  display: block;
+  line-height: 1.6 !important;
+}
+/* Nav buttons */
+.driver-popover.stitcher-tour .driver-popover-progress-text {
+  font-size: 11px;
+  color: #71717a;
+}
+.driver-popover.stitcher-tour .driver-popover-footer {
+  margin-top: 22px !important;
+}
+.driver-popover.stitcher-tour .driver-popover-footer button {
+  background-color: rgba(24, 24, 27, 0.92) !important;
+  color: #e4e4e7 !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 8px !important;
+  text-shadow: none !important;
+  font-size: 12px !important;
+  padding: 8px 16px !important;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.driver-popover.stitcher-tour .driver-popover-footer button:hover {
+  background-color: #27272a;
+  border-color: #52525b;
+}
+.driver-popover.stitcher-tour .driver-popover-next-btn {
+  background-color: #f4f4f5 !important;
+  color: #18181b !important;
+  border-color: #f4f4f5 !important;
+  font-weight: 600;
+}
+.driver-popover.stitcher-tour .driver-popover-next-btn:hover {
+  background-color: #e4e4e7 !important;
+  border-color: #e4e4e7 !important;
+}
+.driver-popover.stitcher-tour .driver-popover-close-btn {
+  display: none; /* tour must be completed — no early exit */
+}
+/* No arrow — there's no box to point from */
+.driver-popover.stitcher-tour .driver-popover-arrow {
+  display: none;
+}
+
+/* Tour: phone-safe layout — hide cat, remove right padding, fit viewport */
+@media (max-width: 640px) {
+  .driver-popover.stitcher-tour {
+    min-width: unset !important;
+    max-width: calc(100vw - 24px) !important;
+    padding: 20px !important;
+    margin: 0 12px !important;
+  }
+  .driver-popover.stitcher-tour::before {
+    right: 0 !important;
+  }
+  .driver-popover.stitcher-tour .stitcher-tour-cat-float {
+    display: none !important;
+  }
+}
+
+/* --- Auth page entrance animations (sign-in.tsx) ---
+   The @theme block above defines the fadeSlideIn / slideRightIn keyframes, but
+   the utility classes that actually trigger them aren't generated by Tailwind,
+   so they're defined here. Elements start hidden+blurred and animate into
+   place; staggered via animate-delay-*. Disabled under reduced-motion. */
+.animate-element {
+  opacity: 0;
+  transform: translateY(20px);
+  filter: blur(4px);
+  animation: fadeSlideIn 0.6s cubic-bezier(0.25, 0.4, 0.25, 1) forwards;
+}
+.animate-slide-right {
+  opacity: 0;
+  transform: translateX(40px);
+  filter: blur(4px);
+  animation: slideRightIn 0.85s cubic-bezier(0.25, 0.4, 0.25, 1) forwards;
+}
+.animate-delay-100 { animation-delay: 0.1s; }
+.animate-delay-200 { animation-delay: 0.2s; }
+.animate-delay-300 { animation-delay: 0.3s; }
+.animate-delay-400 { animation-delay: 0.4s; }
+.animate-delay-500 { animation-delay: 0.5s; }
+.animate-delay-600 { animation-delay: 0.6s; }
+.animate-delay-700 { animation-delay: 0.7s; }
+.animate-delay-800 { animation-delay: 0.8s; }
+.animate-delay-900 { animation-delay: 0.9s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-element,
+  .animate-slide-right,
+  .animate-flicker {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* Safe-area bottom padding for fixed mobile bars (notched phones).
+   Used by the dashboard's mobile bottom navigation. */
+.safe-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}

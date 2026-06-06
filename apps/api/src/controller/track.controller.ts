@@ -566,6 +566,13 @@ export const deleteTimelineItem = async (req: DeleteTimelineItemRequest, res: Re
 
     const { trackId, assetId } = timelineItem;
 
+    // Resolve the projectId BEFORE we delete, so we can also remove the item
+    // from the live Y.Doc (the authoritative collab state). Without this, a
+    // delete that isn't mirrored into the Y.Doc by a synced client gets
+    // re-materialized from the doc and the clip "resurrects".
+    const trackForProject = await Track.findById(trackId).select('projectId').lean();
+    const deleteProjectId = (trackForProject?.projectId as unknown as { toString(): string } | null)?.toString?.() ?? '';
+
     // Start a transaction to ensure data consistency
     const session = await TimelineItem.startSession();
     
@@ -599,6 +606,36 @@ export const deleteTimelineItem = async (req: DeleteTimelineItemRequest, res: Re
           }
         }
       });
+
+      // ── Propagate the deletion into the live Y.Doc (authoritative) ──────────
+      // Mirror the add-asset injection so every collaborator drops the item and
+      // it cannot be re-materialized back into Mongo. Best-effort / non-fatal.
+      try {
+        if (deleteProjectId) {
+          const ydoc = getYjsDoc(deleteProjectId);
+          if (ydoc) {
+            const timelineMap = ydoc.getMap<unknown>('timeline');
+            const tracksArray = timelineMap.get('tracks') as Y.Array<Y.Map<unknown>> | undefined;
+            if (tracksArray) {
+              ydoc.transact(() => {
+                for (let i = 0; i < tracksArray.length; i++) {
+                  const t = tracksArray.get(i);
+                  const itemsArray = t.get('items') as Y.Array<Y.Map<unknown>> | undefined;
+                  if (!itemsArray) continue;
+                  for (let j = 0; j < itemsArray.length; j++) {
+                    if ((itemsArray.get(j).get('id') as string) === timelineItemId) {
+                      itemsArray.delete(j, 1);
+                      return; // ids are unique — done
+                    }
+                  }
+                }
+              }, 'rest-delete-item');
+            }
+          }
+        }
+      } catch (yjsDelErr) {
+        console.error('Y.Doc delete propagation error (non-fatal):', yjsDelErr);
+      }
 
       // Success response
       res.status(200).json({

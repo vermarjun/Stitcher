@@ -13,21 +13,22 @@ import { Label } from "@/Components/ui/label";
 import { Textarea } from "@/Components/ui/textarea";
 import {
   Plus,
-  Upload,
-  Share2,
+  Compass,
+  Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type NavigateFunction } from "react-router-dom";
 import api from "@/api";
 import { ShineBorder } from "../../magicui/shine-border";
-import { FEATURES } from "@/config/features";
+import { LINKS } from "@/config/links";
+import { startReplayTour } from "@/lib/onboardingTour";
 
 interface Props3 {
   navigate: NavigateFunction;
   onNavigate: (itemKey:string)=>void,
 }
 
-const QuickActions = ({ navigate, onNavigate }: Props3) => {
+const QuickActions = ({ navigate }: Props3) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -96,6 +97,7 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
               <Card
+                data-tour="create-project"
                 onClick={startNewProject}
                 className="relative overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]"
               >
@@ -203,42 +205,66 @@ const QuickActions = ({ navigate, onNavigate }: Props3) => {
             </DialogContent>
           </Dialog>
 
-          {FEATURES.community && (
+          {/* Replaces "Browse Templates" (already in the left panel). Starts the
+              guided cat-meme tour from here; finishing Act 1 arms the editor leg
+              to auto-run once the user opens a project. */}
           <Card
-            onClick={()=>{onNavigate("backpack")}}
+            onClick={() => {
+              const autoOpen = async () => {
+                try {
+                  const userStr = localStorage.getItem("user");
+                  const u = userStr ? JSON.parse(userStr) : null;
+                  const res = await api.get<any[]>(`/project/user/${u?._id}`);
+                  const projects = res.data;
+                  if (projects && projects.length > 0) {
+                    const sorted = [...projects].sort(
+                      (a, b) =>
+                        new Date(b.updatedAt ?? b.createdAt).getTime() -
+                        new Date(a.updatedAt ?? a.createdAt).getTime()
+                    );
+                    navigate(`/dashboard/${sorted[0]._id}`);
+                  } else {
+                    const created = await api.post<any>("/project", { name: "demo" });
+                    navigate(`/dashboard/${created.data._id}`);
+                  }
+                } catch {
+                  // silent fallback
+                }
+              };
+              startReplayTour(autoOpen);
+            }}
             className="border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full">
               <div className="flex flex-col items-center text-center space-y-3">
                 <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
-                  <Share2 className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
+                  <Compass className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                 </div>
                 <div className="space-y-1">
                   <h3 className="font-medium text-white text-sm group-hover:text-white transition-colors duration-200">
-                    Community Post
+                    Take the Tour
                   </h3>
                   <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
-                    Share with others
+                    Guided demo 🐱
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          )}
-          
-          <Card 
-            onClick={()=>{onNavigate("api-keys")}}
-            className="hidden md:flex border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px] col-span-2 md:col-span-1">
+
+          <Card
+            onClick={() => { window.open(LINKS.docs, "_blank"); }}
+            className="hidden md:flex flex-col border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
             <CardContent className="p-4 flex flex-col items-center justify-center h-full w-full">
               <div className="flex flex-col items-center text-center space-y-3">
                 <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
-                  <Upload className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
+                  <Terminal className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
                 </div>
                 <div className="space-y-1">
                   <h3 className="font-medium text-white text-sm group-hover:text-white transition-colors duration-200">
-                    API Keys
+                    API, MCP &amp; Agent
                   </h3>
                   <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
-                    Manage usage
+                    Use Stitcher in your stack
                   </p>
                 </div>
               </div>

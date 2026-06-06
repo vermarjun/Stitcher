@@ -17,6 +17,10 @@ import logger from "../util/logger.util";
 
 export type ProgressEventType =
     | "job_queued"
+    // Live granular pipeline phase (rag/code/voiceover/render/debug/upload).
+    // data: { phase, label, percent, ceil } from PIPELINE_PHASES. Drives the
+    // user-facing live step label + progress bar (see pipelinePhases.ts).
+    | "progress"
     | "planning"
     | "plan_complete"
     | "scene_started"

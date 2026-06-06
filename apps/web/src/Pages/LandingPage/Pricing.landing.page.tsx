@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import {
   Check,
   Zap,
@@ -6,89 +5,72 @@ import {
   Rocket,
   ExternalLink,
 } from "lucide-react";
-import { Toaster } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { ShineBorder } from "../../Components/magicui/shine-border";
-
-// Razorpay type declaration
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+import { BackgroundGrid } from "@/Components/ui/background-snippets";
 
 const PaymentPage = () => {
   const navigate = useNavigate();
   const plans = [
     {
-      id: "basic",
-      name: "Basic",
-      price: 600,
+      id: "starter",
+      name: "Starter",
+      price: 299,
       icon: Zap,
       features: [
-        "50 Generation Credits",
-        "100 Editing Credits",
-        "Valid for 30 days",
-        "Email Support",
-        "Basic Templates",
+        "25 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Email support",
+        "BYOK — bring your own API key",
       ],
       popular: false,
     },
     {
-      id: "plus",
-      name: "Plus",
-      price: 3000,
+      id: "creator",
+      name: "Creator",
+      price: 799,
       icon: Crown,
       features: [
-        "200 Generation Credits",
-        "400 Editing Credits",
-        "Valid for 30 days",
-        "Priority Support",
-        "Premium Templates",
-        "Advanced Features",
+        "75 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
       ],
       popular: true,
     },
     {
-      id: "max",
-      name: "Max",
-      price: 8000,
+      id: "pro",
+      name: "Pro",
+      price: 1999,
       icon: Rocket,
       features: [
-        "500 Generation Credits",
-        "1000 Editing Credits",
-        "Valid for 30 days",
-        "24/7 Support",
-        "All Templates",
-        "All Features",
-        "API Access",
+        "250 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
+        "Early access to new features",
       ],
       popular: false,
     },
   ];
 
   const handleGetStarted = () => {
-      // Redirect to home/signup instead of direct payment
-      navigate("/home");
+    // Logged-out marketing surface — send visitors to sign up, then they can
+    // buy credit packs from the in-app pricing page.
+    navigate("/auth");
   };
 
   return (
     <div className="min-h-screen md:h-screen bg-black text-white selection:bg-[#19E5A1]/30 overflow-x-hidden overflow-y-auto md:overflow-hidden relative flex flex-col justify-center py-12 md:py-0">
+      <BackgroundGrid />
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
       <div className="fixed bottom-0 right-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
-
-      <Toaster
-        position="top-center"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: "#18181b",
-            border: "1px solid #27272a",
-            color: "#fff",
-            fontSize: "14px",
-          },
-        }}
-      />
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10 w-full">
         
@@ -103,7 +85,7 @@ const PaymentPage = () => {
         </div>
 
         {/* Pricing Cards Grid with 3D Effect (desktop only) */}
-        <div className="flex flex-col md:flex-row justify-center items-stretch md:items-center gap-4 md:gap-6 w-full max-w-6xl mx-auto md:perspective-[1200px]">
+        <div className="flex flex-col md:flex-row justify-center items-stretch md:items-center gap-4 md:gap-6 w-full max-w-6xl mx-auto md:perspective-[1200px] px-2 md:px-0">
           {plans.map((plan, index) => {
             const Icon = plan.icon;
             // Determine rotation based on position (desktop only)
@@ -112,17 +94,17 @@ const PaymentPage = () => {
             const isCenter = index === 1;
 
             return (
-              <div 
-                key={plan.id} 
+              <div
+                key={plan.id}
                 className={`relative group transition-all duration-500 ease-out flex-1 w-full max-w-sm mx-auto ${plan.popular ? 'md:z-20' : 'md:z-10'}`}
                 style={{
                    // Only apply 3D transforms on medium screens and up
-                   transform: window.innerWidth >= 768 ? `
+                   transform: typeof window !== 'undefined' && window.innerWidth >= 768 ? `
                      ${isLeft ? 'rotateY(10deg) translateX(10px) scale(0.95)' : ''}
                      ${isRight ? 'rotateY(-10deg) translateX(-10px) scale(0.95)' : ''}
                      ${isCenter ? 'translateZ(20px) scale(1.0)' : ''}
                    ` : 'none',
-                   transformStyle: window.innerWidth >= 768 ? 'preserve-3d' : 'flat'
+                   transformStyle: typeof window !== 'undefined' && window.innerWidth >= 768 ? 'preserve-3d' : 'flat'
                 }}
               >
                 {plan.popular && (

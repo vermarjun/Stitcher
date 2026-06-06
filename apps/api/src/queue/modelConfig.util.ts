@@ -28,9 +28,13 @@ import { decrypt } from "../util/crypto.util";
 
 const DEFAULT_MODEL_CONFIG: ResolvedModelConfig = {
     // OpenCode Go is the canonical LLM backend for this project.
-    // glm-5.1 is a good default for planner/coder/debugger/validator — fast,
-    // OpenAI-completions compatible, and the OPENCODE_GO_API_KEY single key
-    // covers all roles. Per-user BYOK keys override this when present.
+    // MUST be a tool-capable model: the agent service wraps every role in
+    // createReactAgent({llm, tools}), which sends tool_choice on each call.
+    // OpenCode's DeepSeek/MiniMax/Qwen run in thinking mode and reject
+    // tool_choice ("Thinking mode does not support this tool_choice") AND put
+    // their answer in `reasoning` (empty `content`) — so they break the agent
+    // two ways. glm-5.1 supports tools and populates content. (kimi-k2.5 also
+    // works.) Per-user BYOK keys override this when present.
     planner: {
         provider: "opencodego",
         model: "glm-5.1",

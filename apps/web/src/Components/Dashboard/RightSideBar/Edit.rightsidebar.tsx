@@ -1,6 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, useState } from 'react';
 import { ScrollArea } from '@/Components/ui/scroll-area';
-import { Bot } from 'lucide-react';
+import { Bot, Lock } from 'lucide-react';
 import { messageActions, type Message } from './Main.rightsidebar';
 import EmptyState from './EmptyState.rightsidebar';
 import MessageBubble from './MessageBubble.rightsidebar';
@@ -50,6 +50,9 @@ const EditComponent = ({
   const { triggerRefresh } = useRefreshAssetStash();
   const { triggerHeaderRefresh } = useRefreshHeader();
   const [pollingStatus, setPollingStatus] = useState<'queued' | 'editing' | 'rendering' | null>(null);
+  // Viewers are read-only: they cannot spend credits / run AI edits. Default
+  // permissive when the role is unknown (older project payloads).
+  const canEdit = (currentProject?.myRole ?? 'owner') !== 'viewer';
 
   useImperativeHandle(ref, () => ({
     handleNewChat: () => {},
@@ -136,6 +139,10 @@ const EditComponent = ({
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
+    if (!canEdit) {
+      toast.error('You have viewer-only access to this project.');
+      return;
+    }
 
     // The first dropped item is the source asset to edit
     const sourceAsset = droppedItems?.[0];
@@ -241,6 +248,34 @@ const EditComponent = ({
 
   const noAssetSelected = !droppedItems || droppedItems.length === 0;
 
+  // Read-only bar shown in place of the message input for viewers.
+  const ViewerLockedBar = () => (
+    <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400">
+      <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+      <span>
+        You have <span className="text-amber-300 font-medium">viewer-only</span> access — AI editing is disabled.
+      </span>
+    </div>
+  );
+
+  // The input bar: the real composer for editors/owners, a disabled notice for viewers.
+  const inputBar = canEdit ? (
+    <MessageInput
+      input={input}
+      setInput={setInput}
+      onSubmit={handleSubmit}
+      isProcessing={isProcessing}
+      placeholder={noAssetSelected ? 'Drop a video asset first...' : 'Describe your edit...'}
+      mode="edit"
+      onCancel={() => {}}
+      onAssetDrop={onAssetDrop}
+      droppedItems={droppedItems}
+      onRemoveItem={onRemoveItem}
+    />
+  ) : (
+    <ViewerLockedBar />
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {messages.length === 0 ? (
@@ -254,18 +289,7 @@ const EditComponent = ({
               </p>
             )}
           </div>
-          <MessageInput
-            input={input}
-            setInput={setInput}
-            onSubmit={handleSubmit}
-            isProcessing={isProcessing}
-            placeholder={noAssetSelected ? 'Drop a video asset first...' : 'Describe your edit...'}
-            mode="edit"
-            onCancel={() => {}}
-            onAssetDrop={onAssetDrop}
-            droppedItems={droppedItems}
-            onRemoveItem={onRemoveItem}
-          />
+          {inputBar}
         </>
       ) : (
         <>
@@ -320,18 +344,7 @@ const EditComponent = ({
             </div>
           </ScrollArea>
 
-          <MessageInput
-            input={input}
-            setInput={setInput}
-            onSubmit={handleSubmit}
-            isProcessing={isProcessing}
-            placeholder={noAssetSelected ? 'Drop a video asset first...' : 'Describe your edit...'}
-            mode="edit"
-            onCancel={() => {}}
-            onAssetDrop={onAssetDrop}
-            droppedItems={droppedItems}
-            onRemoveItem={onRemoveItem}
-          />
+          {inputBar}
         </>
       )}
     </div>

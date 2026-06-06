@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Check,
   Zap,
@@ -11,10 +11,13 @@ import {
   Linkedin,
   X,
 } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { ShimmerButton } from "../magicui/shimmer-button";
+import { ShineBorder } from "../magicui/shine-border";
 import api from "@/api";
+import { PlanBadge } from "@/Components/ui/PlanBadge";
+import { BackgroundGrid } from "@/Components/ui/background-snippets";
 
 // Dialog component for social media modal
 const SocialModal = ({
@@ -27,18 +30,10 @@ const SocialModal = ({
   if (!isOpen) return null;
 
   const socialLinks = [
-    {
-      icon: Twitter,
-      label: "Twitter",
-      url: "https://twitter.com/yourusername",
-    },
-    { icon: Github, label: "GitHub", url: "https://github.com/yourusername" },
-    {
-      icon: Linkedin,
-      label: "LinkedIn",
-      url: "https://linkedin.com/in/yourusername",
-    },
-    { icon: Mail, label: "Email", url: "mailto:you@example.com" },
+    { icon: Twitter, label: "Twitter", url: "https://x.com/Arjunv3rm4" },
+    { icon: Github, label: "GitHub", url: "https://github.com/vermarjun" },
+    { icon: Linkedin, label: "LinkedIn", url: "https://www.linkedin.com/in/vermarjun" },
+    { icon: Mail, label: "Email", url: "mailto:vermarjun26@gmail.com" },
   ];
 
   return (
@@ -100,15 +95,16 @@ const UserCurrentPlan = ({
   userData,
 }: {
   userData: {
-    plan: "free" | "basic" | "plus" | "max";
+    plan: string;
     credits: {
       generation: number;
       editing: number;
-      expiresAt: Date;
+      expiresAt: Date | string | null | undefined;
     };
   };
 }) => {
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return "—";
     return new Date(date).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -119,15 +115,13 @@ const UserCurrentPlan = ({
   return (
     <div className="w-full max-w-2xl mx-auto mb-10">
       <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 rounded-2xl sm:rounded-full p-5 sm:px-6 sm:py-3 flex flex-col sm:flex-row items-center sm:justify-between gap-y-4 sm:gap-4 shadow-lg shadow-black/20 w-full">
-        
+
         {/* Plan Section */}
         <div className="flex items-center justify-between w-full sm:w-auto gap-2">
           <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Current Plan</span>
-          <span className="bg-zinc-800 text-white text-xs px-2 py-0.5 rounded border border-zinc-700 font-medium capitalize">
-            {userData.plan}
-          </span>
+          <PlanBadge plan={userData.plan} />
         </div>
-        
+
         {/* Divider */}
         <div className="w-full h-px bg-zinc-800 sm:hidden" />
         <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
@@ -174,59 +168,83 @@ const PaymentPage = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSocialModal, setShowSocialModal] = useState(false);
 
-  // Mock user data - replace with actual data from your app
-  const userData = {
-    plan: "free" as const,
+  const [userData, setUserData] = useState<{
+    plan: string;
     credits: {
-      generation: 5,
-      editing: 10,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-    },
-  };
+      generation: number;
+      editing: number;
+      expiresAt: Date | string | null | undefined;
+    };
+  }>({
+    plan: "free",
+    credits: { generation: 0, editing: 0, expiresAt: null },
+  });
+
+  useEffect(() => {
+    api
+      .get<any>("/users/me/credits")
+      .then((response) => {
+        const data = response.data;
+        if (data.success) {
+          const msg = data.message;
+          setUserData({
+            plan: msg.plan,
+            credits: {
+              generation: msg.credits.generation,
+              editing: msg.credits.editing,
+              expiresAt: msg.credits.expiresAt ?? null,
+            },
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch credits:", err);
+      });
+  }, []);
 
   const plans = [
     {
-      id: "basic",
-      name: "Basic",
-      price: 600,
+      id: "starter",
+      name: "Starter",
+      price: 299,
       icon: Zap,
       features: [
-        "50 Generation Credits",
-        "100 Editing Credits",
-        "Valid for 30 days",
-        "Email Support",
-        "Basic Templates",
+        "25 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Email support",
+        "BYOK — bring your own API key",
       ],
       popular: false,
     },
     {
-      id: "plus",
-      name: "Plus",
-      price: 3000,
+      id: "creator",
+      name: "Creator",
+      price: 799,
       icon: Crown,
       features: [
-        "200 Generation Credits",
-        "400 Editing Credits",
-        "Valid for 30 days",
-        "Priority Support",
-        "Premium Templates",
-        "Advanced Features",
+        "75 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
       ],
       popular: true,
     },
     {
-      id: "max",
-      name: "Max",
-      price: 8000,
+      id: "pro",
+      name: "Pro",
+      price: 1999,
       icon: Rocket,
       features: [
-        "500 Generation Credits",
-        "1000 Editing Credits",
-        "Valid for 30 days",
-        "24/7 Support",
-        "All Templates",
-        "All Features",
-        "API Access",
+        "250 videos",
+        "Credits never expire",
+        "All 7 animation domains",
+        "Priority support",
+        "BYOK — bring your own API key",
+        "Collaboration & sharing",
+        "Early access to new features",
       ],
       popular: false,
     },
@@ -249,6 +267,13 @@ const PaymentPage = () => {
   const handlePayment = async (planId: string) => {
     setLoading(true);
     setSelectedPlan(planId);
+
+    let storedUser: { username?: string; email?: string } = {};
+    try {
+      storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      storedUser = {};
+    }
 
     try {
       const scriptLoaded = await loadRazorpayScript();
@@ -289,6 +314,16 @@ const PaymentPage = () => {
             const verifyData = await verifyResponse.data;
 
             if (verifyData.success) {
+              // Reflect the newly granted credits/plan immediately.
+              setUserData((prev) => ({
+                plan: verifyData.plan ?? prev.plan,
+                credits: {
+                  generation:
+                    verifyData.credits?.generation ?? prev.credits.generation,
+                  editing: verifyData.credits?.editing ?? prev.credits.editing,
+                  expiresAt: verifyData.credits?.expiresAt ?? null,
+                },
+              }));
               setShowConfetti(true);
               toast.success(
                 `Payment successful! Welcome to ${planId.toUpperCase()} plan!`
@@ -305,9 +340,9 @@ const PaymentPage = () => {
           }
         },
         prefill: {
-          name: "User Name",
-          email: "user@example.com",
-          contact: "9999999999",
+          name: storedUser.username || "",
+          email: storedUser.email || "",
+          contact: "",
         },
         notes: {
           plan: planId,
@@ -336,22 +371,10 @@ const PaymentPage = () => {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-[#19E5A1]/30 overflow-x-hidden relative">
+      <BackgroundGrid />
       {/* Background Ambient Effects */}
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-[#19E5A1]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none translate-x-1/3 translate-y-1/3" />
-
-      <Toaster
-        position="top-center"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: "#18181b",
-            border: "1px solid #27272a",
-            color: "#fff",
-            fontSize: "14px",
-          },
-        }}
-      />
 
       {showConfetti && (
         <Confetti 
@@ -403,13 +426,20 @@ const PaymentPage = () => {
                 key={plan.id}
                 className={`group relative flex flex-col p-8 rounded-3xl border transition-all duration-500 ${
                   plan.popular
-                    ? "bg-zinc-900/60 border-[#19E5A1]/30 shadow-2xl shadow-[#19E5A1]/10 scale-105 z-10 ring-1 ring-[#19E5A1]/20"
-                    : "bg-zinc-900/20 border-zinc-800 hover:border-zinc-700/80 hover:bg-zinc-900/40"
+                    ? "bg-zinc-950 border-transparent shadow-2xl shadow-black/30 scale-105 z-10"
+                    : "bg-zinc-950 border-zinc-800 hover:border-zinc-700/80"
                 }`}
               >
+                {plan.popular && (
+                  <ShineBorder
+                    shineColor={["#a0c4ff", "#ffffff", "#c8b6ff"]}
+                    borderWidth={1.5}
+                    duration={10}
+                  />
+                )}
                 {/* Popular Badge */}
                 {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#19E5A1] text-black px-4 py-1.5 text-xs font-bold rounded-full shadow-[0_0_20px_rgba(25,229,161,0.3)] tracking-wide">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-white via-zinc-200 to-white text-black px-4 py-1.5 text-xs font-bold rounded-full shadow-[0_0_20px_rgba(255,255,255,0.25)] tracking-wide">
                     MOST POPULAR
                   </div>
                 )}

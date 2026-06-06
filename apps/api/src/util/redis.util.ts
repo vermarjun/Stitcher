@@ -8,10 +8,20 @@ const redisUrl = REDIS_PASSWORD
     : `redis://${REDIS_HOST}:${REDIS_PORT}`;
 
 export const redisSubscriber = createClient({
-    url: redisUrl
+    url: redisUrl,
+    socket: {
+        // Never stop reconnecting: a transient DNS/network failure must not
+        // permanently kill the pub/sub relay that drives live progress events.
+        // Backoff capped at 5s; returning a number (not an Error) keeps retrying.
+        reconnectStrategy: (retries: number) => Math.min(retries * 200, 5000),
+        connectTimeout: 15_000,
+        keepAlive: 30_000,
+    },
 });
 
 redisSubscriber.on('error', (err) => logger.error({ message: 'Redis Client Error', error: String(err) }));
+redisSubscriber.on('reconnecting', () => logger.warn({ message: 'Redis subscriber reconnecting…' }));
+redisSubscriber.on('ready', () => logger.info({ message: 'Redis subscriber ready' }));
 
 export const initRedisSubscriber = async (io: Server) => {
     try {

@@ -1,0 +1,115 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Stitcher — PRODUCTION (single EC2 box)
+#
+#  Differences from dev compose:
+#    • No local `mongo` container — app + RAG use MongoDB Atlas (MONGODB_URL).
+#    • No `qdrant` container — vector store is Atlas (VECTOR_STORE=mongodb_atlas).
+#    • `api` depends only on `redis` (mongo dependency removed).
+#    • All published ports bound to 127.0.0.1 — public traffic enters via the
+#      host Caddy reverse proxy (TLS) → api:3000. Inter-service calls use the
+#      compose network (service names), not published ports.
+#
+#  Run:
+#    docker compose -f docker-compose.prod.yml up -d --build
+#  (REDIS_PASSWORD / SANDBOX_ENABLED come from the sibling .env in this dir.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+        --requirepass ${REDIS_PASSWORD:-dev_redis_password}
+        --maxmemory 512mb
+        --maxmemory-policy noeviction
+        --appendonly yes
+        --auto-aof-rewrite-percentage 100
+        --auto-aof-rewrite-min-size 64mb
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - stitcher-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dev_redis_password}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./API
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:1455:3000"   # Codex OAuth callback (admin-only; reach via SSH tunnel)
+    env_file:
+      - ./API/.env.docker
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  agent-service:
+    build:
+      context: ../../Manim-Agent-Service
+    ports:
+      - "127.0.0.1:4000:4000"
+    env_file:
+      - ./API/.env.docker
+    volumes:
+      - ../../Manim-Agent-Service/src/prompts/planner:/srv/dist/prompts/planner:ro
+      - ../../Manim-Agent-Service/src/prompts/coder:/srv/dist/prompts/coder:ro
+      - ../../Manim-Agent-Service/src/prompts/debugger:/srv/dist/prompts/debugger:ro
+      - ../../Manim-Agent-Service/src/prompts/refiner:/srv/dist/prompts/refiner:ro
+      - ../../Manim-Agent-Service/src/prompts/skills:/srv/dist/prompts/skills:ro
+    environment:
+      CHECKPOINT_REDIS_URL: "redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379"
+      NODE_ENV: production
+      PORT: "4000"
+      OTEL_SDK_DISABLED: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  render-service:
+    build:
+      context: ../../manim-render-service
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - ./API/.env.docker
+    environment:
+      SANDBOX_ENABLED: "${SANDBOX_ENABLED:-true}"
+      LOG_LEVEL: "INFO"
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    tmpfs:
+      - /tmp:size=2g
+    restart: unless-stopped
+
+  rag-service:
+    build:
+      context: ../../ManimRAG/pipeline
+    ports:
+      - "127.0.0.1:7001:7000"
+    env_file:
+      - ./API/.env.docker
+    environment:
+      VECTOR_STORE: "mongodb_atlas"
+      PORT: "7000"
+      NODE_ENV: "production"
+      OTEL_SDK_DISABLED: "true"
+    restart: unless-stopped
+
+volumes:
+  stitcher-redis-data:

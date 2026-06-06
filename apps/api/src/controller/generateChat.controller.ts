@@ -7,11 +7,35 @@ import GenerationJob from '../model/generationJob.model';
 import Project, { IProject } from '../model/project.model';
 import User from '../model/user.model';
 import Asset from '../model/asset.model';
-import { enqueueGeneration } from '../queue/generationQueue';
+import { enqueueGeneration, generationQueue } from '../queue/generationQueue';
 import { resolveModelConfig, hasOwnKeys } from '../queue/modelConfig.util';
 import { publishProgress } from '../queue/eventPublisher.util';
 import { createJobRecord } from '../queue/jobTracker.util';
+import { getPhaseMeta } from '../queue/pipelinePhases';
+import { markCancelled } from '../queue/generationWorker';
+import { redisConnection } from '../queue/connection';
+import { config } from '../config';
 import type { Document } from 'mongoose';
+
+/**
+ * Global daily ceiling on FREE-tier generations — a public-launch budget/abuse
+ * guard. Increments a per-UTC-day Redis counter; returns false once the cap
+ * (config.DAILY_FREE_GEN_CAP) is exceeded. FAILS OPEN: any Redis error returns
+ * true so a cache hiccup never blocks all generations. Cap of 0 = disabled.
+ */
+async function underDailyFreeCap(): Promise<boolean> {
+    const cap = config.DAILY_FREE_GEN_CAP;
+    if (!cap || cap <= 0) return true;
+    try {
+        const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+        const key = `stitcher:freegen:${day}`;
+        const n = await redisConnection.incr(key);
+        if (n === 1) await redisConnection.expire(key, 60 * 60 * 48); // 2-day TTL
+        return n <= cap;
+    } catch {
+        return true; // never block generations on a Redis error
+    }
+}
 
 // ─── POST / — main generation entry ──────────────────────────────────────────
 // Validates input, creates/finds the GenerateChat doc, enqueues a BullMQ job,
@@ -28,6 +52,12 @@ export const generateChatResponse = async (req: Request, res: Response) => {
             minScenes?: number;
             maxScenes?: number;
             quality?: 'low' | 'medium' | 'high';
+            voiceover?: {
+                enabled: boolean;
+                provider?: string;
+                voice?: string;
+                language?: string;
+            };
         };
     };
     const userId = req.userId;
@@ -43,9 +73,21 @@ export const generateChatResponse = async (req: Request, res: Response) => {
     }
 
     // Credit pre-check (atomic deduction happens inside the worker after success)
-    const user = await User.findById(userId).select('credits isTestAccount').lean();
+    const user = await User.findById(userId).select('credits isTestAccount plan').lean();
     if (!user) {
         res.status(404).json({ success: false, message: 'User not found' });
+        return;
+    }
+
+    // Public-launch budget guard: cap total FREE-tier generations per day across all
+    // users so scripted/abusive signups can't drain the shared LLM budget. Paid and
+    // test accounts are exempt (they don't draw on the free pool). Fail-open.
+    const isFreeTier = (user.plan ?? 'free') === 'free' && !user.isTestAccount;
+    if (isFreeTier && !(await underDailyFreeCap())) {
+        res.status(429).json({
+            success: false,
+            message: 'We\'ve hit today\'s free-generation limit. Please try again tomorrow, or upgrade your plan for uninterrupted access.',
+        });
         return;
     }
     // BYOT exhaust path: once credits hit zero, users who supplied their own
@@ -123,10 +165,11 @@ export const generateChatResponse = async (req: Request, res: Response) => {
 
     await chat.save();
 
-    if (isNewChat) {
-        project.edit_chat = chat._id as Types.ObjectId;
-        await project.save();
-    }
+    // NOTE: deliberately NOT writing chat._id onto project.edit_chat. Generate
+    // chats are private per user and resolved via GET /generatechat/project/:id
+    // (userId-scoped); project.edit_chat is reserved for the legacy pointer and
+    // must not be hijacked by one user's generate chat on a shared project.
+    void isNewChat;
 
     const resolvedChatId = (chat._id as Types.ObjectId).toString();
     const traceId = (req as Request & { id?: string }).id ?? crypto.randomUUID();
@@ -155,6 +198,16 @@ export const generateChatResponse = async (req: Request, res: Response) => {
 
     // Publish a queued event so the frontend knows work has started
     publishProgress(resolvedChatId, { type: 'job_queued', phase: 'controller', data: { jobId } });
+    // …and an initial live-progress event so the bar + step label start moving
+    // immediately (before the worker picks the job up). Mirrors PIPELINE_PHASES.
+    {
+        const q = getPhaseMeta('queued');
+        publishProgress(resolvedChatId, {
+            type: 'progress',
+            phase: 'queued',
+            data: { phase: 'queued', label: q.label, percent: q.percent, ceil: q.ceil },
+        });
+    }
 
     res.status(202).json({
         success: true,
@@ -294,6 +347,13 @@ export const getChatHistory = async (req: Request, res: Response) => {
             return;
         }
 
+        // Privacy: a chat belongs to exactly one user. Even project members
+        // (including the owner) cannot read another member's chat history.
+        if (chat.userId && req.userId && chat.userId.toString() !== req.userId) {
+            res.status(403).json({ success: false, message: 'Forbidden' });
+            return;
+        }
+
         // Populate assetId for each scene
         if (chat.messages) {
             for (let i = 0; i < chat.messages.length; i++) {
@@ -326,8 +386,20 @@ export const getChatHistory = async (req: Request, res: Response) => {
 export const getProjectChats = async (req: Request, res: Response) => {
     try {
         const { projectId } = req.params;
+        const userId = req.userId;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'User not authenticated' });
+            return;
+        }
 
-        const chats = await GenerateChat.find({ projectId })
+        // Chats are PRIVATE per user (like memory): each collaborator only ever
+        // sees their own AI conversations, even on a shared project. This also
+        // backs per-user credit enforcement — you only generate against chats
+        // tied to your own account.
+        const chats = await GenerateChat.find({
+            projectId,
+            userId: new Types.ObjectId(userId),
+        })
             .select('_id title createdAt updatedAt')
             .sort({ updatedAt: -1 })
             .lean();
@@ -339,78 +411,83 @@ export const getProjectChats = async (req: Request, res: Response) => {
     }
 };
 
-// ─── POST /cancel/:chatId — mark latest assistant message cancelled ───────────
+// ─── POST /cancel/:chatId ─────────────────────────────────────────────────────
+// 1. Set a Redis flag so the running worker stops at its next checkpoint.
+// 2. Remove the BullMQ job if it hasn't started yet (waiting/delayed).
+// 3. Update the GenerationJob record and the chat message in Mongo.
+// 4. Publish a socket event so the UI updates immediately.
 
 export const stopGeneration = async (req: Request, res: Response) => {
     try {
         const { chatId } = req.params;
         const userId = req.userId;
 
-        if (!chatId) {
-            res.status(400).json({ success: false, message: 'Chat ID is required' });
-            return;
-        }
-        if (!userId) {
-            res.status(401).json({ success: false, message: 'User not authenticated' });
-            return;
+        if (!chatId) { res.status(400).json({ success: false, message: 'Chat ID is required' }); return; }
+        if (!userId) { res.status(401).json({ success: false, message: 'Unauthorized' }); return; }
+
+        // ── 1. Set the Redis cancellation flag ───────────────────────────────
+        await markCancelled(chatId);
+
+        // ── 2. Find the active GenerationJob and remove/stop the BullMQ job ─
+        const genJob = await GenerationJob.findOne({
+            chatId,
+            status: { $in: ['queued', 'planning', 'generating', 'rendering', 'concatenating'] },
+        }).sort({ createdAt: -1 });
+
+        if (genJob?.jobId) {
+            try {
+                const bullJob = await generationQueue.getJob(genJob.jobId);
+                if (bullJob) {
+                    const state = await bullJob.getState();
+                    // Waiting jobs can be removed immediately; active jobs will hit the checkpoint.
+                    if (state === 'waiting' || state === 'delayed' || state === 'waiting-children') {
+                        await bullJob.remove();
+                    }
+                }
+            } catch {
+                // Non-fatal — the Redis flag will stop the worker regardless.
+            }
+            // Mark the GenerationJob as failed/cancelled.
+            await GenerationJob.findByIdAndUpdate(genJob._id, {
+                status: 'failed',
+                error: 'cancelled',
+                completedAt: new Date(),
+            });
         }
 
+        // ── 3. Update the chat message in Mongo ──────────────────────────────
         const chat = await GenerateChat.findById(chatId);
-        if (!chat) {
-            res.status(404).json({ success: false, message: 'Chat not found' });
-            return;
+        if (chat) {
+            const assistantMessages = chat.messages.filter((m) => m.role === 'assistant');
+            const latest = assistantMessages[assistantMessages.length - 1];
+            if (latest) {
+                const idx = chat.messages.findIndex(
+                    (m) => m.role === 'assistant' && m.timestamp.getTime() === latest.timestamp.getTime()
+                );
+                if (idx !== -1) {
+                    chat.messages[idx].completed = true;
+                    chat.messages[idx].error = 'cancelled';
+                    chat.messages[idx].content =
+                        typeof latest.content === 'string'
+                            ? 'Generation was cancelled.'
+                            : { plannerOutput: (latest.content as { plannerOutput?: string }).plannerOutput ?? '', llmResponse: 'Generation was cancelled.' };
+                    chat.markModified('messages');
+                    await chat.save();
+                }
+            }
         }
 
-        const assistantMessages = chat.messages.filter((msg) => msg.role === 'assistant');
-        if (assistantMessages.length === 0) {
-            res.status(404).json({ success: false, message: 'No assistant messages found to cancel' });
-            return;
-        }
-
-        const latestAssistantMessage = assistantMessages[assistantMessages.length - 1];
-        const messageIndex = chat.messages.findIndex(
-            (msg) =>
-                msg.role === 'assistant' &&
-                msg.timestamp.getTime() === latestAssistantMessage.timestamp.getTime()
-        );
-
-        if (messageIndex === -1) {
-            res.status(404).json({ success: false, message: 'Assistant message not found in chat array' });
-            return;
-        }
-
-        chat.messages[messageIndex].completed = true;
-        chat.messages[messageIndex].plannerOut = latestAssistantMessage.plannerOut || true;
-        chat.messages[messageIndex].generatorOutput = latestAssistantMessage.generatorOutput || true;
-        chat.messages[messageIndex].error = 'cancelled';
-
-        if (typeof latestAssistantMessage.content === 'string') {
-            chat.messages[messageIndex].content = 'Generation was cancelled by user.';
-        } else {
-            chat.messages[messageIndex].content = {
-                plannerOutput: latestAssistantMessage.content.plannerOutput || '',
-                llmResponse: latestAssistantMessage.content.llmResponse || 'Generation was cancelled by user.',
-            };
-        }
-
-        chat.markModified('messages');
-        await chat.save();
-
-        res.status(200).json({
-            success: true,
-            data: {
-                chatId: chat._id,
-                message: 'Generation cancelled successfully',
-                updatedMessage: chat.messages[messageIndex],
-            },
+        // ── 4. Publish socket event for immediate UI feedback ────────────────
+        publishProgress(chatId, {
+            type: 'job_complete',
+            phase: 'cancelled',
+            data: { status: 'cancelled', finalUrl: null },
         });
+
+        res.status(200).json({ success: true, data: { chatId, message: 'Generation cancelled' } });
     } catch (error) {
-        console.error('Stop generation error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to cancel generation',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        console.error('stopGeneration error:', error);
+        res.status(500).json({ success: false, message: 'Failed to cancel generation' });
     }
 };
 
@@ -445,6 +522,82 @@ export const completeGeneration = async (req: Request, res: Response) => {
             message: 'Failed to complete generation',
             error: error instanceof Error ? error.message : 'Unknown error',
         });
+    }
+};
+
+// ─── GET /:chatId/status — lightweight polling fallback ──────────────────────
+// Returns { status, finalUrl, jobId } for the most recent job tied to this chat.
+// The frontend polls this when the socket misses the 'job_complete' event.
+// Auth-gated + ownership-checked: only the chat owner can query it.
+
+export const getChatStatus = async (req: Request, res: Response) => {
+    try {
+        const { chatId } = req.params;
+        const userId = req.userId;
+
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'User not authenticated' });
+            return;
+        }
+
+        if (!chatId || !Types.ObjectId.isValid(chatId)) {
+            res.status(400).json({ success: false, message: 'Invalid chat id' });
+            return;
+        }
+
+        // Ownership check: only the chat's owner may poll status.
+        const chat = await GenerateChat.findById(chatId).select('userId projectId messages').lean();
+        if (!chat) {
+            res.status(404).json({ success: false, message: 'Chat not found' });
+            return;
+        }
+
+        const isOwner =
+            (chat.userId && chat.userId.toString() === userId) ||
+            !!(await User.exists({
+                _id: new Types.ObjectId(userId),
+                projects: chat.projectId,
+            }));
+
+        if (!isOwner) {
+            res.status(403).json({ success: false, message: 'Forbidden' });
+            return;
+        }
+
+        // Fetch the most recent job for this chat (newest-first)
+        const job = await GenerationJob.findOne({ chatId: new Types.ObjectId(chatId) })
+            .select('jobId status progress finalUrl sceneProgress startedAt completedAt')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Also pull the finalUrl from the last assistant message content as a
+        // fallback: if the job doc was GC'd or not yet created, the chat message
+        // is the ground truth.
+        let finalUrlFallback: string | undefined;
+        if (chat.messages && chat.messages.length > 0) {
+            const lastAssistant = [...chat.messages].reverse().find((m) => m.role === 'assistant');
+            if (lastAssistant && typeof lastAssistant.content === 'object') {
+                finalUrlFallback = (lastAssistant.content as { llmResponse?: string }).llmResponse || undefined;
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                jobId: job?.jobId ?? null,
+                status: job?.status ?? (finalUrlFallback ? 'complete' : 'unknown'),
+                // Live granular progress (phase + label + percent + ceil) so a page
+                // reload restores the exact bar position + step label.
+                progress: job?.progress ?? null,
+                finalUrl: job?.finalUrl ?? finalUrlFallback ?? null,
+                sceneProgress: job?.sceneProgress ?? null,
+                startedAt: job?.startedAt ?? null,
+                completedAt: job?.completedAt ?? null,
+            },
+        });
+    } catch (error) {
+        console.error('Get chat status error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch chat status' });
     }
 };
 
@@ -586,5 +739,71 @@ export const generateGuestChatResponse = async (req: Request, res: Response) => 
             message: 'Failed to generate guest chat',
             error: error instanceof Error ? error.message : 'Unknown error',
         });
+    }
+};
+
+// ─── PATCH /:chatId/rating — RLHF rating ─────────────────────────────────────
+
+/**
+ * PATCH /api/generatechat/:chatId/rating
+ *
+ * Body: { rating: 1..5, jobId?: string }
+ * Auth: chat owner (requireChatOwnership applied at router level)
+ *
+ * Sets GenerationJob.rating + ratedAt for the specified job (or the most
+ * recent completed job for this chat if jobId is omitted). Also mirrors the
+ * rating onto the chat's last assistant message so the UI can persist state.
+ */
+export const rateChatGeneration = async (req: Request, res: Response) => {
+    const { chatId } = req.params;
+    const { rating, jobId } = req.body as { rating?: number; jobId?: string };
+
+    if (!chatId || !Types.ObjectId.isValid(chatId)) {
+        return res.status(400).json({ error: { message: "invalid chatId" } });
+    }
+    if (typeof rating !== "number" || rating < 1 || rating > 5 || !Number.isInteger(rating)) {
+        return res.status(400).json({ error: { message: "rating must be an integer 1–5" } });
+    }
+
+    try {
+        // Find the target job (by provided jobId, or fall back to latest complete)
+        let job;
+        if (jobId) {
+            job = await GenerationJob.findOne({
+                chatId: new Types.ObjectId(chatId),
+                $or: [
+                    { jobId: jobId },
+                    ...(Types.ObjectId.isValid(jobId) ? [{ _id: new Types.ObjectId(jobId) }] : []),
+                ],
+            }).select("_id jobId");
+        }
+        if (!job) {
+            job = await GenerationJob.findOne({
+                chatId: new Types.ObjectId(chatId),
+                status: "complete",
+            })
+                .sort({ createdAt: -1 })
+                .select("_id jobId");
+        }
+        if (!job) {
+            return res.status(404).json({ error: { message: "No completed generation found for this chat" } });
+        }
+
+        const ratedAt = new Date();
+        await GenerationJob.updateOne(
+            { _id: job._id },
+            { $set: { rating, ratedAt } }
+        );
+
+        // Mirror rating onto the chat's last assistant message (best-effort).
+        await GenerateChat.findByIdAndUpdate(chatId, {
+            $set: { "messages.$[last].rating": rating },
+        }, {
+            arrayFilters: [{ "last.role": "assistant" }],
+        }).catch(() => {/* non-fatal */});
+
+        return res.status(200).json({ ok: true, jobId: job.jobId, rating, ratedAt });
+    } catch (err) {
+        return res.status(500).json({ error: { message: "Failed to save rating", detail: String(err) } });
     }
 };

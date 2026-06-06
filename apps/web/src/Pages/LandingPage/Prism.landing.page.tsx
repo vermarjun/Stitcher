@@ -21,6 +21,7 @@ type PrismProps = {
   uSteps?: number; // how many ray-march steps to run (default 40 to match original)
   staticWallpaper?: boolean; // if true: render once and stop (default false)
   capDPR?: boolean; // if true: cap devicePixelRatio to 1 for consistent, cheaper rendering (default false)
+  renderScale?: number; // <1 renders at lower internal resolution + CSS-upscales (big perf win; default 1)
   // New props for browser-specific adjustments
   safariGlow?: number; // Override glow for Safari
   chromeGlow?: number; // Override glow for Chrome
@@ -101,6 +102,7 @@ const Prism: React.FC<PrismProps> = ({
   uSteps = 30,
   staticWallpaper = false,
   capDPR = false,
+  renderScale = 1,
   // Browser-specific overrides
   safariGlow,
   chromeGlow,
@@ -157,7 +159,7 @@ const Prism: React.FC<PrismProps> = ({
     const TS = Math.max(0, timeScale || 1);
     const HOVSTR = Math.max(0, hoverStrength || 1);
     const INERT = Math.max(0, Math.min(1, inertia || 0.12));
-    const dpr = 1;
+    const dpr = Math.max(0.25, Math.min(1, renderScale || 1));
     
     const renderer = new Renderer({
       dpr,
@@ -543,6 +545,7 @@ const Prism: React.FC<PrismProps> = ({
     uSteps,
     staticWallpaper,
     capDPR,
+    renderScale,
     // browser-specific overrides
     safariGlow,
     chromeGlow,

@@ -32,8 +32,8 @@ router.get("/user/:userId", auth, getRecentProjectsByUser);
 // Projects shared with the current user (must be before /:id to avoid param conflict)
 router.get("/shared-with-me", auth, sharedWithMe);
 
-// Get single project by ID — collaborators may read
-router.get("/:id", auth, refreshCredits, getProjectById);
+// Get single project by ID — owner or accepted collaborator (viewer included)
+router.get("/:id", auth, requireProjectAccess("params", "id"), refreshCredits, getProjectById);
 
 // Update project
 router.put("/:id", auth, updateProject);

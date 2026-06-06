@@ -1,20 +1,18 @@
-import {Schema, Document, Model, model} from "mongoose";
-// ITimeline import removed — was unused
+import {Schema, Document, Model, model, Types} from "mongoose";
 
-// Interface for individual messages in a chat
 export interface IChatMessage {
-    role: string; //'user' | 'assistant'
+    role: string;
     content: any;
     timestamp: Date;
-    timelineObject?: any; // Har ek message ke liye unique timeline Object banega. STORE IT TO PROVIDE ROLL BACK FEATURE AFTER EACH PROMPT TO EDIT THE TIMELINE
+    timelineObject?: any;
 }
 
-// Interface representing a Chat document in MongoDB
 export interface IChat extends Document {
+    projectId?: Types.ObjectId;
+    userId?: Types.ObjectId;
     messages: IChatMessage[];
 }
 
-// Chat Message Schema
 const ChatMessageSchema = new Schema<IChatMessage>({
     role: { type: String, enum: ['user', 'assistant'], required: true },
     content: { type: Schema.Types.Mixed, required: true },
@@ -22,10 +20,13 @@ const ChatMessageSchema = new Schema<IChatMessage>({
     timelineObject: { type: Schema.Types.Mixed, default: {} }
 }, { _id: false });
 
-// Chat Schema
 const ChatSchema = new Schema<IChat>({
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     messages: [ChatMessageSchema],
 }, { timestamps: true });
+
+ChatSchema.index({ projectId: 1, userId: 1 });
 
 const EditChat: Model<IChat> = model<IChat>('EditChat', ChatSchema);
 export default EditChat;

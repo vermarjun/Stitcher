@@ -19,8 +19,23 @@ const envSchema = z.object({
     MONGODB_URL: z.string().min(1),
     JWT_SECRET: z.string().min(1),
 
+    // ── Email ────────────────────────────────────────────────────────────────
+    // EMAIL_USER is the sending Gmail address (used as the SMTP/OAuth identity
+    // and the default From). Required.
     EMAIL_USER: z.string().min(1),
-    EMAIL_APP_PASSWORD: z.string().min(1),
+    // Pluggable sender. "gmail" (default) sends through Gmail; "console" just
+    // logs the message (handy for local dev / self-host with no creds). Adding
+    // a new provider (e.g. "resend", "ses") is a switch case in
+    // email/providers/index.ts — no other code changes.
+    EMAIL_PROVIDER: z.string().optional().default("gmail"),
+    // Optional display From, e.g. 'Stitcher <no-reply@stitcher.app>'. Note Gmail
+    // requires this to be EMAIL_USER or a verified alias. Falls back to
+    // `Stitcher <EMAIL_USER>` when unset.
+    EMAIL_FROM: z.string().optional(),
+    // Gmail App Password — generated at https://myaccount.google.com/apppasswords.
+    // The Gmail provider authenticates with this over SMTP. (A pluggable OAuth2
+    // or third-party provider can be added later in email/providers/.)
+    EMAIL_APP_PASSWORD: z.string().optional().default(""),
 
     CLOUDINARY_CLOUD_NAME: z.string().min(1),
     CLOUDINARY_API_KEY: z.string().min(1),
@@ -31,6 +46,11 @@ const envSchema = z.object({
 
     RZP_KEY_ID: z.string().min(1),
     RZP_KEY_SECRET: z.string().min(1),
+    // Razorpay webhook signing secret — configured in the Razorpay dashboard
+    // (Webhooks → Secret). Used to verify the X-Razorpay-Signature header on
+    // incoming webhook POSTs. Optional so boot never fails; when empty the
+    // webhook handler logs a warning and skips signature verification (dev only).
+    RAZORPAY_WEBHOOK_SECRET: z.string().optional().default(""),
 
     REDIS_HOST: z.string().min(1),
     REDIS_PORT: z
@@ -52,6 +72,11 @@ const envSchema = z.object({
     OPENCODE_GO_API_KEY: z.string().optional().default(""),
     OPENCODE_GO_DEFAULT_MODEL: z.string().optional().default("glm-5.1"),
 
+    // Gateway proxy — internal bearer key that the Agent service must present
+    // when using /gateway/proxy/* endpoints. Set to a random secret string.
+    // If unset, the proxy is open (dev/local only — never leave unset in prod).
+    GATEWAY_INTERNAL_KEY: z.string().optional().default(""),
+
     KEYS_ENCRYPTION_KEY: z
         .string()
         .length(64, 'KEYS_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
@@ -66,6 +91,29 @@ const envSchema = z.object({
     // Gates the bull-board admin dashboard at ${API_PREFIX}/admin/queues.
     // Must be "true" AND the request must pass JWT auth to access the board.
     ADMIN_DASHBOARD_ENABLED: z.string().optional().default("false"),
+
+    // Global daily ceiling on FREE-tier generations (abuse / budget-drain guard for
+    // the public launch). 0 = disabled. Counts accepted free generations per UTC day
+    // across ALL free users; paid/BYOK/test accounts are exempt. Tune to your LLM
+    // budget (~1150 videos/mo capacity ≈ ~38/day sustainable).
+    DAILY_FREE_GEN_CAP: z
+        .string()
+        .optional()
+        .default("0")
+        .transform((v) => {
+            const n = parseInt(v, 10);
+            return isNaN(n) || n < 0 ? 0 : n;
+        }),
+
+    // ── Native voiceover (TTS) — all optional; voiceover is feature-flagged OFF
+    //    by default at the request layer, so missing Azure keys NEVER break boot.
+    //    TTS_PROVIDER picks the default adapter; a per-request override
+    //    (generationOptions.voiceover.provider) takes precedence in the worker.
+    TTS_PROVIDER: z.string().optional().default("gtts"),
+    AZURE_SPEECH_KEY: z.string().optional(),
+    AZURE_SPEECH_REGION: z.string().optional(),
+    DEFAULT_VOICEOVER_VOICE: z.string().optional(),
+    DEFAULT_VOICEOVER_LANG: z.string().optional().default("en"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -91,6 +139,7 @@ export const MICROSERVICE_BASE_URL = config.AGENT_SERVICE_URL;
 
 export const RZP_KEY_ID = config.RZP_KEY_ID;
 export const RZP_KEY_SECRET = config.RZP_KEY_SECRET;
+export const RAZORPAY_WEBHOOK_SECRET = config.RAZORPAY_WEBHOOK_SECRET;
 export const GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID;
 export const GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET;
 export const PORT = config.PORT;
@@ -110,6 +159,7 @@ export const FEATURES = {
 export const ADMIN_DASHBOARD_ENABLED = config.ADMIN_DASHBOARD_ENABLED === "true";
 export const EMAIL_USER = config.EMAIL_USER;
 export const EMAIL_APP_PASSWORD = config.EMAIL_APP_PASSWORD;
+export const EMAIL_PROVIDER = config.EMAIL_PROVIDER;
 export const CLOUDINARY_API_KEY = config.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = config.CLOUDINARY_API_SECRET;
 export const CLOUDINARY_CLOUD_NAME = config.CLOUDINARY_CLOUD_NAME;
@@ -136,11 +186,21 @@ export const PASSWORD_RESET_CONFIG = {
     tokenLength: 32,
 };
 
-// Email Configuration
+// Email Verification Configuration
+export const EMAIL_VERIFICATION_CONFIG = {
+    tokenExpiry: 1000 * 60 * 60 * 24, // 24 hours
+    tokenLength: 32,
+};
+
+// Email Configuration — consumed by the pluggable sender in src/email/.
+// `from` defaults to "Stitcher <EMAIL_USER>" so messages have a friendly name.
+// The Gmail provider authenticates via app password over SMTP.
 export const EMAIL_CONFIG = {
+    provider: config.EMAIL_PROVIDER,
     service: "gmail",
     user: EMAIL_USER,
     pass: EMAIL_APP_PASSWORD,
+    from: config.EMAIL_FROM || `Stitcher <${EMAIL_USER}>`,
 };
 
 export const CLOUDINARY_CONFIG = {

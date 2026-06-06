@@ -1,36 +1,25 @@
 /**
  * BullMQ worker for the video-generation pipeline.
  *
- * Pipeline steps per job:
- *   1. Fail-fast credit check (avoids burning LLM quota on credit-less users)
- *   2. RAG enhance — grounded prompt + retrieval context
- *   3. Agent plan  — scenes[], styleManifest
- *   4. Per-scene (Promise.all with concurrency cap = 3):
- *        a. RAG enhance per scene
- *        b. Agent code — Manim Python code
- *        c. Render — mp4 URL from render service
- *        d. On render failure: Agent debug → re-render (up to 2 attempts/scene)
- *        e. Persist Asset in Mongo on success
- *   5. ffmpeg concat all mp4s → Cloudinary upload
- *   6. Update GenerateChat doc (finalUrl, status)
- *   7. Decrement user.credits.generation
- *   8. Best-effort RAG corpus storage
+ * Pipeline steps per job (LINEAR, SINGLE-SCENE):
+ *   1. Credit gate + model config resolution
+ *   2. RAG enhance  → examples (similarScripts) + requiredApis
+ *   3. Agent /code  → { code, sceneClass } (single LLM completion, no planner)
+ *   4. Validate (code response success flag)
+ *   5. Voiceover (ALWAYS ON, NON-FATAL): extract self.voiceover texts → TTS bundle
+ *   6. Render → finalUrl
+ *   7. Debug loop (max 3): on validate/render failure → agent /debug → re-render
+ *   8. Persist Asset + GenerateChat + tokens + stages; decrement credits
+ *   9. Emit job_complete { finalUrl }
  *
- * Concurrency cap rationale: each scene render is CPU/GPU-bound on the render
- * service.  Cap at 3 to avoid saturating a single render-service instance
- * (which typically exposes maxConcurrent=3 in its semaphore).  Tune via env
- * WORKER_SCENE_CONCURRENCY if needed.
+ * Removed: planner (agent /plan), per-scene fan-out loop + concurrency cap,
+ *          ffmpeg concat, upload to Cloudinary, voiceover on/off branching.
  *
- * Per-scene render failure handling:
- *   - render.success === false  → agent.debug() → render again (budget = 2)
- *   - ServiceError (503)        → surface to BullMQ (job-level retry)
- *   - All scenes failed         → throw, BullMQ will retry the whole job
- *
- * Worker concurrency = 4: four simultaneous jobs can run on this process.
- * lockDuration = 600 s: each job may take up to 10 minutes (render is slow).
+ * Preserved: withStep() + appendJobStage + setJobTokens (observability),
+ *            OTEL trace propagation, socket/UI events, credit gate.
  */
 
-import { Worker, Job } from "bullmq";
+import { Worker, Job, UnrecoverableError } from "bullmq";
 import { Types } from "mongoose";
 import {
     trace,
@@ -47,118 +36,385 @@ import { agentClient } from "../services/agentClient";
 import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
 import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
+import { resolveServiceConfig, tierForUser, normalizeGatewayBaseURL } from "../util/serviceConfig.util";
+import type { ResolvedTtsConfig } from "../services/ttsClient";
 import { publishProgress } from "./eventPublisher.util";
-import { setJobStatus, setJobSceneTotal, incrementJobScene } from "./jobTracker.util";
-import { concatVideos, uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
+import { setJobStatus, setJobSceneTotal, incrementJobScene, appendJobStage, setJobTokens, setJobProgress } from "./jobTracker.util";
+import { getPhaseMeta, type GenerationPhase } from "./pipelinePhases";
+import { buildAudioBundle } from "../services/ttsClient";
+import { uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
+import { promises as fsp } from "fs";
+import * as os from "os";
+import * as path from "path";
+import type { VoiceoverSpec } from "../services/renderClient";
 import { recall, reflect } from "../services/memoryService";
 import GenerateChat from "../model/generateChat.model";
 import Asset, { AssetType, AssetOrigin } from "../model/asset.model";
+import GenerationLlmIO, { IO_FIELD_CAP } from "../model/generationLlmIO.model";
+import type { RagTrace } from "../services/ragClient";
+import CoderLesson from "../model/coderLesson.model";
+import GenerationJob from "../model/generationJob.model";
+import type { LlmCallLogEntry, DebugHistoryEntry, LlmRoleConfig } from "../services/agentClient";
 import User from "../model/user.model";
 import logger from "../util/logger.util";
+import { buildFallbackSceneCode, FALLBACK_SCENE_CLASS } from "../util/fallbackScene.util";
+
+// ─── Cancellation support ─────────────────────────────────────────────────────
+
+export const CANCEL_KEY = (chatId: string) => `gen:cancel:${chatId}`;
+const CANCEL_TTL_SEC = 600; // 10 min — auto-expires so Redis doesn't leak
+
+/**
+ * Set the cancellation flag for a chat. The worker checks this between steps
+ * and throws UnrecoverableError('cancelled') so BullMQ doesn't retry.
+ */
+export async function markCancelled(chatId: string): Promise<void> {
+    await redisConnection.set(CANCEL_KEY(chatId), "1", "EX", CANCEL_TTL_SEC);
+}
+
+/**
+ * Throws UnrecoverableError('cancelled') if the flag is set.
+ * Call this between expensive pipeline steps.
+ */
+async function assertNotCancelled(chatId: string): Promise<void> {
+    const flag = await redisConnection.get(CANCEL_KEY(chatId));
+    if (flag) throw new UnrecoverableError("cancelled");
+}
 import { AppError } from "../util/AppError";
 import type {
     VideoGenerationJobData,
     VideoGenerationJobResult,
-    ResolvedModelConfig,
 } from "./types";
-import type { SceneSpec, StyleManifest } from "../services/agentClient";
+import type { AgentTokensUsed } from "../services/agentClient";
+import type { StageId, StageService, IJobStage } from "../model/generationJob.model";
+import { computeCostUsd } from "../util/pricing";
 
-// ─── Inline p-limit helper ────────────────────────────────────────────────────
-// We inline a simple concurrency limiter rather than adding a dependency.
-// This avoids ESM/CJS compatibility issues with the p-limit npm package
-// (which ships as pure ESM from v4 onward) while keeping the codebase strict.
+// ─── Stage → service mapping ──────────────────────────────────────────────────
 
-function makeLimiter(maxConcurrent: number) {
-    let running = 0;
-    const queue: Array<() => void> = [];
+const STAGE_SERVICE: Record<StageId, StageService> = {
+    rag_enhance:  "stitcher-rag",
+    agent_plan:   "stitcher-agent",
+    agent_code:   "stitcher-agent",
+    agent_debug:  "stitcher-agent",
+    render:       "stitcher-render",
+    tts:          "stitcher-api",
+    concat:       "stitcher-api",
+    upload:       "stitcher-api",
+};
 
-    return function limit<T>(fn: () => Promise<T>): Promise<T> {
-        return new Promise<T>((resolve, reject) => {
-            const attempt = () => {
-                running++;
-                fn()
-                    .then(resolve, reject)
-                    .finally(() => {
-                        running--;
-                        if (queue.length > 0) {
-                            const next = queue.shift();
-                            if (next) next();
-                        }
-                    });
-            };
+// ─── LLM I/O persistence helper ──────────────────────────────────────────────
 
-            if (running < maxConcurrent) {
-                attempt();
-            } else {
-                queue.push(attempt);
-            }
+/** Cap a string to IO_FIELD_CAP bytes (UTF-16 code units as a proxy). Non-fatal. */
+function capString(s: string | undefined | null): string {
+    if (!s) return "";
+    return s.length > IO_FIELD_CAP ? s.slice(0, IO_FIELD_CAP) : s;
+}
+
+/**
+ * Persist one GenerationLlmIO document per LlmCallLogEntry in a response's
+ * llmCallLog (or llmIO) array.
+ *
+ * Best-effort: wraps everything in try/catch. A Mongo failure here must never
+ * crash the pipeline. Called for BOTH success and failure paths.
+ */
+async function persistLlmIO(opts: {
+    jobId: string | undefined;
+    chatId: string | undefined;
+    stage: "agent_code" | "agent_debug" | "query_transform" | "rag_enhance" | "reflect";
+    attempt: number;
+    sceneIndex?: number;
+    entries: LlmCallLogEntry[] | undefined;
+    error?: string;
+}): Promise<void> {
+    if (!opts.jobId) return;
+    const entries = opts.entries;
+    if (!entries || entries.length === 0) {
+        // Even if no llmCallLog was returned (agent didn't emit it yet or call failed
+        // before any LLM call), persist a single placeholder row so the admin can
+        // see that the stage was attempted.
+        if (opts.error) {
+            try {
+                await GenerationLlmIO.create({
+                    jobId: opts.jobId,
+                    chatId: opts.chatId ? new Types.ObjectId(opts.chatId) : undefined,
+                    stage: opts.stage,
+                    sceneIndex: opts.sceneIndex ?? 0,
+                    attempt: opts.attempt,
+                    role: opts.stage,
+                    provider: "unknown",
+                    llmModel: "unknown",
+                    systemPrompt: "",
+                    userPrompt: "",
+                    rawOutput: "",
+                    error: capString(opts.error),
+                });
+            } catch { /* non-fatal */ }
+        }
+        return;
+    }
+    try {
+        const docs = entries.map((e) => ({
+            jobId: opts.jobId,
+            chatId: opts.chatId ? new Types.ObjectId(opts.chatId) : undefined,
+            stage: opts.stage,
+            sceneIndex: opts.sceneIndex ?? 0,
+            attempt: opts.attempt,
+            role: e.role,
+            provider: e.provider,
+            llmModel: e.model,
+            systemPrompt: capString(e.systemPrompt),
+            userPrompt: capString(e.userPrompt),
+            fullInput: e.fullInput,
+            rawOutput: capString(e.rawOutput),
+            tokensUsed: e.inputTokens !== undefined
+                ? { input: e.inputTokens, output: e.outputTokens }
+                : undefined,
+            error: opts.error ? capString(opts.error) : undefined,
+        }));
+        await GenerationLlmIO.insertMany(docs, { ordered: false });
+    } catch (err) {
+        logger.warn({ message: "[worker] persistLlmIO failed (non-fatal)", jobId: opts.jobId, stage: opts.stage, error: String(err) });
+    }
+}
+
+/**
+ * Persist RAG pipeline trace as two GenerationLlmIO rows (best-effort, non-fatal):
+ *   1. stage="query_transform" — the LLM call made by the RAG service (if it ran)
+ *   2. stage="rag_enhance", role="retrieval" — non-LLM embed/retrieve/select data
+ *
+ * Called after ragClient.enhance() returns on BOTH success and failure paths.
+ * A missing or partial trace never throws; all errors are swallowed.
+ */
+async function persistRagTrace(opts: {
+    jobId: string | undefined;
+    chatId: string | undefined;
+    trace: RagTrace | undefined;
+    error?: string;
+}): Promise<void> {
+    if (!opts.jobId) return;
+    const t = opts.trace;
+
+    // Row 1: query_transform LLM call. Persist whenever the trace exists — including
+    // the degraded (ran:false) case (timeout/no-JSON), so the admin can SEE why a
+    // job got no plugins instead of the transform silently vanishing from the I/O log.
+    if (t?.queryTransform) {
+        try {
+            const qt = t.queryTransform;
+            await GenerationLlmIO.create({
+                jobId: opts.jobId,
+                chatId: opts.chatId ? new Types.ObjectId(opts.chatId) : undefined,
+                stage: "query_transform",
+                sceneIndex: 0,
+                attempt: 0,
+                role: "query_transform",
+                provider: capString(qt.provider ?? "unknown"),
+                llmModel: capString(qt.model ?? "unknown"),
+                systemPrompt: capString(qt.systemPrompt),
+                userPrompt: capString(qt.userPrompt),
+                rawOutput: capString(qt.rawOutput),
+                tokensUsed: qt.tokensUsed,
+                error: opts.error
+                    ? capString(opts.error)
+                    : (qt.ran ? undefined : capString("query_transform did not run (timeout/degraded → raw-query fallback, no requiredPlugins)")),
+            });
+        } catch { /* non-fatal */ }
+    }
+
+    // Row 2: retrieval row (embed + retrieve + select — non-LLM pipeline data)
+    try {
+        const retrievalTrace = t
+            ? {
+                searchQuery: t.retrieve?.searchQuery,
+                dense: t.retrieve?.dense,
+                sparse: t.retrieve?.sparse,
+                merged: t.retrieve?.merged,
+                select: t.select,
+                embed: t.embed,
+              }
+            : undefined;
+        await GenerationLlmIO.create({
+            jobId: opts.jobId,
+            chatId: opts.chatId ? new Types.ObjectId(opts.chatId) : undefined,
+            stage: "rag_enhance",
+            sceneIndex: 0,
+            attempt: 0,
+            role: "retrieval",
+            provider: capString(t?.embed?.provider ?? "rag"),
+            llmModel: capString(t?.embed?.model ?? "unknown"),
+            // These three are required:true on the schema and Mongoose rejects "" for a
+            // required String — so empty strings here silently threw and the retrieval
+            // row never persisted (0/30 in the stress test). Use non-LLM placeholders.
+            systemPrompt: "(rag retrieval — non-LLM stage)",
+            userPrompt: "(embed → retrieve → select; see retrievalTrace)",
+            rawOutput: "(see retrievalTrace field)",
+            retrievalTrace,
+            error: opts.error ? capString(opts.error) : undefined,
         });
+    } catch { /* non-fatal */ }
+}
+
+// ─── Job-scoped token accumulator ─────────────────────────────────────────────
+
+interface TokenAccumulator {
+    input: number;
+    output: number;
+    /** Flat call log for per-model cost computation. */
+    calls: Array<{ model: string; inputTokens: number; outputTokens: number }>;
+}
+
+function makeTokenAccumulator(): {
+    acc: TokenAccumulator;
+    add: (t?: AgentTokensUsed, model?: string) => void;
+} {
+    const acc: TokenAccumulator = { input: 0, output: 0, calls: [] };
+    return {
+        acc,
+        add(t?: AgentTokensUsed, model?: string) {
+            if (!t) return;
+            const inTok = t.input ?? 0;
+            const outTok = t.output ?? 0;
+            acc.input += inTok;
+            acc.output += outTok;
+            if (model) {
+                acc.calls.push({ model, inputTokens: inTok, outputTokens: outTok });
+            }
+        },
     };
 }
 
 // ─── OTel tracing helper ──────────────────────────────────────────────────────
-// All pipeline spans are created from this tracer. See OBSERVABILITY §3b.
 
 const tracer = trace.getTracer("stitcher-api/generation");
 
 /**
- * Run `fn` inside a child span of `parentCtx`, named `pipeline.<step>` per the
- * contract, with the supplied attributes. Records the exception + ERROR status
- * on throw, and records the step duration into the histogram tagged
- * { step, success }. Re-throws so control flow is unchanged.
+ * Run `fn` inside a child span of `parentCtx`, named `pipeline.<step>`.
+ * Records exception + ERROR status on throw, records step duration into the
+ * histogram. Re-throws so control flow is unchanged.
+ *
+ * Auto-pushes a stage row to the persisted job record (best-effort) when:
+ *   - On success: caller provided onSuccess
+ *   - On failure (throw): always pushed (onFail is optional; absence means no extras)
  */
 async function withStep<T>(
     parentCtx: Context,
     step: string,
     attrs: Record<string, string | number | boolean>,
-    fn: () => Promise<T>
+    fn: () => Promise<T>,
+    extras?: {
+        jobId?: string | undefined;
+        stageId: StageId;
+        sceneIndex?: number;
+        onSuccess?: (result: T) => Partial<Pick<IJobStage, "tokens" | "model" | "outputSummary">>;
+        onFail?: (err: unknown) => Partial<Pick<IJobStage, "model" | "outputSummary" | "failedCode">>;
+    }
 ): Promise<T> {
     const span = tracer.startSpan(`pipeline.${step}`, { attributes: attrs }, parentCtx);
     const spanCtx = trace.setSpan(parentCtx, span);
-    const start = Date.now();
+    const startedAt = new Date();
+    const startMs = startedAt.getTime();
     let success = false;
+    let stageResult: T | undefined;
+    let stageErr: unknown;
     try {
         const result = await context.with(spanCtx, fn);
+        stageResult = result;
         success = true;
         return result;
     } catch (err) {
+        stageErr = err;
         span.recordException(err as Error);
         span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
         throw err;
     } finally {
         span.end();
-        pipelineStepDuration.record(Date.now() - start, { step, success });
+        const endedAt = new Date();
+        const durationMs = endedAt.getTime() - startMs;
+        pipelineStepDuration.record(durationMs, { step, success });
+
+        const shouldAutoPush = extras?.jobId && extras.stageId &&
+            (success ? !!extras.onSuccess : true);
+        if (shouldAutoPush) {
+            try {
+                const stageId = extras!.stageId;
+                const base: IJobStage = {
+                    stage: stageId,
+                    service: STAGE_SERVICE[stageId],
+                    sceneIndex: extras!.sceneIndex,
+                    status: success ? "ok" : "failed",
+                    error: success ? undefined : String(stageErr),
+                    startedAt,
+                    endedAt,
+                    durationMs,
+                };
+                const additional = success
+                    ? (extras!.onSuccess!(stageResult as T))
+                    : (extras!.onFail?.(stageErr) ?? {});
+                const row: IJobStage = { ...base, ...additional };
+                void appendJobStage(extras!.jobId!, row);
+            } catch {
+                // Instrumentation must never crash the pipeline
+            }
+        }
     }
 }
 
-// ─── Per-scene state ──────────────────────────────────────────────────────────
+// ─── Voiceover text extraction from generated Manim code ─────────────────────
 
-interface SceneState {
-    sceneIndex: number;
-    sceneSpec: SceneSpec;
-    sceneClass: string;
-    code: string;
-    attempts: number; // render + debug-retry counter (max 2)
-    status: "pending" | "success" | "failed";
-    renderUrl?: string;
-    thumbnailUrl?: string;
-    assetId?: string;
-    durationSec?: number;
-    error?: string;
+/**
+ * Extract all `self.voiceover(text="…")` string literals from Manim Python code.
+ * Handles both double-quoted and single-quoted text argument, including escaped
+ * quotes within (non-greedy match). Returns an ordered array of unique beat
+ * strings in first-occurrence order (preserving the sha256 cache-key contract
+ * — the render side hashes the exact text literal from the code).
+ *
+ * Non-fatal: if parsing yields nothing the TTS step is skipped gracefully.
+ */
+function extractVoiceoverTexts(code: string): string[] {
+    const seen = new Set<string>();
+    const results: string[] = [];
+
+    // Match: self.voiceover(text="...") or self.voiceover(text='...')
+    // Also matches: self.voiceover("...") and self.voiceover('...')
+    // Uses a simple regex; does not handle triple-quoted strings (not used in practice).
+    const patterns = [
+        /self\.voiceover\s*\(\s*text\s*=\s*"((?:[^"\\]|\\.)*)"/g,
+        /self\.voiceover\s*\(\s*text\s*=\s*'((?:[^'\\]|\\.)*)'/g,
+        /self\.voiceover\s*\(\s*"((?:[^"\\]|\\.)*)"/g,
+        /self\.voiceover\s*\(\s*'((?:[^'\\]|\\.)*)'/g,
+    ];
+
+    for (const pattern of patterns) {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(code)) !== null) {
+            const text = match[1]!
+                // Unescape common Python escape sequences
+                .replace(/\\n/g, "\n")
+                .replace(/\\t/g, "\t")
+                .replace(/\\"/g, '"')
+                .replace(/\\'/g, "'")
+                .replace(/\\\\/g, "\\")
+                .trim();
+            if (text.length > 0 && !seen.has(text)) {
+                seen.add(text);
+                results.push(text);
+            }
+        }
+    }
+
+    return results;
 }
 
 // ─── Worker process function ──────────────────────────────────────────────────
 
-const SCENE_CONCURRENCY = parseInt(process.env["WORKER_SCENE_CONCURRENCY"] ?? "3", 10);
-const MAX_RENDER_ATTEMPTS = 2;
+const MAX_DEBUG_ATTEMPTS = 3;
 
 /**
  * BullMQ processor entrypoint.
  *
- * OBSERVABILITY §3a/§3b: extract the W3C trace context injected at enqueue time,
- * open the root `generation.job` span as a child of the originating request
- * trace, then run the pipeline inside that active context so every child span
- * and every auto-instrumented HTTP call (agent/rag/render) joins the trace.
+ * Extracts W3C trace context injected at enqueue time, opens the root
+ * `generation.job` span as a child of the originating request trace, then
+ * runs the pipeline inside that active context so every child span and every
+ * auto-instrumented HTTP call joins the trace.
  */
 async function processGenerationJob(
     job: Job<VideoGenerationJobData, VideoGenerationJobResult>
@@ -187,6 +443,20 @@ async function processGenerationJob(
         rootSpan.setStatus({ code: SpanStatusCode.OK });
         return result;
     } catch (err) {
+        // Cancelled by user — update the job record and notify the UI,
+        // then re-throw so BullMQ marks it failed without retrying.
+        if (err instanceof UnrecoverableError && err.message === "cancelled") {
+            const { chatId, userId: _uid } = job.data;
+            logger.info({ message: "[worker] generation cancelled by user", chatId, jobBullId: job.id });
+            void setJobStatus(job.id, "failed");
+            publishProgress(chatId, {
+                type: "job_complete",
+                phase: "cancelled",
+                data: { status: "cancelled", finalUrl: null },
+            });
+            // Delete the flag so a future generation for the same chat starts clean.
+            void redisConnection.del(CANCEL_KEY(chatId));
+        }
         rootSpan.recordException(err as Error);
         rootSpan.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
         throw err;
@@ -203,448 +473,961 @@ async function runGenerationPipeline(
     const { chatId, userId, projectId, prompt, traceId, modelConfigOverride, generationOptions } =
         job.data;
 
-    // F2.4: BullMQ job id correlates the persisted GenerationJob history row.
     const jobId = job.id;
 
-    // ── Step 0: Update job progress helper ──────────────────────────────────
-    // Also advances the persisted GenerationJob status on the coarse phase
-    // transitions (non-fatal; jobTracker swallows DB errors).
+    // Wall-clock start of the generation pipeline — used to persist how long the
+    // video took to generate (so "time taken" survives a page reload).
+    const pipelineStartMs = Date.now();
+
+    // ── Token accumulator ────────────────────────────────────────────────────
+    const tokens = makeTokenAccumulator();
+
+    // ── Progress helper ──────────────────────────────────────────────────────
     const progress = (type: Parameters<typeof publishProgress>[1]["type"], phase: string, data?: unknown) => {
         publishProgress(chatId, { type, phase, data });
         logger.debug({ message: `[worker] ${type}`, chatId, traceId, phase });
     };
 
+    // ── Live phase helper ────────────────────────────────────────────────────
+    // Advances the user-facing live progress for one real pipeline transition.
+    // Does BOTH, from the single source of truth (PIPELINE_PHASES):
+    //   1. persists progress to the job (reload-safe, monotonic percent)
+    //   2. emits a `progress` socket event { phase, label, percent, ceil } so the
+    //      bar + step label update live without polling.
+    const phase = (key: GenerationPhase) => {
+        void setJobProgress(jobId, key);
+        const meta = getPhaseMeta(key);
+        publishProgress(chatId, {
+            type: "progress",
+            phase: key,
+            data: { phase: key, label: meta.label, percent: meta.percent, ceil: meta.ceil },
+        });
+        logger.debug({ message: `[worker] phase ${key}`, chatId, traceId, percent: meta.percent });
+    };
+
     // ── Step 1: Load user (credit gate applied after model config resolves) ──
-    const user = await User.findById(userId).select("credits isTestAccount").lean();
+    const user = await User.findById(userId).select("credits isTestAccount plan").lean();
     if (!user) {
         throw new AppError(404, `User ${userId} not found`, "user_not_found");
     }
 
-    // ── Step 2: Resolve model config ─────────────────────────────────────────
-    // Resolved first so the credit gate can grant a BYOT (bring-your-own-token)
-    // exhaust path when the user supplied their own provider keys.
-    const modelConfig: ResolvedModelConfig = await resolveModelConfig(userId, modelConfigOverride);
+    // ── Step 1b: Determine user's service tier ───────────────────────────────
+    const tier = tierForUser((user as { plan?: string }).plan ?? "free");
+
+    // ── Step 2: Resolve model config + tier-based service configs ────────────
+    // Resolve all 5 service configs in parallel (each is cached with 15s TTL).
+    const [
+        modelConfig,
+        tierCoderCfg,
+        tierDebuggerCfg,
+        tierRagQueryTransformCfg,
+        tierRagEmbedderCfg,
+        tierTtsCfg,
+    ] = await Promise.all([
+        resolveModelConfig(userId, modelConfigOverride),
+        resolveServiceConfig("coder", tier),
+        resolveServiceConfig("debugger", tier),
+        resolveServiceConfig("query_transform", tier),
+        resolveServiceConfig("embedder", tier),
+        resolveServiceConfig("tts", tier),
+    ]);
 
     // ── Step 2b: Credit gate ─────────────────────────────────────────────────
-    // Allow the run when ANY of:
-    //   - test account                        (never billed)
-    //   - generation credits remaining        (credit-funded path; unchanged)
-    //   - user supplied their own keys (BYOT)  (zero-credit exhaust path)
-    // Otherwise block. Conservative: if hasOwnKeys can't be confirmed we fall
-    // through to the credit requirement and block keyless, credit-less users.
     const usingOwnKeys = hasOwnKeys(modelConfig);
     const hasCredits = user.credits.generation > 0;
     if (!user.isTestAccount && !hasCredits && !usingOwnKeys) {
         throw new AppError(402, "Insufficient generation credits", "insufficient_credits");
     }
-    // True only when the run proceeds purely on the user's own keys (no credits
-    // to spend) — in that case we must NOT decrement credits below.
     const runOnOwnKeys = !user.isTestAccount && !hasCredits && usingOwnKeys;
 
-    // ── Step 3: RAG enhance (top-level prompt) ───────────────────────────────
-    progress("planning", "rag_enhance");
-    void setJobStatus(jobId, "planning");
-    let groundedPrompt = prompt;
-
-    try {
-        const ragResult = await withStep(jobCtx, "rag_enhance", { "scene.index": -1 }, () =>
-            ragClient.enhance({ prompt }, traceId)
-        );
-        groundedPrompt = ragResult.groundedPrompt;
-    } catch (err) {
-        // RAG is best-effort at planning stage; proceed with raw prompt
-        logger.warn({ message: "[worker] RAG enhance (top-level) failed; using raw prompt", traceId, error: String(err) });
+    // ── Step 2c: Apply tier service config to modelConfig (BYOK wins) ────────
+    // BYOK precedence: resolveModelConfig already overlays user BYOK keys onto
+    // the env defaults. We only override coder/debugger from the tier config when
+    // the user did NOT supply their own BYOK key for that role (i.e., apiKey is
+    // absent/empty in the BYOK-resolved config). This preserves the existing
+    // contract: user BYOK > tier config > env default.
+    // Normalise ServiceConfig params for the agent factory:
+    // The factory reads cfg.params.maxTokens (camelCase) for the token cap,
+    // and passes everything else through as modelKwargs (enable_thinking,
+    // reasoning_effort, thinking_budget, top_p, etc.).
+    // We store max_tokens (OpenAI convention) in the DB so rename it here.
+    function normaliseParams(p: Record<string, unknown>, provider?: string): Record<string, unknown> {
+        // Codex backend only accepts reasoning_effort — strip everything else.
+        // The gateway also strips on its end, but avoid sending junk to the factory.
+        if (provider === 'codex') {
+            return p.reasoning_effort ? { reasoning_effort: p.reasoning_effort } : {};
+        }
+        // For all other providers: rename max_tokens → maxTokens (factory convention)
+        const { max_tokens, ...rest } = p as Record<string, unknown> & { max_tokens?: unknown };
+        return max_tokens !== undefined ? { ...rest, maxTokens: max_tokens } : rest;
     }
 
-    // ── Step 3b: Inject long-term user memory (preferences) ──────────────────
+    // Convert a resolved (service,tier) config — primary OR fallback — into the
+    // LlmRoleConfig the agent service consumes. Coerces codex→openai for the
+    // factory, normalises params, and forces gateway-proxy baseURLs to the
+    // docker-internal origin so the agent can always reach them.
+    function toRoleConfig(
+        cfg: { provider: string; model: string | null; apiKey: string; baseURL: string | null; params: Record<string, unknown> },
+        defaultModel: string
+    ): LlmRoleConfig {
+        return {
+            provider: cfg.provider === 'codex' ? 'openai' : cfg.provider,
+            model: cfg.model ?? defaultModel,
+            apiKey: cfg.apiKey || undefined,
+            baseURL: normalizeGatewayBaseURL(cfg.baseURL) ?? undefined,
+            params: normaliseParams(cfg.params, cfg.provider),
+        };
+    }
+
+    // Fallback role-configs (admin-defined). Only present when the user is NOT on
+    // BYOK for that role (tier config governs) AND the admin enabled a fallback.
+    let coderFallbackCfg: LlmRoleConfig | undefined;
+    let debuggerFallbackCfg: LlmRoleConfig | undefined;
+
+    if (!modelConfig.coder.apiKey) {
+        modelConfig.coder = toRoleConfig(tierCoderCfg, modelConfig.coder.model);
+        if (tierCoderCfg.fallback) {
+            coderFallbackCfg = toRoleConfig(tierCoderCfg.fallback, modelConfig.coder.model);
+        }
+    }
+    if (!modelConfig.debugger.apiKey) {
+        modelConfig.debugger = toRoleConfig(tierDebuggerCfg, modelConfig.debugger.model);
+        if (tierDebuggerCfg.fallback) {
+            debuggerFallbackCfg = toRoleConfig(tierDebuggerCfg.fallback, modelConfig.debugger.model);
+        }
+    }
+
+    // Build RAG providerConfig from the resolved tier configs. Strip the nested
+    // `fallback` field before sending downstream (RAG only needs the active config).
+    const stripFallback = <T extends { fallback?: unknown }>(c: T) => {
+        const { fallback: _omit, ...rest } = c;
+        return rest;
+    };
+    const ragProviderConfig = {
+        queryTransform: stripFallback(tierRagQueryTransformCfg),
+        embedder: stripFallback(tierRagEmbedderCfg),
+    };
+    // Admin-defined query_transform fallback — retried if the primary RAG enhance throws.
+    const ragProviderConfigFallback = tierRagQueryTransformCfg.fallback
+        ? { queryTransform: tierRagQueryTransformCfg.fallback, embedder: stripFallback(tierRagEmbedderCfg) }
+        : undefined;
+
+    // Build the TTS config for this tier (cast to the expected type).
+    const toTtsConfig = (c: { provider: string; apiKey: string; baseURL: string | null; params: Record<string, unknown> }): ResolvedTtsConfig => ({
+        provider: c.provider,
+        apiKey: c.apiKey,
+        baseURL: c.baseURL,
+        params: {
+            region: typeof c.params.region === "string" ? c.params.region : undefined,
+            voice: typeof c.params.voice === "string" ? c.params.voice : undefined,
+        },
+    });
+    const resolvedTtsConfig: ResolvedTtsConfig = toTtsConfig(tierTtsCfg);
+    // Admin-defined TTS fallback (e.g. azure → gtts) — used if the primary TTS throws.
+    const resolvedTtsFallbackConfig: ResolvedTtsConfig | undefined =
+        tierTtsCfg.fallback ? toTtsConfig(tierTtsCfg.fallback) : undefined;
+
+    // ── Cancellation gate ────────────────────────────────────────────────────
+    await assertNotCancelled(chatId);
+
+    // ── Step 3: RAG enhance ──────────────────────────────────────────────────
+    // Returns examples (similarScripts) and requiredApis for the coder.
+    progress("planning", "rag_enhance");
+    void setJobStatus(jobId, "planning");
+    phase("rag");
+
+    let ragExamples: Array<{ description: string; code: string }> = [];
+    let ragRequiredApis: string[] = [];
+    let ragRequiredPlugins: string[] = [];
+
+    const doEnhance = (cfg: typeof ragProviderConfig, fb: boolean) => withStep(
+        jobCtx,
+        "rag_enhance",
+        { "scene.index": 0, fallback: fb },
+        () => ragClient.enhance({ prompt }, traceId, cfg),
+        {
+            jobId,
+            stageId: "rag_enhance",
+            onSuccess: (r) => {
+                const scriptCount = Array.isArray(r.structuredContext.similarScripts)
+                    ? r.structuredContext.similarScripts.length
+                    : 0;
+                return { outputSummary: `${fb ? "[fallback] " : ""}${scriptCount} similarScripts` };
+            },
+            onFail: () => ({ outputSummary: `${fb ? "[fallback] " : ""}RAG down → raw prompt` }),
+        }
+    );
+
+    try {
+        let ragResult: Awaited<ReturnType<typeof ragClient.enhance>>;
+        try {
+            ragResult = await doEnhance(ragProviderConfig, false);
+            // A timeout in query_transform does NOT throw — transformQuery swallows it
+            // and returns HTTP 200 with an empty transform (ran:false, no requiredPlugins).
+            // So the throw-based fallback below never fires for the real failure mode.
+            // Detect the degraded case explicitly and retry the enhance via the fallback
+            // provider (e.g. gpt-5.5) so the coder still gets requiredPlugins + skills.
+            if (
+                ragResult.trace?.queryTransform &&
+                ragResult.trace.queryTransform.ran === false &&
+                ragProviderConfigFallback
+            ) {
+                logger.warn({ message: "[worker] query_transform degraded (did not run) — retrying enhance with fallback provider", traceId });
+                try {
+                    const fbResult = await doEnhance(ragProviderConfigFallback as typeof ragProviderConfig, true);
+                    if (fbResult.trace?.queryTransform?.ran) ragResult = fbResult;
+                } catch (fbErr) {
+                    logger.warn({ message: "[worker] fallback enhance failed; keeping primary result", traceId, error: String(fbErr) });
+                }
+            }
+        } catch (primaryRagErr) {
+            // query_transform FALLBACK: retry enhance with the fallback provider.
+            if (ragProviderConfigFallback) {
+                logger.warn({ message: "[worker] primary RAG/query_transform failed — retrying with fallback", traceId, error: String(primaryRagErr) });
+                ragResult = await doEnhance(ragProviderConfigFallback as typeof ragProviderConfig, true);
+            } else {
+                throw primaryRagErr;
+            }
+        }
+
+        // Persist RAG pipeline trace on success (best-effort, non-fatal)
+        void persistRagTrace({ jobId, chatId, trace: ragResult.trace });
+
+        // Extract similarScripts → examples for the coder (CONTRACT 2 input shape).
+        // Cap at MAX_CODER_EXAMPLES: the RAG examples are ~70-85% of the codegen prompt
+        // (5 full scenes ≈ 5-6k tokens). The relevance-first selector ranks them, so the
+        // top 3 are the on-domain ones; 3 cuts ~40% of the user-message tokens with
+        // negligible quality loss.
+        const MAX_CODER_EXAMPLES = 3;
+        if (Array.isArray(ragResult.structuredContext.similarScripts)) {
+            ragExamples = ragResult.structuredContext.similarScripts
+                .filter((s): s is Record<string, unknown> => s != null && typeof s === "object")
+                .map((s) => ({
+                    description: String((s as Record<string, unknown>)["description"] ?? ""),
+                    code: String((s as Record<string, unknown>)["code"] ?? ""),
+                }))
+                .filter((e) => e.code.length > 0)
+                .slice(0, MAX_CODER_EXAMPLES);
+        }
+
+        // requiredApis from RAG query-transform (CONTRACT 1 output)
+        const ra = (ragResult.structuredContext as unknown as Record<string, unknown>)["requiredApis"];
+        if (Array.isArray(ra)) {
+            ragRequiredApis = ra.filter((x): x is string => typeof x === "string");
+        }
+
+        // requiredPlugins from RAG query-transform — drives plugin-skill injection in the coder
+        const rp = (ragResult.structuredContext as unknown as Record<string, unknown>)["requiredPlugins"];
+        if (Array.isArray(rp)) {
+            ragRequiredPlugins = rp.filter((x): x is string => typeof x === "string");
+        }
+    } catch (err) {
+        // RAG is best-effort; proceed with empty examples + raw prompt
+        logger.warn({ message: "[worker] RAG enhance failed; using raw prompt", traceId, error: String(err) });
+        // Persist error row so admin job-detail shows RAG was attempted (best-effort)
+        void persistRagTrace({ jobId, chatId, trace: undefined, error: String(err) });
+    }
+
+    // ── Step 3b: Long-term user memory ───────────────────────────────────────
+    let effectivePrompt = prompt;
     try {
         const userMemory = await recall(userId);
         if (userMemory) {
-            groundedPrompt = `User preferences to honor (learned over time):\n${userMemory}\n\n${groundedPrompt}`;
+            effectivePrompt = `User preferences to honor (learned over time):\n${userMemory}\n\n${prompt}`;
         }
     } catch (err) {
         logger.warn({ message: "[worker] memory recall failed; proceeding without it", traceId, error: String(err) });
     }
 
-    // ── Step 4: Agent plan ───────────────────────────────────────────────────
-    progress("planning", "agent_plan");
-    const planResponse = await withStep(
-        jobCtx,
-        "agent_plan",
-        { model: modelConfig.planner.model },
-        () =>
-            agentClient.plan(
-                {
-                    prompt: groundedPrompt,
-                    modelConfig: { planner: modelConfig.planner },
-                    constraints: {
-                        minScenes: generationOptions?.minScenes,
-                        maxScenes: generationOptions?.maxScenes,
-                        targetTotalDurationSec: generationOptions?.targetTotalDurationSec,
-                        renderQualityHint: generationOptions?.quality,
-                    },
-                    meta: { traceId },
-                },
-                traceId
-            )
-    );
-
-    if (!planResponse.success || !planResponse.output) {
-        throw new AppError(
-            502,
-            `Planning failed: ${planResponse.error?.summary ?? "unknown"}`,
-            "plan_failed"
-        );
+    // ── Step 3c: Fetch coder memory (most-recent 25 lessons) ────────────────
+    // Best-effort: if the fetch fails, proceed without lessons.
+    let coderMemory: string[] = [];
+    try {
+        const lessons = await CoderLesson.find()
+            .sort({ createdAt: -1 })
+            .limit(25)
+            .select("lesson")
+            .lean();
+        coderMemory = lessons.map((l) => l.lesson).filter(Boolean);
+    } catch (err) {
+        logger.warn({ message: "[worker] coderMemory fetch failed (non-fatal)", traceId, error: String(err) });
     }
 
-    const { scenes, styleManifest }: { scenes: SceneSpec[]; styleManifest: StyleManifest } =
-        planResponse.output;
+    // ── Cancellation gate ────────────────────────────────────────────────────
+    await assertNotCancelled(chatId);
 
-    progress("plan_complete", "agent_plan", { sceneCount: scenes.length });
-    void setJobSceneTotal(jobId, scenes.length);
-    rootSpan.setAttribute("scene.count", scenes.length);
-
-    // ── Step 5: Per-scene processing ─────────────────────────────────────────
-    const limit = makeLimiter(SCENE_CONCURRENCY);
-
-    const sceneStates: SceneState[] = scenes.map((spec) => ({
-        sceneIndex: spec.index,
-        sceneSpec: spec,
-        sceneClass: "",
-        code: "",
-        attempts: 0,
-        status: "pending",
-    }));
+    // ── Step 4: Agent /code (single completion, no planner) ─────────────────
+    // sceneProgress 1 total (single scene)
+    void setJobSceneTotal(jobId, 1);
+    void setJobStatus(jobId, "rendering");
+    progress("planning", "agent_code");
+    phase("code");
+    rootSpan.setAttribute("scene.count", 1);
 
     const renderQuality = generationOptions?.quality ?? "medium";
 
-    // OBSERVABILITY §3b: each scene gets a `pipeline.scene` span (attr scene.index)
-    // wrapping its agent_code / render / agent_debug child spans.
-    async function processScene(state: SceneState): Promise<void> {
-        const sceneSpan = tracer.startSpan(
-            "pipeline.scene",
-            { attributes: { "scene.index": state.sceneIndex } },
-            jobCtx
-        );
-        const sceneCtx = trace.setSpan(jobCtx, sceneSpan);
+    // Mutable code/sceneClass — updated by debug loop
+    let currentCode = "";
+    let currentSceneClass = "";
+    let lastError = "";
+    let debugAttempts = 0;
+    // RLHF Feature 3 tracking
+    let debugInvoked = false;
+    let debugResolved = false;
+    // True when the LLM pipeline was bypassed and we rendered the guaranteed fallback scene
+    let usingFallback = false;
+    const originalCodeForReflect = { value: "" };
+    const debugHistory: DebugHistoryEntry[] = [];
+
+    // Run one codegen attempt with a given coder config. Records its own
+    // agent_code stage (attempt index distinguishes primary vs fallback) and
+    // persists the LLM I/O. Returns the response + error string (if any).
+    async function runCodeGen(
+        coderCfg: LlmRoleConfig,
+        attempt: number
+    ): Promise<{ response: Awaited<ReturnType<typeof agentClient.code>> | undefined; error: string | undefined }> {
+        let err: string | undefined;
+        let resp: Awaited<ReturnType<typeof agentClient.code>> | undefined;
         try {
-            await context.with(sceneCtx, () => processSceneInner(state, sceneCtx));
-            if (state.status !== "success") {
-                sceneSpan.setStatus({ code: SpanStatusCode.ERROR, message: state.error ?? "scene failed" });
-            }
-        } finally {
-            sceneSpan.end();
+            resp = await withStep(
+                jobCtx,
+                "agent_code",
+                { "scene.index": 0, model: coderCfg.model, voiceover: true, attempt },
+                () =>
+                    agentClient.code(
+                        {
+                            prompt: effectivePrompt,
+                            examples: ragExamples,
+                            requiredApis: ragRequiredApis,
+                            requiredPlugins: ragRequiredPlugins,
+                            voiceover: true,
+                            styleManifest: null,
+                            // Complex prompts make a single-shot completion run >120s; give the
+                            // agent room (HTTP client waits 330s, see agentClient.code).
+                            limits: { timeoutSec: 300 },
+                            modelConfig: {
+                                coder: coderCfg,
+                                validator: modelConfig.validator,
+                            },
+                            meta: { traceId },
+                            coderMemory: coderMemory.length > 0 ? coderMemory : undefined,
+                        },
+                        traceId
+                    ),
+                {
+                    jobId,
+                    stageId: "agent_code",
+                    sceneIndex: 0,
+                    onSuccess: (r) => {
+                        tokens.add(r.tokensUsed, coderCfg.model);
+                        const codeTokens = r.tokensUsed
+                            ? { input: r.tokensUsed.input, output: r.tokensUsed.output, total: r.tokensUsed.total }
+                            : undefined;
+                        const cls = r.output?.sceneClass ?? "?";
+                        const codeLen = r.output?.code?.length ?? 0;
+                        return {
+                            tokens: codeTokens,
+                            model: coderCfg.model,
+                            outputSummary: `${attempt > 0 ? "[fallback] " : ""}${cls} ${codeLen}chars`,
+                        };
+                    },
+                    onFail: () => ({
+                        model: coderCfg.model,
+                        outputSummary: `${attempt > 0 ? "[fallback] " : ""}code generation failed`,
+                    }),
+                }
+            );
+        } catch (codeErr) {
+            err = String(codeErr);
         }
+
+        // Persist LLM I/O for this attempt (success OR failure) — best-effort
+        void persistLlmIO({
+            jobId,
+            chatId,
+            stage: "agent_code",
+            attempt,
+            sceneIndex: 0,
+            entries: resp?.llmCallLog,
+            error: err ?? (!resp?.success ? (resp?.error?.summary) : undefined),
+        });
+
+        return { response: resp, error: err };
     }
 
-    async function processSceneInner(state: SceneState, sceneCtx: Context): Promise<void> {
-        const { sceneSpec } = state;
-        progress("scene_started", "scene", { index: state.sceneIndex });
+    const codeIsEmpty = (r: { response: Awaited<ReturnType<typeof agentClient.code>> | undefined; error: string | undefined }) =>
+        !!r.error || !r.response?.success || !r.response?.output?.code;
 
-        // a. Per-scene RAG enhance
-        let scenePrompt = sceneSpec.prompt;
-        let sceneRagContext: Parameters<typeof agentClient.code>[0]["codeExamples"] = undefined;
+    // Resilience telemetry persisted on the job for the admin "real vs fallback"
+    // visibility (set below + at final persist).
+    let usedFallbackLlm = false;
 
+    // Primary codegen attempt
+    let codeResult = await runCodeGen(modelConfig.coder, 0);
+
+    // LLM FALLBACK: if the primary coder failed/returned empty AND an admin
+    // fallback is configured, retry the whole codegen with the fallback provider
+    // before giving up to the guaranteed title-card. This is what keeps real
+    // animations flowing when one LLM backend (codex token, opencode key, …) dies.
+    if (codeIsEmpty(codeResult) && coderFallbackCfg) {
+        logger.warn({
+            message: "[worker] primary coder failed — retrying with fallback provider",
+            jobId, traceId,
+            primaryModel: modelConfig.coder.model,
+            fallbackModel: coderFallbackCfg.model,
+            error: codeResult.error ?? codeResult.response?.error?.summary ?? "empty",
+        });
+        progress("planning", "agent_code", { fallback: true, model: coderFallbackCfg.model });
+        codeResult = await runCodeGen(coderFallbackCfg, 1);
+        // The fallback LLM produced usable code → record it engaged successfully.
+        if (!codeIsEmpty(codeResult)) usedFallbackLlm = true;
+    }
+
+    const codeResponse = codeResult.response;
+    const codeCallError = codeResult.error;
+
+    if (codeIsEmpty(codeResult)) {
+        logger.warn({
+            message: "[worker] codegen failed (all providers) — falling back to guaranteed title-card scene",
+            jobId, traceId,
+            error: codeCallError ?? codeResponse?.error?.summary ?? "unknown",
+        });
+        currentCode = buildFallbackSceneCode(prompt);
+        currentSceneClass = FALLBACK_SCENE_CLASS;
+        usingFallback = true;
+    } else {
+        currentCode = codeResponse!.output!.code!;
+        currentSceneClass = codeResponse!.output!.sceneClass;
+    }
+    // Remember first code for reflection
+    originalCodeForReflect.value = currentCode;
+    progress("scene_code_complete", "agent_code", { sceneClass: currentSceneClass });
+
+    // ── Step 5: Voiceover — ALWAYS ON, NON-FATAL ─────────────────────────────
+    // Extract self.voiceover(text="…") strings from the generated code and
+    // synthesize audio via TTS. If TTS throws or yields nothing, log and proceed
+    // to render WITHOUT a bundle (render still works, just no narration audio).
+    let voiceoverBundle: VoiceoverSpec | undefined;
+
+    const voiceoverTexts = extractVoiceoverTexts(currentCode);
+    if (voiceoverTexts.length > 0) {
+        phase("voiceover");
         try {
-            const sceneRag = await withStep(sceneCtx, "rag_enhance", { "scene.index": state.sceneIndex }, () =>
-                ragClient.enhance({ prompt: scenePrompt }, traceId)
+            const voiceoverOpts = {
+                provider: generationOptions?.voiceover?.provider,
+                voice: generationOptions?.voiceover?.voice,
+                lang: generationOptions?.voiceover?.language,
+            };
+            // One TTS attempt with a given config, bounded by a 90s timeout.
+            const synth = (ttsCfg: ResolvedTtsConfig) => Promise.race([
+                buildAudioBundle(voiceoverTexts, voiceoverOpts, ttsCfg),
+                new Promise<never>((_, rej) => setTimeout(() => rej(new Error("TTS timeout (90s)")), 90_000)),
+            ]);
+            const audioEntries = await withStep(
+                jobCtx,
+                "tts",
+                { "scene.index": 0, beats: voiceoverTexts.length },
+                async () => {
+                    try {
+                        return await synth(resolvedTtsConfig);
+                    } catch (primaryErr) {
+                        // TTS FALLBACK: retry with the admin-defined fallback provider
+                        // (e.g. azure → gtts) before giving up on audio entirely.
+                        if (resolvedTtsFallbackConfig) {
+                            logger.warn({
+                                message: "[worker] primary TTS failed — retrying with fallback provider",
+                                traceId,
+                                primary: resolvedTtsConfig.provider,
+                                fallback: resolvedTtsFallbackConfig.provider,
+                                error: String(primaryErr),
+                            });
+                            return await synth(resolvedTtsFallbackConfig);
+                        }
+                        throw primaryErr;
+                    }
+                },
+                {
+                    jobId,
+                    stageId: "tts",
+                    sceneIndex: 0,
+                    onSuccess: (entries) => ({
+                        outputSummary: `${entries.length} beats synthesised`,
+                    }),
+                    onFail: () => ({ outputSummary: "TTS failed — rendering without audio" }),
+                }
             );
-            scenePrompt = sceneRag.groundedPrompt;
-            sceneRagContext = sceneRag.structuredContext.apiExamples.map((e) => ({
-                description: e.docstring ?? e.symbol,
-                code: e.snippet,
-            }));
-        } catch {
-            // Non-fatal
+            voiceoverBundle = { audio: audioEntries };
+        } catch (ttsErr) {
+            // NON-FATAL: log and continue without voiceover bundle
+            logger.warn({
+                message: "[worker] TTS failed (non-fatal); rendering without voiceover",
+                traceId,
+                error: String(ttsErr),
+            });
         }
+    } else {
+        logger.info({ message: "[worker] no voiceover texts found in generated code; skipping TTS", traceId });
+    }
 
-        // b. Agent code
-        const codeResponse = await withStep(
-            sceneCtx,
-            "agent_code",
-            { "scene.index": state.sceneIndex, model: modelConfig.coder.model },
-            () =>
-                agentClient.code(
-                    {
-                        scenePlan: { ...sceneSpec, prompt: scenePrompt },
-                        styleManifest,
-                        codeExamples: sceneRagContext,
-                        modelConfig: {
-                            coder: modelConfig.coder,
-                            validator: modelConfig.validator,
-                        },
-                        meta: { traceId },
-                    },
-                    traceId
-                )
-        );
+    // ── Cancellation gate ────────────────────────────────────────────────────
+    await assertNotCancelled(chatId);
 
-        if (!codeResponse.success || !codeResponse.output?.code) {
-            state.status = "failed";
-            state.error = codeResponse.error?.summary ?? "code generation failed";
-            progress("scene_failed", "scene", { index: state.sceneIndex, error: state.error });
-            return;
-        }
+    // ── Steps 6 + 7: Render + debug loop (max 3 debug attempts) ─────────────
+    let finalUrl: string | undefined;
+    let thumbnailUrl: string | undefined;
+    let durationSec = 0;
+    let renderBytes = 0; // real output size for storage metrics (was hardcoded 0)
 
-        state.code = codeResponse.output.code;
-        state.sceneClass = codeResponse.output.sceneClass;
-        progress("scene_code_complete", "scene", { index: state.sceneIndex, sceneClass: state.sceneClass });
+    // Loop: initial render + up to MAX_DEBUG_ATTEMPTS debug-retry cycles
+    // Each cycle: render → on failure → debug → update code → try render again
+    for (let attempt = 0; attempt <= MAX_DEBUG_ATTEMPTS; attempt++) {
+        phase("render");
+        const renderStartedAt = new Date();
 
-        // c+d. Render with debug-retry loop (max 2 attempts)
-        let lastRenderError: string | undefined;
-
-        while (state.attempts < MAX_RENDER_ATTEMPTS) {
-            state.attempts++;
-            const currentAttempt = state.attempts;
-
-            const renderResponse = await withStep(
-                sceneCtx,
+        let renderResponse: Awaited<ReturnType<typeof renderClient.render>>;
+        try {
+            renderResponse = await withStep(
+                jobCtx,
                 "render",
-                { "scene.index": state.sceneIndex, attempt: currentAttempt },
+                { "scene.index": 0, attempt },
                 () =>
                     renderClient.render({
-                        code: state.code,
-                        sceneClass: state.sceneClass,
+                        code: currentCode,
+                        sceneClass: currentSceneClass,
                         render: { quality: renderQuality },
+                        // Include the voiceover bundle if TTS succeeded.
+                        // Reused across debug retries — debugger preserves narration beats.
+                        ...(voiceoverBundle ? { voiceover: voiceoverBundle } : {}),
                         storage: {
-                            // Render service returns a local HTTP URL per scene.
-                            // Final upload to Cloudinary happens in the API via
-                            // uploadConcatToCloudinary() after ffmpeg concat.
+                            // Render to the service's local store (reachable from the worker
+                            // inside docker); the worker then uploads the final video to
+                            // Cloudinary below so the URL is reachable from the browser.
                             backend: "local",
                             folder: `stitcher/scenes/${projectId ?? userId}`,
                             public: false,
                             generateThumbnail: true,
                             thumbnailAt: 1,
                         },
-                        // 300s sandbox cap per scene; render service default is 120s
-                        // which is too aggressive for first-render LaTeX cache warm-up.
                         limits: { timeoutSec: 300 },
                         meta: { traceId },
-                    })
+                    }),
+                {
+                    jobId,
+                    stageId: "render",
+                    sceneIndex: 0,
+                    // onSuccess not provided — manual rows handle both domain paths below
+                    onFail: () => ({
+                        failedCode: currentCode.slice(0, 8192),
+                        outputSummary: "render service unreachable",
+                    }),
+                }
             );
+        } catch (renderErr) {
+            // Render THREW (HTTP 0 / unreachable / pipeline timeout) = an INFRA failure,
+            // not a code bug. Debugging or regenerating the code (the latter is what a
+            // BullMQ whole-job retry would do) cannot fix an infra timeout and wastes a
+            // full RAG + codegen. Skip debug and break to the guaranteed fallback scene
+            // below — so infra timeouts yield a title-card video instead of a hard fail,
+            // and we never re-spend codegen tokens re-hitting the same timeout.
+            lastError = `render service error: ${String(renderErr)}`.slice(0, 300);
+            logger.warn({ message: "[worker] render infra error — skipping debug + code regen, going to fallback scene", attempt, traceId, error: String(renderErr) });
+            break; // withStep already recorded the failed render stage on throw
+        }
 
-            if (renderResponse.success) {
-                state.renderUrl = renderResponse.render.url;
-                state.thumbnailUrl = renderResponse.render.thumbnailUrl;
-                state.durationSec = renderResponse.render.durationSec;
-                state.status = "success";
-                progress("scene_render_complete", "scene", {
-                    index: state.sceneIndex,
-                    url: state.renderUrl,
-                    attempt: state.attempts,
-                });
-                void incrementJobScene(jobId);
-                break;
-            }
+        const renderEndedAt = new Date();
+        const renderDurationMs = renderEndedAt.getTime() - renderStartedAt.getTime();
 
-            // Render returned success:false — Manim execution failed
-            lastRenderError = renderResponse.error.summary;
-            logger.warn({
-                message: "[worker] scene render failed",
-                index: state.sceneIndex,
-                attempt: state.attempts,
-                traceId,
-                summary: lastRenderError,
+        if (renderResponse.success) {
+            void appendJobStage(jobId, {
+                stage: "render",
+                service: "stitcher-render",
+                sceneIndex: 0,
+                status: "ok",
+                startedAt: renderStartedAt,
+                endedAt: renderEndedAt,
+                durationMs: renderDurationMs,
+                outputSummary: `${renderResponse.render.url} ${renderResponse.render.bytes}B ${renderResponse.render.durationSec}s`,
             });
+            finalUrl = renderResponse.render.url;
+            thumbnailUrl = renderResponse.render.thumbnailUrl;
+            durationSec = renderResponse.render.durationSec;
+            renderBytes = renderResponse.render.bytes ?? 0;
+            void incrementJobScene(jobId);
+            progress("scene_render_complete", "render", { url: finalUrl, attempt });
+            break; // success — exit loop
+        }
 
-            if (state.attempts >= MAX_RENDER_ATTEMPTS) {
-                // Exhausted budget
-                break;
-            }
+        // Render returned success:false (Manim execution error)
+        lastError = renderResponse.error.summary;
+        void appendJobStage(jobId, {
+            stage: "render",
+            service: "stitcher-render",
+            sceneIndex: 0,
+            status: "failed",
+            error: `[${renderResponse.error.category}] ${renderResponse.error.summary}\n${renderResponse.error.stderr}`,
+            startedAt: renderStartedAt,
+            endedAt: renderEndedAt,
+            durationMs: renderDurationMs,
+            outputSummary: `failed attempt=${attempt} cat=${renderResponse.error.category}`,
+            failedCode: currentCode.slice(0, 8192),
+        });
+        logger.warn({
+            message: "[worker] render failed",
+            attempt,
+            traceId,
+            summary: lastError,
+        });
 
-            // d. Debug: ask agent to fix the code
+        if (attempt >= MAX_DEBUG_ATTEMPTS) {
+            break; // exhausted debug budget
+        }
+
+        // The fallback scene is known-good; never spend a debug call on it.
+        if (usingFallback) break;
+
+        // Debug: ask agent to fix the code, then loop back to render
+        debugAttempts++;
+        debugInvoked = true;
+        phase("debug");
+        const codeBeforeDebug = currentCode;
+        const errorForDebug = lastError;
+
+        // One debug attempt with a given debugger config (primary or fallback).
+        const callDebug = async (
+            dbgCfg: LlmRoleConfig,
+            dbgAttempt: number
+        ): Promise<{ resp: Awaited<ReturnType<typeof agentClient.debug>> | undefined; err: string | undefined }> => {
+            let dErr: string | undefined;
+            let dResp: Awaited<ReturnType<typeof agentClient.debug>> | undefined;
             try {
-                const debugResponse = await withStep(
-                    sceneCtx,
+                dResp = await withStep(
+                    jobCtx,
                     "agent_debug",
-                    { "scene.index": state.sceneIndex, attempt: currentAttempt, model: modelConfig.debugger.model },
+                    { "scene.index": 0, attempt, model: dbgCfg.model, dbgAttempt },
                     () =>
                         agentClient.debug(
                             {
-                                brokenCode: state.code,
-                                sceneClass: state.sceneClass,
+                                brokenCode: currentCode,
+                                sceneClass: currentSceneClass,
                                 error: {
                                     stderr: renderResponse.error.stderr,
                                     summary: renderResponse.error.summary,
                                     line: renderResponse.error.line,
                                     category: renderResponse.error.category,
                                 },
-                                originalPrompt: sceneSpec.prompt,
+                                originalPrompt: prompt,
                                 modelConfig: {
-                                    debugger: modelConfig.debugger,
+                                    debugger: dbgCfg,
                                     validator: modelConfig.validator,
                                 },
+                                // Always keep VoiceoverScene shape + preserve narration beats
+                                voiceover: true,
                                 meta: { traceId },
                             },
                             traceId
-                        )
-                );
-
-                if (debugResponse.success && debugResponse.output?.code) {
-                    state.code = debugResponse.output.code;
-                    if (debugResponse.output.sceneClass) {
-                        state.sceneClass = debugResponse.output.sceneClass;
+                        ),
+                    {
+                        jobId,
+                        stageId: "agent_debug",
+                        sceneIndex: 0,
+                        onSuccess: (r) => {
+                            tokens.add(r.tokensUsed, dbgCfg.model);
+                            const debugTokens = r.tokensUsed
+                                ? { input: r.tokensUsed.input, output: r.tokensUsed.output, total: r.tokensUsed.total }
+                                : undefined;
+                            return {
+                                tokens: debugTokens,
+                                model: dbgCfg.model,
+                                outputSummary: `${dbgAttempt > 0 ? "[fallback] " : ""}${r.output?.changeSummary ?? "debugged"}`,
+                            };
+                        },
+                        onFail: () => ({
+                            model: dbgCfg.model,
+                            outputSummary: `${dbgAttempt > 0 ? "[fallback] " : ""}debug call failed`,
+                            failedCode: currentCode.slice(0, 8192),
+                        }),
                     }
-                }
-                // If debug itself failed, the while loop will hit the attempt cap and exit
+                );
             } catch (debugErr) {
+                dErr = String(debugErr);
                 logger.warn({
-                    message: "[worker] debug call failed",
-                    index: state.sceneIndex,
+                    message: "[worker] debug call threw (non-fatal); re-rendering with unchanged code",
                     traceId,
-                    error: String(debugErr),
+                    error: dErr,
                 });
             }
-        }
-
-        if (state.status !== "success") {
-            state.status = "failed";
-            state.error = lastRenderError ?? "render failed after max attempts";
-            progress("scene_failed", "scene", { index: state.sceneIndex, error: state.error });
-            return;
-        }
-
-        // e. Persist Asset in Mongo
-        try {
-            const asset = new Asset({
-                name: `${state.sceneClass}-${chatId}-${state.sceneIndex}`,
-                type: AssetType.VIDEO,
-                code: state.code,
-                scene_name: state.sceneClass,
-                scene_description: sceneSpec.description ?? sceneSpec.prompt.slice(0, 200),
-                origin: AssetOrigin.GENERATED_VIDEO,
-                url: state.renderUrl!,
-                thumbnail: state.thumbnailUrl ?? state.renderUrl!,
-                durationSec: state.durationSec,
-                bytes: 0,
-                metadata: { traceId, sceneIndex: state.sceneIndex },
-                projectId: new Types.ObjectId(projectId ?? userId),
-                isOnTimeline: false,
+            void persistLlmIO({
+                jobId,
+                chatId,
+                stage: "agent_debug",
+                attempt,
+                sceneIndex: 0,
+                entries: dResp?.llmCallLog,
+                error: dErr ?? (!dResp?.success ? String(dResp?.error ?? "") : undefined),
             });
-            await asset.save();
-            state.assetId = (asset._id as Types.ObjectId).toString();
-        } catch (assetErr) {
-            // Non-fatal — we still have the URL
+            return { resp: dResp, err: dErr };
+        };
+
+        let { resp: debugResponse, err: debugCallError } = await callDebug(modelConfig.debugger, 0);
+
+        // LLM FALLBACK for the debugger: if the primary produced no usable fix
+        // and an admin fallback is configured, try once more with the fallback.
+        if ((debugCallError || !debugResponse?.success || !debugResponse?.output?.code) && debuggerFallbackCfg) {
             logger.warn({
-                message: "[worker] Asset persist failed",
-                index: state.sceneIndex,
-                traceId,
-                error: String(assetErr),
+                message: "[worker] primary debugger failed — retrying with fallback provider",
+                jobId, traceId,
+                primaryModel: modelConfig.debugger.model,
+                fallbackModel: debuggerFallbackCfg.model,
             });
+            ({ resp: debugResponse, err: debugCallError } = await callDebug(debuggerFallbackCfg, 1));
+        }
+        void debugCallError;
+
+        // Track debug history for reflection
+        debugHistory.push({
+            code: codeBeforeDebug,
+            error: errorForDebug,
+            changeSummary: debugResponse?.output?.changeSummary,
+        });
+
+        if (debugResponse?.success && debugResponse?.output?.code) {
+            currentCode = debugResponse.output.code;
+            if (debugResponse.output.sceneClass) {
+                currentSceneClass = debugResponse.output.sceneClass;
+            }
+        }
+        // If debug itself failed, the loop continues and hits attempt cap
+    }
+
+    // Track whether the debug loop eventually resolved
+    if (debugInvoked && !!finalUrl) {
+        debugResolved = true;
+    }
+
+    // ── Reflection: after debug loop (best-effort, non-fatal) ───────────────
+    // If the debug loop ran, ask the agent to reflect and store a CoderLesson.
+    if (debugInvoked) {
+        try {
+            const reflectResponse = await agentClient.reflect(
+                {
+                    prompt,
+                    originalCode: originalCodeForReflect.value,
+                    finalError: lastError || undefined,
+                    debugHistory,
+                    modelConfig: { debugger: modelConfig.debugger },
+                },
+                traceId
+            );
+
+            // Persist the reflect LLM I/O row
+            void persistLlmIO({
+                jobId,
+                chatId,
+                stage: "reflect",
+                attempt: 0,
+                sceneIndex: 0,
+                entries: reflectResponse.llmIO,
+                error: reflectResponse.success ? undefined : (reflectResponse.error ?? "reflect failed"),
+            });
+
+            // Store the lesson if we got one
+            if (reflectResponse.success && reflectResponse.lesson) {
+                try {
+                    await CoderLesson.create({
+                        lesson: reflectResponse.lesson,
+                        sourcePrompt: prompt.slice(0, 500),
+                        error: lastError ? lastError.slice(0, 500) : undefined,
+                        fix: debugHistory.length > 0
+                            ? (debugHistory[debugHistory.length - 1]?.changeSummary ?? undefined)
+                            : undefined,
+                        jobId,
+                    });
+                } catch (lessonErr) {
+                    logger.warn({ message: "[worker] CoderLesson persist failed (non-fatal)", jobId, error: String(lessonErr) });
+                }
+            }
+        } catch (reflectErr) {
+            logger.warn({ message: "[worker] reflect call failed (non-fatal)", traceId, error: String(reflectErr) });
         }
     }
 
-    // Run all scenes with the concurrency limiter
-    await Promise.all(
-        sceneStates.map((state) => limit(() => processScene(state)))
-    );
+    // Last-resort fallback render: if real code exhausted debug budget without a
+    // successful render, swap in the guaranteed title-card scene and try once more.
+    if (!finalUrl && !usingFallback) {
+        logger.warn({ message: "[worker] render+debug exhausted — rendering guaranteed fallback scene", jobId, traceId, lastError });
+        usingFallback = true;
+        currentCode = buildFallbackSceneCode(prompt);
+        currentSceneClass = FALLBACK_SCENE_CLASS;
+        phase("render");
+        const fbStartedAt = new Date();
+        const fbResponse = await withStep(
+            jobCtx, "render", { "scene.index": 0, attempt: "fallback" },
+            () => renderClient.render({
+                code: currentCode,
+                sceneClass: currentSceneClass,
+                render: { quality: renderQuality },
+                storage: { backend: "local", folder: `stitcher/scenes/${projectId ?? userId}`, public: false, generateThumbnail: true, thumbnailAt: 1 },
+                limits: { timeoutSec: 120 },
+                meta: { traceId },
+            }),
+            { jobId, stageId: "render", sceneIndex: 0, onFail: () => ({ outputSummary: "fallback render failed" }) }
+        );
+        if (fbResponse.success) {
+            finalUrl = fbResponse.render.url;
+            thumbnailUrl = fbResponse.render.thumbnailUrl;
+            durationSec = fbResponse.render.durationSec;
+            renderBytes = fbResponse.render.bytes ?? 0;
+            void appendJobStage(jobId, { stage: "render", service: "stitcher-render", sceneIndex: 0, status: "ok", startedAt: fbStartedAt, endedAt: new Date(), durationMs: Date.now() - fbStartedAt.getTime(), outputSummary: `fallback ${finalUrl}` });
+            progress("scene_render_complete", "render", { url: finalUrl, attempt: "fallback" });
+        } else {
+            lastError = fbResponse.error.summary;
+        }
+    }
 
-    // Check if any scenes failed
-    const failedScenes = sceneStates.filter((s) => s.status === "failed");
-    if (failedScenes.length > 0) {
-        const failedIndices = failedScenes.map((s) => s.sceneIndex).join(", ");
+    if (!finalUrl) {
+        // Persist partial token spend, finalCode, and debug flags before throwing
+        try {
+            const partialTotal = { input: tokens.acc.input, output: tokens.acc.output, total: tokens.acc.input + tokens.acc.output };
+            const costResult = computeCostUsd(tokens.acc.calls);
+            void setJobTokens(jobId, partialTotal, costResult.costUsd);
+        } catch { /* instrumentation must not throw */ }
+        try {
+            await GenerationJob.updateOne(
+                { jobId },
+                { $set: { finalCode: currentCode || undefined, debugInvoked, debugResolved, usedFallbackLlm, usedFallbackScene: usingFallback } }
+            );
+        } catch { /* non-fatal */ }
+
         throw new AppError(
             502,
-            `Scene(s) ${failedIndices} failed after ${MAX_RENDER_ATTEMPTS} attempts`,
-            "scenes_failed"
+            `Generation failed after ${debugAttempts} debug attempts: ${lastError}`,
+            "render_failed"
         );
     }
 
-    // ── Step 6: ffmpeg concat ────────────────────────────────────────────────
-    progress("concat_started", "concat");
-    void setJobStatus(jobId, "concatenating");
+    // ── Step 7.5: Upload the final video to Cloudinary ────────────────────────
+    // The render service stores to its local volume and returns an internal docker
+    // URL the browser can't reach. The single-scene flow has no concat-upload step,
+    // so download the render and push it to Cloudinary here for a public URL.
+    {
+        phase("upload");
+        const uploadStartedAt = new Date();
+        try {
+            const resp = await fetch(finalUrl);
+            if (!resp.ok) throw new Error(`fetch render HTTP ${resp.status}`);
+            const buf = Buffer.from(await resp.arrayBuffer());
+            const tmp = path.join(os.tmpdir(), `stitcher-${jobId}-${Date.now()}.mp4`);
+            await fsp.writeFile(tmp, buf);
+            const uploaded = await uploadConcatToCloudinary(tmp, `stitcher/final/${projectId ?? userId}`);
+            await fsp.unlink(tmp).catch(() => {});
+            finalUrl = uploaded.url;
+            if (uploaded.thumbnailUrl) thumbnailUrl = uploaded.thumbnailUrl;
+            void appendJobStage(jobId, {
+                stage: "upload", service: "stitcher-api", status: "ok",
+                startedAt: uploadStartedAt, endedAt: new Date(),
+                durationMs: Date.now() - uploadStartedAt.getTime(),
+                outputSummary: finalUrl.slice(0, 80),
+            });
+            progress("scene_render_complete", "upload", { url: finalUrl });
+        } catch (uploadErr) {
+            logger.warn({ message: "[worker] cloudinary upload failed; keeping internal render url", jobId, error: String(uploadErr) });
+            void appendJobStage(jobId, {
+                stage: "upload", service: "stitcher-api", status: "failed",
+                startedAt: uploadStartedAt, endedAt: new Date(),
+                durationMs: Date.now() - uploadStartedAt.getTime(),
+                error: String(uploadErr),
+            });
+            // Non-fatal: finalUrl stays as the internal render url (job still completes).
+        }
+    }
 
-    const sceneUrls = sceneStates
-        .sort((a, b) => a.sceneIndex - b.sceneIndex)
-        .map((s) => s.renderUrl!);
+    // ── Step 8: Persist ──────────────────────────────────────────────────────
 
-    const outputName = `final-${chatId}.mp4`;
-    const { filePath, cleanup } = await withStep(
-        jobCtx,
-        "concat",
-        { "scene.count": sceneUrls.length },
-        () => concatVideos(sceneUrls, outputName)
-    );
-
-    let finalUrl: string;
-    let thumbnailUrl: string | undefined;
-
-    void setJobStatus(jobId, "uploading");
-
+    // Persist single Asset
+    let assetId = "";
     try {
-        const uploaded = await withStep(jobCtx, "upload", {}, () =>
-            uploadConcatToCloudinary(filePath, `stitcher/final/${projectId ?? userId}`)
-        );
-        finalUrl = uploaded.url;
-        thumbnailUrl = uploaded.thumbnailUrl;
-    } finally {
-        // Always delete temp files regardless of upload success/failure
-        await cleanup();
+        const asset = new Asset({
+            name: `${currentSceneClass}-${chatId}`,
+            type: AssetType.VIDEO,
+            code: currentCode,
+            scene_name: currentSceneClass,
+            scene_description: prompt.slice(0, 200),
+            origin: AssetOrigin.GENERATED_VIDEO,
+            url: finalUrl,
+            thumbnail: thumbnailUrl ?? finalUrl,
+            duration: durationSec,
+            bytes: renderBytes,
+            metadata: { traceId },
+            projectId: new Types.ObjectId(projectId ?? userId),
+            isOnTimeline: false,
+        });
+        await asset.save();
+        assetId = (asset._id as Types.ObjectId).toString();
+    } catch (assetErr) {
+        logger.warn({ message: "[worker] Asset persist failed (non-fatal)", traceId, error: String(assetErr) });
     }
 
-    const totalDurationSec = sceneStates.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
+    // Persist final code + debug flags on the GenerationJob (best-effort, non-fatal).
+    // finalCode is used by /curate to build the RagCandidate.
+    try {
+        const jobUpdate: Record<string, unknown> = {
+            finalCode: currentCode,
+            debugInvoked,
+            debugResolved,
+            usedFallbackLlm,
+            usedFallbackScene: usingFallback,
+        };
+        await GenerationJob.updateOne({ jobId }, { $set: jobUpdate });
+    } catch { /* non-fatal */ }
 
-    // ── Step 7: Update GenerateChat ──────────────────────────────────────────
+    // Update GenerateChat: set finalUrl on the last in-progress assistant message
     await GenerateChat.findByIdAndUpdate(chatId, {
         $set: {
             "messages.$[last].completed": true,
             "messages.$[last].generatorOutput": true,
             "messages.$[last].error": "none",
             "messages.$[last].content.llmResponse": finalUrl,
+            "messages.$[last].generationMs": Date.now() - pipelineStartMs,
         },
     }, {
         arrayFilters: [{ "last.role": "assistant", "last.completed": false }],
     });
 
-    // ── Step 8: Decrement credits (atomic; won't go below zero) ─────────────
-    // Skip the decrement entirely for BYOT runs (credits<=0 && own keys): the
-    // user funded this generation with their own provider key, so it costs us
-    // nothing and must not touch their (already-zero) credit balance. The
-    // credit-funded path is unchanged.
-    if (!user.isTestAccount && !runOnOwnKeys) {
+    // Decrement credits (skip for test accounts, BYOK-only runs, and fallback-only renders)
+    if (!user.isTestAccount && !runOnOwnKeys && !usingFallback) {
         await User.updateOne(
             { _id: userId, "credits.generation": { $gt: 0 } },
             { $inc: { "credits.generation": -1 } }
         );
     }
 
-    // ── Step 9: Best-effort RAG corpus storage ───────────────────────────────
-    let ragCorpusStored = false;
-    try {
-        const successfulScenes = sceneStates.filter((s) => s.status === "success");
-        if (successfulScenes.length > 0) {
-            const docs = successfulScenes.map((s) => ({
-                child: { prompt: s.sceneSpec.prompt, code: s.code, sceneClass: s.sceneClass },
-                metadata: { traceId, chatId, projectId },
-            }));
-            const corpusResult = await ragClient.corpusAdd({ documents: docs }, traceId);
-            ragCorpusStored = corpusResult.allSucceeded;
-        }
-    } catch (ragErr) {
-        logger.warn({ message: "[worker] RAG corpusAdd failed (non-fatal)", traceId, error: String(ragErr) });
-    }
+    // RAG corpus is populated exclusively via admin RLHF approval (Admin → Generation → Approve → Sync).
+    // Auto-adding here would bypass quality control and pollute the corpus with unreviewed code.
+    const ragCorpusStored = false;
 
-    // ── Step 10: Memory reflection (fire-and-forget; never blocks the result) ─
-    // Ask the cheap LLM whether this turn reveals any durable user preference.
+    // Memory reflection (fire-and-forget)
     reflect(userId, {
         userMessage: prompt,
-        assistantMessage: `Generated a ${scenes.length}-scene video.`,
+        assistantMessage: "Generated a single-scene video.",
     }).catch((err) => {
         logger.warn({ message: "[worker] memory reflect failed (non-fatal)", traceId, error: String(err) });
     });
 
-    // ── Build result ─────────────────────────────────────────────────────────
-    const sceneAssets = sceneStates.map((s) => ({
-        index: s.sceneIndex,
-        url: s.renderUrl!,
-        assetId: s.assetId ?? "",
-    }));
+    // Persist token totals + cost
+    try {
+        const totalTokens = { input: tokens.acc.input, output: tokens.acc.output, total: tokens.acc.input + tokens.acc.output };
+        const costResult = computeCostUsd(tokens.acc.calls);
+        void setJobTokens(jobId, totalTokens, costResult.costUsd);
+        if (costResult.unknownModels.length > 0) {
+            logger.warn({ message: "[worker] unknown models in pricing table (cost=null)", models: costResult.unknownModels, jobId });
+        }
+    } catch { /* instrumentation must not throw */ }
 
     return {
         finalUrl,
         thumbnailUrl,
-        durationSec: totalDurationSec,
-        sceneAssets,
+        durationSec,
+        sceneAssets: [{ index: 0, url: finalUrl, assetId }],
         ragCorpusStored,
     };
 }
@@ -656,7 +1439,7 @@ export const generationWorker = new Worker<VideoGenerationJobData, VideoGenerati
     processGenerationJob,
     {
         connection: redisConnection,
-        concurrency: 4,
+        concurrency: 2,
         lockDuration: 600_000, // 10 minutes — render is synchronous and slow
     }
 );
@@ -672,8 +1455,6 @@ generationWorker.on("failed", (job, err) => {
         traceId: job?.data.traceId,
     });
     if (job) {
-        // On ServiceError 503, BullMQ will retry automatically per defaultJobOptions.
-        // We still publish so the frontend can show "retrying…" state.
         const isRetryable = err instanceof ServiceError && err.status === 503;
         publishProgress(job.data.chatId, {
             type: "job_failed",
@@ -685,14 +1466,10 @@ generationWorker.on("failed", (job, err) => {
             },
         });
 
-        // F2.4: mark the persisted history row failed (non-fatal). Only on the
-        // terminal failure (BullMQ retries exhausted) — retryable 503s keep the
-        // row in its current in-progress state so the UI can show "retrying…".
         if (!isRetryable) {
             void setJobStatus(job.id, "failed", { error: String(err), completedAt: new Date() });
         }
 
-        // Mark the chat's in-progress assistant message as errored
         GenerateChat.findByIdAndUpdate(job.data.chatId, {
             $set: {
                 "messages.$[last].completed": true,
@@ -720,7 +1497,6 @@ generationWorker.on("completed", (job, result) => {
         data: result,
     });
 
-    // F2.4: finalize the persisted history row (non-fatal).
     void setJobStatus(job.id, "complete", { finalUrl: result.finalUrl, completedAt: new Date() });
 });
 

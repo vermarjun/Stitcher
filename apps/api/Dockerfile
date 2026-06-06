@@ -24,8 +24,10 @@ RUN npm run build
 # ─── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS runtime
 
-# ffmpeg is required by the BullMQ video worker
-RUN apk add --no-cache ffmpeg
+# ffmpeg is required by the BullMQ video worker. fontconfig + a DejaVu font are
+# required by ffmpeg's drawtext filter when burning in text overlays — without
+# a font on the host, drawtext falls back to the "Sans" family and fails.
+RUN apk add --no-cache ffmpeg fontconfig font-dejavu
 
 ENV NODE_ENV=production
 

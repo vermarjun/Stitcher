@@ -3,8 +3,14 @@ import User from '../model/user.model';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import sendMail from '../util/mailer.util';
-import { JWT_CONFIG, PASSWORD_RESET_CONFIG } from '../config';
+import {
+  sendWelcomeEmail,
+  sendVerificationEmail,
+  sendSignupOtpEmail,
+  sendPasswordResetEmail,
+} from '../email/email.service';
+import { pubClient } from '../queue/connection';
+import { JWT_CONFIG, PASSWORD_RESET_CONFIG, EMAIL_VERIFICATION_CONFIG, API_PREFIX, PUBLIC_APP_URL } from '../config';
 import cloudinary from '../util/cloudinary.util';
 import mongoose from 'mongoose';
 import { Types } from 'mongoose';
@@ -40,6 +46,23 @@ interface IGoogleUser {
   family_name: string;
   picture: string;
   locale: string;
+}
+
+// Generates a fresh email-verification token and stamps it (+ expiry) onto the
+// (unsaved) user document. Caller is responsible for persisting. Returns the
+// raw token to embed in the verification link.
+function issueEmailVerificationToken(user: IUser): string {
+  const token = crypto.randomBytes(EMAIL_VERIFICATION_CONFIG.tokenLength).toString('hex');
+  user.emailVerificationToken = token;
+  user.emailVerificationExpires = Date.now() + EMAIL_VERIFICATION_CONFIG.tokenExpiry;
+  return token;
+}
+
+// Absolute URL of the API verify endpoint (which verifies, then redirects the
+// browser back to the app). Built from the request host so it works across
+// environments without extra config.
+function buildVerifyUrl(req: Request, token: string): string {
+  return `${req.protocol}://${req.get('host')}${API_PREFIX}/users/verify-email/${token}`;
 }
 
 export const authWithGoogle = async (req: Request, res: Response) => {
@@ -83,10 +106,24 @@ export const authWithGoogle = async (req: Request, res: Response) => {
         username: finalUsername,
         email,
         profilePhoto: picture,
-        usedOAuth: true
+        usedOAuth: true,
+        plan: 'free',
+        // New signups get free generation credits to try it out. Password signups
+        // grant the same below — keep these two in sync.
+        credits: { generation: 10, editing: 10, expiresAt: null },
+        // Google has already verified the address — no verification email needed.
+        emailVerified: true,
       });
 
       await user.save();
+
+      // Welcome the first-time OAuth signup (non-blocking).
+      void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
+    }
+
+    // Reject banned users before issuing a token.
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Your account has been banned.", banned: true });
     }
 
     // ✅ STEP 5: Generate JWT
@@ -115,6 +152,7 @@ export const authWithGoogle = async (req: Request, res: Response) => {
         createdAt: user.createdAt,
         lastActive: user.lastActive,
         isActive: user.isActive,
+        onboardingTourCompletedAt: user.onboardingTourCompletedAt ?? null,
       }
     });
 
@@ -151,9 +189,167 @@ export const signup = async (req: IUserRequest, res: IUserResponse): Promise<Res
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 3, editing: 5, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } });
+    const user = new User({ username, email, password: hashedPassword, usedOAuth: false, plan: 'free', isTestAccount: false, credits: { generation: 10, editing: 10, expiresAt: null } });
+    const verifyToken = issueEmailVerificationToken(user);
     await user.save();
+
+    // Fire-and-forget: the email service enqueues and never throws, so a mail
+    // hiccup can't fail signup. Welcome + verification go out on the email queue.
+    const verifyUrl = buildVerifyUrl(req, verifyToken);
+    void sendVerificationEmail({ to: user.email, username: user.username, verifyUrl });
+    void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
+
     return res.status(201).json({ message: 'User created successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── OTP-gated signup (email + password) ──────────────────────────────────────
+// No User doc is created until the email is verified by OTP. The pending
+// registration (username, email, bcrypt hash, code) lives in Redis with a 10-min
+// TTL, so abandoned signups self-clean and never leave half-built accounts.
+const SIGNUP_OTP_TTL_SECONDS = 600; // 10 minutes
+const SIGNUP_OTP_MAX_ATTEMPTS = 5;
+const signupOtpKey = (email: string): string => `signup:otp:${email}`;
+
+function sixDigitCode(): string {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+interface PendingSignup { username: string; email: string; passwordHash: string; code: string; attempts: number; }
+
+// POST /users/signup/start — validate, stash a pending registration in Redis, email an OTP.
+export const startSignup = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+    username = username.trim();
+    email = email.trim().toLowerCase();
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+    if (await User.findOne({ email })) {
+      return res.status(409).json({ message: 'Email already exists. Try logging in instead.' });
+    }
+    if (await User.findOne({ username })) {
+      return res.status(409).json({ message: 'Username already taken. Try a different one.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const code = sixDigitCode();
+    const pending: PendingSignup = { username, email, passwordHash, code, attempts: 0 };
+    await pubClient.set(signupOtpKey(email), JSON.stringify(pending), 'EX', SIGNUP_OTP_TTL_SECONDS);
+
+    // Fire-and-forget via the email queue (the worker sends within ~1s).
+    void sendSignupOtpEmail({ to: email, username, code });
+
+    return res.status(200).json({ message: 'otp_sent', email });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// POST /users/signup/verify — check the OTP, then create the account + grant credits + log in.
+export const verifySignupOtp = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { email, code } = req.body as { email?: string; code?: string };
+    email = email?.trim().toLowerCase();
+    code = String(code ?? '').trim();
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and code are required.' });
+    }
+
+    const raw = await pubClient.get(signupOtpKey(email));
+    if (!raw) {
+      return res.status(400).json({ message: 'Your code expired. Please start signup again.' });
+    }
+    const pending = JSON.parse(raw) as PendingSignup;
+
+    if (pending.code !== code) {
+      pending.attempts += 1;
+      if (pending.attempts >= SIGNUP_OTP_MAX_ATTEMPTS) {
+        await pubClient.del(signupOtpKey(email));
+        return res.status(429).json({ message: 'Too many incorrect attempts. Please start signup again.' });
+      }
+      const ttl = await pubClient.ttl(signupOtpKey(email));
+      await pubClient.set(signupOtpKey(email), JSON.stringify(pending), 'EX', ttl > 0 ? ttl : SIGNUP_OTP_TTL_SECONDS);
+      return res.status(400).json({ message: 'Incorrect code. Please try again.', attemptsLeft: SIGNUP_OTP_MAX_ATTEMPTS - pending.attempts });
+    }
+
+    // Race/double-submit guard: re-check uniqueness at creation time.
+    if (await User.findOne({ email })) {
+      await pubClient.del(signupOtpKey(email));
+      return res.status(409).json({ message: 'Email already exists. Try logging in instead.' });
+    }
+
+    const user = new User({
+      username: pending.username,
+      email: pending.email,
+      password: pending.passwordHash,
+      usedOAuth: false,
+      plan: 'free',
+      isTestAccount: false,
+      emailVerified: true,
+      credits: { generation: 10, editing: 10, expiresAt: null },
+    });
+    await user.save();
+    await pubClient.del(signupOtpKey(email));
+
+    void sendWelcomeEmail({ to: user.email, username: user.username, appUrl: PUBLIC_APP_URL });
+
+    const token = jwt.sign(
+      { userId: user._id?.toString() },
+      JWT_CONFIG.secret,
+      { expiresIn: JWT_CONFIG.expiresIn } as jwt.SignOptions
+    );
+    return res.status(201).json({
+      token,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        plan: user.plan,
+        role: user.role,
+        credits: user.credits,
+        isTestAccount: user.isTestAccount,
+        bio: user.bio,
+        profilePhoto: user.profilePhoto,
+        profileBanner: user.profileBanner,
+        aura: user.aura,
+        stats: user.stats,
+        followersCount: user.stats?.followersCount || 0,
+        followingCount: user.stats?.followingCount || 0,
+        createdAt: user.createdAt,
+        lastActive: user.lastActive,
+        isActive: user.isActive,
+        onboardingTourCompletedAt: user.onboardingTourCompletedAt ?? null,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// POST /users/signup/resend — re-issue a fresh OTP for an in-flight signup.
+export const resendSignupOtp = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { email } = req.body as { email?: string };
+    email = email?.trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Email is required.' });
+
+    const raw = await pubClient.get(signupOtpKey(email));
+    if (!raw) return res.status(400).json({ message: 'Your session expired. Please start signup again.' });
+
+    const pending = JSON.parse(raw) as PendingSignup;
+    pending.code = sixDigitCode();
+    pending.attempts = 0;
+    await pubClient.set(signupOtpKey(email), JSON.stringify(pending), 'EX', SIGNUP_OTP_TTL_SECONDS);
+    void sendSignupOtpEmail({ to: email, username: pending.username, code: pending.code });
+
+    return res.status(200).json({ message: 'otp_resent', email });
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -178,6 +374,10 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
 
     if (user.usedOAuth) {
       return res.status(401).json({ message: "This account uses Google OAuth. Please login using Google." });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Your account has been banned.", banned: true });
     }
 
     // Compare passwords
@@ -218,6 +418,7 @@ export const login = async (req: IUserRequest, res: Response): Promise<Response>
         createdAt: user.createdAt,
         lastActive: user.lastActive,
         isActive: user.isActive,
+        onboardingTourCompletedAt: user.onboardingTourCompletedAt ?? null,
       },
     });
   } catch (err: any) {
@@ -251,6 +452,28 @@ export const getUserCredits = async (req: IUserRequest, res: IUserResponse): Pro
       success: false,
       message: 'Server error', error: err.message
     });
+  }
+};
+
+// Marks the one-time product tour as completed (or skipped) for the current user.
+// Idempotent: only stamps the timestamp the first time, so "completed once, ever"
+// holds even if the client calls this more than once.
+export const completeOnboardingTour = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    const user: IUser | null = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    if (!user.onboardingTourCompletedAt) {
+      user.onboardingTourCompletedAt = new Date();
+      await user.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      onboardingTourCompletedAt: user.onboardingTourCompletedAt,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
 
@@ -523,14 +746,9 @@ export const requestPasswordReset = async (req: IUserRequest, res: IUserResponse
     user.resetPasswordExpires = resetTokenExpiry;
     await user.save();
 
-    const resetLink = `${req.protocol}://${req.get('host')}/api/users/reset-password/${resetToken}`;
+    const resetLink = `${req.protocol}://${req.get('host')}${API_PREFIX}/users/reset-password/${resetToken}`;
 
-    await sendMail({
-      to: user.email,
-      subject: 'Password Reset Request',
-      text: `Reset your password using this link: ${resetLink}`,
-      html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Click here to reset your password</a></p><p>If you did not request this, please ignore this email.</p>`,
-    });
+    void sendPasswordResetEmail({ to: user.email, resetUrl: resetLink });
 
     return res.status(200).json({ message: 'Password reset link sent to your email.' });
   } catch (err: any) {
@@ -553,11 +771,79 @@ export const resetPassword = async (req: IUserRequest, res: IUserResponse): Prom
     if (!user) return res.status(400).json({ message: 'Invalid or expired token.' });
 
     user.password = await bcrypt.hash(password, 10);
+    // Clear the OAuth-only flag: setting a password makes password login valid.
+    // Without this, a Google-signup user who sets a password here would still be
+    // blocked by login() ("This account uses Google OAuth"). They keep Google
+    // login too — authWithGoogle doesn't depend on this flag.
+    user.usedOAuth = false;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
 
     return res.status(200).json({ message: 'Password reset successful.' });
+  } catch (err: any) {
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// GET /api/users/verify-email/:token
+// Verifies the address and redirects the browser back to the app with
+// ?emailVerified=1 (success) or =0 (invalid/expired). Opened directly from the
+// link in the verification email.
+export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
+  const appUrl = PUBLIC_APP_URL.replace(/\/$/, '');
+  try {
+    const { token } = req.params;
+
+    const user = token
+      ? await User.findOne({
+          emailVerificationToken: token,
+          emailVerificationExpires: { $gt: Date.now() },
+        })
+      : null;
+
+    if (!user) {
+      res.redirect(`${appUrl}/?emailVerified=0`);
+      return;
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    res.redirect(`${appUrl}/?emailVerified=1`);
+  } catch {
+    res.redirect(`${appUrl}/?emailVerified=0`);
+  }
+};
+
+// POST /api/users/resend-verification  { email }
+// Re-issues a verification email. Always responds 200 with a generic message so
+// the endpoint can't be used to probe which emails have accounts.
+export const resendVerification = async (req: IUserRequest, res: IUserResponse): Promise<Response> => {
+  try {
+    let { email } = req.body;
+    email = email?.trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Email is required.' });
+
+    const generic = {
+      message: 'If that account exists and is unverified, a new verification email has been sent.',
+    };
+
+    const user: IUser | null = await User.findOne({ email });
+    // No-op (but identical response) for: no account, already verified, or OAuth
+    // accounts (which are verified by Google and have no password to protect).
+    if (!user || user.emailVerified || user.usedOAuth) {
+      return res.status(200).json(generic);
+    }
+
+    const token = issueEmailVerificationToken(user);
+    await user.save();
+    const verifyUrl = buildVerifyUrl(req, token);
+    void sendVerificationEmail({ to: user.email, username: user.username, verifyUrl });
+
+    return res.status(200).json(generic);
   } catch (err: any) {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }

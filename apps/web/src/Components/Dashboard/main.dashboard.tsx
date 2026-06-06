@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Menu } from "lucide-react";
 import Header from "./Header/Main.header";
 import LeftSideBar from "./LeftSideBar/Main.leftsidebar";
 import RightSideBar from "./RightSideBar/Main.rightsidebar";
@@ -14,7 +15,10 @@ import {
   RefreshProviderTimeline,
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
+import { DragAssetProvider } from "@/Components/Dashboard/DragAssetContext";
 import { PollingProvider, RefreshHeaderProvider, CollabAwarenessProvider } from "./context";
+import { maybeRunEditorTour } from "@/lib/onboardingTour";
+import PossibilitiesDialog from "@/Components/Dashboard/PossibilitiesDialog";
 
 import type { Project, IUser, Asset } from "@/State/Types";
 
@@ -24,11 +28,11 @@ const DashboardLayout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState<Project>();
   const [user, setUser] = useState<IUser>();
+  const [showPossibilities, setShowPossibilities] = useState(false);
 
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
   
   // Right Sidebar State
-  const [rightSidebarMode, setRightSidebarMode] = useState<'generate' | 'edit'>('generate');
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
   const handleAssetDrop = (asset: Asset) => {
@@ -66,7 +70,6 @@ const DashboardLayout = () => {
       }
       setUser(user);
 
-      toast.message(`Welcome ${user.username}`);
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message ||
@@ -87,6 +90,30 @@ const DashboardLayout = () => {
     }
   }, []);
 
+  const openPossibilities = () => {
+    setShowPossibilities(true);
+    try {
+      const raw = localStorage.getItem("user");
+      const uid = raw ? (JSON.parse(raw)?._id ?? "") : "";
+      localStorage.setItem("stitcher_possibilities_seen", uid || "1");
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    const handler = () => openPossibilities();
+    window.addEventListener("stitcher:show-possibilities", handler);
+    return () => window.removeEventListener("stitcher:show-possibilities", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // First-time product tour, Act 2 (the editor walkthrough). Fires once the
+  // project has loaded and the editor chrome is mounted. No-ops unless the user
+  // is mid-tour (or hasn't seen it) — see maybeRunEditorTour() for the gating.
+  useEffect(() => {
+    if (!isLoading && project) maybeRunEditorTour();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, project]);
+
   return (
     <RefreshHeaderProvider>
       <CollabAwarenessProvider>
@@ -101,30 +128,22 @@ const DashboardLayout = () => {
               <RefreshProviderTimeline>
                 <RefreshProviderAssetStash>
                     <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-                    <Header currentProject={project} user={user} />
-                    
-                    {/* Mobile Only: Generate / Edit Buttons */}
-                    <div className="md:hidden flex w-full border-b border-zinc-800 bg-black">
-                      <button 
-                        onClick={() => {
-                          setRightSidebarMode('generate');
-                          setIsRightSidebarOpen(true);
-                        }}
-                        className="flex-1 py-3 text-sm font-medium border-r border-zinc-800 hover:bg-zinc-900 transition-colors"
+                    <PossibilitiesDialog open={showPossibilities} onClose={() => setShowPossibilities(false)} />
+                    <Header currentProject={project} user={user} onShowPossibilities={openPossibilities} />
+
+                    {/* Mobile: AI chat trigger bar — sits just below the header */}
+                    <div className="md:hidden flex items-center gap-3 px-4 h-11 border-b border-zinc-800 bg-neutral-950 flex-shrink-0">
+                      <button
+                        data-tour="ai-trigger"
+                        onClick={() => setIsRightSidebarOpen(true)}
+                        className="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors"
                       >
-                        Generate
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setRightSidebarMode('edit');
-                          setIsRightSidebarOpen(true);
-                        }}
-                        className="flex-1 py-3 text-sm font-medium hover:bg-zinc-900 transition-colors"
-                      >
-                        Edit
+                        <Menu className="w-5 h-5" />
+                        <span className="text-sm font-medium text-zinc-300">Generate animation</span>
                       </button>
                     </div>
 
+                    <DragAssetProvider>
                     <div className="flex-1 flex overflow-hidden relative">
                       <LeftSideBar currentProject={project} user={user} />
 
@@ -138,12 +157,12 @@ const DashboardLayout = () => {
                         onRemoveItem={handleRemoveAsset}
                         currentProject={project}
                         user={user}
-                        mode={rightSidebarMode}
-                        setMode={setRightSidebarMode}
+                        mode="generate"
                         isOpen={isRightSidebarOpen}
                         onClose={() => setIsRightSidebarOpen(false)}
                       />
                     </div>
+                    </DragAssetProvider>
 
                     {/* <Footer /> */}
                   </div>

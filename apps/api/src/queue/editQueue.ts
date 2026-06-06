@@ -8,6 +8,7 @@
  *   removeOnFail: 500      — keep last 500 failed jobs for post-mortem
  */
 
+import { randomUUID } from "crypto";
 import { Queue } from "bullmq";
 import { context, propagation } from "@opentelemetry/api";
 import { redisConnection } from "./connection";
@@ -32,6 +33,14 @@ export async function enqueueEdit(data: EditJobData): Promise<string> {
     // edit worker can make its spans children of the originating request trace.
     const otelCarrier: Record<string, string> = {};
     propagation.inject(context.active(), otelCarrier);
-    const job = await editQueue.add("edit", { ...data, otelCarrier });
+    // Globally-unique job id — see generationQueue.ts for the full rationale.
+    // The edit queue shares the GenerationJob/GenerationLlmIO namespace with the
+    // generation queue, so a counter-based "3" here would also collide with a
+    // generation "3". A UUID removes both reset- and cross-queue collisions.
+    const job = await editQueue.add(
+        "edit",
+        { ...data, otelCarrier },
+        { jobId: randomUUID() }
+    );
     return job.id ?? "";
 }

@@ -8,6 +8,8 @@ import Asset from "../model/asset.model";
 import Track from "../model/track.model";
 import TimelineItem from "../model/timelineitem.model";
 import { Types } from "mongoose";
+import { getMembersByProject } from "../util/projectMembers.util";
+import { getProjectRole } from "../util/projectAccess.util";
 
 // Create a new project for a user
 export const createProject = async (req: Request, res: Response) => {
@@ -139,8 +141,16 @@ export const getProjectsByUser = async (req: Request, res: Response) => {
             });
         
         if (!user) return res.status(404).json({ message: "User not found" });
-        
-        res.status(200).json(user.projects);
+
+        const projects = (user.projects ?? []) as any[];
+        const projectIds = projects.map((p: any) => p._id as Types.ObjectId);
+        const membersByProject = await getMembersByProject(projectIds);
+        const withMembers = projects.map((p: any) => {
+            const obj = typeof p.toObject === "function" ? p.toObject() : p;
+            return { ...obj, members: membersByProject.get(p._id.toString()) ?? [] };
+        });
+
+        res.status(200).json(withMembers);
     } catch (error) {
         res.status(500).json({ message: "Error fetching projects", error });
     }
@@ -175,8 +185,16 @@ export const getRecentProjectsByUser = async (req: Request, res: Response) => {
             });
             
         if (!user) return res.status(404).json({ message: "User not found" });
-        
-        res.status(200).json(user.projects);
+
+        const projects = (user.projects ?? []) as any[];
+        const projectIds = projects.map((p: any) => p._id as Types.ObjectId);
+        const membersByProject = await getMembersByProject(projectIds);
+        const withMembers = projects.map((p: any) => {
+            const obj = typeof p.toObject === "function" ? p.toObject() : p;
+            return { ...obj, members: membersByProject.get(p._id.toString()) ?? [] };
+        });
+
+        res.status(200).json(withMembers);
     } catch (error) {
         res.status(500).json({ message: "Error fetching recent projects", error });
     }
@@ -202,8 +220,20 @@ export const getProjectById = async (req: Request, res: Response) => {
             });
             
         if (!project) return res.status(404).json({ message: "Project not found" });
-        
-        res.status(200).json(project);
+
+        // Attach the caller's effective role ('owner' | 'editor' | 'viewer') and
+        // the member list so the client can render avatars and gate edit actions.
+        const userId = req.userId!;
+        const [myRole, membersByProject] = await Promise.all([
+            getProjectRole(userId, id),
+            getMembersByProject([new Types.ObjectId(id)]),
+        ]);
+
+        res.status(200).json({
+            ...project.toObject(),
+            myRole,
+            members: membersByProject.get(id) ?? [],
+        });
     } catch (error) {
         res.status(500).json({ message: "Error fetching project", error });
     }

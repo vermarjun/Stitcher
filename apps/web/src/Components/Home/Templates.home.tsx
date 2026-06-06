@@ -11,9 +11,6 @@ import {
   X,
   Pause,
   Volume2,
-  Backpack,
-  Check,
-  Loader2,
 } from "lucide-react";
 import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
@@ -26,7 +23,6 @@ import {
 } from "@/Components/ui/select";
 import { Skeleton } from "@/Components/ui/skeleton";
 import api from "@/api";
-import { toast } from "sonner";
 
 enum TemplateType {
   VIDEO = "video",
@@ -86,7 +82,6 @@ const TemplateGallery: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [loadingStates, setLoadingStates] = useState<{ [templateId: string]: boolean }>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoPlayerRef = useRef<HTMLDivElement>(null);
@@ -223,41 +218,6 @@ const TemplateGallery: React.FC = () => {
     }
   };
 
-  const handleSaveToBackPack = async (template: ITemplate) => {
-    // Set loading state for this specific template
-    setLoadingStates(prev => ({ ...prev, [template._id]: true }));
-    
-    try {
-      const response = await api.post<any>("/backpack/items", {
-        itemType: "Template",
-        itemId: template._id,
-        source: "template_library",
-        sourceId: template._id,
-        favourite: false,
-        tags: [],
-        notes: "",
-      });
-      if ((response.data as any).success == true) {
-        toast.success("Successfully added template to backpack");
-        // Update the template to show it's added to backpack
-        setTemplates(prev => 
-          prev.map(t => 
-            t._id === template._id 
-              ? { ...t, isAddedToBackpack: true }
-              : t
-          )
-        );
-      } else {
-        throw Error("Error came in saving template item to backpack");
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Error saving template to backpack");
-    } finally {
-      // Clear loading state regardless of success or failure
-      setLoadingStates(prev => ({ ...prev, [template._id]: false }));
-    }
-  };
-
   const handleLikeToggle = async (templateId: string) => {
     try {
       const template = templates.find((t) => t._id === templateId);
@@ -324,8 +284,8 @@ const TemplateGallery: React.FC = () => {
     <div className="min-h-screen bg-black text-white selection:bg-emerald-500/30">
       {/* Search & Header Section - Aligned with Sidebar */}
       <div className="sticky top-0 z-20 bg-black/80 backdrop-blur-md border-b border-zinc-800 h-16 transition-all duration-200">
-        <div className="h-full container mx-auto px-4 lg:px-6">
-          <div className="h-full flex items-center justify-between gap-4">
+        <div className="h-full container mx-auto px-3 lg:px-6">
+          <div className="h-full flex items-center justify-between gap-2 md:gap-4">
             {/* Search Bar */}
             <div className="relative flex-1 max-w-md group">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-500 transition-colors duration-200" />
@@ -339,7 +299,47 @@ const TemplateGallery: React.FC = () => {
             </div>
 
             {/* Filters */}
-            <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-1.5 md:gap-3">
+              {/* Mobile-only type toggle buttons */}
+              <div className="flex md:hidden items-center gap-1 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedType("all")}
+                  className={`h-7 px-2 text-[10px] rounded-md transition-all duration-200 ${
+                    selectedType === "all"
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  }`}
+                >
+                  All
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedType(TemplateType.VIDEO)}
+                  className={`h-7 w-7 p-0 rounded-md transition-all duration-200 ${
+                    selectedType === TemplateType.VIDEO
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <FileVideo className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedType(TemplateType.AUDIO)}
+                  className={`h-7 w-7 p-0 rounded-md transition-all duration-200 ${
+                    selectedType === TemplateType.AUDIO
+                      ? "bg-zinc-800 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <FileAudio className="h-3 w-3" />
+                </Button>
+              </div>
+
               <div className="hidden md:flex items-center gap-2 bg-zinc-900/50 p-1 rounded-lg border border-zinc-800">
                 <Button
                   variant="ghost"
@@ -389,7 +389,7 @@ const TemplateGallery: React.FC = () => {
                   setSortBy(v as "createdAt" | "likesCount" | "name")
                 }
               >
-                <SelectTrigger className="w-[140px] bg-zinc-900/50 border-zinc-800 text-zinc-300 text-xs h-9 rounded-lg hover:bg-zinc-900 hover:border-zinc-700 focus:ring-emerald-500/20 transition-all duration-200">
+                <SelectTrigger className="w-[110px] md:w-[140px] bg-zinc-900/50 border-zinc-800 text-zinc-300 text-xs h-9 rounded-lg hover:bg-zinc-900 hover:border-zinc-700 focus:ring-emerald-500/20 transition-all duration-200">
                   <SelectValue placeholder="Sort By" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 rounded-lg shadow-xl shadow-black/50">
@@ -435,7 +435,7 @@ const TemplateGallery: React.FC = () => {
 
       {/* Main Content Area */}
       <div
-        className="container mx-auto px-4 lg:px-6 py-8"
+        className="container mx-auto px-3 lg:px-6 py-6 md:py-8"
         ref={scrollContainerRef}
       >
         {loading ? (
@@ -461,9 +461,8 @@ const TemplateGallery: React.FC = () => {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 md:gap-6 pb-24 md:pb-20">
             {templates.map((template) => {
-              const isTemplateLoading = loadingStates[template._id];
               const isHovered = hoveredCard === template._id;
               
               return (
@@ -536,14 +535,14 @@ const TemplateGallery: React.FC = () => {
                   </div>
 
                   {/* Content Section */}
-                  <div className="px-3 py-3 space-y-2">
+                  <div className="px-2 py-2 md:px-3 md:py-3 space-y-2">
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-start gap-4">
-                        <h3 className="text-sm font-semibold text-zinc-100 line-clamp-1 group-hover:text-emerald-400 transition-colors duration-200">
+                        <h3 className="text-xs md:text-sm font-semibold text-zinc-100 line-clamp-1 group-hover:text-emerald-400 transition-colors duration-200">
                           {template.title}
                         </h3>
                       </div>
-                      <p className="text-xs text-zinc-500 line-clamp-1 leading-relaxed">
+                      <p className="text-[10px] md:text-xs text-zinc-500 line-clamp-1 leading-relaxed">
                         {template.post_description || "No description available"}
                       </p>
                     </div>
@@ -572,30 +571,6 @@ const TemplateGallery: React.FC = () => {
                         {formatCount(template.likesCount || 0)}
                       </button>
 
-                      {!template.isAddedToBackpack ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSaveToBackPack(template);
-                          }}
-                          disabled={isTemplateLoading}
-                          className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-zinc-800 hover:border-zinc-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isTemplateLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <Backpack className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Save</span>
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                          <Check className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Saved</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -679,7 +654,7 @@ const TemplateGallery: React.FC = () => {
 
       {/* Overlays - Audio Player */}
       {isAudioPlayerVisible && playingAudio && (
-        <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="fixed inset-x-0 bottom-20 md:bottom-6 z-50 flex justify-center px-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="bg-zinc-900/90 backdrop-blur-xl border border-zinc-800 w-full max-w-2xl rounded-2xl shadow-2xl shadow-black/50 overflow-hidden ring-1 ring-white/10">
             <div className="relative p-1">
               {/* Progress Bar Background */}
@@ -696,9 +671,9 @@ const TemplateGallery: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[auto_1fr_auto] gap-6 items-center p-4 pt-5">
+              <div className="flex flex-col md:grid md:grid-cols-[auto_1fr_auto] gap-3 md:gap-6 items-center p-3 md:p-4 pt-4 md:pt-5">
                 {/* Track Info */}
-                <div className="flex items-center gap-4 min-w-[180px]">
+                <div className="flex items-center gap-3 md:gap-4 w-full md:min-w-[180px]">
                   <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center border border-zinc-700/50 shadow-inner">
                     <FileAudio className="h-5 w-5 text-emerald-500" />
                   </div>

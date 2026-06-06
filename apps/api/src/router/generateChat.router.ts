@@ -6,22 +6,18 @@ import {
     getChatUpdate,
     getLatestAssistantMessage,
     getUserJobs,
+    getChatStatus,
     stopGeneration,
     completeGeneration,
-    generateGuestChatResponse
+    rateChatGeneration,
 } from '../controller/generateChat.controller';
 import auth from "../middleware/auth.middleware";
 import { refreshCredits } from '../middleware/refreshCredits.middleware';
 import { requireChatOwnership } from '../middleware/ownership.middleware';
+import { requireProjectEditor } from '../middleware/access.middleware';
 
 const router = Router();
 
-/**
- * @route   POST /api/generate-chat/guest
- * @desc    Generate chat response for unauthenticated (guest) users
- * @access  Public
- */
-router.post('/guest', generateGuestChatResponse);
 
 /**
  * @route   POST /api/generate-chat
@@ -29,7 +25,7 @@ router.post('/guest', generateGuestChatResponse);
  * @access  Private
  * @body    { projectId: string, prompt: string, chatId?: string }
  */
-router.post('/', auth, refreshCredits, generateChatResponse);
+router.post('/', auth, requireProjectEditor('body', 'projectId'), refreshCredits, generateChatResponse);
 
 /**
  * @route   GET /api/generate-chat/update/:chatId
@@ -62,6 +58,28 @@ router.get('/jobs', auth, getUserJobs);
  * @access  Private
  */
 router.get('/project/:projectId', auth, getProjectChats);
+
+/**
+ * @route   PATCH /api/generatechat/:chatId/rating
+ * @desc    RLHF: submit a 1–5 star rating for the most-recent (or specified) generation
+ * @access  Private (auth + chat ownership)
+ * @body    { rating: 1..5, jobId?: string }
+ *
+ * NOTE: must be registered BEFORE the bare /:chatId catch-all below.
+ */
+router.patch('/:chatId/rating', auth, requireChatOwnership('params', 'chatId'), rateChatGeneration);
+
+/**
+ * @route   GET /api/generatechat/:chatId/status
+ * @desc    Polling fallback — returns { status, finalUrl, jobId, sceneProgress }
+ *          for the most recent job of this chat. The frontend polls this when
+ *          the socket misses the 'job_complete' event.
+ * @access  Private (auth + ownership check inside handler)
+ *
+ * NOTE: must be registered BEFORE the bare /:chatId catch-all below so Express
+ * does not treat "status" as a chatId.
+ */
+router.get('/:chatId/status', auth, getChatStatus);
 
 /**
  * @route   GET /api/generate-chat/:chatId

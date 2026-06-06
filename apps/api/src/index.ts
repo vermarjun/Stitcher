@@ -26,6 +26,7 @@ import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import { generationQueue } from "./queue/generationQueue";
 import { editQueue } from "./queue/editQueue";
+import { emailQueue } from "./queue/emailQueue";
 import { startQueueDepthSampler, stopQueueDepthSampler } from "./util/metrics.util";
 import auth from "./middleware/auth.middleware";
 import GenerateChat from "./model/generateChat.model";
@@ -39,6 +40,7 @@ import { requireFeature } from "./middleware/feature.middleware";
 // Queue workers — import after express setup so workers boot with the server
 import { generationWorker } from "./queue/generationWorker";
 import { editWorker } from "./queue/editWorker";
+import { emailWorker } from "./queue/emailWorker";
 
 // Import Routes
 import userRoutes from "./router/user.router";
@@ -60,7 +62,20 @@ import paymentRoutes from "./router/payment.router";
 import memoryRoutes from "./router/memory.router";
 import collabRoutes from "./router/collab.router";
 import adminLiveRoutes from "./router/adminLive.router";
-import { isAdminUser } from "./middleware/admin.middleware";
+import feedbackRoutes from "./router/feedback.router";
+import adminFeedbackRoutes from "./router/adminFeedback.router";
+import adminMetricsRoutes from "./router/adminMetrics.router";
+import adminPrometheusRoutes from "./router/adminPrometheus.router";
+import adminHealthRoutes from "./router/adminHealth.router";
+import adminActionsRoutes from "./router/adminActions.router";
+import adminProvidersRoutes from "./router/adminProviders.router";
+import adminRlhfRoutes from "./router/adminRlhf.router";
+import gatewayRoutes from "./router/gateway.router";
+import analyticsRoutes from "./router/analytics.router";
+import { codexAuthCallback } from "./controller/gateway.controller";
+import { startHealthPoller, stopHealthPoller } from "./services/adminHealth.service";
+import { startStuckJobCleaner, stopStuckJobCleaner } from "./util/stuckJobCleaner.util";
+import { isAdminUser, requireAdmin } from "./middleware/admin.middleware";
 import { initYjsServer } from "./collab/yjs.server";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
@@ -80,6 +95,7 @@ const corsOptions: cors.CorsOptions = {
 
 // ─── App & HTTP server ────────────────────────────────────────────────────────
 const app = express();
+app.set("trust proxy", 1); // trust Caddy reverse proxy for real client IPs
 const httpServer = createServer(app);
 
 // ─── Socket.IO ────────────────────────────────────────────────────────────────
@@ -103,7 +119,18 @@ app.use((req: Request & { id?: string }, _res: Response, next: NextFunction) => 
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json({ limit: "1mb" }));
+app.use(
+    express.json({
+        limit: "1mb",
+        // Stash the exact raw request bytes on req.rawBody so the Razorpay
+        // webhook handler can verify X-Razorpay-Signature against the original
+        // payload. Re-stringifying the parsed body does NOT reproduce the bytes
+        // Razorpay signed, so signature verification must use the raw buffer.
+        verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
+            req.rawBody = buf;
+        },
+    })
+);
 app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
 // ─── Global rate limit ────────────────────────────────────────────────────────
@@ -125,6 +152,31 @@ const authLimiter = rateLimit({
 });
 app.use(`${API_PREFIX}/users/login`, authLimiter);
 app.use(`${API_PREFIX}/users/signup`, authLimiter);
+
+// Stricter per-IP cap on the account-creation entry point: each /signup/start
+// sends an OTP email and can mint a (free-credit) account, so throttle hard to
+// blunt scripted throwaway-account abuse on the public launch.
+const signupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    limit: 6,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: { message: "Too many signup attempts. Please try again later." } },
+});
+app.use(`${API_PREFIX}/users/signup/start`, signupLimiter);
+
+// Email-sending endpoints (password reset, resend verification/OTP) — strict cap
+// to prevent email-bombing and exhausting the single Gmail App Password quota.
+const mailerLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 min
+    limit: 5,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: { message: "Too many requests. Please try again later." } },
+});
+app.use(`${API_PREFIX}/users/request-password-reset`, mailerLimiter);
+app.use(`${API_PREFIX}/users/resend-verification`, mailerLimiter);
+app.use(`${API_PREFIX}/users/signup/resend`, mailerLimiter);
 
 // ─── Socket.IO auth middleware ────────────────────────────────────────────────
 io.use((socket, next) => {
@@ -290,6 +342,7 @@ app.use(`${API_PREFIX}/editchat`, editChatRoutes);
 app.use(`${API_PREFIX}/generatechat`, generateChatRoutes);
 app.use(`${API_PREFIX}/timeline`, timelineRoutes);
 app.use(`${API_PREFIX}/share`, shareRoutes); // public — no auth
+app.use(`${API_PREFIX}`, analyticsRoutes); // public — POST /analytics/collect (best-effort auth)
 app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
 // Community surface — gated behind FEATURE_COMMUNITY (off for v1 relaunch).
@@ -307,6 +360,27 @@ app.use(`${API_PREFIX}/collab`, collabRoutes);
 // ADMIN_DASHBOARD_ENABLED=false every route here 404s.
 app.use(`${API_PREFIX}/admin/live`, adminLiveRoutes);
 
+// User feedback intake — any logged-in user may POST (auth only, gated in the
+// router). NOT a community feature, so kept outside the requireFeature block.
+app.use(`${API_PREFIX}/feedback`, feedbackRoutes);
+
+// Admin portal surfaces (OBSERVABILITY §5 + admin dashboard). Every router below
+// is internally double-gated by auth + requireAdmin and 404s when
+// ADMIN_DASHBOARD_ENABLED=false. Mounted outside requireFeature("community").
+app.use(`${API_PREFIX}/admin/feedback`, adminFeedbackRoutes);
+app.use(`${API_PREFIX}/admin/metrics`, adminMetricsRoutes);
+app.use(`${API_PREFIX}/admin/prometheus`, adminPrometheusRoutes);
+app.use(`${API_PREFIX}/admin/health`, adminHealthRoutes);
+app.use(`${API_PREFIX}/admin/actions`, adminActionsRoutes);
+app.use(`${API_PREFIX}/admin/providers`, adminProvidersRoutes);
+app.use(`${API_PREFIX}/admin/rlhf`, adminRlhfRoutes);
+// Gateway: admin management + internal proxy (Agent service calls /gateway/proxy/*)
+app.use(`${API_PREFIX}`, gatewayRoutes);
+// Codex OAuth callback — OpenAI ALWAYS redirects to http://localhost:1455/auth/callback
+// (hardcoded in OpenAI's Hydra allowlist). Port 1455 maps to this container in docker-compose.
+// This route must be at /auth/callback with NO API prefix.
+app.get('/auth/callback', codexAuthCallback);
+
 // ─── bull-board queue dashboard (OBSERVABILITY §6) ───────────────────────────
 // Instant queue/job/step visibility at ${API_PREFIX}/admin/queues.
 //
@@ -321,12 +395,15 @@ if (ADMIN_DASHBOARD_ENABLED) {
     serverAdapter.setBasePath(bullBoardPath);
 
     createBullBoard({
-        queues: [new BullMQAdapter(generationQueue), new BullMQAdapter(editQueue)],
+        queues: [new BullMQAdapter(generationQueue), new BullMQAdapter(editQueue), new BullMQAdapter(emailQueue)],
         serverAdapter,
     });
 
-    app.use(bullBoardPath, auth, serverAdapter.getRouter());
-    logger.info({ message: "bull-board mounted (auth-gated)", path: bullBoardPath });
+    // Gated by auth + requireAdmin (role check) — NOT just a valid JWT. This surface
+    // exposes/controls job payloads, so any logged-in non-admin (e.g. a launch tester)
+    // must NOT reach it.
+    app.use(bullBoardPath, auth, requireAdmin, serverAdapter.getRouter());
+    logger.info({ message: "bull-board mounted (auth + admin gated)", path: bullBoardPath });
 }
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
@@ -350,6 +427,11 @@ const server = httpServer.listen(PORT, async () => {
             { queue: generationQueue, label: "video-generation" },
             { queue: editQueue, label: "video-edit" },
         ]);
+
+        // Admin portal: poll dependency health (mongo/redis/agent/render/rag) on
+        // a 30s interval so /admin/health serves a cached snapshot. Best-effort.
+        startHealthPoller();
+        startStuckJobCleaner();
     } catch (error) {
         logger.error({ message: "Failed to start services", error: String(error) });
     }
@@ -373,9 +455,12 @@ async function shutdown(signal: string) {
 
         try {
             stopQueueDepthSampler();
+            stopHealthPoller();
+            stopStuckJobCleaner();
 
             await generationWorker.close();
             await editWorker.close();
+            await emailWorker.close();
             logger.info("BullMQ workers closed");
 
             await mongoose.connection.close();

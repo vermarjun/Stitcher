@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import User from '../model/user.model';
+import Project from '../model/project.model';
 import ProjectCollaborator from '../model/projectCollaborator.model';
 import { disconnectProjectUser } from '../collab/yjs.server';
+import { getMembersByProject } from '../util/projectMembers.util';
+import { sendCollabInviteEmail } from '../email/email.service';
+import { PUBLIC_APP_URL } from '../config';
 
 // ─── POST /api/project/:projectId/invite ──────────────────────────────────────
 // Owner-only (guarded by requireProjectOwnership upstream)
@@ -18,7 +22,7 @@ export const inviteCollaborator = async (req: Request, res: Response) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   // Don't allow inviting yourself (the owner)
-  const owner = await User.findById(invitedBy).select('email').lean();
+  const owner = await User.findById(invitedBy).select('email username').lean();
   if (owner?.email === normalizedEmail) {
     return res.status(409).json({ error: { message: 'cannot invite the project owner', code: 'conflict' } });
   }
@@ -61,6 +65,19 @@ export const inviteCollaborator = async (req: Request, res: Response) => {
     });
   }
 
+  // Notify the invitee by email (non-blocking; the email service swallows errors
+  // so a mail failure never fails the invite). Existing users get a "view
+  // invitation" CTA; unknown emails get a "sign up & join" CTA.
+  const project = await Project.findById(projectId).select('name').lean();
+  void sendCollabInviteEmail({
+    to: normalizedEmail,
+    inviterName: owner?.username ?? 'A Stitcher user',
+    projectName: project?.name ?? 'a project',
+    role,
+    acceptUrl: PUBLIC_APP_URL.replace(/\/$/, '') + '/',
+    hasAccount: !!invitedUser,
+  });
+
   return res.status(201).json({ success: true, data: { invite } });
 };
 
@@ -72,21 +89,43 @@ export const listCollaborators = async (req: Request, res: Response) => {
   const all = await ProjectCollaborator.find({
     projectId: new Types.ObjectId(projectId),
   })
-    .populate<{ userId: { _id: Types.ObjectId; username: string; email: string } | null }>(
+    .populate<{ userId: { _id: Types.ObjectId; username: string; email: string; profilePhoto: string } | null }>(
       'userId',
-      'username email'
+      'username email profilePhoto'
     )
     .lean();
 
-  const collaborators = all
+  // Resolve the project owner so the member list is complete and every avatar
+  // (including the owner's) can render a real profile photo.
+  const owner = await User.findOne({ projects: new Types.ObjectId(projectId) })
+    .select('username email profilePhoto')
+    .lean();
+
+  const ownerEntry = owner
+    ? [
+        {
+          userId: owner._id,
+          username: owner.username,
+          email: owner.email,
+          profilePhoto: owner.profilePhoto ?? '',
+          role: 'owner' as const,
+          status: 'accepted' as const,
+        },
+      ]
+    : [];
+
+  const acceptedCollaborators = all
     .filter((c) => c.status === 'accepted')
     .map((c) => ({
       userId: c.userId ? (c.userId as any)._id : null,
       username: c.userId ? (c.userId as any).username : null,
       email: c.userId ? (c.userId as any).email : c.invitedEmail,
+      profilePhoto: c.userId ? (c.userId as any).profilePhoto ?? '' : '',
       role: c.role,
       status: c.status,
     }));
+
+  const collaborators = [...ownerEntry, ...acceptedCollaborators];
 
   const pending = all
     .filter((c) => c.status === 'pending')
@@ -229,18 +268,31 @@ export const sharedWithMe = async (req: Request, res: Response) => {
     userId: new Types.ObjectId(userId),
     status: 'accepted',
   })
-    .populate<{ projectId: { _id: Types.ObjectId; name: string; playback_url: string; updatedAt: Date } }>(
+    .populate<{ projectId: { _id: Types.ObjectId; name: string; playback_url: string; updatedAt: Date; status: string } }>(
       'projectId',
-      'name playback_url updatedAt'
+      'name playback_url updatedAt status'
+    )
+    .populate<{ invitedBy: { _id: Types.ObjectId; username: string } }>(
+      'invitedBy',
+      'username'
     )
     .lean();
 
-  const projects = collabs
-    .filter((c) => c.projectId != null)
-    .map((c) => ({
+  const valid = collabs.filter((c) => c.projectId != null);
+  const projectIds = valid.map((c) => (c.projectId as any)._id as Types.ObjectId);
+
+  // Member avatars (owner + accepted collaborators) per project.
+  const membersByProject = await getMembersByProject(projectIds);
+
+  const projects = valid.map((c) => {
+    const pidStr = (c.projectId as any)._id.toString();
+    return {
       ...(c.projectId as any),
       role: c.role,
-    }));
+      sharedByUsername: (c.invitedBy as any)?.username ?? null,
+      members: membersByProject.get(pidStr) ?? [],
+    };
+  });
 
   return res.json({ success: true, data: { projects } });
 };

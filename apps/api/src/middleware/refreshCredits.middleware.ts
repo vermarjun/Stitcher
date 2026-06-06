@@ -10,8 +10,11 @@ export const refreshCredits = async (req: Request, res: Response, next: NextFunc
             return res.status(404).json({ message: "User not found" });
         }
 
-        // If credits expired
-        if (user.credits.expiresAt < new Date()) {
+        // If credits expired. `expiresAt === null` means "never expires" (free
+        // signup grants + purchased credits both set null). Without this guard,
+        // `null < new Date()` is true in JS, so a brand-new user's signup credits
+        // get wiped to 0 on their very first authenticated request.
+        if (user.credits.expiresAt && user.credits.expiresAt < new Date()) {
             user.credits.generation = 0;
             user.credits.editing = 0;
             // So that the calculation is not done everytime

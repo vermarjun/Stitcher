@@ -1,6 +1,6 @@
 import TimelineEditor from "./TimeLine/main.timeline";
 import VideoPlayer from "./VideoPlayer/main.videoplayer";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import VideoPlayerLoading from "@/Components/LoadingScreens/VideoPlayer.loader";
 import TimelineEditorLoading from "@/Components/LoadingScreens/Timeline.loader";
 import api from "@/api";
@@ -20,6 +20,9 @@ import {
   applyItemUpdate,
   deleteYItem,
   addYItem,
+  createHydration,
+  harvestHydration,
+  hasUnresolvedAssets,
 } from "@/collab/yjsTimeline";
 import { useCollabAwareness } from "./context";
 
@@ -40,6 +43,13 @@ const VideoEditor = ({ currentProject }: Props) => {
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   // Snapshot of the timeline as fetched from HTTP (used as base for Y.Doc hydration)
   const baseTimelineRef = useRef<Timeline | null>(null);
+  // Cache of fully-populated items/assets so re-deriving from the Y.Doc never
+  // strips asset objects (the cause of remote-collaborator timeline corruption).
+  const hydrationRef = useRef(createHydration());
+  const rehydratingRef = useRef(false);
+
+  // Viewers are read-only: default permissive when role is unknown (older payloads).
+  const canEdit = (currentProject?.myRole ?? "owner") !== "viewer";
 
   const { refreshKey: timelineRefreshKey } = useRefreshTimeline();
 
@@ -60,13 +70,19 @@ const VideoEditor = ({ currentProject }: Props) => {
 
   // ─── Fetch timeline (used as base; Y.Doc is authoritative once synced) ──
   const fetchTimeline = async () => {
+    const projectId = currentProject?._id;
+    if (!projectId) return;
+    // Only show the full-screen loader on the VERY FIRST load. A refetch (e.g.
+    // after an asset drop) must not blank the editor — that caused a visible
+    // flicker/glitch where the timeline briefly vanished and reappeared.
+    const firstLoad = !baseTimelineRef.current;
     try {
-      setLoading(true);
-      const projectId = currentProject?._id;
-      if (!projectId) return;
+      if (firstLoad) setLoading(true);
       const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
       const tl = response.data;
       baseTimelineRef.current = tl;
+      // Learn every populated asset/item so Y.Doc-derived state can be rehydrated.
+      harvestHydration(tl, hydrationRef.current);
       // Only set React timeline from HTTP if Y.Doc isn't synced yet
       if (!collabDoc?.synced) {
         setTimeline(tl);
@@ -75,7 +91,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       console.error("Error fetching timeline:", err);
       toast.error("Error fetching timeline");
     } finally {
-      setLoading(false);
+      if (firstLoad) setLoading(false);
     }
   };
 
@@ -84,14 +100,44 @@ const VideoEditor = ({ currentProject }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineRefreshKey]);
 
+  // ─── Re-fetch populated assets when the Y.Doc references one we don't know ──
+  // A collaborator can add a brand-new generated/uploaded asset; remote clients
+  // first see it as a bare id. Pull the populated timeline once to learn it, then
+  // re-derive. Guarded so it can't loop.
+  const hydrateFromServer = useCallback(async () => {
+    if (rehydratingRef.current) return;
+    const projectId = currentProject?._id;
+    if (!projectId || !collabDoc) return;
+    rehydratingRef.current = true;
+    try {
+      const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
+      harvestHydration(response.data, hydrationRef.current);
+      if (baseTimelineRef.current) {
+        setTimeline(
+          yDocToReactTimeline(
+            collabDoc.timelineMap,
+            baseTimelineRef.current,
+            hydrationRef.current
+          )
+        );
+      }
+    } catch {
+      /* best-effort */
+    } finally {
+      rehydratingRef.current = false;
+    }
+  }, [currentProject?._id, collabDoc]);
+
   // ─── Seed React state from Y.Doc once synced ─────────────────────────────
   useEffect(() => {
     if (!collabDoc?.synced || !baseTimelineRef.current) return;
     const derived = yDocToReactTimeline(
       collabDoc.timelineMap,
-      baseTimelineRef.current
+      baseTimelineRef.current,
+      hydrationRef.current
     );
     setTimeline(derived);
+    if (hasUnresolvedAssets(derived)) void hydrateFromServer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collabDoc?.synced]);
 
@@ -103,17 +149,39 @@ const VideoEditor = ({ currentProject }: Props) => {
     const handler = (_events: Y.YEvent<any>[], txn: Y.Transaction) => {
       // Skip echoes from our own local writes
       if (txn.origin === LOCAL_ORIGIN) return;
-      // Apply remote changes to React state
+      // Apply remote changes to React state, rehydrating asset objects so the
+      // remote edit doesn't strip thumbnails/playback for this client.
       if (!baseTimelineRef.current) return;
-      const derived = yDocToReactTimeline(timelineMap, baseTimelineRef.current);
+      const derived = yDocToReactTimeline(
+        timelineMap,
+        baseTimelineRef.current,
+        hydrationRef.current
+      );
       setTimeline(derived);
+      if (hasUnresolvedAssets(derived)) void hydrateFromServer();
     };
 
     timelineMap.observeDeep(handler);
     return () => {
       timelineMap.unobserveDeep(handler);
     };
-  }, [collabDoc]);
+  }, [collabDoc, hydrateFromServer]);
+
+  // Effective duration = the stored duration OR the furthest clip end, whichever
+  // is larger. Local edits move/extend clips without updating timeline.duration
+  // (only the server materialize does), so playback must clamp to this — not the
+  // stale stored value — or it stops early before reaching a far-placed clip.
+  const effectiveDuration = useMemo(() => {
+    if (!timeline) return 0;
+    let max = Number(timeline.duration) || 0;
+    for (const t of ((timeline.tracks as ITrack[]) ?? [])) {
+      for (const it of (t.items ?? [])) {
+        const end = (it as ITimelineItemBase).endTime;
+        if (typeof end === "number" && end > max) max = end;
+      }
+    }
+    return max;
+  }, [timeline]);
 
   // ─── Playback loop ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -131,9 +199,9 @@ const VideoEditor = ({ currentProject }: Props) => {
           setCurrentTime((prev) => {
             const nt = prev + delta;
             if (nt < prev) return prev;
-            if (nt >= Number(timeline.duration)) {
+            if (nt >= effectiveDuration) {
               setIsPlaying(false);
-              return Number(timeline.duration);
+              return effectiveDuration;
             }
             return nt;
           });
@@ -152,7 +220,7 @@ const VideoEditor = ({ currentProject }: Props) => {
       if (animationFrameRef.current)
         cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isPlaying, timeline?.duration]);
+  }, [isPlaying, effectiveDuration]);
 
   const handlePlayPause = () => setIsPlaying((p) => !p);
   const handleTimeUpdate = (t: number) => setCurrentTime(t);
@@ -163,6 +231,7 @@ const VideoEditor = ({ currentProject }: Props) => {
     updates: Partial<ITimelineItemBase>
   ) => {
     if (!timeline) return;
+    if (!canEdit) return; // viewers are read-only
 
     // Write to Y.Doc (the observeDeep handler skips LOCAL_ORIGIN echoes)
     if (collabDoc?.synced) {
@@ -274,6 +343,27 @@ const VideoEditor = ({ currentProject }: Props) => {
     [collabDoc]
   );
 
+  // ─── Add asset item: optimistic React-only update ────────────────────────
+  // Server already injects the item into the Y.Doc (so collaborators see it via
+  // the observer). We must NOT write to the Y.Doc here — that would duplicate
+  // the clip. We only update local React state so the drop is instant for the
+  // dropping client instead of waiting on the racy server→Y.Doc→observer path.
+  const handleAddAssetItem = useCallback(
+    (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
+      setTimeline((prev) =>
+        prev
+          ? {
+              ...prev,
+              tracks: (prev.tracks as ITrack[]).map((t) =>
+                t._id === trackId ? { ...t, items: [...t.items, item] } : t
+              ),
+            }
+          : prev
+      );
+    },
+    []
+  );
+
   // ─── Add text item (called from TimelineEditor) ───────────────────────────
   const handleAddTextItem = useCallback(
     (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
@@ -297,47 +387,77 @@ const VideoEditor = ({ currentProject }: Props) => {
     return { video: 58, timeline: 42 };
   });
 
+  const sharedPlayerProps = {
+    timeline: timeline!,
+    currentTime,
+    isPlaying,
+    onTimeUpdate: handleTimeUpdate,
+    onPlayPause: handlePlayPause,
+    onUpdateTextItem: handleUpdateTextItem,
+    editingTextId,
+    setEditingTextId,
+  };
+
+  const sharedTimelineProps = {
+    timeline: timeline!,
+    currentTime,
+    onTimeUpdate: handleTimeUpdate,
+    onTimelineUpdate: handleTimelineUpdate,
+    onSync: syncToBackend,
+    onDeleteItem: handleDeleteItem,
+    onAddTextItem: handleAddTextItem,
+    onAddAssetItem: handleAddAssetItem,
+    canEdit,
+    collabDoc,
+    localOrigin: LOCAL_ORIGIN,
+    awareness: collabDoc?.awareness ?? null,
+    setAwarenessCursor: collabDoc?.setAwarenessCursor ?? null,
+    setAwarenessSelection: collabDoc?.setAwarenessSelection ?? null,
+  };
+
   return (
-    <ResizablePanelGroup direction="vertical" className="h-full w-full">
-      <ResizablePanel defaultSize={defaultLayout.video}>
-        {isLoading || !timeline ? (
-          <VideoPlayerLoading />
-        ) : (
-          <VideoPlayer
-            timeline={timeline}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            onTimeUpdate={handleTimeUpdate}
-            onPlayPause={handlePlayPause}
-            onUpdateTextItem={handleUpdateTextItem}
-            editingTextId={editingTextId}
-            setEditingTextId={setEditingTextId}
-          />
-        )}
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={defaultLayout.timeline}>
-        {isLoading || !timeline ? (
-          <TimelineEditorLoading />
-        ) : (
-          <TimelineEditor
-            timeline={timeline}
-            currentTime={currentTime}
-            onTimeUpdate={handleTimeUpdate}
-            onTimelineUpdate={handleTimelineUpdate}
-            onSync={syncToBackend}
-            onDeleteItem={handleDeleteItem}
-            onAddTextItem={handleAddTextItem}
-            collabDoc={collabDoc}
-            localOrigin={LOCAL_ORIGIN}
-            awareness={collabDoc?.awareness ?? null}
-            setAwarenessCursor={collabDoc?.setAwarenessCursor ?? null}
-            setAwarenessSelection={collabDoc?.setAwarenessSelection ?? null}
-            key={timelineRefreshKey}
-          />
-        )}
-      </ResizablePanel>
-    </ResizablePanelGroup>
+    <>
+      {/* ── Mobile layout: fixed-height stacked panels (no resizable handle on touch) ── */}
+      <div className="md:hidden flex flex-col h-full">
+        {/* Video player: ~45vh */}
+        <div className="h-[45vh] flex-shrink-0">
+          {isLoading || !timeline ? (
+            <VideoPlayerLoading />
+          ) : (
+            <VideoPlayer {...sharedPlayerProps} />
+          )}
+        </div>
+        {/* Timeline: fills remaining space, scrolls internally */}
+        <div data-tour="timeline" className="flex-1 min-h-0">
+          {isLoading || !timeline ? (
+            <TimelineEditorLoading />
+          ) : (
+            <TimelineEditor {...sharedTimelineProps} />
+          )}
+        </div>
+      </div>
+
+      {/* ── Desktop layout: resizable panels ── */}
+      <ResizablePanelGroup direction="vertical" className="hidden md:flex h-full w-full">
+        <ResizablePanel defaultSize={defaultLayout.video}>
+          {isLoading || !timeline ? (
+            <VideoPlayerLoading />
+          ) : (
+            <VideoPlayer {...sharedPlayerProps} />
+          )}
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={defaultLayout.timeline}>
+          <div data-tour="timeline" className="h-full w-full">
+            {isLoading || !timeline ? (
+              <TimelineEditorLoading />
+            ) : (
+              <TimelineEditor {...sharedTimelineProps} />
+            )}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </>
   );
 };
 

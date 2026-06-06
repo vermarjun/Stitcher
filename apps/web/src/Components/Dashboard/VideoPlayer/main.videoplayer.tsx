@@ -6,13 +6,25 @@ import {
   SkipForward,
   Volume2,
   Check,
-  ChevronDown
+  Type,
 } from "lucide-react";
-import type { 
-  Timeline, 
-  ITrack, 
-  IVideoTimelineItem, 
-  IAudioTimelineItem, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/Components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/Components/ui/popover";
+import type {
+  Timeline,
+  ITrack,
+  IVideoTimelineItem,
+  IAudioTimelineItem,
   ITextTimelineItem,
 } from "@/State/Types";
 
@@ -48,13 +60,6 @@ const FONT_FAMILIES = [
   { name: 'JetBrains Mono', value: 'JetBrains Mono, monospace' }
 ];
 
-interface DropdownProps {
-  isOpen: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-  className?: string;
-}
-
 interface TextOverlaysProps {
   overlays: ITextTimelineItem[];
   editingTextId: string | null;
@@ -66,18 +71,10 @@ interface TextOverlaysProps {
     initY: number;
   } | null>;
   livePos: { x: number; y: number } | null;
-  dropdownStates: {
-    [key: string]: {
-      colorOpen: boolean;
-      fontSizeOpen: boolean;
-      fontFamilyOpen: boolean;
-    };
-  };
   onTextMouseDown: (e: React.MouseEvent, item: ITextTimelineItem) => void;
   onTextEdit: (item: ITextTimelineItem) => void;
   onTextContentChange: (itemId: string, value: string) => void;
   onUpdateTextItem: (itemId: string, updates: Partial<ITextTimelineItem>) => void;
-  onToggleDropdown: (overlayId: string, dropdownType: 'color' | 'fontSize' | 'fontFamily') => void;
   setEditingTextId: (id: string | null) => void;
 }
 
@@ -86,39 +83,12 @@ const TextOverlays: React.FC<TextOverlaysProps> = ({
   editingTextId,
   draggingRef,
   livePos,
-  dropdownStates,
   onTextMouseDown,
   onTextEdit,
   onTextContentChange,
   onUpdateTextItem,
-  onToggleDropdown,
   setEditingTextId,
 }) => {
-  const handleColorSelect = (itemId: string, color: string) => {
-    onUpdateTextItem(itemId, { color });
-    onToggleDropdown(itemId, 'color');
-  };
-
-  const handleFontSizeSelect = (itemId: string, fontSize: number) => {
-    onUpdateTextItem(itemId, { fontSize });
-    onToggleDropdown(itemId, 'fontSize');
-  };
-
-  const handleFontFamilySelect = (itemId: string, fontFamily: string) => {
-    onUpdateTextItem(itemId, { fontFamily });
-    onToggleDropdown(itemId, 'fontFamily');
-  };
-
-  const getCurrentColorName = (color: string) => {
-    const colorItem = COLOR_PALETTE.find(c => c.value === color);
-    return colorItem ? colorItem.name : 'Custom';
-  };
-
-  const getCurrentFontName = (fontFamily: string) => {
-    const fontItem = FONT_FAMILIES.find(f => f.value === fontFamily);
-    return fontItem ? fontItem.name : 'Custom';
-  };
-
   return (
     <>
       {overlays.map((overlay) => {
@@ -132,19 +102,13 @@ const TextOverlays: React.FC<TextOverlaysProps> = ({
             ? livePos.y
             : overlay.y ?? 50;
 
-        const dropdownState = dropdownStates[overlay._id] || {
-          colorOpen: false,
-          fontSizeOpen: false,
-          fontFamilyOpen: false
-        };
-
         // Smart Positioning Logic
         const isTopHalf = posY < 50;
-        
+
         // When editing:
         // - If in top half: anchor to top-center (translate -50%, 0), grows downwards
         // - If in bottom half: anchor to bottom-center (translate -50%, -100%), grows upwards
-        const transform = isEditing 
+        const transform = isEditing
           ? (isTopHalf ? "translate(-50%, 0%)" : "translate(-50%, -100%)")
           : "translate(-50%, -50%)"; // Standard center anchor for display/dragging
 
@@ -152,12 +116,14 @@ const TextOverlays: React.FC<TextOverlaysProps> = ({
         const marginTop = isEditing && isTopHalf ? "16px" : "0px";
         const marginBottom = isEditing && !isTopHalf ? "16px" : "0px";
 
+        const currentColor = overlay.color || "#ffffff";
+
         return (
           <div
             key={overlay._id}
             className={`absolute transition-all duration-200 ${
               isEditing
-                ? "z-50" 
+                ? "z-50"
                 : "cursor-grab hover:scale-105 active:scale-95"
             }`}
             style={{
@@ -166,175 +132,179 @@ const TextOverlays: React.FC<TextOverlaysProps> = ({
               transform,
               marginTop,
               marginBottom,
-              fontFamily: overlay.fontFamily || "Inter, sans-serif",
-              fontSize: `${overlay.fontSize || 24}px`,
-              color: overlay.color || "white",
+              // While editing, the toolbar must NOT inherit the overlay's font
+              // size/family/color (a 72px toolbar looked broken). Only apply the
+              // text styling in display mode.
+              fontFamily: isEditing ? undefined : overlay.fontFamily || "Inter, sans-serif",
+              fontSize: isEditing ? undefined : `${overlay.fontSize || 24}px`,
+              color: isEditing ? undefined : overlay.color || "white",
               userSelect: isEditing ? "text" : "none",
-              maxWidth: isEditing ? "360px" : "none",
               width: isEditing ? "max-content" : "auto",
             }}
             onMouseDown={(e) => onTextMouseDown(e, overlay)}
             onDoubleClick={() => onTextEdit(overlay)}
           >
             {isEditing ? (
-              /* === Editing UI (Premium Look) === */
-              <div className="bg-zinc-950/95 backdrop-blur-md rounded-xl border border-zinc-800 shadow-2xl animate-in fade-in zoom-in-95 duration-150 p-1">
-                <div className="flex flex-col gap-2 p-3 min-w-[300px]">
-                  {/* Input Row */}
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        value={overlay.content || ""}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          onTextContentChange(overlay._id, e.target.value)
-                        }
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-700/50 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 focus:bg-zinc-900 outline-none text-white text-sm transition-all placeholder:text-zinc-600"
-                        autoFocus
-                        onKeyDown={(e: React.KeyboardEvent) => {
-                          if (e.key === "Enter") setEditingTextId(null);
-                        }}
-                        placeholder="Type text..."
-                      />
-                    </div>
-                    <button
-                      onClick={() => setEditingTextId(null)}
-                      className="p-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg transition-colors shadow-lg shadow-blue-900/20"
-                      title="Done"
+              /* === Editing toolbar (shadcn Select + Popover, brand-green) === */
+              <div className="w-[320px] rounded-xl border border-zinc-800 bg-zinc-950/95 p-2.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+                {/* Text input + Done */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Type className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      value={overlay.content || ""}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        onTextContentChange(overlay._id, e.target.value)
+                      }
+                      className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-900 pl-8 pr-3 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#19E5A1]/50 focus:ring-2 focus:ring-[#19E5A1]/20"
+                      autoFocus
+                      onKeyDown={(e: React.KeyboardEvent) => {
+                        if (e.key === "Enter") setEditingTextId(null);
+                      }}
+                      placeholder="Type text..."
+                    />
+                  </div>
+                  <button
+                    onClick={() => setEditingTextId(null)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#19E5A1] text-[#00231a] transition-colors hover:bg-[#15c88c]"
+                    title="Done"
+                  >
+                    <Check className="h-4 w-4" strokeWidth={3} />
+                  </button>
+                </div>
+
+                {/* Controls: Font | Size | Color */}
+                <div className="mt-2 flex items-center gap-1.5">
+                  {/* Font family */}
+                  <Select
+                    value={overlay.fontFamily || "Inter, sans-serif"}
+                    onValueChange={(v) =>
+                      onUpdateTextItem(overlay._id, { fontFamily: v })
+                    }
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="h-8 flex-1 border-zinc-800 bg-zinc-900 text-xs text-zinc-200 hover:bg-zinc-800 focus-visible:border-[#19E5A1]/50 focus-visible:ring-[#19E5A1]/20"
                     >
-                      <Check className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
-                  {/* Divider */}
-                  <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent my-1" />
+                      <SelectValue placeholder="Font" />
+                    </SelectTrigger>
+                    <SelectContent className="border-zinc-800 bg-zinc-900 text-zinc-200">
+                      {FONT_FAMILIES.map((font) => (
+                        <SelectItem
+                          key={font.value}
+                          value={font.value}
+                          className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-white"
+                          style={{ fontFamily: font.value }}
+                        >
+                          {font.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                  {/* Controls Row */}
-                  <div className="flex flex-col gap-2.5">
-                    {/* Font Family */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Font</span>
-                      <Dropdown
-                        isOpen={dropdownState.fontFamilyOpen}
-                        onToggle={() => onToggleDropdown(overlay._id, 'fontFamily')}
-                        className="flex-1 max-w-[200px]"
+                  {/* Font size */}
+                  <Select
+                    value={String(overlay.fontSize || 24)}
+                    onValueChange={(v) =>
+                      onUpdateTextItem(overlay._id, { fontSize: Number(v) })
+                    }
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="h-8 w-[74px] border-zinc-800 bg-zinc-900 text-xs text-zinc-200 hover:bg-zinc-800 focus-visible:border-[#19E5A1]/50 focus-visible:ring-[#19E5A1]/20"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-zinc-800 bg-zinc-900 text-zinc-200">
+                      {FONT_SIZES.map((size) => (
+                        <SelectItem
+                          key={size}
+                          value={String(size)}
+                          className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-white"
+                        >
+                          {size}px
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Color */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="flex h-8 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 transition-colors hover:bg-zinc-800"
+                        title="Text color"
                       >
-                        <button
-                          data-dropdown-toggle
-                          onClick={() => onToggleDropdown(overlay._id, 'fontFamily')}
-                          className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-md text-zinc-200 text-xs transition-colors group"
-                        >
-                          <span className="truncate font-medium">{getCurrentFontName(overlay.fontFamily || 'Inter, sans-serif')}</span>
-                          <ChevronDown className={`w-3 h-3 text-zinc-500 group-hover:text-zinc-300 transition-transform ${dropdownState.fontFamilyOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        
-                        {dropdownState.fontFamilyOpen && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar">
-                            {FONT_FAMILIES.map((font) => (
-                              <button
-                                key={font.value}
-                                onClick={() => handleFontFamilySelect(overlay._id, font.value)}
-                                className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors border-b border-zinc-800/50 last:border-0"
-                                style={{ fontFamily: font.value }}
-                              >
-                                {font.name}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </Dropdown>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Font Size */}
-                      <div className="flex-1 flex items-center gap-2">
-                        <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 w-8">Size</span>
-                        <Dropdown
-                          isOpen={dropdownState.fontSizeOpen}
-                          onToggle={() => onToggleDropdown(overlay._id, 'fontSize')}
-                          className="flex-1"
-                        >
-                          <button
-                            data-dropdown-toggle
-                            onClick={() => onToggleDropdown(overlay._id, 'fontSize')}
-                            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-md text-zinc-200 text-xs transition-colors group"
-                          >
-                            <span className="font-medium">{overlay.fontSize || 24}px</span>
-                            <ChevronDown className={`w-3 h-3 text-zinc-500 group-hover:text-zinc-300 transition-transform ${dropdownState.fontSizeOpen ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          {dropdownState.fontSizeOpen && (
-                            <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-lg shadow-xl z-40 max-h-48 overflow-y-auto custom-scrollbar">
-                              {FONT_SIZES.map((size) => (
-                                <button
-                                  key={size}
-                                  onClick={() => handleFontSizeSelect(overlay._id, size)}
-                                  className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors border-b border-zinc-800/50 last:border-0"
-                                >
-                                  {size}px
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </Dropdown>
+                        <span
+                          className="h-4 w-4 rounded-full border border-white/20 shadow-sm"
+                          style={{ backgroundColor: currentColor }}
+                        />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-auto border-zinc-800 bg-zinc-900 p-3 text-zinc-200"
+                    >
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {COLOR_PALETTE.map((color) => {
+                          const active =
+                            currentColor.toLowerCase() === color.value.toLowerCase();
+                          return (
+                            <button
+                              key={color.value}
+                              onClick={() =>
+                                onUpdateTextItem(overlay._id, { color: color.value })
+                              }
+                              title={color.name}
+                              className={`h-6 w-6 rounded-full border transition-transform hover:scale-110 focus:outline-none ${
+                                active
+                                  ? "border-white ring-2 ring-[#19E5A1] ring-offset-1 ring-offset-zinc-900"
+                                  : "border-zinc-700 hover:border-zinc-500"
+                              }`}
+                              style={{ backgroundColor: color.value }}
+                            />
+                          );
+                        })}
                       </div>
 
-                      {/* Color */}
-                      <div className="flex-1 flex items-center gap-2 pl-2 border-l border-zinc-800">
-                         <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 w-8">Color</span>
-                        <Dropdown
-                          isOpen={dropdownState.colorOpen}
-                          onToggle={() => onToggleDropdown(overlay._id, 'color')}
-                          className="flex-1"
-                        >
-                          <button
-                            data-dropdown-toggle
-                            onClick={() => onToggleDropdown(overlay._id, 'color')}
-                            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-md text-zinc-200 text-xs transition-colors group"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full border border-zinc-700 shadow-sm"
-                                style={{ backgroundColor: overlay.color }}
-                              />
-                              <span className="truncate font-medium">{getCurrentColorName(overlay.color || '#ffffff')}</span>
-                            </div>
-                            <ChevronDown className={`w-3 h-3 text-zinc-500 group-hover:text-zinc-300 transition-transform ${dropdownState.colorOpen ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          {dropdownState.colorOpen && (
-                            <div className="absolute top-full right-0 mt-1 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-lg shadow-xl z-30 p-2.5 min-w-[160px]">
-                              <div className="grid grid-cols-5 gap-1.5">
-                                {COLOR_PALETTE.map((color) => (
-                                  <button
-                                    key={color.value}
-                                    onClick={() => handleColorSelect(overlay._id, color.value)}
-                                    title={color.name}
-                                    className={`w-6 h-6 rounded-full border transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                      overlay.color === color.value
-                                        ? "border-white shadow-md ring-1 ring-white/20"
-                                        : "border-zinc-700 hover:border-zinc-500"
-                                    }`}
-                                    style={{ backgroundColor: color.value }}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </Dropdown>
+                      {/* Custom color */}
+                      <div className="mt-3 flex items-center gap-2 border-t border-zinc-800 pt-3">
+                        <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-md border border-zinc-700">
+                          <input
+                            type="color"
+                            value={currentColor}
+                            onChange={(e) =>
+                              onUpdateTextItem(overlay._id, { color: e.target.value })
+                            }
+                            className="absolute -inset-1 h-[calc(100%+8px)] w-[calc(100%+8px)] cursor-pointer border-0 bg-transparent p-0"
+                            title="Pick a custom color"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={currentColor}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            onUpdateTextItem(overlay._id, { color: v });
+                          }}
+                          spellCheck={false}
+                          className="h-7 w-[88px] rounded-md border border-zinc-800 bg-zinc-950 px-2 font-mono text-xs uppercase text-zinc-200 outline-none focus:border-[#19E5A1]/50"
+                          aria-label="Hex color"
+                        />
                       </div>
-                    </div>
-                  </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             ) : (
               /* === Display Mode === */
-              <div 
-                className="px-3 py-1.5 rounded-lg border border-transparent hover:border-blue-500/50 hover:bg-blue-500/20 transition-all duration-200"
+              <div
+                className="rounded-lg border border-transparent px-3 py-1.5 transition-all duration-200 hover:border-[#19E5A1]/50 hover:bg-[#19E5A1]/15"
                 title="Double click to edit"
               >
-                <div 
-                  className="drop-shadow-md text-center leading-tight whitespace-nowrap"
-                  style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}
+                <div
+                  className="whitespace-nowrap text-center leading-tight drop-shadow-md"
+                  style={{ textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}
                 >
                   {overlay.content}
                 </div>
@@ -344,35 +314,6 @@ const TextOverlays: React.FC<TextOverlaysProps> = ({
         );
       })}
     </>
-  );
-};
-
-const Dropdown: React.FC<DropdownProps> = ({ isOpen, onToggle, children, className = '' }) => {
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown-toggle]')) {
-          onToggle();
-        }
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onToggle]);
-
-  return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
-      {children}
-    </div>
   );
 };
 
@@ -439,27 +380,6 @@ const VideoPlayer = ({
     return activeItem as IVideoTimelineItem | null;
   }, [timeline, currentTime]);
 
-  // Dropdown states for each overlay
-  const [dropdownStates, setDropdownStates] = useState<{
-    [key: string]: {
-      colorOpen: boolean;
-      fontSizeOpen: boolean;
-      fontFamilyOpen: boolean;
-    };
-  }>({});
-
-  const toggleDropdown = (overlayId: string, dropdownType: 'color' | 'fontSize' | 'fontFamily') => {
-    setDropdownStates(prev => ({
-      ...prev,
-      [overlayId]: {
-        ...prev[overlayId],
-        colorOpen: dropdownType === 'color' ? !prev[overlayId]?.colorOpen : false,
-        fontSizeOpen: dropdownType === 'fontSize' ? !prev[overlayId]?.fontSizeOpen : false,
-        fontFamilyOpen: dropdownType === 'fontFamily' ? !prev[overlayId]?.fontFamilyOpen : false,
-      }
-    }));
-  };
-
   const getActiveAudio = useCallback(() => {
     const tracks = timeline.tracks as ITrack[];
     const audioTrack = tracks.find((t) => t.type === "audio");
@@ -501,9 +421,9 @@ const VideoPlayer = ({
       if (video.src !== activeVideo.assetId.url) {
         video.src = activeVideo.assetId.url;
         video.currentTime = Math.max(0, sourceTime);
-      } else if (isNewClip && Math.abs(video.currentTime - sourceTime) > 0.1) {
-        // Only hard-seek when switching clips or scrubbing; during normal
-        // playback let the element advance itself to avoid stutter.
+      } else if (isNewClip || Math.abs(video.currentTime - sourceTime) > 0.5) {
+        // Seek on clip transitions OR when user scrubs (large drift).
+        // Normal playback drift is <0.2s; scrubs are typically seconds apart.
         video.currentTime = Math.max(0, sourceTime);
       }
 
@@ -680,11 +600,11 @@ const VideoPlayer = ({
   const overlays = getActiveTextOverlays();
 
   return (
-    <div className="bg-black p-3 h-full flex flex-col">
-      {/* Video Container */}
+    <div className="bg-black p-2 md:p-3 h-full flex flex-col">
+      {/* Video Container — on mobile fills remaining space above controls */}
       <div
         ref={containerRef}
-        className="relative bg-black rounded-lg overflow-hidden mb-3 flex-1"
+        className="relative bg-black rounded-lg overflow-hidden mb-2 md:mb-3 flex-1 min-h-0"
       >
         <video
           ref={videoRef}
@@ -708,50 +628,48 @@ const VideoPlayer = ({
         />
 
         {/* Text overlays */}
-        <TextOverlays 
+        <TextOverlays
           overlays={overlays}
           editingTextId={editingTextId}
           draggingRef={draggingRef}
           livePos={livePos}
-          dropdownStates={dropdownStates}
           onTextMouseDown={onTextMouseDown}
           onTextEdit={handleTextEdit}
           onTextContentChange={handleTextContentChange}
           onUpdateTextItem={onUpdateTextItem}
-          onToggleDropdown={toggleDropdown}
           setEditingTextId={setEditingTextId}
         />
       </div>
 
       {/* Player Controls */}
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between mt-1 md:mt-2 gap-1">
+        <div className="flex items-center gap-1 md:gap-1.5">
           <button
             onClick={() => handleSkip(-5)}
-            className="p-1.5 hover:bg-zinc-800 rounded transition-colors"
+            className="p-1 md:p-1.5 hover:bg-zinc-800 rounded transition-colors"
           >
-            <SkipBack className="w-4 h-4 text-zinc-300" />
+            <SkipBack className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-300" />
           </button>
           <button
             onClick={onPlayPause}
-            className="p-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+            className="p-1.5 md:p-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
           >
             {isPlaying ? (
-              <Pause className="w-4 h-4 text-white" />
+              <Pause className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
             ) : (
-              <Play className="w-4 h-4 text-white ml-0.5" />
+              <Play className="w-3.5 h-3.5 md:w-4 md:h-4 text-white ml-0.5" />
             )}
           </button>
           <button
             onClick={() => handleSkip(5)}
-            className="p-1.5 hover:bg-zinc-800 rounded transition-colors"
+            className="p-1 md:p-1.5 hover:bg-zinc-800 rounded transition-colors"
           >
-            <SkipForward className="w-4 h-4 text-zinc-300" />
+            <SkipForward className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-300" />
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Volume2 className="w-4 h-4 text-zinc-400" />
+        <div className="flex items-center gap-1 md:gap-1.5">
+          <Volume2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-400" />
           <input
             type="range"
             min="0"
@@ -759,11 +677,11 @@ const VideoPlayer = ({
             step="0.1"
             value={volume}
             onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-20 bg-zinc-700 rounded-full h-1 appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+            className="w-14 md:w-20 bg-zinc-700 rounded-full h-1 appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
           />
         </div>
 
-        <div className="text-zinc-300 text-xs">
+        <div className="text-zinc-300 text-[10px] md:text-xs tabular-nums">
           {formatTime(currentTime)} / {formatTime(Number(timeline.duration))}
         </div>
       </div>
