@@ -16,6 +16,7 @@ import { buildPlanGraph } from "../graph/planGraph.js";
 import { saveJob } from "../graph/checkpointer.js";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
+import { extractLlmCallLog, sumLlmCallLog } from "./tokenUtils.js";
 
 const log = getLogger("plan");
 
@@ -120,6 +121,9 @@ export function registerPlan(app: FastifyInstance): void {
 
         const success = !error && Array.isArray(scenes) && scenes.length > 0;
 
+        const llmCallLog = extractLlmCallLog(finalState);
+        const tokensUsed = sumLlmCallLog(llmCallLog);
+
         publishEvent(jobId, success ? "job_complete" : "job_failed", {
           output: success ? { scenes, styleManifest } : null,
           error,
@@ -130,6 +134,8 @@ export function registerPlan(app: FastifyInstance): void {
           jobId,
           output: success ? { scenes, styleManifest } : null,
           error: error ?? null,
+          llmCallLog,
+          tokensUsed,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

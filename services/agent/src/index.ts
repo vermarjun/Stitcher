@@ -20,6 +20,7 @@ import { registerGenerate } from "./api/generate.js";
 import { registerPlan } from "./api/plan.js";
 import { registerCode } from "./api/code.js";
 import { registerDebug } from "./api/debug.js";
+import { registerReflect } from "./api/reflect.js";
 import { registerStream } from "./api/stream.js";
 import { registerJobs } from "./api/jobs.js";
 import { closeRedis } from "./graph/checkpointer.js";
@@ -59,6 +60,7 @@ async function build() {
   registerPlan(app);
   registerCode(app);
   registerDebug(app);
+  registerReflect(app);
   registerStream(app);
   registerJobs(app);
 

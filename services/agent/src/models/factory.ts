@@ -23,6 +23,13 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { config } from "../config.js";
 
+export interface ModelConfigParams {
+  temperature?: number;
+  maxTokens?: number;
+  enable_thinking?: boolean;
+  [key: string]: unknown;
+}
+
 export interface ModelConfig {
   provider: string;
   /** API key for this request. Falls back to env vars if omitted. */
@@ -32,6 +39,12 @@ export interface ModelConfig {
   maxTokens?: number;
   /** Required for ollama or any self-hosted OpenAI-compat endpoint. */
   baseURL?: string;
+  /**
+   * Freeform params block — per-request override for temperature, maxTokens,
+   * enable_thinking and any other pass-through keys forwarded to modelKwargs.
+   * Values here take precedence over the top-level temperature/maxTokens fields.
+   */
+  params?: ModelConfigParams;
 }
 
 const OPENAI_COMPAT_BASE_URLS: Record<string, string> = {
@@ -41,7 +54,10 @@ const OPENAI_COMPAT_BASE_URLS: Record<string, string> = {
 };
 
 export function getModel(cfg: ModelConfig): BaseChatModel {
-  const { provider, model, temperature = 0.2, maxTokens } = cfg;
+  const { provider, model } = cfg;
+  // params.temperature / params.maxTokens take precedence over the top-level fields
+  const temperature = cfg.params?.temperature ?? cfg.temperature ?? 0.2;
+  const maxTokens = cfg.params?.maxTokens ?? cfg.maxTokens;
 
   // ── OpenAI + all OpenAI-compatible providers ──────────────────────────────
   if (
@@ -68,12 +84,24 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
       );
     }
 
+    // Build modelKwargs: start with the safe default (disable thinking for
+    // opencode.ai zen models), then merge any passthrough keys from params.
+    // The request can override enable_thinking and add any other keys.
+    const { temperature: _t, maxTokens: _m, ...passthroughParams } = cfg.params ?? {};
+    const modelKwargs: Record<string, unknown> = {
+      enable_thinking: false,   // safe default — request can override via params
+      ...passthroughParams,
+    };
+
     return new ChatOpenAI({
       modelName: model,
       temperature,
-      maxTokens,
+      // Cap output so a "thinking" model can't burn an unbounded budget; a full
+      // single scene fits well under this.
+      maxTokens: maxTokens ?? 8000,
       openAIApiKey: apiKey,
       configuration: baseURL ? { baseURL } : undefined,
+      modelKwargs,
     });
   }
 

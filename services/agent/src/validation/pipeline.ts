@@ -47,7 +47,7 @@ async function runPythonChecks(
 
     proc.on("error", (err) => {
       log.warn({ err: err.message }, "Validator runner failed to start");
-      resolve({ results: {}, failFast: null });
+      resolve({ results: {}, failFast: "validator_unavailable" });
     });
 
     proc.on("close", (code_: number | null) => {
@@ -57,7 +57,7 @@ async function runPythonChecks(
       try {
         resolve(JSON.parse(stdout.trim()) as { results: Record<string, { status: string; error?: string; line?: number; suggestion?: string }>; failFast: string | null });
       } catch {
-        resolve({ results: {}, failFast: null });
+        resolve({ results: {}, failFast: "validator_unavailable" });
       }
     });
 

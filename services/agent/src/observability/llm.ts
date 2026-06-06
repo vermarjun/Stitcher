@@ -80,17 +80,28 @@ export function extractUsage(result: unknown): TokenUsage {
   let output = 0;
   let available = false;
 
+  // Helper to consume a single message's usage_metadata
+  function consumeMsg(msg: unknown): void {
+    const meta = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } })
+      .usage_metadata;
+    if (meta && (typeof meta.input_tokens === "number" || typeof meta.output_tokens === "number")) {
+      input += meta.input_tokens ?? 0;
+      output += meta.output_tokens ?? 0;
+      available = true;
+    }
+  }
+
+  // Case 1: ReAct agent result — { messages: BaseMessage[] }
   const messages = (result as { messages?: BaseMessage[] } | undefined)?.messages;
   if (Array.isArray(messages)) {
     for (const msg of messages) {
-      const meta = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } })
-        .usage_metadata;
-      if (meta && (typeof meta.input_tokens === "number" || typeof meta.output_tokens === "number")) {
-        input += meta.input_tokens ?? 0;
-        output += meta.output_tokens ?? 0;
-        available = true;
-      }
+      consumeMsg(msg);
     }
+  }
+
+  // Case 2: model.invoke() result — a single BaseMessage with usage_metadata
+  if (!available && result && typeof result === "object" && "content" in result) {
+    consumeMsg(result);
   }
 
   return { inputTokens: input, outputTokens: output, available };
@@ -161,15 +172,30 @@ export async function withGenAiSpan<T>(
 }
 
 /**
- * Side-channel for the most recent call's usage so node code can append it to
- * the LangGraph `llmCallLog` state (which the /generate response surfaces).
+ * Side-channel for the most recent call's usage + I/O so node code can append it
+ * to the LangGraph `llmCallLog` state (which the /generate response surfaces).
  * Read it immediately after `withGenAiSpan` resolves.
+ *
+ * `setLastIo` lets callers inject the captured I/O fields (systemPrompt,
+ * userPrompt, fullInput, rawOutput, error) BEFORE reading via `takeLastUsage`,
+ * so they are included in the returned log entry.
  */
 let lastUsage: LlmCallLog | undefined;
+let pendingIo: Pick<LlmCallLog, "systemPrompt" | "userPrompt" | "fullInput" | "rawOutput" | "error"> | undefined;
+
+export function setLastIo(
+  io: Pick<LlmCallLog, "systemPrompt" | "userPrompt" | "fullInput" | "rawOutput" | "error">
+): void {
+  pendingIo = io;
+}
+
 export function takeLastUsage(): LlmCallLog | undefined {
   const u = lastUsage;
+  const io = pendingIo;
   lastUsage = undefined;
-  return u;
+  pendingIo = undefined;
+  if (!u) return undefined;
+  return io ? { ...u, ...io } : u;
 }
 
 // ── Langfuse (optional) ───────────────────────────────────────────────────────

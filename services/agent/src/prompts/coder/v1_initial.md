@@ -26,8 +26,8 @@ class Scene{INDEX:02d}(Scene):
 1. **Class name is deterministic**: MUST be `Scene{INDEX:02d}` where `{INDEX:02d}` is the zero-padded scene index from the plan (e.g. `Scene00`, `Scene01`, ...). No exceptions.
 2. **Self-contained**: every import, every helper function, every constant in ONE file. No `from scene_utils import *`.
 3. **StyleManifest compliance**:
-   - `backgroundColor`: use `self.camera.background_color = ManimColor(backgroundColor)` in `construct()`.
-   - Colors: use the manifest values. Never hardcode colours not in the manifest.
+   - **WHITE BACKGROUND — STRICT, NON-NEGOTIABLE**: set `self.camera.background_color = WHITE` in `construct()` — ALWAYS, even if the manifest's `backgroundColor` differs (override it to white). Never use a dark, blue, or coloured background. Because the background is white, every `Text`, `MathTex`, shape and line MUST use a **dark** colour so it is legible — default text/strokes to `BLACK`, use dark fills, and never render white or pale objects on the white background (they are invisible).
+   - Colors: use the manifest values for foreground elements; if a manifest colour is white/very light, swap it for a dark equivalent so it stays visible on white. Never hardcode colours not in the manifest.
    - `positioningZones`: use the zone positions for element placement.
    - `fontFamily`: use in `Text(font=fontFamily)` where applicable.
 4. **Duration**: the scene must play for approximately `durationSec` seconds. Use `self.wait()` and `run_time` on animations to control timing.

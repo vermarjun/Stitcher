@@ -1,10 +1,15 @@
 /**
- * POST /code — accepts ONE scene plan + retrieved code examples + style
- * manifest, runs the coder agent and the validator/refiner loop, returns
- * the final validated Manim code for that scene.
+ * POST /code — CONTRACT 2 (single-completion, no planner).
  *
- * The orchestrator (e.g. stitcher) is expected to call /plan first, run RAG
- * per scene, then call this endpoint per scene with the retrieved examples.
+ * NEW input shape (no scenePlan):
+ *   { prompt, examples, requiredApis, voiceover: true, styleManifest? }
+ *
+ * Old shape (scenePlan/codeExamples) is accepted defensively for backward-compat
+ * but the worker should send the new shape.
+ *
+ * Behavior: ONE LLM completion via codeGenNode (no createReactAgent, no tools,
+ * no recursion). Returns { success, output: { code, sceneClass }, tokensUsed,
+ * llmCallLog } — envelope unchanged.
  */
 
 import { FastifyInstance } from "fastify";
@@ -12,22 +17,45 @@ import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { createEmitter, publishEvent, removeEmitter } from "../events/emitter.js";
-import { buildCodeGraph } from "../graph/codeGraph.js";
 import { saveJob } from "../graph/checkpointer.js";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
+import { extractLlmCallLog, sumLlmCallLog } from "./tokenUtils.js";
+import { codeGenNode } from "../agents/codeGen.js";
+import type { GraphState } from "../graph/state.js";
 
 const log = getLogger("code");
 
-const ModelConfigSchema = z.object({
-  provider: z.string(),
+// ── Schema ────────────────────────────────────────────────────────────────────
+
+// Per-role model config: all fields optional for backward-compat.
+// params is a freeform override bag (temperature, maxTokens, enable_thinking, etc.)
+// that takes precedence over the top-level convenience fields when both are set.
+const RoleModelConfigSchema = z.object({
+  provider: z.string().optional(),
   apiKey: z.string().optional(),
-  model: z.string(),
+  baseURL: z.string().optional(),
+  model: z.string().optional(),
+  // Convenience shorthands kept for backward-compat (model factory reads params first)
   temperature: z.number().optional(),
   maxTokens: z.number().optional(),
-  baseURL: z.string().optional(),
+  params: z
+    .object({
+      temperature: z.number().optional(),
+      maxTokens: z.number().optional(),
+      enable_thinking: z.boolean().optional(),
+    })
+    .catchall(z.unknown())
+    .optional(),
 });
 
+// New CONTRACT 2 example shape
+const CodeExampleSchema = z.object({
+  description: z.string(),
+  code: z.string(),
+});
+
+// Legacy scene plan — kept for backward-compat
 const ScenePlanSchema = z.object({
   index: z.number().int().min(0),
   prompt: z.string().min(1),
@@ -37,8 +65,6 @@ const ScenePlanSchema = z.object({
   description: z.string().optional(),
   concepts: z.array(z.string()).optional(),
   visualElements: z.array(z.string()).optional(),
-  // Native voiceover (FROZEN CONTRACT v1): ordered narration beats for this scene.
-  // Supplied by the orchestrator (echoed from /plan) when voiceover mode is on.
   narration: z.array(z.string()).optional(),
 });
 
@@ -51,24 +77,29 @@ const StyleManifestSchema = z.object({
   animationPace: z.enum(["slow", "medium", "fast"]),
   positioningZones: z.record(z.string(), z.string()),
   elementNaming: z.record(z.string(), z.string()),
-});
-
-const CodeExampleSchema = z.object({
-  description: z.string(),
-  code: z.string(),
-});
+}).optional().nullable();
 
 const CodeRequestSchema = z.object({
-  scenePlan: ScenePlanSchema,
+  // ── NEW CONTRACT 2 fields ──────────────────────────────────────────────────
+  prompt: z.string().min(1).optional(),
+  examples: z.array(CodeExampleSchema).optional().default([]),
+  requiredApis: z.array(z.string()).optional().default([]),
+  // Plugin names from RAG query-transform (e.g. ["manim-chess"]); drive skill injection.
+  requiredPlugins: z.array(z.string()).optional().default([]),
+  voiceover: z.boolean().optional().default(true),   // always true in new flow
   styleManifest: StyleManifestSchema,
-  // Native voiceover (FROZEN CONTRACT v1). Default false → unchanged behavior.
-  // When true, scenePlan.narration is REQUIRED and the coder emits a VoiceoverScene.
-  voiceover: z.boolean().optional().default(false),
-  codeExamples: z.array(CodeExampleSchema).optional().default([]),
+
+  // ── Feature 3 — Coder memory (past mistakes to avoid) ────────────────────
+  coderMemory: z.array(z.string()).optional(),
+
+  // ── LEGACY fields (backward-compat) ───────────────────────────────────────
+  scenePlan: ScenePlanSchema.optional(),
+  codeExamples: z.array(CodeExampleSchema).optional(),
+
   modelConfig: z
     .object({
-      coder: ModelConfigSchema.optional(),
-      validator: ModelConfigSchema.optional(),
+      coder: RoleModelConfigSchema.optional(),
+      validator: RoleModelConfigSchema.optional(),
     })
     .optional()
     .default({}),
@@ -81,6 +112,8 @@ const CodeRequestSchema = z.object({
   meta: z.object({ traceId: z.string().optional() }).optional(),
 });
 
+// ── Route ─────────────────────────────────────────────────────────────────────
+
 export function registerCode(app: FastifyInstance): void {
   app.post(
     "/code",
@@ -92,108 +125,118 @@ export function registerCode(app: FastifyInstance): void {
       }
       const body = parseResult.data;
 
-      // Voiceover contract: narration beats are required when voiceover is on.
-      if (body.voiceover && (!Array.isArray(body.scenePlan.narration) || body.scenePlan.narration.length === 0)) {
-        return reply.status(400).send({
-          error: "Invalid request",
-          details: "voiceover=true requires scenePlan.narration to be a non-empty string array",
-        });
+      // Resolve effective prompt — new shape wins, legacy scene plan is fallback
+      const effectivePrompt = body.prompt ?? body.scenePlan?.prompt;
+      if (!effectivePrompt) {
+        return reply.status(400).send({ error: "Invalid request", details: "prompt or scenePlan.prompt is required" });
       }
+
+      // Merge examples from both shapes
+      const examples = body.examples?.length ? body.examples : (body.codeExamples ?? []);
+
+      // Required APIs: new shape or legacy requiredSymbols
+      const requiredApis = body.requiredApis?.length
+        ? body.requiredApis
+        : (body.scenePlan?.requiredSymbols ?? body.scenePlan?.manimFeatures ?? []);
 
       const jobId = uuidv4();
       const timeoutMs = (body.limits?.timeoutSec ?? config.defaultTimeoutSec) * 1000;
+      const SCENE_INDEX = 0;
 
       log.info(
-        { jobId, sceneIndex: body.scenePlan.index, examples: body.codeExamples.length },
-        "Code job created"
+        { jobId, examples: examples.length, requiredApis: requiredApis.length },
+        "Code job created (single completion)"
       );
 
       createEmitter(jobId);
       publishEvent(jobId, "job_started", { mode: "code" });
 
-      // The codeGraph runs single-scene at index 0 internally — normalise the
-      // incoming plan to that index. The class name in the output reflects 0,
-      // but we expose the requested original index in the response for the caller.
-      const incomingIndex = body.scenePlan.index;
-      const normalisedPlan = { ...body.scenePlan, index: 0 };
-      // The codeGraph forces the generated class name to the NORMALISED index
-      // (always "Scene00" — see codeGen buildUserMessage). The render service
-      // locates the output mp4 by this class name, so the sceneClass we report
-      // MUST equal the real class in the emitted code, NOT the caller's original
-      // index. Reporting Scene<incomingIndex> caused ArtifactMissing for every
-      // scene with index != 0 (manim wrote Scene00.mp4, render looked for SceneNN.mp4).
-      const emittedSceneClass = "Scene00";
+      // Build a minimal scene plan for the graph state (codeGenNode may reference it)
+      const scenePlan = body.scenePlan
+        ? { ...body.scenePlan, index: SCENE_INDEX }
+        : {
+            index: SCENE_INDEX,
+            prompt: effectivePrompt,
+            durationSec: 30,
+            manimFeatures: requiredApis,
+            requiredSymbols: requiredApis,
+            narration: undefined as string[] | undefined,
+          };
 
-      const initialState = {
+      // Build graph state for codeGenNode.
+      // GraphState is a complex LangGraph annotation type — cast through unknown
+      // to avoid TS complaining about fields managed internally by the graph runtime.
+      const graphStateBase = {
         jobId,
         mode: "generate" as const,
-        voiceover: body.voiceover,
-        traceId: body.meta?.traceId ?? req.traceId,
-        scenes: [normalisedPlan],
-        styleManifest: body.styleManifest,
-        codeExamples: body.codeExamples,
+        voiceover: body.voiceover ?? true,
+        traceId: body.meta?.traceId ?? (req as unknown as { traceId?: string }).traceId,
+        prompt: effectivePrompt,
+        scenes: [scenePlan],
+        styleManifest: (body.styleManifest ?? undefined) as GraphState["styleManifest"],
+        codeExamples: examples,
         modelConfig: body.modelConfig,
         limits: body.limits,
-        sceneStates: {},
-        events: [],
-        llmCallLog: [],
-        messages: [],
+        sceneStates: {} as GraphState["sceneStates"],
+        events: [] as GraphState["events"],
+        llmCallLog: [] as GraphState["llmCallLog"],
+        messages: [] as GraphState["messages"],
+        // Surface requiredApis so codeGenNode can pick them up for cheatsheet lookup
+        ...(requiredApis.length ? { requiredApis } : {}),
+        // Surface requiredPlugins so codeGenNode injects the matching skill docs
+        ...(body.requiredPlugins?.length ? { requiredPlugins: body.requiredPlugins } : {}),
+        // Feature 3 — pass coder memory to the codeGen node
+        ...(body.coderMemory?.length ? { coderMemory: body.coderMemory } : {}),
       };
+      const graphState = graphStateBase as unknown as GraphState & { requiredApis?: string[]; requiredPlugins?: string[]; coderMemory?: string[] };
 
-      await saveJob(jobId, initialState);
-
-      const graph = buildCodeGraph();
+      await saveJob(jobId, graphState);
 
       try {
         const timeout = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("Code job timed out")), timeoutMs)
         );
-        const run = graph.invoke(initialState);
-        const finalState = (await Promise.race([run, timeout])) as Record<string, unknown>;
 
+        // Single completion — invoke codeGenNode directly (no graph/recursion)
+        const run = codeGenNode(graphState, SCENE_INDEX);
+        const partial = (await Promise.race([run, timeout])) as Partial<GraphState>;
+
+        // Merge back into state for checkpointing
+        const finalState = { ...graphState, ...partial };
         await saveJob(jobId, finalState);
 
-        const sceneStates = (finalState["sceneStates"] ?? {}) as Record<
-          number,
-          { status: string; finalCode?: string; attempts?: unknown[] }
-        >;
-        const sceneState = sceneStates[0];
-        const error = finalState["error"];
+        const sceneState = partial.sceneStates?.[SCENE_INDEX];
+        const success = !!sceneState && sceneState.status !== "failed" && !!sceneState.finalCode;
 
-        const success = !!sceneState && sceneState.status === "done" && !!sceneState.finalCode;
+        // Accumulate llmCallLog
+        const llmCallLog = extractLlmCallLog(partial as Record<string, unknown>);
+        const tokensUsed = sumLlmCallLog(llmCallLog);
+
+        const emittedSceneClass = `Scene${String(SCENE_INDEX).padStart(2, "0")}`;
 
         publishEvent(jobId, success ? "job_complete" : "job_failed", {
           output: success
-            ? {
-                sceneIndex: incomingIndex,
-                sceneClass: emittedSceneClass,
-                code: sceneState.finalCode,
-                status: sceneState.status,
-                attempts: sceneState.attempts,
-                ...(body.voiceover ? { narration: body.scenePlan.narration } : {}),
-              }
+            ? { sceneClass: emittedSceneClass, code: sceneState!.finalCode }
             : null,
-          error,
         });
 
         return reply.send({
           success,
           jobId,
-          output: sceneState
+          output: success
             ? {
-                sceneIndex: incomingIndex,
+                code: sceneState!.finalCode,
                 sceneClass: emittedSceneClass,
-                code: sceneState.finalCode,
-                status: sceneState.status,
-                attempts: sceneState.attempts,
-                ...(body.voiceover ? { narration: body.scenePlan.narration } : {}),
+                status: sceneState!.status,
               }
             : null,
-          error: error ?? null,
+          error: success ? null : { summary: "CodeGen failed to produce valid code" },
+          llmCallLog,
+          tokensUsed,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log.error({ jobId, err: msg }, "Code graph error");
+        log.error({ jobId, err: msg }, "Code job error");
         publishEvent(jobId, "job_failed", { error: { summary: msg } });
         return reply.status(500).send({ success: false, jobId, error: { summary: msg } });
       } finally {

@@ -47,6 +47,7 @@ FROM scratch AS builder
 WORKDIR /build
 COPY dist/ ./dist/
 COPY src/assets/manim_api_index.json ./dist/assets/manim_api_index.json
+COPY src/assets/manim_cheatsheet.json ./dist/assets/manim_cheatsheet.json
 COPY src/assets/ruff_manim.toml ./dist/assets/ruff_manim.toml
 
 # ── stage 5: runtime ──────────────────────────────────────────────────────────
@@ -61,7 +62,9 @@ COPY --from=builder /build/dist ./dist
 
 ENV NODE_ENV=production \
     MANIM_API_INDEX_PATH=/srv/dist/assets/manim_api_index.json \
+    MANIM_CHEATSHEET_PATH=/srv/dist/assets/manim_cheatsheet.json \
     RUFF_CONFIG_PATH=/srv/dist/assets/ruff_manim.toml \
+    SKILLS_DIR=/srv/dist/prompts/skills \
     PYTHON_PATH=python3 \
     PORT=4000
 

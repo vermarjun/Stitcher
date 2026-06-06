@@ -53,7 +53,7 @@ export const config = {
 
   maxParallelScenes: optInt("MAX_PARALLEL_SCENES", 6),
   defaultMaxValidationRetries: optInt("DEFAULT_MAX_VALIDATION_RETRIES", 3),
-  defaultTimeoutSec: optInt("DEFAULT_TIMEOUT_SEC", 120),
+  defaultTimeoutSec: optInt("DEFAULT_TIMEOUT_SEC", 300),
   maxCodeSizeBytes: optInt("MAX_CODE_SIZE_BYTES", 524288),
 
   promptVersionPlanner: opt("PROMPT_VERSION_PLANNER", "active"),
@@ -82,9 +82,16 @@ export const config = {
     "MANIM_API_INDEX_PATH",
     path.join(__dirname, "assets", "manim_api_index.json")
   ),
+  manimCheatsheetPath: opt(
+    "MANIM_CHEATSHEET_PATH",
+    path.join(__dirname, "assets", "manim_cheatsheet.json")
+  ),
   ruffConfigPath: opt(
     "RUFF_CONFIG_PATH",
     path.join(__dirname, "assets", "ruff_manim.toml")
   ),
+  // Directory holding per-plugin skill docs (manim-<plugin>.md). Bind-mounted in
+  // docker at /srv/dist/prompts/skills (see docker-compose.services.yml).
+  skillsDir: opt("SKILLS_DIR", path.join(__dirname, "prompts", "skills")),
   pythonPath: opt("PYTHON_PATH", "python3"),
 } as const;

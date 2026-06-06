@@ -1,5 +1,12 @@
 /**
- * POST /debug — broken Manim code + error → fixed code
+ * POST /debug — CONTRACT 3.
+ *
+ * Input (new shape): { code, error, prompt, apiReference?, voiceover: true }
+ * Old shape (brokenCode/originalPrompt) accepted defensively.
+ *
+ * Behavior: single completion (no internal loop — worker loops max 3).
+ * Cheatsheet injected from apiReference symbols. self.voiceover blocks preserved.
+ * Output: { success, output: { code, sceneClass, changeSummary }, tokensUsed, llmCallLog }
  */
 
 import { FastifyInstance } from "fastify";
@@ -8,43 +15,64 @@ import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { createEmitter, publishEvent, removeEmitter } from "../events/emitter.js";
 import { buildDebugGraph } from "../graph/debugGraph.js";
-import { saveJob, loadJob } from "../graph/checkpointer.js";
+import { saveJob } from "../graph/checkpointer.js";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
+import { extractLlmCallLog, sumLlmCallLog } from "./tokenUtils.js";
 
 const log = getLogger("debug");
 
-const ModelConfigSchema = z.object({
-  provider: z.string(),
+// Per-role model config: all fields optional for backward-compat.
+// params is a freeform override bag (temperature, maxTokens, enable_thinking, etc.)
+// that takes precedence over the top-level convenience fields when both are set.
+const RoleModelConfigSchema = z.object({
+  provider: z.string().optional(),
   apiKey: z.string().optional(),
-  model: z.string(),
+  baseURL: z.string().optional(),
+  model: z.string().optional(),
+  // Convenience shorthands kept for backward-compat (model factory reads params first)
   temperature: z.number().optional(),
   maxTokens: z.number().optional(),
-  baseURL: z.string().optional(),
+  params: z
+    .object({
+      temperature: z.number().optional(),
+      maxTokens: z.number().optional(),
+      enable_thinking: z.boolean().optional(),
+    })
+    .catchall(z.unknown())
+    .optional(),
 });
 
 const DebugRequestSchema = z.object({
-  brokenCode: z.string().min(1).max(524288),
-  sceneClass: z.string().optional(),
-  // Native voiceover (FROZEN CONTRACT v1). When true, the debugger preserves the
-  // VoiceoverScene structure and the exact narration beats. Default false →
-  // unchanged behavior.
-  voiceover: z.boolean().optional().default(false),
+  // ── New CONTRACT 3 fields ─────────────────────────────────────────────────
+  code: z.string().min(1).max(524288).optional(),
+  // error may come as a plain string or as the legacy structured object
+  error: z.union([
+    z.string(),
+    z.object({
+      stderr: z.string(),
+      summary: z.string(),
+      line: z.number().optional(),
+      category: z.string().optional(),
+    }),
+  ]).optional(),
+  prompt: z.string().optional(),
+  apiReference: z.array(z.string()).optional(),
+  voiceover: z.boolean().optional().default(true),
   narration: z.array(z.string()).optional(),
-  error: z.object({
-    stderr: z.string(),
-    summary: z.string(),
-    line: z.number().optional(),
-    category: z.string().optional(),
-  }),
+
+  // ── Legacy fields (backward-compat) ───────────────────────────────────────
+  brokenCode: z.string().min(1).max(524288).optional(),
+  sceneClass: z.string().optional(),
   originalPrompt: z.string().optional(),
   previousAttempts: z
     .array(z.object({ code: z.string(), error: z.string() }))
     .optional(),
+
   modelConfig: z
     .object({
-      debugger: ModelConfigSchema.optional(),
-      validator: ModelConfigSchema.optional(),
+      debugger: RoleModelConfigSchema.optional(),
+      validator: RoleModelConfigSchema.optional(),
     })
     .optional()
     .default({}),
@@ -67,10 +95,29 @@ export function registerDebug(app: FastifyInstance): void {
         return reply.status(400).send({ error: "Invalid request", details: parseResult.error.format() });
       }
       const body = parseResult.data;
+
+      // Resolve effective fields — new shape wins, legacy is fallback
+      const effectiveCode = body.code ?? body.brokenCode;
+      if (!effectiveCode) {
+        return reply.status(400).send({ error: "Invalid request", details: "code or brokenCode is required" });
+      }
+      const effectivePrompt = body.prompt ?? body.originalPrompt;
+      const effectiveSceneClass = body.sceneClass;
+
+      // Normalise error to the structured shape the graph state expects
+      let brokenError: { stderr: string; summary: string; line?: number; category?: string } | undefined;
+      if (body.error) {
+        if (typeof body.error === "string") {
+          brokenError = { stderr: body.error, summary: body.error };
+        } else {
+          brokenError = body.error;
+        }
+      }
+
       const jobId = uuidv4();
       const timeoutMs = (body.limits?.timeoutSec ?? config.defaultTimeoutSec) * 1000;
 
-      log.info({ jobId, sceneClass: body.sceneClass }, "Debug job created");
+      log.info({ jobId, sceneClass: effectiveSceneClass }, "Debug job created (single completion)");
 
       createEmitter(jobId);
       publishEvent(jobId, "job_started", { mode: "debug" });
@@ -78,18 +125,17 @@ export function registerDebug(app: FastifyInstance): void {
       const initialState = {
         jobId,
         mode: "debug" as const,
-        voiceover: body.voiceover,
-        traceId: body.meta?.traceId ?? req.traceId,
-        brokenCode: body.brokenCode,
-        sceneClass: body.sceneClass,
-        // Carry narration as a single-scene plan (index 0) so the debugger node
-        // and validator can access the beats in voiceover mode.
+        voiceover: body.voiceover ?? true,
+        traceId: body.meta?.traceId ?? (req as unknown as { traceId?: string }).traceId,
+        brokenCode: effectiveCode,
+        sceneClass: effectiveSceneClass,
+        // Pass narration via a synthetic scene so debuggerNode can access beats
         ...(body.voiceover && body.narration
           ? {
               scenes: [
                 {
                   index: 0,
-                  prompt: body.originalPrompt ?? "",
+                  prompt: effectivePrompt ?? "",
                   durationSec: 1,
                   manimFeatures: [],
                   requiredSymbols: [],
@@ -98,11 +144,13 @@ export function registerDebug(app: FastifyInstance): void {
               ],
             }
           : {}),
-        brokenError: body.error,
-        originalPrompt: body.originalPrompt,
+        brokenError,
+        originalPrompt: effectivePrompt,
         previousAttempts: body.previousAttempts,
         modelConfig: body.modelConfig,
         limits: body.limits,
+        // CONTRACT 3: surface apiReference so debuggerNode injects the cheatsheet
+        ...(body.apiReference?.length ? { apiReference: body.apiReference } : {}),
         sceneStates: {},
         events: [],
         llmCallLog: [],
@@ -122,15 +170,18 @@ export function registerDebug(app: FastifyInstance): void {
 
         await saveJob(jobId, finalState);
 
-        const success = !finalState["error"] || !!finalState["fixedCode"];
+        const success = !!finalState["fixedCode"] && !finalState["error"];
+
+        const llmCallLog = extractLlmCallLog(finalState);
+        const tokensUsed = sumLlmCallLog(llmCallLog);
+
         publishEvent(jobId, success ? "job_complete" : "job_failed", {
           output: finalState["fixedCode"]
             ? {
-                sceneClass: body.sceneClass,
+                sceneClass: effectiveSceneClass,
                 code: finalState["fixedCode"],
                 changeSummary: finalState["changeSummary"],
                 diff: finalState["diff"],
-                validation: finalState["fixedValidation"],
               }
             : null,
           error: finalState["error"],
@@ -141,14 +192,15 @@ export function registerDebug(app: FastifyInstance): void {
           jobId,
           output: success
             ? {
-                sceneClass: body.sceneClass,
+                sceneClass: effectiveSceneClass,
                 code: finalState["fixedCode"],
                 changeSummary: finalState["changeSummary"],
                 diff: finalState["diff"],
-                validation: finalState["fixedValidation"],
               }
             : null,
           error: finalState["error"],
+          llmCallLog,
+          tokensUsed,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

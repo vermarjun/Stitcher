@@ -7,7 +7,22 @@
 
 import { Annotation, messagesStateReducer } from "@langchain/langgraph";
 import { BaseMessage } from "@langchain/core/messages";
-import { ModelConfig } from "../models/factory.js";
+import { ModelConfig, ModelConfigParams } from "../models/factory.js";
+
+/**
+ * A partial per-role config accepted from API callers.
+ * provider and model are optional so callers can override only what they need;
+ * agent nodes fill the rest from env defaults before calling getModel().
+ */
+export interface PartialModelConfig {
+  provider?: string;
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  params?: ModelConfigParams;
+}
 
 // ── Sub-types ────────────────────────────────────────────────────────────────
 
@@ -80,6 +95,12 @@ export interface LlmCallLog {
   outputTokens: number;
   durationMs: number;
   timestamp: string;
+  // Feature 2 — Full I/O capture (always present when captured, even on errors)
+  systemPrompt?: string;
+  userPrompt?: string;
+  fullInput?: unknown;
+  rawOutput?: string;
+  error?: string;
 }
 
 export interface AgentEvent {
@@ -118,10 +139,10 @@ export interface GenerateLimits {
 }
 
 export interface ModelConfigMap {
-  planner?: ModelConfig;
-  coder?: ModelConfig;
-  debugger?: ModelConfig;
-  validator?: ModelConfig;
+  planner?: PartialModelConfig;
+  coder?: PartialModelConfig;
+  debugger?: PartialModelConfig;
+  validator?: PartialModelConfig;
 }
 
 // ── LangGraph Annotation-based state ────────────────────────────────────────
