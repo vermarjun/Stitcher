@@ -95,6 +95,12 @@ services:
       - SYS_ADMIN
     tmpfs:
       - /tmp:size=2g
+    # Cap total container memory so a runaway LLM-generated render can't OOM the
+    # whole 8GB box (which would take down redis/api/agent). 4g = the 2g /tmp
+    # tmpfs (RAM-backed, charged to the cgroup) + ~2g headroom for up to 2
+    # concurrent 480p renders. A render that exceeds this is OOM-killed in
+    # isolation; the service stays up.
+    mem_limit: 4g
     restart: unless-stopped
 
   rag-service:

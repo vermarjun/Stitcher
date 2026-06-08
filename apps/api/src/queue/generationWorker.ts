@@ -764,7 +764,10 @@ async function runGenerationPipeline(
     phase("code");
     rootSpan.setAttribute("scene.count", 1);
 
-    const renderQuality = generationOptions?.quality ?? "medium";
+    // Default to 480p15 ("low"): renders ~4x faster than 720p30, which keeps the
+    // box well inside the render budget and frees time for richer codegen. A paid
+    // tier can still pass an explicit quality to override this default.
+    const renderQuality = generationOptions?.quality ?? "low";
 
     // Mutable code/sceneClass — updated by debug loop
     let currentCode = "";
@@ -1008,7 +1011,7 @@ async function runGenerationPipeline(
                             generateThumbnail: true,
                             thumbnailAt: 1,
                         },
-                        limits: { timeoutSec: 300 },
+                        limits: { timeoutSec: 450 },
                         meta: { traceId },
                     }),
                 {

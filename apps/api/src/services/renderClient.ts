@@ -229,8 +229,14 @@ class RenderClient {
 
         // Override per-call timeout when the caller supplies a limit.
         // The field is in seconds; axios expects milliseconds.
+        // Give the HTTP client a 30s margin OVER the render budget. The render
+        // service kills a runaway manim subprocess at (timeoutSec + 2s) and then
+        // returns a structured {success:false, Timeout} response — if axios timed
+        // out at exactly timeoutSec it would drop the socket 2s too early and the
+        // worker would see an opaque "HTTP 0" (the bug that silently shipped
+        // fallback title-cards). The extra margin lets the structured timeout land.
         const timeoutMs = input.limits?.timeoutSec
-            ? input.limits.timeoutSec * 1_000
+            ? input.limits.timeoutSec * 1_000 + 30_000
             : DEFAULT_TIMEOUT_MS;
 
         try {
