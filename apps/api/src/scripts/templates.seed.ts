@@ -40,9 +40,9 @@ const TEMPLATES: SeedTemplate[] = [
     post_description:
       'Parametric Lissajous curves traced from two sine waves at different frequencies.',
     type: TemplateType.VIDEO,
-    url: 'https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164127/LissajousCurves_yoz0yp.mp4',
+    url: 'https://res.cloudinary.com/dodlenepk/video/upload/v1769164127/LissajousCurves_yoz0yp.mp4',
     thumbnail:
-      'https://res.cloudinary.com/dloh4tkp5/video/upload/so_2,f_jpg,w_600/v1769164127/LissajousCurves_yoz0yp.jpg',
+      'https://res.cloudinary.com/dodlenepk/video/upload/so_2,f_jpg,w_600/v1769164127/LissajousCurves_yoz0yp.jpg',
     duration: 12,
     metadata: { category: 'math', source: 'seed', featured: true },
     scene_name: 'LissajousCurves',
@@ -54,9 +54,9 @@ const TEMPLATES: SeedTemplate[] = [
     post_description:
       'A symmetrical mandala that draws itself from the center outward in gold and purple.',
     type: TemplateType.VIDEO,
-    url: 'https://res.cloudinary.com/dloh4tkp5/video/upload/v1768958348/MandalaPattern_vfemzi.mp4',
+    url: 'https://res.cloudinary.com/dodlenepk/video/upload/v1768958348/MandalaPattern_vfemzi.mp4',
     thumbnail:
-      'https://res.cloudinary.com/dloh4tkp5/video/upload/so_2,f_jpg,w_600/v1768958348/MandalaPattern_vfemzi.jpg',
+      'https://res.cloudinary.com/dodlenepk/video/upload/so_2,f_jpg,w_600/v1768958348/MandalaPattern_vfemzi.jpg',
     duration: 14,
     metadata: { category: 'art', source: 'seed', featured: true },
     scene_name: 'MandalaPattern',
@@ -68,9 +68,9 @@ const TEMPLATES: SeedTemplate[] = [
     post_description:
       'Boolean set operations (union, intersection, difference) shown with overlapping 2D shapes.',
     type: TemplateType.VIDEO,
-    url: 'https://res.cloudinary.com/dloh4tkp5/video/upload/v1761076391/BooleanOperations_bl9afi.mp4',
+    url: 'https://res.cloudinary.com/dodlenepk/video/upload/v1761076391/BooleanOperations_bl9afi.mp4',
     thumbnail:
-      'https://res.cloudinary.com/dloh4tkp5/video/upload/so_2,f_jpg,w_600/v1761076391/BooleanOperations_bl9afi.jpg',
+      'https://res.cloudinary.com/dodlenepk/video/upload/so_2,f_jpg,w_600/v1761076391/BooleanOperations_bl9afi.jpg',
     duration: 10,
     metadata: { category: 'math', source: 'seed', featured: true },
     scene_name: 'BooleanOperations',
@@ -81,9 +81,9 @@ const TEMPLATES: SeedTemplate[] = [
     title: 'India GDP Growth',
     post_description: 'An animated bar/line chart visualizing India GDP growth over time.',
     type: TemplateType.VIDEO,
-    url: 'https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164126/IndiaGDP_a8oexw.mp4',
+    url: 'https://res.cloudinary.com/dodlenepk/video/upload/v1769164126/IndiaGDP_a8oexw.mp4',
     thumbnail:
-      'https://res.cloudinary.com/dloh4tkp5/video/upload/so_2,f_jpg,w_600/v1769164126/IndiaGDP_a8oexw.jpg',
+      'https://res.cloudinary.com/dodlenepk/video/upload/so_2,f_jpg,w_600/v1769164126/IndiaGDP_a8oexw.jpg',
     duration: 15,
     metadata: { category: 'data', source: 'seed', featured: true },
     scene_name: 'IndiaGDP',
@@ -94,9 +94,9 @@ const TEMPLATES: SeedTemplate[] = [
     title: 'Euler Identity',
     post_description: 'A visual derivation of Eulers identity e^(i·pi) + 1 = 0 on the complex plane.',
     type: TemplateType.VIDEO,
-    url: 'https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164127/EulerIdentity_jbubvz.mp4',
+    url: 'https://res.cloudinary.com/dodlenepk/video/upload/v1769164127/EulerIdentity_jbubvz.mp4',
     thumbnail:
-      'https://res.cloudinary.com/dloh4tkp5/video/upload/so_2,f_jpg,w_600/v1769164127/EulerIdentity_jbubvz.jpg',
+      'https://res.cloudinary.com/dodlenepk/video/upload/so_2,f_jpg,w_600/v1769164127/EulerIdentity_jbubvz.jpg',
     duration: 13,
     metadata: { category: 'math', source: 'seed', featured: true },
     scene_name: 'EulerIdentity',
@@ -107,9 +107,9 @@ const TEMPLATES: SeedTemplate[] = [
     title: 'Riemann Zeta Visualization',
     post_description: 'A visualization of the Riemann zeta function in the complex plane.',
     type: TemplateType.VIDEO,
-    url: 'https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164455/RiemannZetaVisualization_gryhdk.mp4',
+    url: 'https://res.cloudinary.com/dodlenepk/video/upload/v1769164455/RiemannZetaVisualization_gryhdk.mp4',
     thumbnail:
-      'https://res.cloudinary.com/dloh4tkp5/video/upload/so_2,f_jpg,w_600/v1769164455/RiemannZetaVisualization_gryhdk.jpg',
+      'https://res.cloudinary.com/dodlenepk/video/upload/so_2,f_jpg,w_600/v1769164455/RiemannZetaVisualization_gryhdk.jpg',
     duration: 16,
     metadata: { category: 'math', source: 'seed', featured: true },
     scene_name: 'RiemannZetaVisualization',

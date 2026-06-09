@@ -61,11 +61,11 @@ const Leaderboard = ({ onProfileClick, onBack }: Props) => {
 
             const rankIcon =
               rank === 1 ? (
-                <img src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1761962346/pngimg.com_-_golden_cup_PNG94601_jte7zy.png" className="h-4 w-auto drop-shadow-md" alt="1st" />
+                <img src="https://res.cloudinary.com/dodlenepk/image/upload/v1761962346/pngimg.com_-_golden_cup_PNG94601_jte7zy.png" className="h-4 w-auto drop-shadow-md" alt="1st" />
               ) : rank === 2 ? (
-                <img src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1761962347/Second_Place_Medal_Badge_Clipart_Image-removebg-preview_p7yodv.png" className="h-4 w-auto drop-shadow-md" alt="2nd" />
+                <img src="https://res.cloudinary.com/dodlenepk/image/upload/v1761962347/Second_Place_Medal_Badge_Clipart_Image-removebg-preview_p7yodv.png" className="h-4 w-auto drop-shadow-md" alt="2nd" />
               ) : rank === 3 ? (
-                <img src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1761962350/225-2252470_third-place-medal-badge-clipart-image-emblem-hd.png-removebg-preview_xpt8px.png" className="h-4 w-auto drop-shadow-md" alt="3rd" />
+                <img src="https://res.cloudinary.com/dodlenepk/image/upload/v1761962350/225-2252470_third-place-medal-badge-clipart-image-emblem-hd.png-removebg-preview_xpt8px.png" className="h-4 w-auto drop-shadow-md" alt="3rd" />
               ) : null;
 
             return (

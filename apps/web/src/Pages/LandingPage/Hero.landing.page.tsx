@@ -468,7 +468,7 @@ const Hero = () => {
       <div className="hidden lg:flex absolute left-30 top-50 opacity-50 pointer-events-none mix-blend-screen z-10 select-none">
         <img
           className="h-40 object-cover object-left scale-125 -translate-x-10"
-          src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094972/image-removebg-preview_fshtui.png"
+          src="https://res.cloudinary.com/dodlenepk/image/upload/v1760094972/image-removebg-preview_fshtui.png"
           alt="math-theme-left"
           loading="lazy"
           fetchPriority="low"
@@ -481,7 +481,7 @@ const Hero = () => {
         <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-l from-transparent to-black" />
         <img
           className="h-40 object-cover object-right scale-125 translate-x-10"
-          src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
+          src="https://res.cloudinary.com/dodlenepk/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
           alt="math-theme-right"
           loading="lazy"
           fetchPriority="low"

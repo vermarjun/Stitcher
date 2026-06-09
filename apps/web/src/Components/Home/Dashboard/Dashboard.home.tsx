@@ -42,13 +42,13 @@ const TopDesign = () => {
          <div className="hidden md:flex items-center space-x-4 absolute right-0 top-0 h-full opacity-40 pointer-events-none fade-in mask-image-gradient">
             <img
               className="h-full object-cover mix-blend-screen"
-              src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094972/image-removebg-preview_fshtui.png"
+              src="https://res.cloudinary.com/dodlenepk/image/upload/v1760094972/image-removebg-preview_fshtui.png"
               alt="math-theme-1"
             />
             <div className="h-full w-px bg-gradient-to-b from-transparent via-zinc-700 to-transparent"></div>
             <img
               className="h-full object-cover mix-blend-screen pr-4"
-              src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
+              src="https://res.cloudinary.com/dodlenepk/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
               alt="math-theme-2"
             />
          </div>

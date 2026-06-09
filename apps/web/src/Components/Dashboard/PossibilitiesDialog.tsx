@@ -11,12 +11,12 @@ import { cn } from "@/lib/utils";
 import { GlowCard } from "@/Components/ui/spotlight-card";
 
 const VIDEO_URLS: Record<string, string> = {
-  chess:     "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780397868/stitcher/final/6a1eb22933e26be4a040188c/wwtb6fswizzwh5qvnzcl.mp4",
-  physics:   "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398196/stitcher/final/6a1eb22933e26be4a040188c/didvwytsit18ida38emi.mp4",
-  chemistry: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398373/stitcher/final/6a1eb22933e26be4a040188c/x7kvskuyiv3xwizz142e.mp4",
-  ml:        "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398116/stitcher/final/6a1eb22933e26be4a040188c/drsklmi5kwcoersxazcd.mp4",
-  dsa:       "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398059/stitcher/final/6a1eb22933e26be4a040188c/kqonslglgwrf66rlfich.mp4",
-  astronomy: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780335694/stitcher/final/6a176455c847e74ccebd974b/mmmxnnhuyfyddl2vsgz0.mp4",
+  chess:     "https://res.cloudinary.com/dodlenepk/video/upload/v1780397868/stitcher/final/6a1eb22933e26be4a040188c/wwtb6fswizzwh5qvnzcl.mp4",
+  physics:   "https://res.cloudinary.com/dodlenepk/video/upload/v1780398196/stitcher/final/6a1eb22933e26be4a040188c/didvwytsit18ida38emi.mp4",
+  chemistry: "https://res.cloudinary.com/dodlenepk/video/upload/v1780398373/stitcher/final/6a1eb22933e26be4a040188c/x7kvskuyiv3xwizz142e.mp4",
+  ml:        "https://res.cloudinary.com/dodlenepk/video/upload/v1780398116/stitcher/final/6a1eb22933e26be4a040188c/drsklmi5kwcoersxazcd.mp4",
+  dsa:       "https://res.cloudinary.com/dodlenepk/video/upload/v1780398059/stitcher/final/6a1eb22933e26be4a040188c/kqonslglgwrf66rlfich.mp4",
+  astronomy: "https://res.cloudinary.com/dodlenepk/video/upload/v1780335694/stitcher/final/6a176455c847e74ccebd974b/mmmxnnhuyfyddl2vsgz0.mp4",
 };
 
 // Icons sourced from Tabler Icons (tabler.io/icons, MIT license)

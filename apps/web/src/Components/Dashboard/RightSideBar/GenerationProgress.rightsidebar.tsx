@@ -65,7 +65,7 @@ export default function GenerationProgress({ label, percent, ceil, phase }: Gene
     <div className="flex w-full gap-3 text-sm">
       <div className="flex-shrink-0">
         <img
-          src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760610643/loading_animation_phpia7.gif"
+          src="https://res.cloudinary.com/dodlenepk/image/upload/v1760610643/loading_animation_phpia7.gif"
           alt="Generating…"
           className="w-14 h-14 rounded-full"
         />

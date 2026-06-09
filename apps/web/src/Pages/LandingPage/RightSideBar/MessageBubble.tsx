@@ -190,7 +190,7 @@ const MessageBubble = ({
                     <div className="inline-flex items-center gap-4 bg-neutral-900/50 pr-6 pl-2 py-2 rounded-full border border-emerald-500/10 shadow-[0_0_30px_-5px_rgba(16,185,129,0.1)]">
                         <div className="relative w-8 h-8 flex items-center justify-center bg-black rounded-full overflow-hidden border border-emerald-500/20">
                            <img 
-                                src="https://res.cloudinary.com/dloh4tkp5/image/upload/v1760610643/loading_animation_phpia7.gif" 
+                                src="https://res.cloudinary.com/dodlenepk/image/upload/v1760610643/loading_animation_phpia7.gif" 
                                 alt="Loading"
                                 className="w-full h-full object-cover opacity-80"
                             />

@@ -118,7 +118,7 @@ const PLUGINS: Plugin[] = [
       "Animate a mate-in-3 puzzle",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780397868/stitcher/final/6a1eb22933e26be4a040188c/wwtb6fswizzwh5qvnzcl.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780397868/stitcher/final/6a1eb22933e26be4a040188c/wwtb6fswizzwh5qvnzcl.mp4",
     imageSrc: "/landing-assets/plugins/chess.png",
     accent: "#F0B429",
   },
@@ -134,7 +134,7 @@ const PLUGINS: Plugin[] = [
       "Animate BFS on a binary tree",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398059/stitcher/final/6a1eb22933e26be4a040188c/kqonslglgwrf66rlfich.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780398059/stitcher/final/6a1eb22933e26be4a040188c/kqonslglgwrf66rlfich.mp4",
     imageSrc: "/landing-assets/plugins/data-structures.png",
     accent: "#10B981",
   },
@@ -150,7 +150,7 @@ const PLUGINS: Plugin[] = [
       "Animate a convex 3D surface",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780512287/stitcher/final/6a1f388d3972ea8b005badd1/d7409hootysefzzg0run.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780512287/stitcher/final/6a1f388d3972ea8b005badd1/d7409hootysefzzg0run.mp4",
     imageSrc: "/landing-assets/plugins/core-math.png",
     accent: "#8B5CF6",
   },
@@ -166,7 +166,7 @@ const PLUGINS: Plugin[] = [
       "Show how a CNN processes an image",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398116/stitcher/final/6a1eb22933e26be4a040188c/drsklmi5kwcoersxazcd.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780398116/stitcher/final/6a1eb22933e26be4a040188c/drsklmi5kwcoersxazcd.mp4",
     imageSrc: "/landing-assets/plugins/neural-network.png",
     accent: "#EC4899",
   },
@@ -182,7 +182,7 @@ const PLUGINS: Plugin[] = [
       "Visualize wave interference patterns",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398196/stitcher/final/6a1eb22933e26be4a040188c/didvwytsit18ida38emi.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780398196/stitcher/final/6a1eb22933e26be4a040188c/didvwytsit18ida38emi.mp4",
     imageSrc: "/landing-assets/plugins/physics.png",
     accent: "#F97316",
   },
@@ -198,7 +198,7 @@ const PLUGINS: Plugin[] = [
       "Show electron orbitals of oxygen",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780398373/stitcher/final/6a1eb22933e26be4a040188c/x7kvskuyiv3xwizz142e.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780398373/stitcher/final/6a1eb22933e26be4a040188c/x7kvskuyiv3xwizz142e.mp4",
     imageSrc: "/landing-assets/plugins/chemistry.png",
     accent: "#06B6D4",
   },
@@ -214,7 +214,7 @@ const PLUGINS: Plugin[] = [
       "Show a star's lifecycle",
     ],
     videoSrc:
-      "https://res.cloudinary.com/dloh4tkp5/video/upload/v1780335694/stitcher/final/6a176455c847e74ccebd974b/mmmxnnhuyfyddl2vsgz0.mp4",
+      "https://res.cloudinary.com/dodlenepk/video/upload/v1780335694/stitcher/final/6a176455c847e74ccebd974b/mmmxnnhuyfyddl2vsgz0.mp4",
     imageSrc: "/landing-assets/plugins/astronomy.png",
     accent: "#6366F1",
   },

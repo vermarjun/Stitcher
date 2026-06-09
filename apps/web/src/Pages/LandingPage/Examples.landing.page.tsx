@@ -4,28 +4,28 @@ import { Button } from "../../Components/ui/button";
 const data = [
   {
     prompt: "Create a highly polished animation to visualize a Binary Search Tree whose structure morphs smoothly.",
-    mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
+    mediaSrc: "https://res.cloudinary.com/dodlenepk/video/upload/q_auto,f_auto,w_600/v1757006850/tree_yoifqz.mp4",
     mediaType: 'gif',
     // Titles removed per instruction "no text" (title), only prompt remains in overlay
   },
   {
     prompt: "Create a highly polished 3D Manim animation that visualizes the Lorenz Attractor in a cinematic and educational way.",
-    mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1757006283/Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
+    mediaSrc: "https://res.cloudinary.com/dodlenepk/video/upload/q_auto,f_auto,w_600/v1757006283/Lorenz_Attractor_Visualization_-_Simulation_of_Chaos_a.k.a_Butterfly_Effect_-_Visualization_101_1080p_h264_apudib.mp4",
     mediaType: 'gif',
   },
   {
     prompt: "Create a 3D animation for a smooth mathematical surface defined by a scalar function z=f(x,y)",
-    mediaSrc: "https://res.cloudinary.com/dloh4tkp5/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
+    mediaSrc: "https://res.cloudinary.com/dodlenepk/image/upload/q_auto,f_auto,w_600/v1756999225/3d_calculus_ziwjza.mp4",
     mediaType: 'gif',
   },
   {
     prompt: "Create a clean, cinematic 3D animation that visualizes a convex mathematical surface emerging from the xy-plane.",
-    mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/q_auto,f_auto,w_600/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
+    mediaSrc: "https://res.cloudinary.com/dodlenepk/video/upload/q_auto,f_auto,w_600/v1756990356/ezgif-1c22e6dbdda273_frao3j.mp4",
     mediaType: 'gif',
   },
   {
     prompt: "Animate indian gdp growth between year 2020 to 2025, use modern minimal colors.",
-    mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164126/IndiaGDP_a8oexw.mp4",
+    mediaSrc: "https://res.cloudinary.com/dodlenepk/video/upload/v1769164126/IndiaGDP_a8oexw.mp4",
     mediaType: 'gif',
   },
   // {
@@ -35,7 +35,7 @@ const data = [
   // },
   {
     prompt: "Create a lissajous curve by plotting parametric equations with two different frequency sine waves",
-    mediaSrc: "https://res.cloudinary.com/dloh4tkp5/video/upload/v1769164127/LissajousCurves_yoz0yp.mp4",
+    mediaSrc: "https://res.cloudinary.com/dodlenepk/video/upload/v1769164127/LissajousCurves_yoz0yp.mp4",
     mediaType: 'gif',
   },
   // {
