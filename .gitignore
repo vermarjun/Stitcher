@@ -1,50 +1,40 @@
-node_modules
+# Environment files (keep committed examples)
 .env
-.env.docker
-.env.docker.local
-.env.local
-microservice_venv
-Test
-manimDocs
-Plan/
-.DS_Store
-API/vitest.config.js
-CuteCats/
-media/
-scripts/
-.claude/
-
-# Secrets / local backups — never commit (contain API keys + DB creds)
-OPENCODE_GO.md
-*.bak
-rzp-key.csv
-
-# Internal reports / working notes — keep local, not on GitHub
-E2E_TEST_REPORT.md
-PLUGIN_STRESS_TEST_REPORT.md
-CODEGEN_PLUGIN_ROOTCAUSE.md
-DEPLOY_VERCEL.md
-LANDING_PAGE_BRIEF.md
-landing-assets/
-Client/public/plugin-demos/
-
-# Separate projects / unrelated directories
-SecureFaceOffline/
-
-# Build artifacts
-*.tsbuildinfo
-
-StitcherRelaunch.pem
-StitcherRelaunchv2.pem
-# Local-only: archived reports, logs, scratch (see ../README.md)
-_archive/
-
-# Env backups and local overrides never get committed
 .env.*
 !.env.example
-!.env.docker.example
-**/.env.*
 !**/.env.example
-!**/.env.docker.example
 docker-compose.local.yml
+
+# Secrets and local backups
+*.pem
+**/.git.bak/
+
+# Dependencies
+node_modules/
+.venv/
+
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Generated media
+services/render/media/
+services/rag/seed_corpus/renders/
+services/rag/seed_corpus/renders_v2/
+
+# Logs and OS files
 *.log
+.DS_Store
+
+# Local tooling and archives
+.claude/
+_archive/
