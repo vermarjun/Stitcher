@@ -160,7 +160,7 @@ export async function codeGenNode(
           plan: state.scenes?.[sceneIndex] ?? {
             index: sceneIndex,
             prompt: state.prompt ?? "",
-            durationSec: 30,
+            durationSec: 90,
             manimFeatures: [],
             requiredSymbols: [],
           },
@@ -177,7 +177,7 @@ export async function codeGenNode(
     const plan = state.scenes?.[sceneIndex] ?? {
       index: sceneIndex,
       prompt: state.prompt ?? "",
-      durationSec: 30,
+      durationSec: 90,
       manimFeatures: [],
       requiredSymbols: [],
     };
@@ -213,7 +213,7 @@ export async function codeGenNode(
           plan: state.scenes?.[sceneIndex] ?? {
             index: sceneIndex,
             prompt: state.prompt ?? "",
-            durationSec: 30,
+            durationSec: 90,
             manimFeatures: [],
             requiredSymbols: [],
           },

@@ -157,7 +157,7 @@ export function registerCode(app: FastifyInstance): void {
         : {
             index: SCENE_INDEX,
             prompt: effectivePrompt,
-            durationSec: 30,
+            durationSec: 90,
             manimFeatures: requiredApis,
             requiredSymbols: requiredApis,
             narration: undefined as string[] | undefined,
