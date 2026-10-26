@@ -1,4 +1,4 @@
-import { ComponentProps, useCallback, useEffect, useRef } from 'react';
+import { type ComponentProps, useCallback, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 type DotLoaderProps = {

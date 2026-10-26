@@ -74,7 +74,7 @@ export async function reflectMemory(req: Request, res: Response) {
         return res.status(400).json({ message: "Body must include a non-empty 'userMessage' string." });
     }
     if (!isLlmConfigured()) {
-        return res.status(503).json({ message: "LLM not configured (OPENCODE_GO_API_KEY missing)." });
+        return res.status(503).json({ message: "LLM not configured (set LLM_API_KEY)." });
     }
 
     const before = await recall(userId);

@@ -8,13 +8,9 @@ import {
     getUserJobs,
     getChatStatus,
     stopGeneration,
-    completeGeneration,
-    rateChatGeneration,
 } from '../controller/generateChat.controller';
 import auth from "../middleware/auth.middleware";
-import { refreshCredits } from '../middleware/refreshCredits.middleware';
-import { requireChatOwnership } from '../middleware/ownership.middleware';
-import { requireProjectEditor } from '../middleware/access.middleware';
+import { requireChatOwnership, requireProjectOwnership } from '../middleware/ownership.middleware';
 
 const router = Router();
 
@@ -25,18 +21,18 @@ const router = Router();
  * @access  Private
  * @body    { projectId: string, prompt: string, chatId?: string }
  */
-router.post('/', auth, requireProjectEditor('body', 'projectId'), refreshCredits, generateChatResponse);
+router.post('/', auth, requireProjectOwnership('body', 'projectId'), generateChatResponse);
 
 /**
  * @route   GET /api/generate-chat/update/:chatId
  * @desc    Get updated chat
  * @access  Private
  */
-router.get('/update/:chatId', auth, getChatUpdate);
+router.get('/update/:chatId', auth, requireChatOwnership('params', 'chatId'), getChatUpdate);
 
 /**
  * @route   GET /api/generate-chat/latest-message/:chatId
- * @desc    Get latest assistant message (for polling updates from microservice)
+ * @desc    Get latest assistant message 
  * @access  Private
  */
 router.get('/latest-message/:chatId', auth, requireChatOwnership('params', 'chatId'), getLatestAssistantMessage);
@@ -57,17 +53,7 @@ router.get('/jobs', auth, getUserJobs);
  * @desc    Get all chats for a project
  * @access  Private
  */
-router.get('/project/:projectId', auth, getProjectChats);
-
-/**
- * @route   PATCH /api/generatechat/:chatId/rating
- * @desc    RLHF: submit a 1–5 star rating for the most-recent (or specified) generation
- * @access  Private (auth + chat ownership)
- * @body    { rating: 1..5, jobId?: string }
- *
- * NOTE: must be registered BEFORE the bare /:chatId catch-all below.
- */
-router.patch('/:chatId/rating', auth, requireChatOwnership('params', 'chatId'), rateChatGeneration);
+router.get('/project/:projectId', auth, requireProjectOwnership('params', 'projectId'), getProjectChats);
 
 /**
  * @route   GET /api/generatechat/:chatId/status
@@ -86,20 +72,13 @@ router.get('/:chatId/status', auth, getChatStatus);
  * @desc    Get chat history
  * @access  Private
  */
-router.get('/:chatId', auth, getChatHistory);
+router.get('/:chatId', auth, requireChatOwnership('params', 'chatId'), getChatHistory);
 
 /**
  * @route   POST /api/generate-chat/cancel/:chatId
  * @desc    Stop/cancel ongoing generation
  * @access  Private
  */
-router.post('/cancel/:chatId', auth, stopGeneration);
-
-/**
- * @route   POST /api/generate-chat/complete
- * @desc    Called by microservice to signal completion and deduct credits
- * @access  Private (microservice-to-server; auth ensures it carries a valid JWT)
- */
-router.post('/complete', auth, completeGeneration);
+router.post('/cancel/:chatId', auth, requireChatOwnership('params', 'chatId'), stopGeneration);
 
 export default router;

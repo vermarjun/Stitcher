@@ -26,12 +26,12 @@ const EmptyState = ({ mode }: {
       {mode === 'generate' ? <IconClapperboard /> : <Edit3 className="w-5 h-5" />}
     </div>
     <h3 className="text-sm font-semibold text-white mb-2">
-      {mode === 'generate' ? 'Generate a video' : 'Edit Templates'}
+      {mode === 'generate' ? 'Generate a video' : 'Edit a video'}
     </h3>
     <p className="text-xs text-zinc-400 mb-6 max-w-[240px] leading-relaxed">
       {mode === 'generate'
         ? 'Describe what you want to explain. Chess games, physics simulations, algorithms, molecules — type it in plain language.'
-        : 'Import a template to the assets panel, then drag it into the message box below.'
+        : 'Drag a generated video from the Asset Stash into the box below, then describe the change you want.'
       }
     </p>
   </div>

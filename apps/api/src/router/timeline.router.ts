@@ -5,20 +5,20 @@ import {
   exportTimelineVideo
 } from '../controller/timeline.controller';
 import auth from '../middleware/auth.middleware';
-import { requireProjectAccess, requireTimelineEditor } from '../middleware/access.middleware';
+import { requireProjectOwnership, requireTimelineOwnership } from '../middleware/ownership.middleware';
 
 const router = express.Router();
 
 // All timeline routes require authentication
 router.use(auth);
 
-// Get timeline by project ID — owner or accepted collaborator
-router.get('/project/:projectId', requireProjectAccess('params', 'projectId'), getTimelineByProjectId);
+// Get timeline by project ID
+router.get('/project/:projectId', requireProjectOwnership('params', 'projectId'), getTimelineByProjectId);
 
-// Export the current timeline to a single mp4 — owner or accepted collaborator
-router.post('/project/:projectId/export', requireProjectAccess('params', 'projectId'), exportTimelineVideo);
+// Export the current timeline to a single mp4
+router.post('/project/:projectId/export', requireProjectOwnership('params', 'projectId'), exportTimelineVideo);
 
-// Update timeline — owner or accepted editor (viewers are read-only)
-router.put('/:timelineId', requireTimelineEditor('params', 'timelineId'), updateTimeline);
+// Update timeline (owner only)
+router.put('/:timelineId', requireTimelineOwnership('params', 'timelineId'), updateTimeline);
 
 export default router;

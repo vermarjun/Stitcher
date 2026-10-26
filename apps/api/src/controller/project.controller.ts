@@ -8,107 +8,62 @@ import Asset from "../model/asset.model";
 import Track from "../model/track.model";
 import TimelineItem from "../model/timelineitem.model";
 import { Types } from "mongoose";
-import { getMembersByProject } from "../util/projectMembers.util";
-import { getProjectRole } from "../util/projectAccess.util";
+import { storage } from "../storage";
 
-// Create a new project for a user
+// Create a new project for a user.
+// Writes run one after another (no multi-document transaction), so this works
+// on a standalone MongoDB as well as a replica set. If a step fails, the
+// documents created so far are removed.
 export const createProject = async (req: Request, res: Response) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    
+    const { name } = req.body;
+    const userId = req.userId;
+    if (!userId || !name) {
+        return res.status(400).json({ message: "userId and name are required" });
+    }
+
+    const created: Array<{ model: { deleteOne: (f: object) => Promise<unknown> }; id: Types.ObjectId }> = [];
     try {
-        const { name } = req.body;
-        const userId = req.userId;
-        if (!userId || !name) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(400).json({ message: "userId and name are required" });
-        }
-        
-        // Create project first
-        const project = new Project({ 
-            name,
-            status: 'draft'
-        });
-        const savedProject = await project.save({ session });
-        
-        // Create timeline with projectId reference
-        const timeline = new Timeline({
+        const savedProject = await new Project({ name, status: 'draft' }).save();
+        created.push({ model: Project, id: savedProject._id as Types.ObjectId });
+
+        const timeline = await new Timeline({
             projectId: savedProject._id,
             fps: 30,
             resolution: { width: 1920, height: 1080 },
             duration: 0
-        });
-        const savedTimeline = await timeline.save({ session });
-        
-        // Update project with timeline reference
-        savedProject.timeline = savedTimeline._id as mongoose.Types.ObjectId;
-        await savedProject.save({ session });
-        
-        // Create video track 
-        const videoTrack = new Track({
-            type: 'video',
-            projectId: savedProject._id,
-            timelineId: savedTimeline._id,
-            items: []
-        });
-        const savedVideoTrack = await videoTrack.save({ session });
-        
-        // Update timeline with video track reference
-        timeline.tracks.push(savedVideoTrack._id as Types.ObjectId);
-        await timeline.save({ session });
-        
-        // Create audio track
-        const audioTrack = new Track({
-            type: 'audio',
-            projectId: savedProject._id,
-            timelineId: savedTimeline._id,
-            items: []
-        });
-        const savedAudioTrack = await audioTrack.save({ session });
-        
-        // Update timeline with audio track reference
-        timeline.tracks.push(savedAudioTrack._id as Types.ObjectId);
-        await timeline.save({ session });
-        
-        // Create text track
-        const textTrack = new Track({
-            type: 'text',
-            projectId: savedProject._id,
-            timelineId: savedTimeline._id,
-            items: []
-        });
-        const savedTextTrack = await textTrack.save({ session });
-        
-        // Update timeline with text track reference
-        timeline.tracks.push(savedTextTrack._id as Types.ObjectId);
-        await timeline.save({ session });
-        
-        // Create EditChat instance
-        const editChat = new EditChat({
-            messages: []
-        });
-        const savedEditChat = await editChat.save({ session });
-        
-        // Update project with EditChat reference
-        savedProject.edit_chat = savedEditChat._id as mongoose.Types.ObjectId;
-        await savedProject.save({ session }); 
-        
-        // Push project to user's projects array
-        await User.findByIdAndUpdate(userId, {
-            $push: { projects: savedProject._id }
-        }, { session });
-        
-        await session.commitTransaction();
-        session.endSession();
-        
+        }).save();
+        created.push({ model: Timeline, id: timeline._id as Types.ObjectId });
+
+        // One track per type: video, audio, text
+        for (const type of ['video', 'audio', 'text'] as const) {
+            const track = await new Track({
+                type,
+                projectId: savedProject._id,
+                timelineId: timeline._id,
+                items: []
+            }).save();
+            created.push({ model: Track, id: track._id as Types.ObjectId });
+            timeline.tracks.push(track._id as Types.ObjectId);
+        }
+        await timeline.save();
+
+        const editChat = await new EditChat({ messages: [] }).save();
+        created.push({ model: EditChat, id: editChat._id as Types.ObjectId });
+
+        savedProject.timeline = timeline._id as mongoose.Types.ObjectId;
+        savedProject.edit_chat = editChat._id as mongoose.Types.ObjectId;
+        await savedProject.save();
+
+        await User.findByIdAndUpdate(userId, { $push: { projects: savedProject._id } });
+
         res.status(201).json({
             ...savedProject.toObject(),
-            timeline: savedTimeline,
+            timeline,
         });
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
+        for (const { model, id } of created.reverse()) {
+            await model.deleteOne({ _id: id }).catch(() => undefined);
+        }
         res.status(500).json({ message: "Error creating project", error });
     }
 };
@@ -142,61 +97,9 @@ export const getProjectsByUser = async (req: Request, res: Response) => {
         
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        const projects = (user.projects ?? []) as any[];
-        const projectIds = projects.map((p: any) => p._id as Types.ObjectId);
-        const membersByProject = await getMembersByProject(projectIds);
-        const withMembers = projects.map((p: any) => {
-            const obj = typeof p.toObject === "function" ? p.toObject() : p;
-            return { ...obj, members: membersByProject.get(p._id.toString()) ?? [] };
-        });
-
-        res.status(200).json(withMembers);
+        res.status(200).json(user.projects ?? []);
     } catch (error) {
         res.status(500).json({ message: "Error fetching projects", error });
-    }
-};
-
-// Get recent projects (last 2 projects updated by user)
-export const getRecentProjectsByUser = async (req: Request, res: Response) => {
-    try {
-        const userId = req.userId;
-        const user = await User.findById(userId)
-            .populate({
-                path: "projects",
-                options: { 
-                    sort: { updatedAt: -1 }, // Sort by most recently updated
-                    limit: 2 // Only get 2 most recent projects
-                },
-                populate: [
-                    {
-                        path: "timeline",
-                        populate: {
-                            path: "tracks",
-                            populate: {
-                                path: "items"
-                            }
-                        }
-                    },
-                    {
-                        path: "edit_chat", // Populate EditChat
-                        select: "messages" // Only select messages field
-                    }
-                ]
-            });
-            
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        const projects = (user.projects ?? []) as any[];
-        const projectIds = projects.map((p: any) => p._id as Types.ObjectId);
-        const membersByProject = await getMembersByProject(projectIds);
-        const withMembers = projects.map((p: any) => {
-            const obj = typeof p.toObject === "function" ? p.toObject() : p;
-            return { ...obj, members: membersByProject.get(p._id.toString()) ?? [] };
-        });
-
-        res.status(200).json(withMembers);
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching recent projects", error });
     }
 };
 
@@ -221,19 +124,7 @@ export const getProjectById = async (req: Request, res: Response) => {
             
         if (!project) return res.status(404).json({ message: "Project not found" });
 
-        // Attach the caller's effective role ('owner' | 'editor' | 'viewer') and
-        // the member list so the client can render avatars and gate edit actions.
-        const userId = req.userId!;
-        const [myRole, membersByProject] = await Promise.all([
-            getProjectRole(userId, id),
-            getMembersByProject([new Types.ObjectId(id)]),
-        ]);
-
-        res.status(200).json({
-            ...project.toObject(),
-            myRole,
-            members: membersByProject.get(id) ?? [],
-        });
+        res.status(200).json(project.toObject());
     } catch (error) {
         res.status(500).json({ message: "Error fetching project", error });
     }
@@ -242,9 +133,15 @@ export const getProjectById = async (req: Request, res: Response) => {
 // Update a project
 export const updateProject = async (req: Request, res: Response) => {
     try {
+        // Only these fields can be edited from the client.
+        const allowed = ["name", "project_script", "status", "playback_url", "preview_url", "bytes", "compiled"];
+        const updates: Record<string, unknown> = {};
+        for (const key of allowed) {
+            if (req.body?.[key] !== undefined) updates[key] = req.body[key];
+        }
         const updatedProject = await Project.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body },
+            { $set: updates },
             { new: true }
         )
         .populate({
@@ -262,64 +159,48 @@ export const updateProject = async (req: Request, res: Response) => {
     }
 };
 
-// Delete a project with cascade delete
+// Delete a project and everything that belongs to it.
+// Sequential deletes, no transaction (see createProject).
 export const deleteProject = async (req: Request, res: Response) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    
     try {
         const { id } = req.params;
-        
-        // Find the project and related data
-        const project = await Project.findById(id).session(session);
+
+        const project = await Project.findById(id);
         if (!project) {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(404).json({ message: "Project not found" });
         }
-        
-        // Find timeline using projectId (one-to-one relationship)
-        const timeline = await Timeline.findOne({ projectId: id }).session(session);
+
+        // Timeline, tracks and items
+        const timeline = await Timeline.findOne({ projectId: id });
         if (timeline) {
-            // Find tracks using timelineId
-            const tracks = await Track.find({ timelineId: timeline._id }).session(session);
-            
-            // Delete all timeline items in tracks
+            const tracks = await Track.find({ timelineId: timeline._id });
             for (const track of tracks) {
-                await TimelineItem.deleteMany({ trackId: track._id }).session(session);
+                await TimelineItem.deleteMany({ trackId: track._id });
             }
-            
-            // Delete tracks using timelineId
-            await Track.deleteMany({ timelineId: timeline._id }).session(session);
-            
-            // Delete timeline
-            await Timeline.findByIdAndDelete(timeline._id).session(session);
+            await Track.deleteMany({ timelineId: timeline._id });
+            await Timeline.findByIdAndDelete(timeline._id);
         }
-        
-        // Delete EditChat associated with the project
+
+        // Edit chats
         if (project.edit_chat) {
-            await EditChat.findByIdAndDelete(project.edit_chat).session(session);
+            await EditChat.findByIdAndDelete(project.edit_chat);
         }
-        
-        // Delete assets using projectId
-        await Asset.deleteMany({ projectId: id }).session(session);
-        
-        // Delete project
-        await Project.findByIdAndDelete(id).session(session);
-        
-        // Remove project from any user's projects array
-        await User.updateMany(
-            { projects: id },
-            { $pull: { projects: id } }
-        ).session(session);
-        
-        await session.commitTransaction();
-        session.endSession();
-        
+
+        // Assets and their stored files (best effort for the files)
+        const assets = await Asset.find({ projectId: id }).select("url metadata").lean();
+        for (const asset of assets) {
+            const key: string | null = asset.metadata?.storageKey ?? storage.keyFromUrl(asset.url);
+            if (key) await storage.remove(key).catch(() => undefined);
+        }
+        await Asset.deleteMany({ projectId: id });
+
+        await Project.findByIdAndDelete(id);
+
+        // Remove the project from the owner's list
+        await User.updateMany({ projects: id }, { $pull: { projects: id } });
+
         res.status(200).json({ message: "Project and all related data deleted successfully" });
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
         res.status(500).json({ message: "Error deleting project", error });
     }
 };

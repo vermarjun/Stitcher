@@ -31,21 +31,7 @@ export type Project = {
   thumbnailUrl?: string;
   status: "draft" | "processing" | "completed" | "error";
   timeline: Timeline;
-  members?: { username: string; profilePhoto?: string }[];
-  // The requesting user's effective role on this project. Returned by
-  // GET /project/:id. Used to gate edit actions in the editor UI.
-  myRole?: "owner" | "editor" | "viewer" | null;
 };
-
-export interface IUserStats {
-  totalPosts: number;
-  totalLikes: number;
-  totalComments: number;
-  totalViews: number;
-  followersCount: number;
-  followingCount: number;
-  lastUpdated: Date;
-}
 
 // This is what is stored in local storage
 export type IUser = {
@@ -53,52 +39,14 @@ export type IUser = {
   username?: string;
   email?: string;
   profilePhoto?: string;
-  profileBanner?: string; 
   lastActive?: Date;
   createdAt?: string | Date;
   isActive?: boolean;
   bio: string;
-  role?: string | 'user' | 'admin';
-  plan?: 'free' | 'starter' | 'creator' | 'pro';
-  credits?: {
-    generation: number;
-    editing: number;
-    expiresAt: Date | string | number;
-  };
-  isTestAccount?: boolean;
   projects?: string[];
-  communityPosts?: string[];
-  likedPosts?: string[];
-  aura?: number;
-  stats?: IUserStats;
-  followers?: string[];
-  following?: string[];
   // One-time product tour: null/absent => user hasn't seen it => show it once.
   onboardingTourCompletedAt?: string | Date | null;
 };
-
-export enum TemplateType {
-  VIDEO = "video",
-  AUDIO = "audio",
-}
-
-export type Template = {
-  _id: string;
-  title: string;
-  post_description?: string;
-  type: TemplateType;
-  thumbnail?: string;
-  url: string;
-  duration?: number;
-  bytes: number;
-  metadata: Record<string, any>;
-  likesCount?: number;
-  isLikedByUser?: boolean;
-  isInProject?: boolean;
-  projectAssetId?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
 
 export enum AssetType {
   VIDEO = "video",
@@ -118,7 +66,6 @@ export enum TextAnimationType {
 }
 
 export enum AssetOrigin {
-  TEMPLATE = "template",
   UPLOAD = "upload",
   GENERATED_VIDEO = "generated_video",
 }
@@ -142,7 +89,6 @@ export interface Asset {
   createdAt: string;
   updatedAt: string;
   isOnTimeline?: boolean;
-  isAddedToBackpack?: boolean;
   waveformPeaks?: number[] | null;
 }
 

@@ -3,7 +3,7 @@
  *
  * Selected with EMAIL_PROVIDER=console. Useful for local development and
  * self-hosting where no SMTP/OAuth credentials are available — verification
- * links, invites, etc. are printed to the logs so flows remain testable.
+ * links, signup codes, etc. are printed to the logs so flows remain testable.
  */
 
 import logger from "../../util/logger.util";

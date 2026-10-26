@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Activity, Mic, Film, Key } from 'lucide-react';
+import { Eye, EyeOff, Activity, Mic, Film, Server } from 'lucide-react';
 import type { SignupStep } from '@/Pages/Auth.page';
 
 // --- HELPER COMPONENTS (ICONS) ---
@@ -30,12 +30,11 @@ interface SignInPageProps {
   onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   /** Fired on form submit (login or signup). The parent owns the API call. */
   onSubmit: () => void;
-  onGoogleSignIn: () => void;
+  /** Omit to hide every Google entry point (Google sign-in is optional). */
+  onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
   /** Disables the form and shows a spinner on the primary button. */
   isLoading?: boolean;
-  /** Replaces the entire form with a "banned" notice. */
-  isBanned?: boolean;
   /** "google" | "password" — drives the "Last used" hint badge. */
   lastMethod?: string | null;
 
@@ -90,9 +89,9 @@ const FEATURES = [
     desc: 'Every video ships with a synced voiceover that stays in sync through edits.',
   },
   {
-    icon: Key,
-    title: 'Bring your own key',
-    desc: 'Add your OpenAI or Anthropic key and generate free — no credits charged on BYOK runs.',
+    icon: Server,
+    title: 'Runs on your machine',
+    desc: 'Self-hosted and open source. Pick your own model provider and keep your projects local.',
   },
 ] as const;
 
@@ -230,7 +229,7 @@ interface ConfirmEmailStepProps {
   isLoading: boolean;
   onConfirm: () => void;
   onGoBack: () => void;
-  onGoogleSignIn: () => void;
+  onGoogleSignIn?: () => void;
 }
 
 const ConfirmEmailStep: React.FC<ConfirmEmailStepProps> = ({
@@ -261,6 +260,7 @@ const ConfirmEmailStep: React.FC<ConfirmEmailStepProps> = ({
     </div>
 
     {/* Google shortcut */}
+    {onGoogleSignIn && (
     <p className="animate-element animate-delay-300 text-center text-sm text-muted-foreground">
       or{' '}
       <button
@@ -272,6 +272,7 @@ const ConfirmEmailStep: React.FC<ConfirmEmailStepProps> = ({
       </button>{' '}
       to skip this
     </p>
+    )}
 
     {/* Actions */}
     <div className="animate-element animate-delay-400 flex flex-col gap-3">
@@ -387,7 +388,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   onGoogleSignIn,
   onResetPassword,
   isLoading = false,
-  isBanned = false,
   lastMethod = null,
   signupStep = 'form',
   onConfirmEmail,
@@ -410,24 +410,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 
   // Decide which content to render inside the left panel
   const renderContent = () => {
-    if (isBanned) {
-      return (
-        <div className="animate-element flex flex-col items-center justify-center gap-4 py-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10">
-            <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="mb-1 text-xl font-semibold text-foreground">You've been banned</h2>
-            <p className="text-sm font-light text-muted-foreground">
-              Your account has been suspended. If you believe this is a mistake, please contact support.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
     // OTP flow steps (signup only)
     if (!isLogin && signupStep === 'confirm') {
       return (
@@ -465,9 +447,11 @@ export const SignInPage: React.FC<SignInPageProps> = ({
         <p className="animate-element animate-delay-200 text-muted-foreground">
           {isLogin
             ? 'Sign in to continue to your account'
-            : 'Get started with your free Stitcher account'}
+            : 'Get started with your Stitcher account'}
         </p>
 
+        {onGoogleSignIn && (
+          <>
         {/* Google — primary path, carries the "Last used" hint */}
         <div className="animate-element animate-delay-300 relative">
           {lastMethod === 'google' && (
@@ -490,6 +474,9 @@ export const SignInPage: React.FC<SignInPageProps> = ({
           <span className="w-full border-t border-border"></span>
           <span className="absolute bg-background px-4 text-sm text-muted-foreground">Or continue with email</span>
         </div>
+
+          </>
+        )}
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Name — sign-up only */}
@@ -601,16 +588,18 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 />
                 <span className="text-foreground/90">Keep me signed in</span>
               </label>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onResetPassword?.();
-                }}
-                className="text-blue-400 transition-colors hover:underline"
-              >
-                Reset password
-              </a>
+              {onResetPassword && (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onResetPassword();
+                  }}
+                  className="text-blue-400 transition-colors hover:underline"
+                >
+                  Reset password
+                </a>
+              )}
             </div>
           </div>
 

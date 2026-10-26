@@ -1,14 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Italianno&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Satisfy&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Licorice&family=Satisfy&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @theme {
-  --font-satisfy: "Satisfy", cursive;
-  --font-licorice: "Licorice", cursive;
   --font-pacifico: "Pacifico", cursive;
 }
 
@@ -316,7 +311,7 @@ body {
                   }
                 }
 /* ─── Onboarding product tour (driver.js) — side-by-side layout ─── */
-/* Left: glassmorphic card with title + subtitle + nav buttons. Right: cat PNG (transparent). */
+/* Glassmorphic card with title + one line of text + nav buttons. */
 /* All spacing uses !important — driver.js does all:unset then re-applies its own       */
 /* padding/margins, so higher specificity alone is not reliable enough.                  */
 .driver-popover.stitcher-tour {
@@ -325,18 +320,17 @@ body {
   box-shadow: none !important;
   max-width: 560px !important;
   min-width: 400px !important;
-  /* Right padding reserves the cat column (240px) so text never flows under it. */
-  padding: 28px 244px 28px 28px !important;
+  padding: 28px !important;
   isolation: isolate;
   overflow: visible;
 }
-/* Glassmorphic card — covers only the left text area, leaves the cat column open. */
+/* Glassmorphic card behind the popover content. */
 .driver-popover.stitcher-tour::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  right: 220px;
+  right: 0;
   bottom: 0;
   background: linear-gradient(145deg, rgba(15, 18, 28, 0.95) 0%, rgba(9, 11, 18, 0.95) 100%);
   backdrop-filter: blur(24px) saturate(180%);
@@ -350,38 +344,7 @@ body {
   z-index: -1;
   pointer-events: none;
 }
-/* Cat column: pinned to the right, spans the full popover (= card) height.
-   The image fills this box (height:100%), so since each PNG's subject has been
-   trimmed to fill its own canvas, every cat ends up matching the card height —
-   regardless of the original artwork's proportions. */
-.driver-popover.stitcher-tour .stitcher-tour-cat-float {
-  position: absolute;
-  right: 8px;
-  top: 0;
-  bottom: 0;
-  width: 212px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-.driver-popover.stitcher-tour .stitcher-tour-cat {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: transparent;
-  user-select: none;
-  filter: drop-shadow(0 6px 20px rgba(0,0,0,0.45));
-}
-/* Images that keep their original (opaque) background: frame them as a photo. */
-.driver-popover.stitcher-tour .stitcher-tour-cat.cat-photo {
-  max-height: 90%;
-  max-width: 96%;
-  border-radius: 14px;
-  filter: none;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
-}
-/* Left-side text */
+/* Text */
 .driver-popover.stitcher-tour .driver-popover-title {
   font-size: 17px !important;
   font-weight: 700 !important;
@@ -442,19 +405,13 @@ body {
   display: none;
 }
 
-/* Tour: phone-safe layout — hide cat, remove right padding, fit viewport */
+/* Tour: phone-safe layout — fit viewport */
 @media (max-width: 640px) {
   .driver-popover.stitcher-tour {
     min-width: unset !important;
     max-width: calc(100vw - 24px) !important;
     padding: 20px !important;
     margin: 0 12px !important;
-  }
-  .driver-popover.stitcher-tour::before {
-    right: 0 !important;
-  }
-  .driver-popover.stitcher-tour .stitcher-tour-cat-float {
-    display: none !important;
   }
 }
 

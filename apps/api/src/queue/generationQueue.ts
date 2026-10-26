@@ -37,9 +37,9 @@ export async function enqueueGeneration(data: VideoGenerationJobData): Promise<s
     // per-queue sequential counter (bull:video-generation:id). That counter
     // lives in Redis and resets to 1 whenever Redis loses its data (volume
     // wipe / fresh deploy), which made ids "1","2","3" collide across
-    // different generations in the durable Atlas history (GenerationJob /
-    // GenerationLlmIO are keyed by this string). A UUID never repeats, so the
-    // admin per-job view can never conflate two runs again.
+    // different generations in the durable job history (GenerationJob /
+    // GenerationLlmIO are keyed by this string). A UUID never repeats, so two
+    // runs can never be conflated.
     const job = await generationQueue.add(
         "generate",
         { ...data, otelCarrier },

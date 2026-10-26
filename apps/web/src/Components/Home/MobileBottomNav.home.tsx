@@ -1,16 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Home,
-  Users,
-  Backpack,
-  LayoutTemplate,
   Settings,
   LogOut,
   FolderOpen,
   Clapperboard,
 } from "lucide-react";
 import type { IUser } from "@/State/Types";
-import { FEATURES } from "@/config/features";
 
 interface Props {
   activeItem: string;
@@ -47,11 +43,6 @@ const MobileBottomNav: React.FC<Props> = ({
     { icon: Home, label: "Home", key: "home" },
     { icon: FolderOpen, label: "Projects", key: "projects" },
     { icon: Clapperboard, label: "Generations", key: "generations" },
-    ...(FEATURES.community ? [
-      { icon: Users, label: "Community", key: "community" },
-      { icon: Backpack, label: "Backpack", key: "backpack" },
-    ] : []),
-    { icon: LayoutTemplate, label: "Templates", key: "templates" },
   ];
 
   const activeClass = "text-emerald-400";

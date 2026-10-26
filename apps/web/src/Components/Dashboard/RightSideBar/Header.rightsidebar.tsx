@@ -232,9 +232,21 @@ const AISidebarHeader = ({
   return (
     <div className="border-b border-zinc-600 bg-zinc-800 flex-shrink-0">
       <div className="flex items-center justify-between px-3 py-2">
-        {/* Left: brand label */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-white">Stitcher</span>
+        {/* Left: Generate / Edit mode toggle */}
+        <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-700">
+          {(['generate', 'edit'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              data-tour={`mode-${m}`}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${
+                mode === m ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-1">

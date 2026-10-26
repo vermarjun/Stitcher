@@ -1,9 +1,34 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import Asset, { AssetType, AssetOrigin } from '../model/asset.model';
-import Backpack from '../model/backpack.model';
+import User from '../model/user.model';
 import { Types } from 'mongoose';
-import { v2 as cloudinary } from 'cloudinary';
 import { spawn } from 'child_process';
+import { storage } from '../storage';
+import { canAccessProject } from '../util/projectAccess.util';
+import { probeMedia } from '../util/probe.util';
+import logger from '../util/logger.util';
+
+/** Ids of every project the user owns. Used to scope list queries. */
+async function ownedProjectIds(userId: string): Promise<Types.ObjectId[]> {
+  const user = await User.findById(userId).select('projects').lean();
+  return (user?.projects ?? []) as Types.ObjectId[];
+}
+
+/** Add a projectId filter that can only match projects the user owns. */
+async function scopeToOwnedProjects(filter: Record<string, any>, userId: string, requested?: unknown): Promise<boolean> {
+  const owned = await ownedProjectIds(userId);
+  if (requested && Types.ObjectId.isValid(requested as string)) {
+    const wanted = new Types.ObjectId(requested as string);
+    if (!owned.some((id) => id.equals(wanted))) return false;
+    filter.projectId = wanted;
+  } else {
+    filter.projectId = { $in: owned };
+  }
+  return true;
+}
 
 /**
  * Extract ~200 amplitude peaks from an audio URL using ffmpeg.
@@ -64,7 +89,10 @@ async function extractWaveformPeaks(audioUrl: string, targetPoints = 200): Promi
   });
 }
 
-// Create a new asset
+
+const FORBIDDEN_JSON = { success: false, message: 'forbidden' };
+
+// Create a new asset record (for a file that is already hosted somewhere)
 export const createAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -80,7 +108,6 @@ export const createAsset = async (req: Request, res: Response): Promise<void> =>
       bytes,
       metadata,
       projectId,
-      originalTemplateId
     } = req.body;
 
     // Validate required fields
@@ -118,12 +145,8 @@ export const createAsset = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Validate originalTemplateId if provided
-    if (originalTemplateId && !Types.ObjectId.isValid(originalTemplateId)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid originalTemplateId format'
-      });
+    if (!(await canAccessProject(req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
       return;
     }
 
@@ -140,7 +163,6 @@ export const createAsset = async (req: Request, res: Response): Promise<void> =>
       bytes: bytes || 0,
       metadata: metadata || {},
       projectId,
-      originalTemplateId
     });
 
     const savedAsset = await asset.save();
@@ -174,15 +196,16 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     // Build filter object
     const filter: any = {};
 
-    if (projectId) {
-      if (!Types.ObjectId.isValid(projectId as string)) {
-        res.status(400).json({
-          success: false,
-          message: 'Invalid projectId format'
-        });
-        return;
-      }
-      filter.projectId = new Types.ObjectId(projectId as string);
+    if (projectId && !Types.ObjectId.isValid(projectId as string)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid projectId format'
+      });
+      return;
+    }
+    if (!(await scopeToOwnedProjects(filter, req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
+      return;
     }
 
     if (type && Object.values(AssetType).includes(type as AssetType)) {
@@ -198,14 +221,14 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
-    // Sorting
+    // Sorting. Only plain top-level fields are sortable.
+    const sortField = /^[A-Za-z_]+$/.test(sortBy as string) ? (sortBy as string) : 'createdAt';
     const sort: any = {};
-    sort[sortBy as string] = sortOrder === 'desc' ? -1 : 1;
+    sort[sortField] = sortOrder === 'desc' ? -1 : 1;
 
     const [assets, total] = await Promise.all([
       Asset.find(filter)
         .populate('projectId', 'name')
-        .populate('originalTemplateId', 'name')
         .sort(sort)
         .skip(skip)
         .limit(limitNum)
@@ -245,15 +268,19 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const asset = await Asset.findById(id)
-      .populate('projectId', 'name')
-      .populate('originalTemplateId', 'name');
+    const asset = await Asset.findById(id).populate('projectId', 'name');
 
     if (!asset) {
       res.status(404).json({
         success: false,
         message: 'Asset not found'
       });
+      return;
+    }
+
+    const owningProjectId = String((asset.projectId as any)?._id ?? asset.projectId);
+    if (!(await canAccessProject(req.userId!, owningProjectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
       return;
     }
 
@@ -274,7 +301,6 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
 export const updateAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const updates = req.body;
 
     if (!Types.ObjectId.isValid(id)) {
       res.status(400).json({
@@ -284,39 +310,31 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Remove fields that shouldn't be updated
-    const { _id, createdAt, updatedAt, ...validUpdates } = updates;
-
-    // Validate enum values if provided
-    if (validUpdates.type && !Object.values(AssetType).includes(validUpdates.type)) {
-      res.status(400).json({
-        success: false,
-        message: `Invalid type. Must be one of: ${Object.values(AssetType).join(', ')}`
-      });
-      return;
-    }
-
-    if (validUpdates.origin && !Object.values(AssetOrigin).includes(validUpdates.origin)) {
-      res.status(400).json({
-        success: false,
-        message: `Invalid origin. Must be one of: ${Object.values(AssetOrigin).join(', ')}`
-      });
-      return;
-    }
-
-    const asset = await Asset.findByIdAndUpdate(
-      id,
-      validUpdates,
-      { new: true, runValidators: true }
-    ).populate('projectId', 'name').populate('originalTemplateId', 'name');
-
-    if (!asset) {
+    const existing = await Asset.findById(id).select('projectId').lean();
+    if (!existing) {
       res.status(404).json({
         success: false,
         message: 'Asset not found'
       });
       return;
     }
+    if (!(await canAccessProject(req.userId!, String(existing.projectId)))) {
+      res.status(403).json(FORBIDDEN_JSON);
+      return;
+    }
+
+    // Only these fields can be edited. url, type, origin and projectId are fixed.
+    const editable = ['name', 'thumbnail', 'duration', 'width', 'height', 'metadata', 'isOnTimeline', 'waveformPeaks'];
+    const validUpdates: Record<string, unknown> = {};
+    for (const key of editable) {
+      if (req.body?.[key] !== undefined) validUpdates[key] = req.body[key];
+    }
+
+    const asset = await Asset.findByIdAndUpdate(
+      id,
+      validUpdates,
+      { new: true, runValidators: true }
+    ).populate('projectId', 'name');
 
     res.status(200).json({
       success: true,
@@ -337,13 +355,16 @@ export const getAssetsByProject = async (req: Request, res: Response): Promise<v
     const { projectId } = req.params;
     const { type, origin } = req.query;
 
-    const userId = req.userId;
-
     if (!Types.ObjectId.isValid(projectId)) {
       res.status(400).json({
         success: false,
         message: 'Invalid project ID format'
       });
+      return;
+    }
+
+    if (!(await canAccessProject(req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
       return;
     }
 
@@ -357,107 +378,7 @@ export const getAssetsByProject = async (req: Request, res: Response): Promise<v
       filter.origin = origin;
     }
 
-    // Aggregation pipeline for assets with backpack check
-    const aggregationPipeline: any[] = [
-      { $match: filter }
-    ];
-
-    // If userId exists, check if assets are already in backpack
-    let backpackId = "";
-    const backpack = await Backpack.findOne({ userId });
-    if (backpack != null) {
-      backpackId = backpack._id as string;
-    }
-
-    if (Types.ObjectId.isValid(backpackId as string)) {
-      aggregationPipeline.push(
-        {
-          $lookup: {
-            from: 'backpacks',
-            let: { assetId: '$_id' },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $eq: ['$_id', new Types.ObjectId(backpackId as string)]
-                  }
-                }
-              },
-              { $unwind: '$items' },
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ['$items.itemType', 'Asset'] },
-                      { $eq: ['$items.itemId', '$$assetId'] }
-                    ]
-                  }
-                }
-              },
-              {
-                $project: {
-                  _id: 1
-                }
-              }
-            ],
-            as: 'backpackMatch'
-          }
-        },
-        {
-          $addFields: {
-            isAddedToBackpack: {
-              $gt: [{ $size: '$backpackMatch' }, 0]
-            }
-          }
-        }
-      );
-    } else {
-      aggregationPipeline.push({
-        $addFields: {
-          isAddedToBackpack: false
-        }
-      });
-    }
-
-    // Populate originalTemplateId
-    aggregationPipeline.push(
-      {
-        $lookup: {
-          from: 'templates',
-          localField: 'originalTemplateId',
-          foreignField: '_id',
-          as: 'originalTemplate'
-        }
-      },
-      {
-        $addFields: {
-          originalTemplateId: {
-            $cond: {
-              if: { $gt: [{ $size: '$originalTemplate' }, 0] },
-              then: {
-                _id: { $arrayElemAt: ['$originalTemplate._id', 0] },
-                name: { $arrayElemAt: ['$originalTemplate.name', 0] }
-              },
-              else: null
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          originalTemplate: 0,
-          backpackMatch: 0
-        }
-      }
-    );
-
-    // Add sorting
-    aggregationPipeline.push(
-      { $sort: { createdAt: -1 } }
-    );
-
-    // Execute aggregation
-    const assets = await Asset.aggregate(aggregationPipeline);
+    const assets = await Asset.find(filter).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,
@@ -487,14 +408,13 @@ export const getAssetsByType = async (req: Request, res: Response): Promise<void
     }
 
     const filter: any = { type };
-
-    if (projectId && Types.ObjectId.isValid(projectId as string)) {
-      filter.projectId = new Types.ObjectId(projectId as string);
+    if (!(await scopeToOwnedProjects(filter, req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
+      return;
     }
 
     const assets = await Asset.find(filter)
       .populate('projectId', 'name')
-      .populate('originalTemplateId', 'name')
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -525,14 +445,13 @@ export const getAssetsByOrigin = async (req: Request, res: Response): Promise<vo
     }
 
     const filter: any = { origin };
-
-    if (projectId && Types.ObjectId.isValid(projectId as string)) {
-      filter.projectId = new Types.ObjectId(projectId as string);
+    if (!(await scopeToOwnedProjects(filter, req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
+      return;
     }
 
     const assets = await Asset.find(filter)
       .populate('projectId', 'name')
-      .populate('originalTemplateId', 'name')
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -554,8 +473,9 @@ export const getAssetsStats = async (req: Request, res: Response): Promise<void>
     const { projectId } = req.query;
 
     const filter: any = {};
-    if (projectId && Types.ObjectId.isValid(projectId as string)) {
-      filter.projectId = new Types.ObjectId(projectId as string);
+    if (!(await scopeToOwnedProjects(filter, req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
+      return;
     }
 
     const stats = await Asset.aggregate([
@@ -570,9 +490,6 @@ export const getAssetsStats = async (req: Request, res: Response): Promise<void>
           },
           audioCount: {
             $sum: { $cond: [{ $eq: ['$type', AssetType.AUDIO] }, 1, 0] }
-          },
-          templateCount: {
-            $sum: { $cond: [{ $eq: ['$origin', AssetOrigin.TEMPLATE] }, 1, 0] }
           },
           uploadCount: {
             $sum: { $cond: [{ $eq: ['$origin', AssetOrigin.UPLOAD] }, 1, 0] }
@@ -589,7 +506,6 @@ export const getAssetsStats = async (req: Request, res: Response): Promise<void>
       totalBytes: 0,
       videoCount: 0,
       audioCount: 0,
-      templateCount: 0,
       uploadCount: 0,
       generatedCount: 0
     };
@@ -607,142 +523,73 @@ export const getAssetsStats = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-interface UploadSignatureRequest {
-  projectId: string;
-  resourceType: 'video' | 'audio';
-}
-
-interface SaveAssetMetadataRequest {
-  name: string;
-  type: AssetType;
-  url: string;
-  thumbnail: string;
-  duration?: number;
-  width?: number;
-  height?: number;
-  bytes: number;
-  metadata: Record<string, any>;
-  projectId: string;
-  cloudinaryPublicId: string;
-}
-
-// Generate signed upload parameters for Cloudinary
-export const generateUploadSignature = async (req: Request<{}, {}, UploadSignatureRequest>, res: Response) => {
+// POST /asset/upload
+// multipart/form-data: file (video or audio), projectId, optional name.
+// The file is written to a temp file by multer, stored through the storage
+// layer, probed with ffprobe (best effort) and saved as an Asset.
+export const uploadAsset = async (req: Request, res: Response): Promise<void> => {
+  const file = req.file;
   try {
-    const { projectId, resourceType } = req.body;
-
-    if (!projectId) {
-      return res.status(400).json({ error: 'Project ID is required' });
+    if (!file) {
+      res.status(400).json({ success: false, message: 'No file uploaded. Send it as multipart field "file".' });
+      return;
     }
 
-    if (!['video', 'audio'].includes(resourceType)) {
-      return res.status(400).json({ error: 'Resource type must be video or audio' });
+    const mime = file.mimetype || '';
+    let type: AssetType;
+    if (mime.startsWith('video/')) type = AssetType.VIDEO;
+    else if (mime.startsWith('audio/')) type = AssetType.AUDIO;
+    else {
+      res.status(415).json({ success: false, message: 'Only video and audio files can be uploaded.' });
+      return;
     }
 
-    // Generate timestamp for signature
-    const timestamp = Math.round(new Date().getTime() / 1000);
-
-    // Define upload parameters
-    const uploadParams = {
-      timestamp,
-      folder: `projects/${projectId}/${resourceType}s`,
-      resource_type: resourceType,
-      quality: 'auto',
-      fetch_format: 'auto',
-    };
-
-    // Generate signature
-    const signature = cloudinary.utils.api_sign_request(uploadParams, process.env.CLOUDINARY_API_SECRET!);
-
-    // Return upload parameters and signature
-    res.json({
-      signature,
-      timestamp,
-      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-      apiKey: process.env.CLOUDINARY_API_KEY,
-      uploadParams,
-    });
-  } catch (error) {
-    console.error('Error generating upload signature:', error);
-    res.status(500).json({ error: 'Failed to generate upload signature' });
-  }
-}
-
-// Save asset metadata to MongoDB after successful Cloudinary upload
-export const saveAssetMetadata = async (req: Request<{}, {}, SaveAssetMetadataRequest>, res: Response) => {
-  try {
-    const {
-      name,
-      type,
-      url,
-      thumbnail,
-      duration,
-      width,
-      height,
-      bytes,
-      metadata,
-      projectId,
-      cloudinaryPublicId,
-    } = req.body;
-
-    // Validate required fields
-    if (!name || !type || !url || !projectId) {
-      return res.status(400).json({
-        error: 'Name, type, url, and projectId are required'
-      });
+    const projectId = req.body?.projectId;
+    if (!projectId || !Types.ObjectId.isValid(projectId)) {
+      res.status(400).json({ success: false, message: 'A valid projectId is required.' });
+      return;
+    }
+    if (!(await canAccessProject(req.userId!, projectId))) {
+      res.status(403).json(FORBIDDEN_JSON);
+      return;
     }
 
-    // Validate ObjectId format
-    if (!Types.ObjectId.isValid(projectId)) {
-      return res.status(400).json({ error: 'Invalid project ID format' });
-    }
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 10) || (type === AssetType.VIDEO ? '.mp4' : '.mp3');
+    const displayName = (typeof req.body?.name === 'string' && req.body.name.trim())
+      || path.basename(file.originalname, path.extname(file.originalname)).slice(0, 120)
+      || 'upload';
 
-    // Extract waveform peaks for audio assets (best-effort — never fails the upload)
-    let waveformPeaks: number[] | null = null;
-    if (type === AssetType.AUDIO && url) {
-      waveformPeaks = await extractWaveformPeaks(url);
-    }
+    const key = `uploads/${projectId}/${crypto.randomUUID()}${ext}`;
+    const stored = await storage.putFile(file.path, key, { contentType: mime });
 
-    // Create new asset document
-    const asset = new Asset({
-      name,
+    const info = await probeMedia(file.path);
+    const waveformPeaks = type === AssetType.AUDIO ? await extractWaveformPeaks(file.path) : null;
+
+    const asset = await Asset.create({
+      name: displayName,
       type,
       origin: AssetOrigin.UPLOAD,
-      url,
-      thumbnail: thumbnail || '',
-      duration,
-      width,
-      height,
-      bytes,
-      metadata: {
-        ...metadata,
-        cloudinaryPublicId,
-      },
-      projectId: new Types.ObjectId(projectId),
+      url: stored.url,
+      thumbnail: stored.thumbnailUrl ?? '',
+      duration: info?.durationSec ?? stored.durationSec,
+      width: info?.width,
+      height: info?.height,
+      bytes: stored.bytes || file.size,
+      metadata: { storageKey: stored.key, originalName: file.originalname, mimeType: mime },
+      projectId,
       waveformPeaks,
     });
 
-    // Save to database
-    const savedAsset = await asset.save();
-
-    res.status(201).json({
-      success: true,
-      asset: savedAsset,
-    });
+    res.status(201).json({ asset });
   } catch (error) {
-    console.error('Error saving asset metadata:', error);
-    res.status(500).json({ error: 'Failed to save asset metadata' });
+    logger.error({ message: '[asset] upload failed', error: String(error) });
+    res.status(500).json({ success: false, message: 'Upload failed' });
+  } finally {
+    if (file?.path) fs.promises.unlink(file.path).catch(() => undefined);
   }
-}
+};
 
-// Delete asset from both database and Cloudinary
+// Delete asset from both database and storage
 export const deleteAsset = async (req: Request, res: Response) => {
   try {
     const { assetId } = req.params;
@@ -756,17 +603,18 @@ export const deleteAsset = async (req: Request, res: Response) => {
     if (!asset) {
       return res.status(404).json({ error: 'Asset not found' });
     }
+    if (!(await canAccessProject(req.userId!, String(asset.projectId)))) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
 
-    // Delete from Cloudinary if it has a public ID
-    const cloudinaryPublicId = asset.metadata?.cloudinaryPublicId;
-    if (cloudinaryPublicId) {
+    // Remove the stored file. Fall back to the key encoded in a local URL.
+    const key: string | null = asset.metadata?.storageKey ?? storage.keyFromUrl(asset.url);
+    if (key) {
       try {
-        await cloudinary.uploader.destroy(cloudinaryPublicId, {
-          resource_type: asset.type === AssetType.AUDIO ? 'video' : 'video'
-        });
-      } catch (cloudinaryError) {
-        console.error('Error deleting from Cloudinary:', cloudinaryError);
-        // Continue with database deletion even if Cloudinary deletion fails
+        await storage.remove(key);
+      } catch (storageError) {
+        console.error('Error deleting stored file:', storageError);
+        // Continue with database deletion even if the file could not be removed
       }
     }
 

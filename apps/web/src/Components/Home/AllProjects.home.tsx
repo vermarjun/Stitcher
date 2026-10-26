@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Trash2,
-  UserPlus,
   FolderOpen,
   Calendar,
   MoreVertical,
@@ -33,8 +32,6 @@ import { Label } from "@/Components/ui/label";
 import { Textarea } from "@/Components/ui/textarea";
 import { Button } from "@/Components/ui/button";
 import { AuroraButton } from "@/Components/ui/aurora-button";
-import { MemberAvatars, type ProjectMember } from "./Dashboard/CollabSections.home";
-import CollaboratorsDialog from "@/Components/Dashboard/Collaborators.dialog";
 
 interface Project {
   _id: string;
@@ -42,11 +39,6 @@ interface Project {
   description?: string;
   updatedAt: string;
   category?: string;
-  // Set for projects shared with the current user (collaborator, not owner).
-  shared?: boolean;
-  role?: "editor" | "viewer";
-  sharedByUsername?: string | null;
-  members?: ProjectMember[];
 }
 
 interface AllProjectsProps {
@@ -67,7 +59,7 @@ const AllProjects: React.FC<AllProjectsProps> = ({
   });
   const navigate = useNavigate();
 
-  // Fetch the user's own projects + projects shared with them, and merge.
+  // Fetch the user's projects, newest first.
   async function fetchAllProjects() {
     if (!api || !userId) {
       console.error('API or user not available');
@@ -76,33 +68,15 @@ const AllProjects: React.FC<AllProjectsProps> = ({
     }
     try {
       setIsLoading(true);
-      const [ownedRes, sharedRes] = await Promise.allSettled([
-        api.get<Project[]>(`/project/user/${userId}`),
-        api.get<{ success: boolean; data: { projects: Project[] } }>(`/project/shared-with-me`),
-      ]);
-
-      const owned: Project[] =
-        ownedRes.status === "fulfilled"
-          ? ownedRes.value.data.map((p) => ({ ...p, shared: false }))
-          : [];
-
-      const shared: Project[] =
-        sharedRes.status === "fulfilled"
-          ? (sharedRes.value.data?.data?.projects ?? []).map((p) => ({
-              ...p,
-              shared: true,
-            }))
-          : [];
-
-      const merged = [...owned, ...shared].sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      const res = await api.get<Project[]>(`/project/user/${userId}`);
+      setAllProjects(
+        [...res.data].sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        )
       );
-      setAllProjects(merged);
-
-      if (ownedRes.status === "rejected") {
-        toast.error("Failed to fetch your projects");
-      }
+    } catch {
+      toast.error("Failed to fetch your projects");
     } finally {
       setIsLoading(false);
     }
@@ -140,9 +114,6 @@ const AllProjects: React.FC<AllProjectsProps> = ({
   const handleResumeProject = (projectId: string) => {
     navigate(`/dashboard/${projectId}`);
   };
-
-  // Project whose "add collaborators" dialog is currently open.
-  const [collabProjectId, setCollabProjectId] = useState<string | null>(null);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -184,14 +155,6 @@ const AllProjects: React.FC<AllProjectsProps> = ({
     p.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Role pill (editor / viewer) shown on shared projects.
-  const RoleBadge = ({ role }: { role?: string }) =>
-    role ? (
-      <span className="inline-flex items-center text-xs font-medium text-zinc-300 capitalize px-2.5 py-1 rounded-full border border-zinc-700 bg-zinc-800/60">
-        {role}
-      </span>
-    ) : null;
-
   // Mobile Project Card — tapping anywhere opens the project
   const ProjectCard = ({ project }: { project: Project }) => (
     <div
@@ -200,14 +163,11 @@ const AllProjects: React.FC<AllProjectsProps> = ({
     >
       <div className="flex justify-between items-start gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <MemberAvatars members={project.members} />
           <div className="min-w-0 space-y-1.5">
             <h3 className="text-sm font-medium text-white truncate">{project.name}</h3>
-            {project.shared && <RoleBadge role={project.role} />}
           </div>
         </div>
-        {!project.shared && (
-          <DropdownMenu>
+        <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 onClick={(e) => e.stopPropagation()}
@@ -217,15 +177,11 @@ const AllProjects: React.FC<AllProjectsProps> = ({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800">
-              <DropdownMenuItem onClick={() => setCollabProjectId(project._id)} className="cursor-pointer">
-                <UserPlus className="mr-2 h-4 w-4" /> Share
-              </DropdownMenuItem>
                <DropdownMenuItem onClick={() => handleDeleteProject(project.name, project._id)} className="text-red-400 cursor-pointer focus:text-red-400 focus:bg-red-950/20">
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
       </div>
 
       <div className="flex items-center gap-1.5 text-xs text-zinc-500">
@@ -368,12 +324,11 @@ const AllProjects: React.FC<AllProjectsProps> = ({
                     >
                       <td className="py-3 px-6">
                         <div className="flex items-center gap-3">
-                          <MemberAvatars members={project.members} />
                           <div className="min-w-0">
                             <span className="font-medium text-sm text-white group-hover:text-emerald-400 transition-colors truncate block">
                                 {project.name}
                             </span>
-                            {!project.shared && project.category && (
+                            {project.category && (
                                 <div className="text-xs text-zinc-500">{project.category}</div>
                             )}
                           </div>
@@ -383,34 +338,18 @@ const AllProjects: React.FC<AllProjectsProps> = ({
                         {timeAgo(project.updatedAt)}
                       </td>
                       <td className="py-3 px-6">
-                        {project.shared ? (
-                          <div className="flex items-center justify-end">
-                            <RoleBadge role={project.role} />
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 setCollabProjectId(project._id);
-                               }}
-                               className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-all"
-                               title="Add Collaborators"
-                            >
-                              <UserPlus className="w-4 h-4" />
-                            </button>
-                             <button
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 handleDeleteProject(project.name, project._id);
-                               }}
-                               className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-all"
-                               title="Delete Project"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteProject(project.name, project._id);
+                            }}
+                            className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-all"
+                            title="Delete Project"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -421,15 +360,6 @@ const AllProjects: React.FC<AllProjectsProps> = ({
         )}
       </div>
 
-      {collabProjectId && (
-        <CollaboratorsDialog
-          projectId={collabProjectId}
-          onClose={() => {
-            setCollabProjectId(null);
-            fetchAllProjects();
-          }}
-        />
-      )}
     </div>
   );
 };

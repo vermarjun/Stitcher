@@ -6,13 +6,19 @@
  * OfflineTTS cannot find the staged `<key>.mp3` and every voiceover render fails.
  *
  * The expected hex values below were generated from the REAL render venv:
- *   /Users/vermarjun/Desktop/manim-render-service/.venv/bin/python -c \
+ *   python -c \
  *     "from stitcher_voiceover import cache_key; print(cache_key('...'))"
  * including unicode + whitespace edge cases that exercise the Python-vs-JS
  * whitespace-set difference (U+001C..1F, U+0085 vs U+FEFF).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Importing ttsClient pulls in the Redis connection. Stub it so the test never
+// opens a socket (a retrying connection logs after teardown and fails the run).
+vi.mock("../../queue/connection", () => ({
+    redisConnection: { status: "end" },
+}));
 import { cacheKey, normalizeText } from "../ttsClient";
 
 describe("ttsClient cache_key parity with Python stitcher_voiceover", () => {

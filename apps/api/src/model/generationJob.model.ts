@@ -1,13 +1,12 @@
 /**
  * GenerationJob — a persisted record of every generation / edit job (F2.4).
  *
- * Unlike the live Socket.IO progress event (ephemeral) and the admin-live
- * firehose (admin-only, in-memory), this model gives each USER a durable
- * history of their generations: what is in-flight, per-scene progress, and a
+ * Unlike the live Socket.IO progress event (ephemeral), this model gives each
+ * USER a durable history of their generations: what is in-flight, per-scene progress, and a
  * record of past jobs with their final status + URL.
  *
  * The BullMQ job id is stored as `jobId` so the row can be correlated with the
- * queue (bull-board, retries) and so the worker can advance the lifecycle.
+ * queue (retries) and so the worker can advance the lifecycle.
  *
  * Lifecycle writes are intentionally CHEAP + NON-FATAL — the worker wraps every
  * update in try/catch so a Mongo hiccup never breaks a running pipeline.
@@ -88,8 +87,6 @@ export interface IJobProgress {
     updatedAt: Date;
 }
 
-export type CurationStatus = "unreviewed" | "approved" | "rejected";
-
 export interface IGenerationJob extends Document {
     /** BullMQ job id (indexed). Empty string only if the queue failed to assign one. */
     jobId: string;
@@ -105,7 +102,7 @@ export interface IGenerationJob extends Document {
     /** Live granular progress snapshot (phase + label + percent), persisted for reload-safe UI. */
     progress?: IJobProgress;
     finalUrl?: string;
-    /** Final generated Manim code persisted for curation/RAG pipeline. */
+    /** Final generated Manim code. */
     finalCode?: string;
     error?: string;
     traceId?: string;
@@ -113,29 +110,18 @@ export interface IGenerationJob extends Document {
     completedAt?: Date;
     /** LLM token usage — populated by the worker once the agent emits usage data. */
     tokens?: { input: number; output: number };
-    /** Estimated USD cost derived from token usage. Forward-compat; see §5. */
+    /** Estimated USD cost derived from token usage. Not computed in the open-source build. */
     costUsd?: number;
     /** Per-stage ticket record. Each pipeline step pushes one row here (best-effort). */
     stages: IJobStage[];
-    /** RLHF: 1–5 star rating submitted by the user after viewing the video. */
-    rating?: number | null;
-    /** When the rating was set. */
-    ratedAt?: Date;
-    /** Admin curation decision for RAG pipeline. */
-    curationStatus: CurationStatus;
     /** Whether the debug loop was invoked at least once for this job. */
     debugInvoked: boolean;
     /** Whether a render eventually succeeded after the debug loop ran. */
     debugResolved: boolean;
     /**
-     * Resilience telemetry (admin "real vs fallback" visibility):
-     *  - usedFallbackLlm: the primary coder failed and the admin-defined
-     *    FALLBACK LLM produced the code that was used.
-     *  - usedFallbackScene: no LLM produced usable code, so the guaranteed
-     *    title-card scene was rendered (a "soft fail" — counts as NOT a real
-     *    animation even though status is "complete").
+     * True when no LLM produced usable code, so the guaranteed title-card scene
+     * was rendered (a "soft fail": status is "complete" but it is not a real animation).
      */
-    usedFallbackLlm?: boolean;
     usedFallbackScene?: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -235,16 +221,8 @@ const GenerationJobSchema = new Schema<IGenerationJob>(
         costUsd: { type: Number, required: false },
         stages: { type: [JobStageSchema], default: [] },
         finalCode: { type: String, required: false },
-        rating: { type: Number, default: null, required: false },
-        ratedAt: { type: Date, required: false },
-        curationStatus: {
-            type: String,
-            enum: ["unreviewed", "approved", "rejected"],
-            default: "unreviewed",
-        },
         debugInvoked: { type: Boolean, default: false },
         debugResolved: { type: Boolean, default: false },
-        usedFallbackLlm: { type: Boolean, default: false },
         usedFallbackScene: { type: Boolean, default: false },
     },
     { timestamps: true }

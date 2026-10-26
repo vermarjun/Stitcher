@@ -8,20 +8,10 @@ import { toast } from "sonner";
 import type { Project } from "@/State/Types";
 import AllProjects from "./AllProjects.home";
 import Generations from "./Generations.home";
-import Teams from "./Teams.home";
-// import Pricing from "./Pricing.home";
-import ApiKeys from "./ApiKeys.home";
-import Templates from "./Templates.home";
-import Assets from "./Assets.home";
 import SettingsPage from "./Settings/main.settings";
 import ThreeDotLoader from "../LoadingScreens/ThreeDotLoader";
-import AnimationCommunity from "./CommunityPage/main.communitypage";
-import Backpack from "./Backpack/main.backpack";
-import NotificationsComponent from "./Dashboard/Notifications.home";
-import PricingPage from "./Pricing.home";
 import type { IUser } from "@/State/Types";
 import { useNav } from "@/Context/HomeNavigation.context";
-import { FEATURES } from "@/config/features";
 import { maybeRunHomeTour } from "@/lib/onboardingTour";
 
 // Main Component - Updated to handle navigation
@@ -33,9 +23,8 @@ const Main = () => {
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
   const user:IUser = JSON.parse(localStorage.getItem("user") || "");
-  if (user.profilePhoto == "") {
-    user.profilePhoto =
-      "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";
+  if (!user.profilePhoto) {
+    user.profilePhoto = "/default-avatar.svg";
   }
 
   async function fetchRecentProjects() {
@@ -82,8 +71,7 @@ const Main = () => {
   }, []);
 
   // Navigation handler
-  // @ts-ignore
-  const handleNavigation = (itemKey) => {
+  const handleNavigation = (itemKey: string) => {
     setActiveItem(itemKey);
   };
 
@@ -104,34 +92,8 @@ const Main = () => {
         return <AllProjects userId={user._id}/>;
       case "generations":
         return <Generations />;
-      case "teams":
-        return FEATURES.community ? <Teams /> : (
-          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
-        );
-      case "community":
-        return FEATURES.community ? <AnimationCommunity currentUser={user}/> : (
-          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
-        );
-      case "backpack":
-        return FEATURES.community ? <Backpack/> : (
-          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
-        );
-      case "api-keys":
-        return <ApiKeys />;
-      case "templates":
-        return <Templates />;
-      case "assets":
-        return <Assets />;
       case "settings":
         return <SettingsPage currentUser={user}/>;
-      case "notifications":
-        return FEATURES.community ? <NotificationsComponent /> : (
-          <Dashboard recentProjects={recentProjects} fecthRecentProjects={fetchRecentProjects} onNavigate={handleNavigation} />
-        );
-      // PRICING — hidden for sideproject mode; uncomment to re-enable
-      // case "pricing":
-      //   return <PricingPage />;
-
       default:
         return (
           <Dashboard

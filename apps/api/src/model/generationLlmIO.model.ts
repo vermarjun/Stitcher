@@ -83,7 +83,7 @@ const GenerationLlmIOSchema = new Schema<IGenerationLlmIO>(
     { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-// Primary access: admin fetches all rows for a given BullMQ jobId, ordered by time.
+// Primary access: fetch all rows for a given BullMQ jobId, ordered by time.
 GenerationLlmIOSchema.index({ jobId: 1, createdAt: 1 });
 
 const GenerationLlmIO: Model<IGenerationLlmIO> = model<IGenerationLlmIO>(

@@ -4,8 +4,6 @@ export interface UserData {
   email: string;
   bio?: string;
   profilePhoto?: string;
-  plan?: string;
-  role?: string;
 }
 
 export interface FormData {

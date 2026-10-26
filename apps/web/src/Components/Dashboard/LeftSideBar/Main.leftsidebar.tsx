@@ -1,38 +1,26 @@
 import { useState } from "react";
 import {
-  Users,
   ChevronLeft,
   FolderOpen,
-  Layout,
-  Backpack,
   Brain,
   X,
 } from "lucide-react";
 import AssetStash from "./AssetStash/main.assetstash";
-import TemplatesComponent from "./Template.leftsidebar";
-import CollaboratorsComponent from "./Collaborators.leftsidebar";
 import MemoryComponent from "./Memory.leftsidebar";
-import type { Project, IUser } from "@/State/Types";
-// import BackpackComponent from "@/Components/Dashboard/LeftSideBar/Backpack.leftsidebar";
-import BackpackComponent from "./BackPack/main.backpack";
-import { FEATURES } from "@/config/features";
+import type { Project } from "@/State/Types";
 
 interface Props {
   currentProject?: Project;
-  user?: IUser;
 }
 
-const MainSidebar = ({ currentProject, user }: Props) => {
+const MainSidebar = ({ currentProject }: Props) => {
   const [activeTab, setActiveTab] = useState("assetstash");
   const [isExpanded, setIsExpanded] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const sidebarTabs = [
     { id: "assetstash", icon: FolderOpen, label: "Asset Stash" },
-    ...(FEATURES.community ? [{ id: "backpack", icon: Backpack, label: "Backpack" }] : []),
-    { id: "templates", icon: Layout, label: "Templates" },
     { id: "memory", icon: Brain, label: "Memory" },
-    { id: "collaborators", icon: Users, label: "Collaborators" },
   ];
 
   const renderActiveComponent = () => {
@@ -40,14 +28,8 @@ const MainSidebar = ({ currentProject, user }: Props) => {
       case "explorer":
       case "assetstash":
         return <AssetStash currentProject={currentProject} />;
-      case "templates":
-        return <TemplatesComponent currentProject={currentProject} />;
       case "memory":
         return <MemoryComponent />;
-      case "collaborators":
-        return <CollaboratorsComponent currentProject={currentProject} user={user} />;
-      case "backpack":
-        return <BackpackComponent currentProject={currentProject}/>;
       default:
         return <AssetStash currentProject={currentProject} />;
     }

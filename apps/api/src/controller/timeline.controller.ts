@@ -5,23 +5,20 @@ import TimelineItem from '../model/timelineitem.model';
 import { Types } from 'mongoose';
 import { exportTimeline, type ExportVideoClip, type ExportAudioClip, type ExportTextClip } from '../util/exportTimeline.util';
 import logger from '../util/logger.util';
-import { nanoid } from 'nanoid';
-import SharedVideo from '../model/sharedVideo.model';
 import Project from '../model/project.model';
-import { PUBLIC_APP_URL } from '../config';
+import { storage } from '../storage';
 
-// Inject Cloudinary's fl_attachment flag so the browser force-downloads the
-// file (Content-Disposition: attachment) instead of opening it inline.
-function toForcedDownloadUrl(cloudinaryUrl: string, filename: string): string {
-  const marker = '/upload/';
-  const idx = cloudinaryUrl.indexOf(marker);
-  if (idx === -1) return cloudinaryUrl; // not a cloudinary upload URL — return as-is
+// Build a URL that makes the browser download the file instead of playing it.
+// Cloudinary uses the fl_attachment flag; local storage honours ?download=<name>.
+function toForcedDownloadUrl(url: string, filename: string): string {
   const safe = filename.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'stitcher-export';
-  return (
-    cloudinaryUrl.slice(0, idx + marker.length) +
-    `fl_attachment:${safe}/` +
-    cloudinaryUrl.slice(idx + marker.length)
-  );
+  if (storage.name === 'cloudinary') {
+    const marker = '/upload/';
+    const idx = url.indexOf(marker);
+    if (idx === -1) return url;
+    return url.slice(0, idx + marker.length) + `fl_attachment:${safe}/` + url.slice(idx + marker.length);
+  }
+  return `${url}${url.includes('?') ? '&' : '?'}download=${encodeURIComponent(safe)}`;
 }
 
 // Get timeline by project ID
@@ -93,8 +90,9 @@ export const updateTimeline = async (req: Request, res: Response) => {
         if (!trackUpdate._id || !Types.ObjectId.isValid(trackUpdate._id)) continue;
 
         // Update track
-        await Track.findByIdAndUpdate(
-          trackUpdate._id,
+        // Scope by timelineId so a client can only touch tracks of this timeline.
+        const updatedTrack = await Track.findOneAndUpdate(
+          { _id: trackUpdate._id, timelineId },
           {
             $set: {
               order: trackUpdate.order,
@@ -104,15 +102,18 @@ export const updateTimeline = async (req: Request, res: Response) => {
             }
           },
         );
+        if (!updatedTrack) continue;
         
         // --- 3) Update timeline items inside this track ---
         if (Array.isArray(trackUpdate.items)) {
           for (const itemUpdate of trackUpdate.items) {
             if (!itemUpdate._id || !Types.ObjectId.isValid(itemUpdate._id)) continue;
             
-            await TimelineItem.findByIdAndUpdate(
-              itemUpdate._id,
-              { $set: { ...itemUpdate } }
+            // Ids and ownership links are not editable from the client.
+            const { _id, trackId: _trackId, createdAt: _c, updatedAt: _u, __v: _v, ...fields } = itemUpdate;
+            await TimelineItem.findOneAndUpdate(
+              { _id: itemUpdate._id, trackId: trackUpdate._id },
+              { $set: fields }
             );
           }
         }
@@ -151,7 +152,7 @@ export const updateTimeline = async (req: Request, res: Response) => {
 
 // Export the current timeline state to a single downloadable mp4.
 // Trims + concatenates video clips in order and muxes the first audio clip,
-// then uploads the result to Cloudinary and returns the URL.
+// then stores the result and returns a download URL.
 export const exportTimelineVideo = async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
@@ -223,50 +224,20 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
         color: it.color ?? '#ffffff',
       }));
 
-    const mode: 'download' | 'share' = req.body?.mode === 'download' ? 'download' : 'share';
+    logger.info({ message: '[export] starting timeline export', projectId, videoClips: videoClips.length, audioClips: audioClips.length, textClips: textClips.length });
 
-    logger.info({ message: '[export] starting timeline export', projectId, mode, videoClips: videoClips.length, audioClips: audioClips.length, textClips: textClips.length });
+    const result = await exportTimeline(videoClips, audioClips, `exports/${projectId}`, textClips);
 
-    const result = await exportTimeline(videoClips, audioClips, `stitcher/exports/${projectId}`, textClips);
-
-    logger.info({ message: '[export] complete', projectId, mode, url: result.url, durationSec: result.durationSec });
+    logger.info({ message: '[export] complete', projectId, url: result.url, durationSec: result.durationSec });
 
     const project = await Project.findById(projectId).select('name').lean<{ name?: string }>();
     const projectName = project?.name ?? 'Stitcher video';
 
-    if (mode === 'download') {
-      // Force a real file download — never expose a "link" to the user.
-      return res.status(200).json({
-        success: true,
-        data: {
-          mode: 'download',
-          downloadUrl: toForcedDownloadUrl(result.url, projectName),
-          durationSec: result.durationSec,
-          warnings: result.warnings,
-        },
-      });
-    }
-
-    // mode === 'share' — persist an opaque mapping and return a Stitcher link,
-    // NOT the raw Cloudinary URL.
-    const shareId = nanoid(10);
-    await SharedVideo.create({
-      shareId,
-      projectId,
-      userId: req.userId,
-      videoUrl: result.url,
-      thumbnailUrl: result.thumbnailUrl ?? '',
-      durationSec: result.durationSec,
-      projectName,
-    });
-
-    const base = PUBLIC_APP_URL.replace(/\/$/, '');
     return res.status(200).json({
       success: true,
       data: {
-        mode: 'share',
-        shareId,
-        shareUrl: `${base}/v/${shareId}`,
+        mode: 'download',
+        downloadUrl: toForcedDownloadUrl(result.url, projectName),
         durationSec: result.durationSec,
         warnings: result.warnings,
       },
@@ -278,83 +249,5 @@ export const exportTimelineVideo = async (req: Request, res: Response) => {
       success: false,
       message: error?.message ?? 'Export failed',
     });
-  }
-};
-
-// Creates a share link for an already-rendered video URL (no ffmpeg needed).
-export const createSharedVideo = async (req: Request, res: Response) => {
-  try {
-    const { projectId, videoUrl, durationSec, thumbnailUrl, projectName: bodyProjectName } = req.body as {
-      projectId?: string;
-      videoUrl?: string;
-      durationSec?: number;
-      thumbnailUrl?: string;
-      projectName?: string;
-    };
-
-    if (!projectId || !videoUrl || !videoUrl.startsWith('http')) {
-      return res.status(400).json({ success: false, message: 'projectId and a valid videoUrl are required' });
-    }
-
-    const project = await Project.findById(projectId).select('name').lean<{ name?: string }>();
-    const name = (bodyProjectName && bodyProjectName.trim()) || project?.name || 'Stitcher video';
-
-    const shareId = nanoid(10);
-    await SharedVideo.create({
-      shareId,
-      projectId,
-      userId: req.userId,
-      videoUrl,
-      thumbnailUrl: thumbnailUrl ?? '',
-      durationSec: durationSec ?? 0,
-      projectName: name,
-    });
-
-    const base = PUBLIC_APP_URL.replace(/\/$/, '');
-    return res.status(200).json({ success: true, data: { shareId, shareUrl: `${base}/v/${shareId}` } });
-  } catch (error: any) {
-    logger.error({ message: '[share] create failed', error: String(error?.message ?? error) });
-    return res.status(500).json({ success: false, message: 'Failed to create share link' });
-  }
-};
-
-// Public (no-auth) resolver for a shared video. Returns the metadata the watch
-// page needs to play the video. Increments a view counter.
-export const getSharedVideo = async (req: Request, res: Response) => {
-  try {
-    const { shareId } = req.params;
-    if (!shareId) {
-      return res.status(400).json({ success: false, message: 'shareId is required' });
-    }
-    // Only count a view for an actual watch (?count=1, sent by the player). Link-preview
-    // crawlers and the server-side meta-tag injection read without it, so unfurls and
-    // page loads don't inflate the counter.
-    const countView = req.query.count === '1';
-    const shared = countView
-      ? await SharedVideo.findOneAndUpdate(
-          { shareId },
-          { $inc: { views: 1 } },
-          { new: true }
-        ).lean()
-      : await SharedVideo.findOne({ shareId }).lean();
-
-    if (!shared) {
-      return res.status(404).json({ success: false, message: 'This shared video does not exist or was removed' });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        videoUrl: shared.videoUrl,
-        thumbnailUrl: shared.thumbnailUrl,
-        durationSec: shared.durationSec,
-        projectName: shared.projectName,
-        views: shared.views,
-        createdAt: shared.createdAt,
-      },
-    });
-  } catch (error: any) {
-    logger.error({ message: '[share] resolve failed', error: String(error?.message ?? error) });
-    return res.status(500).json({ success: false, message: 'Failed to load shared video' });
   }
 };

@@ -15,7 +15,7 @@ export interface ITimelineItemBase extends Document {
     endTime: number;   // Position on timeline in seconds
     assetId?: Types.ObjectId; // Reference to Asset for video/audio
     metadata: Record<string, any>;
-    locked: Boolean;
+    locked: boolean;
     // Shared properties
     volume?: number; // For audio/video
     opacity?: number; // 0-1 for video/text

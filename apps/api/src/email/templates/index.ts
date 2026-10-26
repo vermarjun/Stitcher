@@ -84,45 +84,6 @@ export function verifyEmailTemplate(params: { username: string; verifyUrl: strin
   };
 }
 
-export function collabInviteTemplate(params: {
-  inviterName: string;
-  projectName: string;
-  role: "editor" | "viewer";
-  acceptUrl: string;
-  hasAccount: boolean;
-}): RenderedEmail {
-  const { inviterName, projectName, role, acceptUrl, hasAccount } = params;
-  const inviter = esc(inviterName);
-  const project = esc(projectName);
-  const roleLabel = role === "editor" ? "edit" : "view";
-  const url = esc(acceptUrl);
-
-  const ctaLabel = hasAccount ? "View invitation" : "Sign up and join";
-  const accountLine = hasAccount
-    ? `Sign in to accept the invitation.`
-    : `Sign up with this email address to accept the invitation.`;
-
-  const bodyHtml = `
-    <p style="margin:0 0 16px;font-size:18px;font-weight:700;">You've been invited to collaborate</p>
-    <p style="margin:0 0 12px;color:#374151;"><strong>${inviter}</strong> invited you to <strong>${roleLabel}</strong> the project <strong>"${project}"</strong> on Stitcher.</p>
-    <p style="margin:0 0 4px;color:#374151;">${accountLine}</p>
-    ${renderButton(ctaLabel, url)}
-    <p style="margin:0;color:#6b7280;font-size:13px;">If you weren't expecting this, you can ignore this email. Nothing will be shared until you accept.</p>`;
-
-  const text = [
-    `${inviterName} invited you to ${roleLabel} the project "${projectName}" on Stitcher.`,
-    ``,
-    accountLine,
-    url,
-  ].join("\n");
-
-  return {
-    subject: `${inviterName} invited you to "${projectName}" on Stitcher`,
-    html: renderLayout({ bodyHtml, preheader: `${inviterName} wants to collaborate with you on Stitcher.` }),
-    text,
-  };
-}
-
 export function passwordResetTemplate(params: { resetUrl: string }): RenderedEmail {
   const url = esc(params.resetUrl);
 

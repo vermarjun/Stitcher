@@ -8,11 +8,11 @@ import {
   getAssetsByType,
   getAssetsByOrigin,
   getAssetsStats,
-  generateUploadSignature,
-  saveAssetMetadata,
+  uploadAsset,
   deleteAsset
 } from "../controller/asset.controller";
 import auth from '../middleware/auth.middleware';
+import { upload } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -28,11 +28,8 @@ router.get('/type/:type', auth, getAssetsByType);             // GET /api/assets
 router.get('/origin/:origin', auth, getAssetsByOrigin);       // GET /api/assets/origin/:origin
 
 
-// POST /api/asset/upload-signature
-router.post('/upload-signature', auth, generateUploadSignature);
-
-// POST /api/asset/save-metadata
-router.post('/save-metadata', auth, saveAssetMetadata);
+// POST /api/asset/upload  (multipart: file, projectId, name?)
+router.post('/upload', auth, upload.single('file'), uploadAsset);
 
 // DELETE /api/asset/:assetId
 router.delete('/:assetId', auth, deleteAsset);

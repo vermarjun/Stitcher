@@ -49,8 +49,7 @@ const DangerTab: React.FC<DangerTabProps> = ({
         <div className="space-y-0.5">
           <p className="text-sm font-medium text-white">Delete account</p>
           <p className="max-w-md text-xs text-zinc-500">
-            Permanently removes your account, projects, and settings. Active
-            subscriptions are cancelled and remaining credits are lost. This
+            Permanently removes your account, projects, and settings. This
             can&apos;t be undone.
           </p>
         </div>

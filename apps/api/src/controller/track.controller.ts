@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import * as Y from 'yjs';
 import Track, { TrackType } from '../model/track.model';
 import TimelineItem, { ITimelineItem, IVideoTimelineItem, IAudioTimelineItem, ITextTimelineItem, TextAnimationType } from '../model/timelineitem.model';
 import Asset, { AssetType } from '../model/asset.model';
 import Timeline from '../model/timeline.model';
-import { getYjsDoc } from '../collab/yjs.server';
 
 // Interface for request bodies
 interface AddAssetToTrackRequest {
@@ -266,50 +264,6 @@ export const addAssetToTrack = async (req: Request, res: Response): Promise<void
         // Populate the created timeline item with asset data
         const populatedTimelineItem = await TimelineItem.findById(timelineItem._id).populate('assetId');
 
-        // ── Phase 5: propagate new item into the live Y.Doc so all collaborators
-        //    see it without a page refresh (mutation completeness).
-        //    We use the Mongo-assigned _id as the Y.Doc item id so it stays
-        //    aligned — materialize() will find it by id and skip re-creating it.
-        try {
-          const projectId = (track.projectId as unknown as { toString(): string } | null)?.toString() ?? '';
-          if (projectId) {
-            const ydoc = getYjsDoc(projectId);
-            if (ydoc) {
-              const timelineMap = ydoc.getMap<unknown>('timeline');
-              const tracksArray = timelineMap.get('tracks') as Y.Array<Y.Map<unknown>> | undefined;
-              if (tracksArray) {
-                // Find the matching track Y.Map
-                let targetTrack: Y.Map<unknown> | null = null;
-                for (let i = 0; i < tracksArray.length; i++) {
-                  const t = tracksArray.get(i);
-                  if ((t.get('id') as string) === trackId) { targetTrack = t; break; }
-                }
-                if (targetTrack) {
-                  // Cast to any to bypass Mongoose union-type limitations on lean doc
-                  const it = timelineItem as any;
-                  const assetRef = asset as any;
-                  ydoc.transact(() => {
-                    const itemsArray = (targetTrack as Y.Map<unknown>).get('items') as Y.Array<Y.Map<unknown>>;
-                    const itemMap = new Y.Map<unknown>();
-                    itemMap.set('id', it._id.toString());
-                    itemMap.set('type', it.type);
-                    itemMap.set('startTime', it.startTime);
-                    itemMap.set('endTime', it.endTime);
-                    itemMap.set('assetId', assetRef._id.toString());
-                    if (it.sourceStartTime != null) itemMap.set('sourceStartTime', it.sourceStartTime);
-                    if (it.sourceEndTime != null) itemMap.set('sourceEndTime', it.sourceEndTime);
-                    if (it.volume != null) itemMap.set('volume', it.volume);
-                    itemsArray.push([itemMap]);
-                  }, 'rest-add-asset');
-                }
-              }
-            }
-          }
-        } catch (yjsErr) {
-          // Non-fatal: the Y.Doc write is best-effort; Mongo is the source of truth
-          console.error('Y.Doc add-asset propagation error (non-fatal):', yjsErr);
-        }
-
         res.status(201).json({
             success: true,
             message: 'Asset added to track successfully',
@@ -566,97 +520,30 @@ export const deleteTimelineItem = async (req: DeleteTimelineItemRequest, res: Re
 
     const { trackId, assetId } = timelineItem;
 
-    // Resolve the projectId BEFORE we delete, so we can also remove the item
-    // from the live Y.Doc (the authoritative collab state). Without this, a
-    // delete that isn't mirrored into the Y.Doc by a synced client gets
-    // re-materialized from the doc and the clip "resurrects".
-    const trackForProject = await Track.findById(trackId).select('projectId').lean();
-    const deleteProjectId = (trackForProject?.projectId as unknown as { toString(): string } | null)?.toString?.() ?? '';
+    // 1. Delete the timeline item
+    await TimelineItem.findByIdAndDelete(timelineItemId);
 
-    // Start a transaction to ensure data consistency
-    const session = await TimelineItem.startSession();
-    
-    try {
-      await session.withTransaction(async () => {
-        // 1. Delete the timeline item
-        await TimelineItem.findByIdAndDelete(timelineItemId).session(session);
+    // 2. Remove the timeline item reference from the track
+    await Track.findByIdAndUpdate(trackId, { $pull: { items: new Types.ObjectId(timelineItemId) } });
 
-        // 2. Remove the timeline item reference from the track
-        await Track.findByIdAndUpdate(
-          trackId,
-          { $pull: { items: new Types.ObjectId(timelineItemId) } },
-          { session }
-        );
-
-        // 3. If the timeline item has an associated asset, update its isOnTimeline status
-        if (assetId) {
-          // Check if this asset is still being used by other timeline items
-          const remainingUsage = await TimelineItem.countDocuments({ 
-            assetId: assetId,
-            _id: { $ne: new Types.ObjectId(timelineItemId) }
-          }).session(session);
-
-          // If no other timeline items are using this asset, mark it as not on timeline
-          if (remainingUsage === 0) {
-            await Asset.findByIdAndUpdate(
-              assetId,
-              { isOnTimeline: false },
-              { session }
-            );
-          }
-        }
-      });
-
-      // ── Propagate the deletion into the live Y.Doc (authoritative) ──────────
-      // Mirror the add-asset injection so every collaborator drops the item and
-      // it cannot be re-materialized back into Mongo. Best-effort / non-fatal.
-      try {
-        if (deleteProjectId) {
-          const ydoc = getYjsDoc(deleteProjectId);
-          if (ydoc) {
-            const timelineMap = ydoc.getMap<unknown>('timeline');
-            const tracksArray = timelineMap.get('tracks') as Y.Array<Y.Map<unknown>> | undefined;
-            if (tracksArray) {
-              ydoc.transact(() => {
-                for (let i = 0; i < tracksArray.length; i++) {
-                  const t = tracksArray.get(i);
-                  const itemsArray = t.get('items') as Y.Array<Y.Map<unknown>> | undefined;
-                  if (!itemsArray) continue;
-                  for (let j = 0; j < itemsArray.length; j++) {
-                    if ((itemsArray.get(j).get('id') as string) === timelineItemId) {
-                      itemsArray.delete(j, 1);
-                      return; // ids are unique — done
-                    }
-                  }
-                }
-              }, 'rest-delete-item');
-            }
-          }
-        }
-      } catch (yjsDelErr) {
-        console.error('Y.Doc delete propagation error (non-fatal):', yjsDelErr);
+    // 3. If the timeline item has an associated asset, update its isOnTimeline status
+    if (assetId) {
+      // If no other timeline items use this asset, mark it as not on timeline
+      const remainingUsage = await TimelineItem.countDocuments({ assetId });
+      if (remainingUsage === 0) {
+        await Asset.findByIdAndUpdate(assetId, { isOnTimeline: false });
       }
-
-      // Success response
-      res.status(200).json({
-        success: true,
-        message: 'Timeline item deleted successfully',
-        data: {
-          deletedItemId: timelineItemId,
-          trackId: trackId.toString(),
-          assetId: assetId?.toString() || null
-        }
-      });
-
-    } catch (transactionError) {
-      console.error('Transaction error:', transactionError);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete timeline item due to database transaction error'
-      });
-    } finally {
-      await session.endSession();
     }
+
+    res.status(200).json({
+      success: true,
+      message: 'Timeline item deleted successfully',
+      data: {
+        deletedItemId: timelineItemId,
+        trackId: trackId.toString(),
+        assetId: assetId?.toString() || null
+      }
+    });
 
   } catch (error) {
     console.error('Error deleting timeline item:', error);

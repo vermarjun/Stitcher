@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { AISidebarHeader, ConfirmationDialog, ChatHistoryComponent } from './Header.rightsidebar';
 import GenerateComponent from './Generate.rightsidebar';
+import EditComponent from './Edit.rightsidebar';
 import type { Project, IUser, Asset } from '@/State/Types';
 import api from '@/api';
 
@@ -52,7 +53,6 @@ export type Message = {
   completed: boolean;
   plannerOut: boolean;
   generatorOutput: boolean;
-  rating?: number;
   generationMs?: number; // wall-clock time taken to generate the video, in ms
 };
 
@@ -107,9 +107,9 @@ const AISidebar = ({
   const [generateIsProcessing, setGenerateIsProcessing] = useState(false);
   
   const [editMessages, setEditMessages] = useState<Message[]>([]);
-  const [_editInput, setEditInput] = useState('');
-  const [_editIsProcessing, setEditIsProcessing] = useState(false);
-  const [_currentEditChatId, setCurrentEditChatId] = useState<string | null>(null);
+  const [editInput, setEditInput] = useState('');
+  const [editIsProcessing, setEditIsProcessing] = useState(false);
+  const [currentEditChatId, setCurrentEditChatId] = useState<string | null>(null);
 
   const [currentGenerateChatId, setCurrentGenerateChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(false);
@@ -284,6 +284,22 @@ const AISidebar = ({
                   <span>Loading chats...</span>
                 </div>
               </div>
+            ) : mode === 'edit' ? (
+              <EditComponent
+                currentProject={currentProject}
+                ref={editRef}
+                messages={editMessages}
+                setMessages={setEditMessages}
+                input={editInput}
+                setInput={setEditInput}
+                isProcessing={editIsProcessing}
+                setIsProcessing={setEditIsProcessing}
+                currentChatId={currentEditChatId}
+                setCurrentChatId={setCurrentEditChatId}
+                onAssetDrop={onAssetDrop}
+                droppedItems={droppedItems}
+                onRemoveItem={onRemoveItem}
+              />
             ) : (
               <GenerateComponent
                 currentProject={currentProject}

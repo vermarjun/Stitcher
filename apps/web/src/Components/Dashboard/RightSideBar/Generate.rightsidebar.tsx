@@ -1,7 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, useState } from "react";
 import { ScrollArea } from "@/Components/ui/scroll-area";
-import { AlertCircle, ChevronDown, ChevronUp, Copy, Lock, Star } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { AlertCircle, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { messageActions, type Message } from "./Main.rightsidebar";
 import EmptyState from "./EmptyState.rightsidebar";
 import MessageBubble from "./MessageBubble.rightsidebar";
@@ -11,10 +10,8 @@ import GenerationProgress from "./GenerationProgress.rightsidebar";
 import api from "@/api";
 import { toast } from "sonner";
 import type { Project, IUser, Asset } from "@/State/Types";
-import { useRefreshAssetStash } from "../RefreshContextProvider";
-import { useRefreshHeader } from "../context";
+import { useRefreshAssetStash, useRefreshTimeline } from "../RefreshContextProvider";
 import { socket, setActiveChat } from "@/socket";
-import { trackAction } from "@/lib/analytics";
 
 /**
  * Live pipeline progress shown as the animated step label + progress bar.
@@ -55,83 +52,6 @@ interface Props {
   droppedItems?: Asset[];
   onRemoveItem?: (id: string) => void;
 }
-
-/** Mirror of the same helper in MessageBubble — avoids cross-file import. */
-function isVideoUrl(value: string): boolean {
-  if (!value) return false;
-  try {
-    if (!/^https?:\/\//i.test(value.trim())) return false;
-    if (/res\.cloudinary\.com\/.+\/video\//i.test(value)) return true;
-    const pathname = new URL(value).pathname.toLowerCase();
-    if (pathname.endsWith(".mp4") || pathname.endsWith(".webm")) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-/** RLHF star-rating widget shown below a completed video message. */
-const StarRatingWidget = ({
-  chatId,
-  onRated,
-}: {
-  chatId: string;
-  onRated: () => void;
-}) => {
-  const [hovered, setHovered] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [exiting, setExiting] = useState(false);
-  const [selected, setSelected] = useState(0);
-
-  const handleClick = async (n: number) => {
-    if (submitting || exiting) return;
-    setSelected(n);
-    setSubmitting(true);
-    try {
-      await api.patch(`/generatechat/${chatId}/rating`, { rating: n });
-    } catch {
-      // best-effort — hide widget regardless
-    }
-    setExiting(true);
-    setTimeout(() => onRated(), 350);
-  };
-
-  const isActive = exiting || submitting;
-
-  return (
-    <div
-      className={cn(
-        "overflow-hidden transition-all duration-300 ease-out mt-2 mb-2",
-        exiting ? "opacity-0 scale-95 max-h-0 -translate-y-1" : "opacity-100 max-h-24"
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-zinc-400 whitespace-nowrap">How would you rate this video?</span>
-        <div className="flex items-center gap-0.5 shrink-0">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              disabled={isActive}
-              onMouseEnter={() => !isActive && setHovered(n)}
-              onMouseLeave={() => !isActive && setHovered(0)}
-              onClick={() => handleClick(n)}
-              className="p-0.5 text-zinc-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
-              aria-label={`Rate ${n} star${n !== 1 ? "s" : ""}`}
-            >
-              <Star
-                className="w-3.5 h-3.5"
-                fill={hovered >= n || selected >= n ? "#facc15" : "none"}
-                stroke={hovered >= n || selected >= n ? "#facc15" : "currentColor"}
-              />
-            </button>
-          ))}
-        </div>
-      </div>
-      <p className="text-[10px] text-zinc-600 mt-0.5">Your rating helps improve Stitcher through our RLHF loop</p>
-    </div>
-  );
-};
 
 // Helper function to format error messages
 const formatErrorMessage = (error: any): string => {
@@ -206,16 +126,14 @@ const GenerateComponent = ({
   droppedItems: _droppedItems,
   onRemoveItem: _onRemoveItem
 }: Props) => {
-  const { triggerHeaderRefresh } = useRefreshHeader()
-  // Viewers are read-only: they cannot spend credits / generate. Default
-  // permissive when the role is unknown (older project payloads).
-  const canEdit = (currentProject?.myRole ?? "owner") !== "viewer";
   const plannerOutputRef = useRef("");
   const streamSummaryRef = useRef(false);
   const llmSummaryRef = useRef("");
   const genStartRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { triggerRefresh } = useRefreshAssetStash();
+  // The workers add the finished video to the stored timeline; refetch it.
+  const { triggerRefresh: triggerTimelineRefresh } = useRefreshTimeline();
   // Live pipeline progress (drives the animated step label + progress bar).
   // Sourced from the backend `progress` socket event AND the status endpoint, so
   // a page reload restores the exact phase + percent the job was on.
@@ -311,7 +229,7 @@ const GenerateComponent = ({
     setIsProcessing(false);
     resetProgress();
     triggerRefresh();
-    triggerHeaderRefresh();
+    triggerTimelineRefresh();
     genStartRef.current = null;
     jobCompletedRef.current = true;
     stopPoll();
@@ -396,7 +314,7 @@ const GenerateComponent = ({
       setIsProcessing(false);
       resetProgress();
       triggerRefresh();
-      triggerHeaderRefresh();
+      triggerTimelineRefresh();
   };
 
   // ─── State reconciliation on load / chat switch ──────────────────────────
@@ -557,7 +475,7 @@ const GenerateComponent = ({
     }
 
     if (type === "job_complete") {
-      const finalUrl: string | undefined = data?.finalUrl ?? data?.cloudinaryUrl;
+      const finalUrl: string | undefined = data?.finalUrl;
       // Funnel into shared idempotent handler (clears loading, stops poll, etc.)
       applyCompletionResult(finalUrl);
       return;
@@ -628,11 +546,6 @@ const GenerateComponent = ({
 
   const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
-    if (!canEdit) {
-      toast.error("You have viewer-only access to this project.");
-      return;
-    }
-    triggerHeaderRefresh();
 
     const userMessage = messageActions.createMessage(input.trim(), "user");
     setMessages((prev: Message[]) => [...prev, userMessage]);
@@ -641,8 +554,6 @@ const GenerateComponent = ({
     setInput("");
     setIsProcessing(true);
     genStartRef.current = Date.now();
-    // Key conversion event: a user submitted a generation prompt.
-    trackAction("generate_submit", { isNewChat: !currentChatId });
     // Reset any streaming refs from a prior generation in this chat.
     streamSummaryRef.current = true;
     plannerOutputRef.current = "";
@@ -702,12 +613,6 @@ const GenerateComponent = ({
       }
     } catch (error: any) {
       const errorDetails = getErrorDetails(error);
-
-      // Out-of-credits (402): point the user at BYOT — they can add their own
-      // API keys in Settings to keep generating at no cost once credits run out.
-      if (error?.response?.status === 402) {
-        toast.error("Out of credits — add your own API keys in Settings to keep generating.");
-      }
 
       const errorMessage = messageActions.createMessage(
         `error:${JSON.stringify(errorDetails)}`,
@@ -930,18 +835,7 @@ const GenerateComponent = ({
     }
   };
 
-  // Read-only bar shown in place of the message input for viewers.
-  const ViewerLockedBar = () => (
-    <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400">
-      <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-      <span>
-        You have <span className="text-amber-300 font-medium">viewer-only</span> access — AI generation is disabled.
-      </span>
-    </div>
-  );
-
-  // The input bar: the real composer for editors/owners, a disabled notice for viewers.
-  const inputBar = canEdit ? (
+  const inputBar = (
     <MessageInput
       input={input}
       setInput={setInput}
@@ -950,8 +844,6 @@ const GenerateComponent = ({
       placeholder={getPlaceholder()}
       onCancel={handleCancelGeneration}
     />
-  ) : (
-    <ViewerLockedBar />
   );
 
   return (
@@ -982,21 +874,6 @@ const GenerateComponent = ({
                   return null;
                 }
 
-                // Determine whether to show the RLHF star-rating widget.
-                // Conditions: last message, assistant, completed, video URL, not yet rated, not currently processing.
-                const llmResp =
-                  typeof message.content === "object" && message.content !== null
-                    ? (message.content as { plannerOutput: string; llmResponse: string }).llmResponse
-                    : "";
-                const showRating =
-                  isLastMessage &&
-                  message.role === "assistant" &&
-                  message.completed &&
-                  isVideoUrl(llmResp) &&
-                  !message.rating &&
-                  !isProcessing &&
-                  !!currentChatId;
-
                 return (
                   <div key={message._id || index} className="break-words">
                     {typeof message.content === "string" &&
@@ -1013,19 +890,6 @@ const GenerateComponent = ({
                         llmSummaryRef={llmSummaryRef}
                         isProcessing={isProcessing}
                         onStreamingComplete={handleStreamingComplete}
-                        projectId={currentProject?._id}
-                      />
-                    )}
-                    {showRating && (
-                      <StarRatingWidget
-                        chatId={currentChatId!}
-                        onRated={() =>
-                          setMessages((prev) => {
-                            const updated = [...prev];
-                            updated[index] = { ...updated[index], rating: -1 }; // -1 = rated, hides widget
-                            return updated;
-                          })
-                        }
                       />
                     )}
                   </div>

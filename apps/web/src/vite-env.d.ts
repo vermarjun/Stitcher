@@ -1,9 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_FEATURE_COMMUNITY?: string;
-  readonly VITE_CLARITY_PROJECT_ID?: string;
-  [key: string]: string | undefined;
+  readonly VITE_BACKEND_URL?: string;
+  readonly VITE_GOOGLE_CLIENT_ID?: string;
 }
 
 interface ImportMeta {

@@ -1,7 +1,7 @@
 /**
  * OpenTelemetry metric instruments and a periodic BullMQ queue-depth sampler.
  *
- * Conforms to Plan/OBSERVABILITY.md §3d:
+ * Instruments:
  *   - stitcher.pipeline.step.duration (histogram, ms)  attrs { step, success }
  *   - stitcher.queue.depth (gauge via async callback)  attrs { queue, state }
  *   - stitcher.render.concurrency (gauge)              attrs { }

@@ -1,10 +1,8 @@
-import { Copy, Check, Download, Share2, X, Link as LinkIcon } from "lucide-react";
+import { Copy, Check, Download } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { Button } from "@/Components/ui/button";
 import type { Message } from "./Main.rightsidebar";
 import LiveTextStream from "./LivestreamText.rightsidebar";
-import { toast } from "sonner";
-import api from "@/api";
 
 /**
  * Returns true when the string looks like a video URL that should be embedded.
@@ -37,20 +35,22 @@ function formatDuration(ms: number): string {
   return rem ? `${m}m ${rem}s` : `${m}m`;
 }
 
-/** Inject Cloudinary fl_attachment flag to force browser download. */
+/**
+ * URL that makes the browser save the file instead of playing it. The API's
+ * /media route turns "?download=<name>" into a Content-Disposition header.
+ * Cloudinary URLs (optional storage backend) use the fl_attachment flag.
+ */
 function toDownloadUrl(u: string): string {
   const marker = '/upload/';
-  const i = u.indexOf(marker);
-  if (i === -1) return u;
-  return u.slice(0, i + marker.length) + 'fl_attachment:stitcher-video/' + u.slice(i + marker.length);
+  if (/res\.cloudinary\.com\//i.test(u) && u.includes(marker)) {
+    const i = u.indexOf(marker);
+    return u.slice(0, i + marker.length) + 'fl_attachment:stitcher-video/' + u.slice(i + marker.length);
+  }
+  return u + (u.includes('?') ? '&' : '?') + 'download=stitcher-video';
 }
 
 /** Embedded player for a completed generation's final video URL. */
-const FinalVideoPlayer = ({ url, generationMs, projectId }: { url: string; generationMs?: number; projectId?: string }) => {
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareLink, setShareLink] = useState("");
-  const [shareBusy, setShareBusy] = useState(false);
-
+const FinalVideoPlayer = ({ url, generationMs }: { url: string; generationMs?: number }) => {
   const handleDownload = () => {
     const a = document.createElement("a");
     a.href = toDownloadUrl(url);
@@ -60,134 +60,30 @@ const FinalVideoPlayer = ({ url, generationMs, projectId }: { url: string; gener
     document.body.removeChild(a);
   };
 
-  const handleShare = async () => {
-    if (!projectId) {
-      toast.error("Can't share — missing project context");
-      return;
-    }
-    setShareOpen(true);
-    setShareLink("");
-    setShareBusy(true);
-    try {
-      const res = await api.post('/share', { projectId, videoUrl: url });
-      setShareLink((res.data as any).data.shareUrl);
-    } catch {
-      toast.error("Couldn't create share link");
-    } finally {
-      setShareBusy(false);
-    }
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(shareLink);
-    toast.success("Link copied");
-  };
-
-  const closeDialog = () => {
-    if (!shareBusy) setShareOpen(false);
-  };
-
   return (
-    <>
-      <div className="mt-2 rounded-md overflow-hidden w-full border border-zinc-800 shadow-lg">
-        <video
-          src={url}
-          controls
-          playsInline
-          className="w-full aspect-video bg-black"
-        />
-        <div className="p-2 bg-zinc-800 flex items-center justify-between">
-          {/* LEFT: generation time */}
-          <span className="text-xs text-neutral-400">
-            {generationMs && generationMs > 0 ? `Generated in ${formatDuration(generationMs)}` : "Generated"}
-          </span>
-
-          {/* RIGHT: Download + Share icon buttons */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              title="Download"
-              onClick={handleDownload}
-              className="w-7 h-7 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-zinc-700/60 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              title="Share"
-              onClick={handleShare}
-              className="w-7 h-7 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-zinc-700/60 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+    <div className="mt-2 rounded-md overflow-hidden w-full border border-zinc-800 shadow-lg">
+      <video
+        src={url}
+        controls
+        playsInline
+        className="w-full aspect-video bg-black"
+      />
+      <div className="p-2 bg-zinc-800 flex items-center justify-between">
+        <span className="text-xs text-neutral-400">
+          {generationMs && generationMs > 0 ? `Generated in ${formatDuration(generationMs)}` : "Generated"}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            title="Download"
+            onClick={handleDownload}
+            className="w-7 h-7 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-zinc-700/60 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
-
-      {/* Share dialog */}
-      {shareOpen && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-          onClick={closeDialog}
-        >
-          <div
-            className="max-w-[420px] w-full rounded-xl border border-zinc-700 bg-black p-5 text-zinc-100 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <LinkIcon className="w-4 h-4 text-zinc-400" />
-                <span className="font-semibold text-sm">Share video</span>
-              </div>
-              <button
-                type="button"
-                onClick={closeDialog}
-                disabled={shareBusy}
-                className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-40"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Body */}
-            {shareBusy ? (
-              <div className="flex items-center gap-3 py-4 justify-center text-zinc-400">
-                <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin flex-shrink-0" />
-                <span className="text-sm">Creating a shareable link…</span>
-              </div>
-            ) : shareLink ? (
-              <div className="space-y-3">
-                <input
-                  readOnly
-                  value={shareLink}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-zinc-500"
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="flex items-center gap-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition-colors"
-                  >
-                    <Copy className="w-3 h-3" />
-                    Copy link
-                  </button>
-                  <a
-                    href={shareLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 rounded-lg border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors"
-                  >
-                    Open link ↗
-                  </a>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 };
 
@@ -201,7 +97,6 @@ interface Props {
   isProcessing: boolean;
   isLastMessage: boolean;
   streamSummaryRef: RefObject<boolean>;
-  projectId?: string;
 }
 
 const VideoPlayer = ({ scene }: { scene: any }) => {
@@ -306,7 +201,6 @@ const MessageBubble = ({
   isProcessing,
   streamSummaryRef,
   onStreamingComplete, // New prop
-  projectId,
 }: Props & { onStreamingComplete?: () => void }) => {
   const [copied, setCopied] = useState(false);
 
@@ -428,7 +322,7 @@ const MessageBubble = ({
                 (llmSummaryRef.current = llmResponse) &&
                 (isVideoUrl(llmResponse) ? (
                   // Video URL arrived live — skip typewriter, show player immediately
-                  (() => { onStreamingComplete?.(); return <FinalVideoPlayer url={llmResponse} generationMs={message.generationMs} projectId={projectId} />; })()
+                  (() => { onStreamingComplete?.(); return <FinalVideoPlayer url={llmResponse} generationMs={message.generationMs} />; })()
                 ) : (
                   <LiveTextStream
                     text={llmSummaryRef.current}
@@ -438,7 +332,7 @@ const MessageBubble = ({
                 ))
               ) : isVideoUrl(llmResponse) ? (
                 // Video URL in loaded history or completed message
-                <FinalVideoPlayer url={llmResponse} generationMs={message.generationMs} projectId={projectId} />
+                <FinalVideoPlayer url={llmResponse} generationMs={message.generationMs} />
               ) : (
                 <p className="break-words">{llmResponse}</p>
               )}

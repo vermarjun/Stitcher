@@ -2,7 +2,7 @@
  * BullMQ worker that delivers queued emails via the configured provider.
  *
  * The worker is intentionally dumb: messages arrive fully rendered, so it only
- * resolves the provider (gmail/console/…) and calls send(). All template logic
+ * resolves the provider (smtp/gmail/console) and calls send(). All template logic
  * lives in src/email/. A failed send throws → BullMQ retries per the queue's
  * backoff policy.
  */

@@ -22,8 +22,9 @@ vi.mock("../../model/project.model", () => ({
     default: { findById: vi.fn() },
 }));
 
+// The controller loads the caller's own chat with findOne({ projectId, userId }).
 vi.mock("../../model/editChat.model", () => ({
-    default: { findById: vi.fn() },
+    default: { findOne: vi.fn() },
 }));
 
 vi.mock("../../model/timelineitem.model", () => ({
@@ -48,7 +49,7 @@ import { Types } from "mongoose";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const mockProjectFind = Project.findById as unknown as ReturnType<typeof vi.fn>;
-const mockChatFind    = EditChat.findById as unknown as ReturnType<typeof vi.fn>;
+const mockChatFind    = EditChat.findOne as unknown as ReturnType<typeof vi.fn>;
 const mockTLIUpdate   = TimelineItem.findByIdAndUpdate as unknown as ReturnType<typeof vi.fn>;
 
 const VALID_PROJECT_ID    = new Types.ObjectId().toHexString();
@@ -56,11 +57,12 @@ const VALID_EDIT_CHAT_ID  = new Types.ObjectId().toHexString();
 const VALID_TLI_ID        = new Types.ObjectId().toHexString();
 const VALID_PREV_ASSET_ID = new Types.ObjectId().toHexString();
 const VALID_NEW_ASSET_ID  = new Types.ObjectId().toHexString();
+const VALID_USER_ID       = new Types.ObjectId().toHexString();
 
 /** Build a minimal mock express Request */
 function makeReq(
     body: Record<string, unknown>,
-    userId: string | null = "user-abc"
+    userId: string | null = VALID_USER_ID
 ): Partial<Request> & { userId?: string } {
     const req: Partial<Request> & { userId?: string } = { body };
     if (userId !== null) req.userId = userId;
