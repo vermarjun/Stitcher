@@ -16,8 +16,8 @@
       "duration_ok": true,
       "play_count_ok": true,
       "verified": true,
-      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/pendulum/01.mp4",
-      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/pendulum/01.jpg"
+      "mp4": "renders_v2/manim-physics/pendulum/01.mp4",
+      "thumb": "renders_v2/manim-physics/pendulum/01.jpg"
     },
     {
       "feature": "electrostatics",
@@ -30,8 +30,8 @@
       "duration_ok": true,
       "play_count_ok": true,
       "verified": true,
-      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/electrostatics/01.mp4",
-      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/electrostatics/01.jpg"
+      "mp4": "renders_v2/manim-physics/electrostatics/01.mp4",
+      "thumb": "renders_v2/manim-physics/electrostatics/01.jpg"
     },
     {
       "feature": "magnetostatics",
@@ -44,8 +44,8 @@
       "duration_ok": true,
       "play_count_ok": true,
       "verified": true,
-      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/magnetostatics/01.mp4",
-      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/magnetostatics/01.jpg"
+      "mp4": "renders_v2/manim-physics/magnetostatics/01.mp4",
+      "thumb": "renders_v2/manim-physics/magnetostatics/01.jpg"
     },
     {
       "feature": "wave",
@@ -58,8 +58,8 @@
       "duration_ok": true,
       "play_count_ok": true,
       "verified": true,
-      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/wave/01.mp4",
-      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/wave/01.jpg"
+      "mp4": "renders_v2/manim-physics/wave/01.mp4",
+      "thumb": "renders_v2/manim-physics/wave/01.jpg"
     },
     {
       "feature": "optics",
@@ -72,8 +72,8 @@
       "duration_ok": true,
       "play_count_ok": true,
       "verified": true,
-      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/optics/01.mp4",
-      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/optics/01.jpg"
+      "mp4": "renders_v2/manim-physics/optics/01.mp4",
+      "thumb": "renders_v2/manim-physics/optics/01.jpg"
     },
     {
       "feature": "rigid_body",
@@ -86,8 +86,8 @@
       "duration_ok": true,
       "play_count_ok": true,
       "verified": true,
-      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/rigid_body/01.mp4",
-      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/rigid_body/01.jpg"
+      "mp4": "renders_v2/manim-physics/rigid_body/01.mp4",
+      "thumb": "renders_v2/manim-physics/rigid_body/01.jpg"
     }
   ]
 }

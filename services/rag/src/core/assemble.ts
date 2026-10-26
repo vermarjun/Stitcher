@@ -55,7 +55,8 @@ export function assemble(
   rawQuery: string,
   transformed: TransformedQuery,
   ranked: ScoredDoc[],
-  topK: number
+  topK: number,
+  includePitfalls = config.STAGE_PITFALLS
 ): AssembleOutput {
   const apiDocs = ranked.filter((s) => s.doc.docType === "api");
   const scriptDocs = ranked.filter((s) => s.doc.docType === "script" && s.doc.code.trim());
@@ -83,7 +84,7 @@ export function assemble(
   const observedColors = [...new Set(scriptDocs.flatMap((s) => s.doc.colorPalette))];
 
   const styleRecommendations = selectStyle([...detectedApis], domain, observedColors);
-  const pitfalls = config.STAGE_PITFALLS ? selectPitfalls([...detectedApis], domain) : [];
+  const pitfalls = includePitfalls ? selectPitfalls([...detectedApis], domain) : [];
 
   const structuredContext: StructuredContext = {
     apiExamples,

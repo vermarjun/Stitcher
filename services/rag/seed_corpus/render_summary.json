@@ -1,7 +1,7 @@
 {
   "results": [
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-astronomy/Star/01.json",
+      "file": "seed_corpus/examples/manim-astronomy/Star/01.json",
       "plugin": "manim-astronomy",
       "api": "Star",
       "scene": "StarBasicYellow",
@@ -12,7 +12,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-astronomy/Star/02.json",
+      "file": "seed_corpus/examples/manim-astronomy/Star/02.json",
       "plugin": "manim-astronomy",
       "api": "Star",
       "scene": "StarRedGiant",
@@ -23,7 +23,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-astronomy/Star/03.json",
+      "file": "seed_corpus/examples/manim-astronomy/Star/03.json",
       "plugin": "manim-astronomy",
       "api": "Star",
       "scene": "StarBlueDwarf",
@@ -34,7 +34,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-astronomy/Star/04.json",
+      "file": "seed_corpus/examples/manim-astronomy/Star/04.json",
       "plugin": "manim-astronomy",
       "api": "Star",
       "scene": "StarWithPlanet",
@@ -45,7 +45,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-astronomy/Star/05.json",
+      "file": "seed_corpus/examples/manim-astronomy/Star/05.json",
       "plugin": "manim-astronomy",
       "api": "Star",
       "scene": "StarComparison",
@@ -56,7 +56,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chemistry/BohrAtom/01.json",
+      "file": "seed_corpus/examples/manim-chemistry/BohrAtom/01.json",
       "plugin": "manim-chemistry",
       "api": "BohrAtom",
       "scene": "BohrAtomHydrogen",
@@ -67,7 +67,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chemistry/BohrAtom/02.json",
+      "file": "seed_corpus/examples/manim-chemistry/BohrAtom/02.json",
       "plugin": "manim-chemistry",
       "api": "BohrAtom",
       "scene": "BohrAtomCarbon",
@@ -78,7 +78,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chemistry/BohrAtom/03.json",
+      "file": "seed_corpus/examples/manim-chemistry/BohrAtom/03.json",
       "plugin": "manim-chemistry",
       "api": "BohrAtom",
       "scene": "BohrAtomOxygen",
@@ -89,7 +89,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chemistry/BohrAtom/04.json",
+      "file": "seed_corpus/examples/manim-chemistry/BohrAtom/04.json",
       "plugin": "manim-chemistry",
       "api": "BohrAtom",
       "scene": "BohrAtomSilicon",
@@ -100,7 +100,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chemistry/BohrAtom/05.json",
+      "file": "seed_corpus/examples/manim-chemistry/BohrAtom/05.json",
       "plugin": "manim-chemistry",
       "api": "BohrAtom",
       "scene": "BohrAtomComparison",
@@ -111,7 +111,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chess/Board/01.json",
+      "file": "seed_corpus/examples/manim-chess/Board/01.json",
       "plugin": "manim-chess",
       "api": "Board",
       "scene": "ChessBoardInitial",
@@ -122,7 +122,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chess/Board/02.json",
+      "file": "seed_corpus/examples/manim-chess/Board/02.json",
       "plugin": "manim-chess",
       "api": "Board",
       "scene": "ChessBoardMoveAnimated",
@@ -133,7 +133,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chess/Board/03.json",
+      "file": "seed_corpus/examples/manim-chess/Board/03.json",
       "plugin": "manim-chess",
       "api": "Board",
       "scene": "ChessBoardCustomColors",
@@ -144,7 +144,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chess/Board/04.json",
+      "file": "seed_corpus/examples/manim-chess/Board/04.json",
       "plugin": "manim-chess",
       "api": "Board",
       "scene": "ChessBoardMultiMove",
@@ -155,7 +155,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-chess/Board/05.json",
+      "file": "seed_corpus/examples/manim-chess/Board/05.json",
       "plugin": "manim-chess",
       "api": "Board",
       "scene": "ChessBoardAddPiece",
@@ -166,7 +166,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MArray/01.json",
+      "file": "seed_corpus/examples/manim-dsa/MArray/01.json",
       "plugin": "manim-dsa",
       "api": "MArray",
       "scene": "MArrayBasicCreate",
@@ -177,7 +177,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MArray/02.json",
+      "file": "seed_corpus/examples/manim-dsa/MArray/02.json",
       "plugin": "manim-dsa",
       "api": "MArray",
       "scene": "MArrayAppendPop",
@@ -188,7 +188,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MArray/03.json",
+      "file": "seed_corpus/examples/manim-dsa/MArray/03.json",
       "plugin": "manim-dsa",
       "api": "MArray",
       "scene": "MArraySwapHighlight",
@@ -199,7 +199,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MArray/04.json",
+      "file": "seed_corpus/examples/manim-dsa/MArray/04.json",
       "plugin": "manim-dsa",
       "api": "MArray",
       "scene": "MArrayGreenStyle",
@@ -210,7 +210,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MArray/05.json",
+      "file": "seed_corpus/examples/manim-dsa/MArray/05.json",
       "plugin": "manim-dsa",
       "api": "MArray",
       "scene": "MArraySwapElements",
@@ -221,7 +221,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MStack/01.json",
+      "file": "seed_corpus/examples/manim-dsa/MStack/01.json",
       "plugin": "manim-dsa",
       "api": "MStack",
       "scene": "MStackBasic",
@@ -232,7 +232,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-dsa/MStack/02.json",
+      "file": "seed_corpus/examples/manim-dsa/MStack/02.json",
       "plugin": "manim-dsa",
       "api": "MStack",
       "scene": "MStackCallStack",
@@ -243,7 +243,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-ml/FeedForward/01.json",
+      "file": "seed_corpus/examples/manim-ml/FeedForward/01.json",
       "plugin": "manim-ml",
       "api": "FeedForward",
       "scene": "FFNBasic",
@@ -254,7 +254,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-ml/FeedForward/02.json",
+      "file": "seed_corpus/examples/manim-ml/FeedForward/02.json",
       "plugin": "manim-ml",
       "api": "FeedForward",
       "scene": "FFNForwardPass",
@@ -265,7 +265,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-ml/FeedForward/03.json",
+      "file": "seed_corpus/examples/manim-ml/FeedForward/03.json",
       "plugin": "manim-ml",
       "api": "FeedForward",
       "scene": "FFNDeep",
@@ -276,7 +276,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-ml/FeedForward/04.json",
+      "file": "seed_corpus/examples/manim-ml/FeedForward/04.json",
       "plugin": "manim-ml",
       "api": "FeedForward",
       "scene": "FFNCustomColors",
@@ -287,7 +287,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-ml/FeedForward/05.json",
+      "file": "seed_corpus/examples/manim-ml/FeedForward/05.json",
       "plugin": "manim-ml",
       "api": "FeedForward",
       "scene": "FFNForwardPassSpaced",
@@ -298,7 +298,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-physics/Pendulum/01.json",
+      "file": "seed_corpus/examples/manim-physics/Pendulum/01.json",
       "plugin": "manim-physics",
       "api": "Pendulum",
       "scene": "PendulumSimple",
@@ -309,7 +309,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-physics/Pendulum/02.json",
+      "file": "seed_corpus/examples/manim-physics/Pendulum/02.json",
       "plugin": "manim-physics",
       "api": "Pendulum",
       "scene": "PendulumLarge",
@@ -320,7 +320,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-physics/Pendulum/03.json",
+      "file": "seed_corpus/examples/manim-physics/Pendulum/03.json",
       "plugin": "manim-physics",
       "api": "Pendulum",
       "scene": "PendulumWithGravity",
@@ -331,7 +331,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-physics/Pendulum/04.json",
+      "file": "seed_corpus/examples/manim-physics/Pendulum/04.json",
       "plugin": "manim-physics",
       "api": "Pendulum",
       "scene": "PendulumCustomBob",
@@ -342,7 +342,7 @@
       "error": null
     },
     {
-      "file": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/examples/manim-physics/Pendulum/05.json",
+      "file": "seed_corpus/examples/manim-physics/Pendulum/05.json",
       "plugin": "manim-physics",
       "api": "Pendulum",
       "scene": "PendulumNearVertical",

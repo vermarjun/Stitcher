@@ -36,8 +36,10 @@ describe("resolveSettings", () => {
 
   it("defaults extraBody to the thinking-disable knob when unset", () => {
     const s = resolveSettings();
-    if (config.OPENCODE_DISABLE_THINKING) {
+    if (["opencode", "opencodego"].includes(config.LLM_PROVIDER) && config.OPENCODE_DISABLE_THINKING) {
       expect(s.llm.extraBody).toEqual({ thinking: { type: "disabled" } });
+    } else {
+      expect(s.llm.extraBody).toEqual({});
     }
   });
 

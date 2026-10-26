@@ -1,244 +1,156 @@
-# ManimRAG
+# Manim RAG service
 
-A low-latency, resilient **retrieval service** with one job: given a natural-language
-animation request, return the most relevant Manim v0.19 knowledge so a downstream
-code-generation model can write correct Manim Python **without hallucinating APIs**.
+This service retrieves Manim API references and scene examples for an animation
+request. It returns a grounded prompt, structured examples and retrieval timing.
+It does not generate or render videos.
 
-It does **not** generate code, render videos, or run Manim — it retrieves and assembles
-grounding context.
+The pipeline optionally rewrites the query with an LLM, embeds it, searches MongoDB
+vectors, optionally adds text search with reciprocal rank fusion, optionally
+reranks with an LLM, selects relevant examples with API coverage, and assembles
+context with curated pitfalls. Query transform and rerank default to off. Their
+failures fall back to the raw query and retrieval order. Embedding or database
+failures return a pipeline error; the calling API may continue without RAG.
 
-```
-POST /enhance  { "prompt": "animate bubble sort with bars swapping heights" }
-        │
-        ▼
- query transform (glm-5.1, optional)  ──fallback──▶ raw query
-        │
-        ▼  embed (bge-m3 / gemini-embedding-001)
- dense vector search (Atlas)  (+ optional BM25 → RRF)
-        │
-        ▼  rerank (deepseek-v4-flash LLM, optional, capped)
- context assembly  →  groundedPrompt + structuredContext
-```
+## Local use
 
-Every stage is **opt-in via env**, **measured** (per-stage latency in the response), and
-**resilient** (retry/backoff + graceful degradation — a failing LLM never fails the request).
+Use Node.js 20 or later and Docker. From `services/rag`, install and check:
 
----
-
-## Architecture
-
-Single MongoDB Atlas collection (`manimrag_corpus`) of `CorpusDoc`s discriminated by
-`docType`:
-
-- **`api`** — Manim API reference (classes, methods, modules) from `chunks_all.json`.
-- **`script`** — full runnable scenes (curated seed + scraped examples).
-
-This split lets `/enhance` return API references and complete example scenes as separate
-buckets, and the single-collection design keeps retrieval to **one round-trip**.
-
-| Stage | Module | Toggle | Notes |
-|-------|--------|--------|-------|
-| Query transform | `core/query-transform.ts` | `STAGE_QUERY_TRANSFORM` | glm-5.1 structured output; timeout → raw-query fallback |
-| Embed | `providers/embedder.ts` | always | Ollama `bge-m3` (local) or Gemini `gemini-embedding-001` |
-| Dense retrieval | `core/retrieve.ts` | always | Atlas `$vectorSearch` |
-| Sparse / BM25 | `core/retrieve.ts` | `STAGE_SPARSE` | Atlas `$search` + RRF fusion (needs text index) |
-| Rerank | `core/rerank.ts` | `STAGE_RERANK` | deepseek-v4-flash LLM, capped at `RERANK_CANDIDATES`, fallback to vector order |
-| Assembly | `core/assemble.ts` | `STAGE_PITFALLS` for pitfalls | buckets + curated style/pitfalls + groundedPrompt |
-
----
-
-## Prerequisites
-
-- **Node ≥ 20** (tested on 26).
-- **MongoDB Atlas** cluster with Vector Search (free M0 works).
-- **Embedder** — either:
-  - **Ollama** (default in `.env`): `ollama serve` with `ollama pull bge-m3` → 1024-dim, local, no rate limit.
-  - **Gemini**: a `gemini-embedding-001` API key → 3072-dim (free tier is rate-limited to 100 embed-requests/min; seeding self-paces around it).
-- **OpenCode-Go** API key for the query-transform LLM (glm-5.1) and reranker (deepseek-v4-flash).
-
----
-
-## Setup
-
-```bash
-cd pipeline
-npm install
-cp .env.example .env     # then fill in MONGODB_URL + keys (or use the provided .env)
+```sh
+npm ci && npx tsc --noEmit && npm test
 ```
 
-Key `.env` choices (everything is opt-in; see `.env.example` for the full list):
+Start a MongoDB instance that includes Search. Plain `mongo` images lack the
+required search APIs. This command uses an isolated local port:
 
-```bash
-EMBEDDER_PROVIDER=ollama          # or gemini
-EMBEDDER_MODEL=bge-m3:latest      # gemini-embedding-001 for gemini
-EMBEDDING_DIM=1024                # 3072 for gemini — MUST match the index
-LLM_MODEL=glm-5.1                 # must support tool_choice
-RERANKER_MODEL=deepseek-v4-flash  # any model (plain completion)
-STAGE_QUERY_TRANSFORM=true
-STAGE_SPARSE=false
-STAGE_RERANK=true
-RAG_API_KEY=<min 16 chars>
+```sh
+docker run -d --name oss-rag-atlas -p 127.0.0.1:27187:27017 mongodb/mongodb-atlas-local:8.0
 ```
 
-> **Dimension rule:** `EMBEDDING_DIM` must equal the vector index's `numDimensions`.
-> Changing the embedder/dim after seeding requires `npm run seed:reset` (which drops and
-> rebuilds the index — Atlas silently keeps the old dims otherwise).
+Set `MONGODB_URL=mongodb://localhost:27187/?directConnection=true`, a
+`RAG_API_KEY` with at least 16 characters, and `LLM_API_KEY` in your environment
+or a gitignored `.env`. The default OpenAI embedder shares `LLM_API_KEY`.
+`.env.example` lists common settings. Then run:
 
----
-
-## Run commands
-
-### 1. Expand the dataset (scrape full scene examples)
-
-```bash
-npm run scrape                # mines chunk examples + scrapes ManimCommunity GitHub & docs
-npm run scrape -- --enrich    # also LLM-generate NL descriptions (uses the reranker model)
-npm run scrape -- --limit 100 # cap output
+```sh
+npm run seed
+npm start
 ```
 
-Writes `data/expanded_examples.json` (de-duped, parse-validated via `python3`).
+The seed reads only `data/`. It skips existing document IDs. `npm run seed:reset`
+clears the corpus and search indexes before rebuilding. Use it after changing
+embedding provider, model or dimensions. A model change requires re-embedding even
+when dimensions stay the same. Both seed and startup create indexes and wait for
+`queryable: true`; incompatible index dimensions fail with a reset instruction.
+Atlas and the local image use the same MongoDB driver and search pipeline.
 
-### 2. Seed the vector DB
-
-```bash
-npm run seed          # idempotent — embeds + upserts, skips ids already present
-npm run seed:reset    # DROP the search index(es) + all docs, then re-seed from scratch
-```
-
-`seed:reset` is required whenever the embedder/dimension changes. It drops the index,
-re-embeds the full corpus (API chunks + seed scripts + scraped scripts), recreates the
-vector index (+ BM25 text index if `STAGE_SPARSE=true`), and **waits until the index is
-READY** before exiting.
-
-> **Native voiceover grounding examples.** `data/seed_examples.json` includes a set of
-> `VoiceoverScene` examples (ids prefixed `voiceover_`, tagged `voiceover`) that ground the
-> coder in the native-voiceover pattern: `from manim_voiceover import VoiceoverScene` +
-> `from stitcher_voiceover import OfflineTTS`, `self.set_speech_service(OfflineTTS(),
-> create_subcaption=False)` as the first construct line, and one `with self.voiceover(text=...)
-> as tracker:` block per narration beat (`run_time=tracker.duration`). These are **seed data
-> only** — they do not affect retrieval until the corpus is re-seeded. `npm run seed` is
-> idempotent and only embeds new ids, so it will pick them up without touching existing docs:
->
-> ```bash
-> npm run seed          # picks up the new voiceover_* examples (skips already-seeded ids)
-> ```
-
-### 3. Start the service
-
-```bash
-npm start             # tsx src/server.ts → http://localhost:7000
-npm run dev           # watch mode
-PORT=7070 npm start   # macOS: port 7000 is used by AirPlay Receiver — override it
-                      # (or disable System Settings ▸ General ▸ AirDrop & Handoff ▸ AirPlay Receiver)
-```
-
-### Admin / introspection
-
-```bash
-npm run health        # component health from the CLI
-npm run stats         # corpus counts by docType / category / domain
-npm run typecheck
-npm test
-```
-
----
+`notebooks/` records how the API corpus was built. Its generated output is not a
+runtime dependency. `seed_corpus/` contains separate plugin authoring and ingestion
+tools. See [NOTICE.md](NOTICE.md) for corpus attribution.
 
 ## HTTP API
 
-All protected routes require the `x-api-key: <RAG_API_KEY>` header.
+All write and corpus routes require `x-api-key: <RAG_API_KEY>`.
 
-### `POST /enhance` — the headline route
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Probe database, embedder and enabled optional LLM stages |
+| GET | `/capabilities` | Show models, settings and supported request overrides |
+| POST | `/enhance` | Body `{ "prompt": "bubble sort on 6 bars" }`; returns `groundedPrompt`, `structuredContext`, `retrievalTrace`, `execution`, `trace` |
+| POST | `/corpus/add` | Embed and upsert a `documents` array |
+| GET | `/corpus/stats` | Counts by document type, category and domain |
+| DELETE | `/corpus/:id` | Remove a document |
 
-```bash
-curl -s localhost:7000/enhance \
-  -H "x-api-key: $RAG_API_KEY" -H 'content-type: application/json' \
-  -d '{"prompt":"animate bubble sort with bars swapping heights","options":{"topK":5}}'
-```
+`/enhance` accepts `options.topK` and `overrides` for stages, retrieval, timeouts,
+LLM and reranker targets. BYO LLM keys use `x-llm-key` and `x-reranker-key`.
+The existing `providerConfig.queryTransform` and `providerConfig.embedder` fields
+remain supported. Embedding overrides must match the seeded model's vector space
+and dimensions. Optional stages can be enabled per request without changing env.
 
-Response:
+## Providers
 
-```jsonc
-{
-  "groundedPrompt": "…assembled prompt: task + API refs + similar full scenes + style + pitfalls…",
-  "structuredContext": {
-    "apiExamples":          [ { "symbol", "category", "signature", "docstring", "snippet", "source", "score" } ],
-    "similarScripts":       [ { "id", "title", "description", "apisUsed", "complexity", "code", "score" } ],
-    "styleRecommendations": [ "…" ],
-    "pitfalls":             [ "…" ]
-  },
-  "retrievalTrace": {
-    "denseCandidates", "sparseCandidates", "mergedCandidates", "afterRerank",
-    "embedModel", "rerankModel", "store", "queryTransformed", "stages"
-  },
-  "execution": {
-    "totalMs", "queryTransformMs", "embeddingMs", "vectorSearchMs",
-    "sparseSearchMs", "rerankMs", "assembleMs", "llmCalls"
-  }
-}
-```
+LLM and reranker use OpenAI-compatible chat endpoints. `opencode` remains an alias
+for `opencodego`. The `thinking` parameter is added by default only for OpenCode Go.
+Explicit per-request `extraBody` or `params` are passed through.
 
-`groundedPrompt` is the headline output — feed it directly to your code-gen model.
+| Provider | Default chat base URL | Default model |
+| --- | --- | --- |
+| openai | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash` |
+| openrouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` |
+| ollama | `http://localhost:11434/v1` | `llama3.2` |
+| opencodego | `https://opencode.ai/zen/go/v1` | `glm-5.1` |
 
-#### Per-request overrides + BYOK
+Embedders: `openai` defaults to `text-embedding-3-small` (1536 dimensions),
+`gemini` to `gemini-embedding-001` (3072), and `ollama` to `nomic-embed-text`
+(768). Known alternatives include `text-embedding-3-large` (3072),
+`text-embedding-ada-002` (1536), `bge-m3` (1024), and `all-minilm` (384).
+Unknown models require `EMBEDDING_DIM`. Wrong output dimensions are rejected.
+Ollama models must already be downloaded. Hosted providers need a key.
 
-Every stage/model/param **except the embedder** (index-locked → set in `.env` + re-seed) can be
-overridden per call via an optional `overrides` object. Absent fields fall back to env defaults.
-API keys are supplied via **headers** (`x-llm-key`, `x-reranker-key`) — never the body — so they
-aren't logged with payloads. `GET /capabilities` lists the full overridable surface.
+Endpoint references: [Gemini](https://ai.google.dev/gemini-api/docs/openai),
+[OpenRouter](https://openrouter.ai/docs/api/reference/overview),
+[MongoDB local Search](https://www.mongodb.com/docs/search/self-managed/current/installation/quick-start/).
 
-```bash
-curl -s localhost:7000/enhance \
-  -H "x-api-key: $RAG_API_KEY" \
-  -H "x-reranker-key: $CALLER_OWN_KEY" \           # BYOK (optional)
-  -H 'content-type: application/json' \
-  -d '{
-    "prompt": "animate bubble sort with bars",
-    "options": { "topK": 5 },
-    "overrides": {
-      "stages":    { "queryTransform": false, "sparse": false, "rerank": true },
-      "retrieval": { "denseTopK": 40, "rerankCandidates": 8 },
-      "timeouts":  { "rerankMs": 3500 },
-      "reranker":  { "model": "mimo-v2.5",
-                     "baseUrl": "https://opencode.ai/zen/go/v1",
-                     "extraBody": { "thinking": { "type": "disabled" } } },
-      "llm":       { "model": "kimi-k2.5", "extraBody": { "thinking": { "type": "disabled" } } }
-    }
-  }'
-```
+## Environment
 
-- **`extraBody`** is merged verbatim into the OpenAI-compatible request body, so any provider's
-  reasoning knob works (`{"thinking":{"type":"disabled"}}` for OpenCode-Go,
-  `{"reasoning_effort":"low"}` for OpenAI, etc.) without code changes. Default comes from
-  `OPENCODE_DISABLE_THINKING`.
-- **`baseUrl`** overrides are validated (http/https) and, if `ALLOWED_LLM_BASE_URLS` is set,
-  must match an allow-listed prefix (SSRF guard). Out-of-bounds / unknown override fields → `400`.
-- `retrievalTrace.rerankModel` and `.stages` report what was *actually* used for that request.
+Only `RAG_API_KEY` is required to start HTTP. A hosted embedder requires
+`EMBEDDER_API_KEY`, `EMBEDDER_API_KEYS`, or the shared `LLM_API_KEY` to serve queries.
+Other settings are optional. Chat keys are required only for enabled hosted stages.
 
-### Other routes
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health` | no | Per-component status (vectorStore, embedder, reranker, llm). 200 ok/degraded, 503 error |
-| GET | `/capabilities` | no | Enabled stages, models, dims, retrieval tuning, perf targets |
-| POST | `/corpus/add` | yes | Add documents (embeds + upserts) |
-| GET | `/corpus/stats` | yes | Counts by docType / category / domain |
-| DELETE | `/corpus/:id` | yes | Remove a document |
-
----
-
-## Performance
-
-Targets (reported per-request in `execution`): end-to-end p95 ≤ 3000 ms (hard ceiling
-5000 ms), vector search < 150 ms, query embedding < 800 ms, rerank < 1500 ms. The
-query-transform and rerank LLM calls are the swing factors — both are optional, bounded by
-timeouts, and degrade gracefully, so a slow/failed LLM keeps the request under the ceiling
-(`llmCalls` reflects how many actually ran).
-
-## Resilience
-
-- Per-call timeouts + exponential backoff with jitter (`util/retry.ts`).
-- Query transform: timeout → embed the raw query instead.
-- Reranker: failure → keep vector/RRF ordering.
-- Sparse: missing text index → dense-only.
-- Embedder: 429-aware backoff honoring the server's per-minute retry window; multi-key
-  rotation via `EMBEDDER_API_KEYS`.
+| Variable | Required | Default |
+| --- | --- | --- |
+| `MONGODB_URL` | no | `mongodb://localhost:27017/?directConnection=true` |
+| `MONGODB_DB_NAME` | no | `manimrag` |
+| `VECTOR_STORE` | no | `mongodb_atlas` (also identifies atlas-local) |
+| `COLLECTION_NAME` | no | `manimrag_corpus` |
+| `VECTOR_INDEX_NAME` | no | `manimrag_vector_index` |
+| `TEXT_INDEX_NAME` | no | `manimrag_text_index` |
+| `RAG_API_KEY` | yes, HTTP | no usable default; minimum 16 characters |
+| `LLM_API_KEY` | hosted stages or shared embeddings | empty |
+| `LLM_PROVIDER` | no | `openai` |
+| `LLM_MODEL` | no | provider default above |
+| `LLM_BASE_URL` | no | provider default above |
+| `RERANKER_PROVIDER` | no | `LLM_PROVIDER` |
+| `RERANKER_MODEL` | no | LLM model if same provider, else provider default |
+| `RERANKER_API_KEY` | no | `LLM_API_KEY` |
+| `RERANKER_BASE_URL` | no | LLM base URL if same provider, else provider default |
+| `RERANKER_TOP_N` | no | `5` |
+| `OPENCODE_GO_BASE_URL` | no | `https://opencode.ai/zen/go/v1` |
+| `OPENCODE_DISABLE_THINKING` | no | `true`; OpenCode Go only |
+| `ALLOWED_LLM_BASE_URLS` | no | empty; comma-separated override URL prefixes |
+| `EMBEDDER_PROVIDER` | no | `openai` |
+| `EMBEDDER_MODEL` | no | provider default above |
+| `EMBEDDER_API_KEY` | hosted embeddings | `LLM_API_KEY` fallback |
+| `EMBEDDER_API_KEYS` | no | empty; comma-separated rotation, takes precedence |
+| `EMBEDDER_BASE_URL` | no | provider endpoint below |
+| `EMBEDDING_DIM` | unknown embedding models | inferred from known model above |
+| `EMBED_BATCH_SIZE` | no | `100` |
+| `OPENAI_BASE_URL` | no | `https://api.openai.com/v1`; embeddings |
+| `GEMINI_BASE_URL` | no | `https://generativelanguage.googleapis.com/v1beta`; native embeddings |
+| `OLLAMA_BASE_URL` | no | `http://localhost:11434`; native embeddings |
+| `STAGE_QUERY_TRANSFORM` | no | `false` |
+| `STAGE_RERANK` | no | `false` |
+| `STAGE_SPARSE` | no | `false` |
+| `STAGE_PITFALLS` | no | `true` |
+| `DEFAULT_TOP_K` | no | `5` |
+| `DENSE_TOP_K` | no | `40` |
+| `DENSE_NUM_CANDIDATES` | no | `200` |
+| `SPARSE_TOP_K` | no | `40` |
+| `RERANK_CANDIDATES` | no | `20` |
+| `RERANK_DOC_CHARS` | no | `600` |
+| `RRF_K` | no | `60` |
+| `QUERY_TRANSFORM_TIMEOUT_MS` | no | `2200` |
+| `EMBED_TIMEOUT_MS` | no | `8000` |
+| `EMBED_BATCH_TIMEOUT_MS` | no | `30000` |
+| `VECTOR_SEARCH_TIMEOUT_MS` | no | `5000` |
+| `RERANK_TIMEOUT_MS` | no | `4000` |
+| `RETRY_MAX` | no | `3` |
+| `RETRY_BASE_MS` | no | `300` |
+| `LOG_LEVEL` | no | `info` |
+| `PORT` | no | `7000` |
+| `HOST` | no | `0.0.0.0` |
+| `RATE_LIMIT_MAX` | no | `120` per minute |
+| `OTEL_SDK_DISABLED` | no | `false`; set `true` without a collector |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | `http://localhost:4318` |
+| `OTEL_SERVICE_NAME` | no | `stitcher-rag` |
+| `OTEL_DIAG_DEBUG` | no | `false` |

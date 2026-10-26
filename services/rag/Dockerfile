@@ -9,10 +9,9 @@ COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 
 # Copy source
-COPY tsconfig.json tsup.config.ts ./
+COPY tsconfig.json tsup.config.ts seed.ts ./
 COPY src ./src
 COPY data ./data
-COPY prompts ./prompts
 
 # Build library + server + CLI
 RUN npm run build
@@ -31,7 +30,6 @@ RUN npm ci --omit=dev --ignore-scripts
 # Copy compiled output and static assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/data ./data
-COPY --from=builder /app/prompts ./prompts
 
 EXPOSE 7000
 

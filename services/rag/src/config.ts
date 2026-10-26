@@ -17,30 +17,34 @@ function boolEnv(def: boolean) {
 
 const ConfigSchema = z.object({
   // ─── MongoDB / vector store ──────────────────────────────────────────────
-  MONGODB_URL: z.string().min(1, "MONGODB_URL is required"),
+  MONGODB_URL: z.string().default("mongodb://localhost:27017/?directConnection=true"),
   MONGODB_DB_NAME: z.string().default("manimrag"),
   VECTOR_STORE: z.enum(["mongodb_atlas"]).default("mongodb_atlas"),
   COLLECTION_NAME: z.string().default("manimrag_corpus"),
   VECTOR_INDEX_NAME: z.string().default("manimrag_vector_index"),
   TEXT_INDEX_NAME: z.string().default("manimrag_text_index"),
 
-  // ─── Embedder (Gemini) ───────────────────────────────────────────────────
-  EMBEDDER_PROVIDER: z.string().default("gemini"),
+  // ─── Embedder ───────────────────────────────────────────────────
+  EMBEDDER_PROVIDER: z.enum(["gemini", "openai", "ollama"]).default("openai"),
   // Single key (back-compat) OR a comma-separated list rotated across requests.
   EMBEDDER_API_KEY: z.string().default(""),
   EMBEDDER_API_KEYS: z.string().default(""),
-  EMBEDDER_MODEL: z.string().default("gemini-embedding-001"),
-  EMBEDDING_DIM: z.coerce.number().int().positive().max(4096).default(3072),
+  EMBEDDER_MODEL: z.string().optional(),
+  EMBEDDING_DIM: z.coerce.number().int().positive().max(4096).optional(),
   EMBED_BATCH_SIZE: z.coerce.number().int().positive().max(250).default(100),
   GEMINI_BASE_URL: z
     .string()
     .default("https://generativelanguage.googleapis.com/v1beta"),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
 
-  // ─── Query-transform LLM (must support tool_choice → glm-5.1/kimi) ────────
-  LLM_PROVIDER: z.string().default("opencode"),
-  LLM_API_KEY: z.string().min(1, "LLM_API_KEY is required"),
-  LLM_MODEL: z.string().default("glm-5.1"),
+  // ─── Query-transform LLM ────────
+  LLM_PROVIDER: z.string().default("openai"),
+  LLM_API_KEY: z.string().default(""),
+  LLM_MODEL: z.string().optional(),
+  LLM_BASE_URL: z.string().optional(),
+  RERANKER_BASE_URL: z.string().optional(),
+  EMBEDDER_BASE_URL: z.string().optional(),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
   OPENCODE_GO_BASE_URL: z.string().default("https://opencode.ai/zen/go/v1"),
   // OpenCode-Go models default to "thinking" mode (slow). Sending
   // thinking:{type:"disabled"} turns it off (~5x faster) — verified to keep
@@ -51,15 +55,15 @@ const ConfigSchema = z.object({
   ALLOWED_LLM_BASE_URLS: z.string().default(""),
 
   // ─── Reranker (plain completion, high-quota model) ───────────────────────
-  RERANKER_PROVIDER: z.string().default("opencode"),
+  RERANKER_PROVIDER: z.string().optional(),
   RERANKER_API_KEY: z.string().default(""),
-  RERANKER_MODEL: z.string().default("deepseek-v4-flash"),
+  RERANKER_MODEL: z.string().optional(),
   RERANKER_TOP_N: z.coerce.number().int().positive().default(5),
 
   // ─── Pipeline stage toggles (opt-in at runtime) ──────────────────────────
-  STAGE_QUERY_TRANSFORM: boolEnv(true),
+  STAGE_QUERY_TRANSFORM: boolEnv(false),
   STAGE_SPARSE: boolEnv(false),
-  STAGE_RERANK: boolEnv(true),
+  STAGE_RERANK: boolEnv(false),
   STAGE_PITFALLS: boolEnv(true),
 
   // ─── Retrieval tuning ────────────────────────────────────────────────────
@@ -88,7 +92,7 @@ const ConfigSchema = z.object({
   // ─── HTTP server ─────────────────────────────────────────────────────────
   RAG_API_KEY: z
     .string()
-    .min(16, "RAG_API_KEY must be at least 16 characters")
+    .refine((v) => v === "__unset__" || v.length >= 16, "RAG_API_KEY must be at least 16 characters")
     .default("__unset__"),
   PORT: z.coerce.number().int().positive().default(7000),
   HOST: z.string().default("0.0.0.0"),
@@ -103,12 +107,50 @@ function parseConfig() {
       .join("\n");
     throw new Error(`ManimRAG configuration error:\n${errors}`);
   }
-  return result.data;
+  const c = result.data;
+  const llm = providerDefaults(c.LLM_PROVIDER);
+  const rerankerProvider = c.RERANKER_PROVIDER ?? c.LLM_PROVIDER;
+  const reranker = providerDefaults(rerankerProvider);
+  const embedModel = c.EMBEDDER_MODEL ?? ({ gemini: "gemini-embedding-001", openai: "text-embedding-3-small", ollama: "nomic-embed-text" }[c.EMBEDDER_PROVIDER]);
+  if (!embedModel) throw new Error(`Unsupported EMBEDDER_PROVIDER: ${c.EMBEDDER_PROVIDER}`);
+  const dimensions: Record<string, number> = { "gemini-embedding-001": 3072, "text-embedding-3-small": 1536, "text-embedding-3-large": 3072, "text-embedding-ada-002": 1536, "nomic-embed-text": 768, "bge-m3": 1024, "all-minilm": 384 };
+  const dim = c.EMBEDDING_DIM ?? dimensions[embedModel];
+  if (!dim) throw new Error("Set EMBEDDING_DIM for an unknown embedding model");
+  const llmBase = c.LLM_BASE_URL ?? (llm.provider === "opencodego" ? c.OPENCODE_GO_BASE_URL : llm.baseUrl);
+  return {
+    ...c,
+    LLM_MODEL: c.LLM_MODEL ?? llm.model,
+    LLM_BASE_URL: llmBase,
+    RERANKER_PROVIDER: rerankerProvider,
+    RERANKER_MODEL: c.RERANKER_MODEL
+      ?? (rerankerProvider === c.LLM_PROVIDER ? c.LLM_MODEL : undefined)
+      ?? reranker.model,
+    RERANKER_BASE_URL: c.RERANKER_BASE_URL
+      ?? (rerankerProvider === c.LLM_PROVIDER ? llmBase : undefined)
+      ?? (reranker.provider === "opencodego" ? c.OPENCODE_GO_BASE_URL : reranker.baseUrl),
+    EMBEDDER_MODEL: embedModel,
+    EMBEDDING_DIM: dim,
+  };
+
+}
+
+export function providerDefaults(provider: string) {
+  const name = provider === "opencode" ? "opencodego" : provider;
+  const defaults: Record<string, { baseUrl: string; model: string }> = {
+    openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+    gemini: { baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-2.5-flash" },
+    openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
+    ollama: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
+    opencodego: { baseUrl: "https://opencode.ai/zen/go/v1", model: "glm-5.1" },
+  };
+  const result = defaults[name];
+  if (!result) throw new Error(`Unsupported LLM provider: ${provider}`);
+  return { ...result, provider: name };
 }
 
 export const config = parseConfig();
 
-export type Config = z.infer<typeof ConfigSchema>;
+export type Config = ReturnType<typeof parseConfig>;
 
 /** Resolve the list of embedder API keys (multi-key rotation). */
 export function embedderKeys(): string[] {
@@ -117,5 +159,6 @@ export function embedderKeys(): string[] {
     .filter(Boolean);
   if (list.length > 0) return list;
   if (config.EMBEDDER_API_KEY.trim()) return [config.EMBEDDER_API_KEY.trim()];
+  if (config.LLM_API_KEY.trim()) return [config.LLM_API_KEY.trim()];
   return [];
 }

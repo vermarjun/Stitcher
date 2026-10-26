@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { log } from "../logger.js";
+import knowledge from "../../data/manim_knowledge.json";
 
 interface KnowledgeEntry {
   id: string;
@@ -14,18 +12,8 @@ interface KnowledgeFile {
   general: { pitfalls: string[]; style: string[] };
 }
 
-let _kb: KnowledgeFile | null = null;
 function kb(): KnowledgeFile {
-  if (_kb === null) {
-    try {
-      const p = fileURLToPath(new URL("../../data/manim_knowledge.json", import.meta.url));
-      _kb = JSON.parse(readFileSync(p, "utf-8"));
-    } catch (err) {
-      log.warn({ err: String(err) }, "manim_knowledge.json not found — pitfalls/style disabled");
-      _kb = { pitfalls: [], style: [], general: { pitfalls: [], style: [] } };
-    }
-  }
-  return _kb!;
+  return knowledge as KnowledgeFile;
 }
 
 function matches(entry: KnowledgeEntry, apiSet: Set<string>, domain: string): boolean {

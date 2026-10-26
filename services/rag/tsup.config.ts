@@ -39,6 +39,7 @@ export default defineConfig([
   {
     entry: {
       server: "src/server.ts",
+      seed: "seed.ts",
       instrumentation: "src/instrumentation.ts",
     },
     format: ["cjs"],
