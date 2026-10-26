@@ -36,3 +36,15 @@ SecureFaceOffline/
 
 StitcherRelaunch.pem
 StitcherRelaunchv2.pem
+# Local-only: archived reports, logs, scratch (see ../README.md)
+_archive/
+
+# Env backups and local overrides never get committed
+.env.*
+!.env.example
+!.env.docker.example
+**/.env.*
+!**/.env.example
+!**/.env.docker.example
+docker-compose.local.yml
+*.log
