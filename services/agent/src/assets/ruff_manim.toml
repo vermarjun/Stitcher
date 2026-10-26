@@ -1,0 +1,22 @@
+# Ruff config tuned for Manim scene validation
+# Applied by the validator pipeline to generated code.
+
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (undefined names, unused imports)
+    "W",    # pycodestyle warnings
+    "B",    # bugbear
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",  # line too long — cosmetic, not a correctness issue
+    "B008",  # function calls in defaults
+    "F401",  # unused imports — manim uses star imports; many symbols appear "unused"
+    "F403",  # star import — manim standard is `from manim import *`
+    "F405",  # may be from star import — false positives with `from manim import *`
+    "UP007", # use X | Y — manim may run on older Python
+]
