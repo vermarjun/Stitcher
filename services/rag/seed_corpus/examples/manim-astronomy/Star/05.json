@@ -1,0 +1,33 @@
+{
+  "api": "Star",
+  "plugin": "manim-astronomy",
+  "scene_class": "StarComparison",
+  "description": "Side-by-side comparison of two stars: a small hot blue star and a large cool red giant, arranged left-right with labels to illustrate stellar diversity.",
+  "code": "from manim import *\nfrom manim_Astronomy import Star\n\nclass StarComparison(Scene):\n    def construct(self):\n        blue = Star(\n            radius=0.25,\n            num_of_particles=300,\n            size_of_particle=0.004,\n            colors=[BLUE, WHITE],\n            temperature=20000,\n        ).move_to(LEFT * 2.5)\n        red = Star(\n            radius=0.75,\n            num_of_particles=600,\n            size_of_particle=0.006,\n            colors=[RED, ORANGE],\n            temperature=3500,\n        ).move_to(RIGHT * 2.5)\n        lbl_blue = Text(\"Blue\", font_size=24, color=BLUE).next_to(blue, DOWN)\n        lbl_red = Text(\"Red Giant\", font_size=24, color=RED).next_to(red, DOWN)\n        self.add(blue, red, lbl_blue, lbl_red)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FC6255",
+      "#FF862F"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Star"
+    ],
+    "category": "scenes",
+    "tags": [
+      "astronomy",
+      "star",
+      "comparison",
+      "stellar-class",
+      "side-by-side",
+      "manim-astronomy"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

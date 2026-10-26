@@ -1,0 +1,353 @@
+[
+  {
+    "id": "manim_ml_feedforward_network",
+    "scene": "FeedForwardNetworkScene",
+    "originalPrompt": "Visualize a feedforward neural network and animate the forward pass through the layers",
+    "description": "Animates a 4-layer feedforward neural network using ManimML. Opens with a title 'Feedforward Neural Network' and subtitle written onto a dark (#0d1117) background. The NeuralNetwork is constructed from four FeedForwardLayer objects (4\u21926\u21926\u21923 nodes) with layer_spacing=0.3 and placed at center-frame. Layer labels (Input, Hidden, Hidden, Output) are written below each layer using nn.input_layers indexing. A horizontal arrow annotates the left-to-right activation flow below the network. A status text reads 'Running forward pass \u2026' then nn.make_forward_pass_animation() fires the ShowPassingFlash connective animations across all layers. Ends with Transform to 'Inference complete' in green.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "Write",
+      "FadeIn",
+      "LaggedStart",
+      "GrowArrow",
+      "Transform",
+      "VGroup"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "LaggedStart",
+      "GrowArrow",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "feedforward",
+      "neural-network",
+      "forward-pass",
+      "deep-learning",
+      "inference",
+      "layers"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#0d1117",
+      "#58C4DD",
+      "#FF862F",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: FeedForward NN with forward pass animation.\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n)\n\n\nclass FeedForwardNetworkScene(ThreeDScene):\n    \"\"\"Rich FeedForward neural network scene with title, labels, and forward pass.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0d1117\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"Feedforward Neural Network\", font_size=36, color=WHITE)\n        title.to_edge(UP, buff=0.35)\n        subtitle = Text(\n            \"Forward Pass Visualization\", font_size=20, color=\"#58C4DD\"\n        )\n        subtitle.next_to(title, DOWN, buff=0.12)\n\n        self.play(Write(title), run_time=0.9)\n        self.play(FadeIn(subtitle, shift=DOWN * 0.2), run_time=0.5)\n\n        # \u2500\u2500 Neural network \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                FeedForwardLayer(num_nodes=4, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=6, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=6, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=3, node_color=\"#10B981\"),\n            ],\n            layer_spacing=0.3,\n        )\n        nn.move_to(ORIGIN + DOWN * 0.3)\n\n        # Layer labels - use nn.input_layers for direct layer access\n        layer_names = [\"Input\\n(4)\", \"Hidden\\n(6)\", \"Hidden\\n(6)\", \"Output\\n(3)\"]\n        label_colors = [\"#F59E0B\", \"#FFFFFF\", \"#FFFFFF\", \"#10B981\"]\n        label_group = VGroup()\n        for i, (lname, lcolor) in enumerate(zip(layer_names, label_colors)):\n            txt = Text(lname, font_size=14, color=lcolor)\n            txt.next_to(nn.input_layers[i], DOWN, buff=0.25)\n            label_group.add(txt)\n\n        # \u2500\u2500 Introduce architecture \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(LaggedStart(*[Write(t) for t in label_group], lag_ratio=0.25), run_time=1.0)\n        self.wait(0.4)\n\n        # \u2500\u2500 Annotation: \"activations flow left \u2192 right\" \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        flow_arrow = Arrow(\n            start=nn.input_layers[0].get_left() + LEFT * 0.5,\n            end=nn.input_layers[-1].get_right() + RIGHT * 0.5,\n            color=\"#FF862F\",\n            stroke_width=2,\n            buff=0,\n        )\n        flow_arrow.next_to(nn, DOWN, buff=0.9)\n        flow_label = Text(\"activations \u2192\", font_size=16, color=\"#FF862F\")\n        flow_label.next_to(flow_arrow, DOWN, buff=0.15)\n        self.play(GrowArrow(flow_arrow), Write(flow_label), run_time=0.7)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        forward_text = Text(\"Running forward pass \u2026\", font_size=18, color=\"#F59E0B\")\n        forward_text.to_edge(DOWN, buff=0.3)\n        self.play(Write(forward_text), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=3.0)\n\n        # \u2500\u2500 Done \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        done = Text(\"Inference complete\", font_size=18, color=\"#10B981\")\n        done.to_edge(DOWN, buff=0.3)\n        self.play(Transform(forward_text, done), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "FeedForwardNetworkScene"
+  },
+  {
+    "id": "manim_ml_cnn_classifier",
+    "scene": "CNNClassifierScene",
+    "originalPrompt": "Show a CNN image classifier with convolutional layers and a forward pass through the full architecture",
+    "description": "Builds a full CNN image classifier pipeline with ManimML on a deep navy (#0d1b2a) background. Title 'Convolutional Neural Network / Image Classifier' is Written up top. A synthetic 8\u00d78 RGB numpy array is wrapped in PIL.Image and passed to ImageLayer (height=1.5). The NeuralNetwork chains ImageLayer \u2192 Convolutional2DLayer(1 fm, 5\u00d75, filter=3) \u2192 Convolutional2DLayer(3 fm, 3\u00d73, filter=3) \u2192 FeedForwardLayer(5) \u2192 FeedForwardLayer(3) with layer_spacing=0.25 and nn.scale(0.9). Architecture labels (Input Image, Conv1, Conv2, FC, Softmax) are placed below each layer via nn.input_layers[i]. A SurroundingRectangle highlights the ImageLayer entry point with callout text '8\u00d78 RGB input'. After fade-out of the callout, nn.make_forward_pass_animation() fires the full 3-D convolutional filter sweep and flash animations. A SurroundingRectangle on the output layer marks 'Class prediction'.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "ImageLayer",
+      "Convolutional2DLayer",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "SurroundingRectangle",
+      "LaggedStart",
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "VGroup"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Create",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "cnn",
+      "convolutional",
+      "image-classifier",
+      "forward-pass",
+      "feature-maps",
+      "deep-learning"
+    ],
+    "complexity": "expert",
+    "colorPalette": [
+      "#0d1b2a",
+      "#58C4DD",
+      "#FF862F",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: Image-to-CNN classifier forward pass (CNN priority scene).\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n    Convolutional2DLayer,\n    ImageLayer,\n)\nimport numpy as np\nfrom PIL import Image as PILImage\n\n\nclass CNNClassifierScene(ThreeDScene):\n    \"\"\"CNN image classifier: ImageLayer \u2192 Conv \u2192 Conv \u2192 FF output with forward pass.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0d1b2a\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"Convolutional Neural Network\", font_size=34, color=WHITE)\n        title.to_edge(UP, buff=0.3)\n        subtitle = Text(\"Image Classifier \u2014 Forward Pass\", font_size=18, color=\"#58C4DD\")\n        subtitle.next_to(title, DOWN, buff=0.1)\n\n        self.play(Write(title), run_time=0.9)\n        self.play(FadeIn(subtitle), run_time=0.5)\n\n        # \u2500\u2500 Build a fake 8\u00d78 RGB input image \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        np.random.seed(42)\n        img_array = np.uint8(np.random.rand(8, 8, 3) * 255)\n        pil_img = PILImage.fromarray(img_array)\n\n        # \u2500\u2500 Network definition \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                ImageLayer(np.asarray(pil_img), height=1.5),\n                Convolutional2DLayer(\n                    num_feature_maps=1,\n                    feature_map_size=5,\n                    filter_size=3,\n                    filter_spacing=0.32,\n                    color=\"#58C4DD\",\n                    active_color=\"#FF862F\",\n                ),\n                Convolutional2DLayer(\n                    num_feature_maps=3,\n                    feature_map_size=3,\n                    filter_size=3,\n                    filter_spacing=0.18,\n                    color=\"#58C4DD\",\n                    active_color=\"#FF862F\",\n                ),\n                FeedForwardLayer(num_nodes=5, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=3, node_color=\"#10B981\"),\n            ],\n            layer_spacing=0.25,\n        )\n        nn.scale(0.9)\n        nn.move_to(ORIGIN + DOWN * 0.1)\n\n        # \u2500\u2500 Architecture labels using nn.input_layers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        arch_labels = [\"Input\\nImage\", \"Conv1\\n(1 fm)\", \"Conv2\\n(3 fm)\", \"FC\\n(5)\", \"Softmax\\n(3)\"]\n        arch_colors = [\"#F59E0B\", \"#58C4DD\", \"#58C4DD\", \"#FFFFFF\", \"#10B981\"]\n        label_mobs = VGroup()\n        for i, (lbl, col) in enumerate(zip(arch_labels, arch_colors)):\n            t = Text(lbl, font_size=13, color=col)\n            t.next_to(nn.input_layers[i], DOWN, buff=0.3)\n            label_mobs.add(t)\n\n        # \u2500\u2500 Intro annotation \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        intro_box = SurroundingRectangle(\n            nn.input_layers[0], color=\"#F59E0B\", corner_radius=0.1, buff=0.08\n        )\n        intro_note = Text(\"8\u00d78 RGB input\", font_size=14, color=\"#F59E0B\")\n        intro_note.next_to(intro_box, UP, buff=0.12)\n\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(\n            LaggedStart(*[Write(t) for t in label_mobs], lag_ratio=0.2),\n            run_time=1.0,\n        )\n        self.play(Create(intro_box), Write(intro_note), run_time=0.6)\n        self.wait(0.3)\n        self.play(FadeOut(intro_box), FadeOut(intro_note), run_time=0.3)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        fwd_text = Text(\"Forward pass through CNN \u2026\", font_size=16, color=\"#FF862F\")\n        fwd_text.to_edge(DOWN, buff=0.3)\n        self.play(Write(fwd_text), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=4.0)\n\n        # \u2500\u2500 Output highlight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        out_box = SurroundingRectangle(nn.input_layers[-1], color=\"#10B981\", corner_radius=0.1)\n        out_note = Text(\"Class prediction\", font_size=14, color=\"#10B981\")\n        out_note.next_to(out_box, UP, buff=0.12)\n        self.play(Create(out_box), Write(out_note), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "CNNClassifierScene"
+  },
+  {
+    "id": "manim_ml_maxpooling_cnn",
+    "scene": "MaxPoolingCNNScene",
+    "originalPrompt": "Animate a CNN with max pooling showing how spatial dimensions are reduced",
+    "description": "Demonstrates max pooling within a CNN pipeline on a dark (#0f0f1a) background. Title 'Max Pooling in a CNN' with subtitle about spatial down-sampling appears first. The NeuralNetwork consists of Convolutional2DLayer(1 fm, 6\u00d76, filter=3) \u2192 MaxPooling2DLayer(kernel=2) \u2192 Convolutional2DLayer(3 fm, 2\u00d72, filter=2) \u2192 FeedForwardLayer(4). All four layers are labeled (Conv 6\u00d76, MaxPool 2\u00d72, Conv 3\u00d73, FC) below via nn.input_layers[i]. A SurroundingRectangle with text 'halves spatial dims' calls out the MaxPooling2DLayer specifically. After fade-out of the callout, nn.make_forward_pass_animation() shows the 3-D pooling kernel sweep. Status text transforms from 'Forward pass with pooling \u2026' to 'Max pooling complete' in green.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "Convolutional2DLayer",
+      "MaxPooling2DLayer",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "SurroundingRectangle",
+      "LaggedStart",
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "Transform"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Create",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "maxpooling",
+      "cnn",
+      "spatial-downsampling",
+      "feature-maps",
+      "forward-pass"
+    ],
+    "complexity": "expert",
+    "colorPalette": [
+      "#0f0f1a",
+      "#58C4DD",
+      "#FF862F",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: MaxPooling2D layer in a CNN pipeline.\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n    Convolutional2DLayer,\n    MaxPooling2DLayer,\n)\n\n\nclass MaxPoolingCNNScene(ThreeDScene):\n    \"\"\"CNN with MaxPooling: Conv \u2192 Pool \u2192 Conv \u2192 FF, showing spatial down-sampling.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0f0f1a\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"Max Pooling in a CNN\", font_size=34, color=WHITE)\n        title.to_edge(UP, buff=0.3)\n        subtitle = Text(\n            \"Spatial down-sampling reduces feature map size\",\n            font_size=17,\n            color=\"#58C4DD\",\n        )\n        subtitle.next_to(title, DOWN, buff=0.1)\n\n        self.play(Write(title), FadeIn(subtitle, shift=DOWN * 0.15), run_time=0.9)\n\n        # \u2500\u2500 Network \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                Convolutional2DLayer(\n                    num_feature_maps=1,\n                    feature_map_size=6,\n                    filter_size=3,\n                    filter_spacing=0.32,\n                    color=\"#58C4DD\",\n                    active_color=\"#FF862F\",\n                ),\n                MaxPooling2DLayer(kernel_size=2, cell_width=0.2, filter_spacing=0.32),\n                Convolutional2DLayer(\n                    num_feature_maps=3,\n                    feature_map_size=2,\n                    filter_size=2,\n                    filter_spacing=0.32,\n                    color=\"#58C4DD\",\n                    active_color=\"#FF862F\",\n                ),\n                FeedForwardLayer(num_nodes=4, node_color=\"#10B981\"),\n            ],\n            layer_spacing=0.3,\n        )\n        nn.move_to(ORIGIN + DOWN * 0.2)\n\n        # \u2500\u2500 Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        arch_info = [\n            (\"Conv\\n6\u00d76 fm\", \"#58C4DD\"),\n            (\"MaxPool\\n2\u00d72\", \"#FF862F\"),\n            (\"Conv\\n3\u00d73 fm\", \"#58C4DD\"),\n            (\"FC\\n(4)\", \"#10B981\"),\n        ]\n        label_group = VGroup()\n        for i, (lbl, col) in enumerate(arch_info):\n            t = Text(lbl, font_size=13, color=col)\n            t.next_to(nn.input_layers[i], DOWN, buff=0.3)\n            label_group.add(t)\n\n        # \u2500\u2500 Highlight pooling layer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        pool_box = SurroundingRectangle(\n            nn.input_layers[1], color=\"#FF862F\", corner_radius=0.08, buff=0.1\n        )\n        pool_note = Text(\"halves spatial dims\", font_size=13, color=\"#FF862F\")\n        pool_note.next_to(pool_box, UP, buff=0.12)\n\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(\n            LaggedStart(*[Write(t) for t in label_group], lag_ratio=0.2),\n            run_time=0.9,\n        )\n        self.play(Create(pool_box), Write(pool_note), run_time=0.6)\n        self.wait(0.4)\n        self.play(FadeOut(pool_box), FadeOut(pool_note), run_time=0.3)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        pass_label = Text(\"Forward pass with pooling \u2026\", font_size=16, color=\"#FF862F\")\n        pass_label.to_edge(DOWN, buff=0.3)\n        self.play(Write(pass_label), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=4.0)\n\n        done = Text(\"Max pooling complete\", font_size=16, color=\"#10B981\")\n        done.to_edge(DOWN, buff=0.3)\n        self.play(Transform(pass_label, done), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "MaxPoolingCNNScene"
+  },
+  {
+    "id": "manim_ml_imagelayer_cnn",
+    "scene": "ImageLayerCNNScene",
+    "originalPrompt": "Show how an image is input into a convolutional neural network using an ImageLayer",
+    "description": "Focuses on the ImageLayer as the raw-pixel entry point of a CNN pipeline, on a deep (#0a0e1a) background. Title 'ImageLayer \u2014 Input to CNN' with subtitle about pixel flow is written first. A 12\u00d712 RGB numpy image with a gradient color pattern (built with np.zeros and math.sin fills) is wrapped in PIL.Image and passed to ImageLayer(height=1.5). The NeuralNetwork chains ImageLayer \u2192 Convolutional2DLayer(1 fm, 5\u00d75, filter=3, cyan) \u2192 Convolutional2DLayer(2 fm, 3\u00d73, filter=2, purple) \u2192 FeedForwardLayer(4) \u2192 FeedForwardLayer(2). After nn.scale(0.9), labels (12\u00d712 RGB, Conv1, Conv2, Dense, Output) are placed below via nn.input_layers[i]. A SurroundingRectangle callout on nn.input_layers[0] labels it 'ImageLayer'. After fade-out, nn.make_forward_pass_animation() fires the 3-D image-to-conv sweep and flash animations.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "ImageLayer",
+      "Convolutional2DLayer",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "SurroundingRectangle",
+      "LaggedStart",
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "Transform"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Create",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "imagelayer",
+      "cnn",
+      "image-input",
+      "pixels",
+      "forward-pass",
+      "convolutional"
+    ],
+    "complexity": "expert",
+    "colorPalette": [
+      "#0a0e1a",
+      "#58C4DD",
+      "#8B5CF6",
+      "#FF862F",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: ImageLayer feeding into a full CNN pipeline.\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n    Convolutional2DLayer,\n    ImageLayer,\n)\nimport numpy as np\nfrom PIL import Image as PILImage\n\n\nclass ImageLayerCNNScene(ThreeDScene):\n    \"\"\"Demonstrates ImageLayer as the entry point of a neural network, flowing into Conv layers.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0a0e1a\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"ImageLayer \u2014 Input to CNN\", font_size=34, color=WHITE)\n        title.to_edge(UP, buff=0.3)\n        subtitle = Text(\"Raw image pixels enter the convolutional pipeline\", font_size=17, color=\"#F59E0B\")\n        subtitle.next_to(title, DOWN, buff=0.1)\n        self.play(Write(title), run_time=0.8)\n        self.play(FadeIn(subtitle), run_time=0.5)\n\n        # \u2500\u2500 Generate a synthetic image (gradient pattern) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        np.random.seed(7)\n        h, w = 12, 12\n        img_arr = np.zeros((h, w, 3), dtype=np.uint8)\n        for r in range(h):\n            for c in range(w):\n                img_arr[r, c] = [\n                    int(255 * r / h),\n                    int(255 * c / w),\n                    int(128 + 64 * np.sin(r + c)),\n                ]\n        pil_img = PILImage.fromarray(img_arr)\n\n        # \u2500\u2500 Network \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                ImageLayer(np.asarray(pil_img), height=1.5),\n                Convolutional2DLayer(\n                    num_feature_maps=1,\n                    feature_map_size=5,\n                    filter_size=3,\n                    filter_spacing=0.32,\n                    color=\"#58C4DD\",\n                    active_color=\"#FF862F\",\n                ),\n                Convolutional2DLayer(\n                    num_feature_maps=2,\n                    feature_map_size=3,\n                    filter_size=2,\n                    filter_spacing=0.22,\n                    color=\"#8B5CF6\",\n                    active_color=\"#FF862F\",\n                ),\n                FeedForwardLayer(num_nodes=4, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=2, node_color=\"#10B981\"),\n            ],\n            layer_spacing=0.25,\n        )\n        nn.scale(0.9)\n        nn.move_to(ORIGIN + DOWN * 0.15)\n\n        # \u2500\u2500 Layer labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        arch_info = [\n            (\"12x12\\nRGB\", \"#F59E0B\"),\n            (\"Conv1\\n(1 fm)\", \"#58C4DD\"),\n            (\"Conv2\\n(2 fm)\", \"#8B5CF6\"),\n            (\"Dense\\n(4)\", \"#FFFFFF\"),\n            (\"Output\\n(2)\", \"#10B981\"),\n        ]\n        label_group = VGroup()\n        for i, (lbl, col) in enumerate(arch_info):\n            t = Text(lbl, font_size=13, color=col)\n            t.next_to(nn.input_layers[i], DOWN, buff=0.3)\n            label_group.add(t)\n\n        # \u2500\u2500 Callout on the ImageLayer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        img_box = SurroundingRectangle(nn.input_layers[0], color=\"#F59E0B\", corner_radius=0.08, buff=0.1)\n        img_call = Text(\"ImageLayer\", font_size=14, color=\"#F59E0B\")\n        img_call.next_to(img_box, UP, buff=0.12)\n\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(\n            LaggedStart(*[Write(t) for t in label_group], lag_ratio=0.2),\n            run_time=0.9,\n        )\n        self.play(Create(img_box), Write(img_call), run_time=0.6)\n        self.wait(0.4)\n        self.play(FadeOut(img_box), FadeOut(img_call), run_time=0.3)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        fwd_lbl = Text(\"Image feeding into CNN \u2026\", font_size=15, color=\"#FF862F\")\n        fwd_lbl.to_edge(DOWN, buff=0.3)\n        self.play(Write(fwd_lbl), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=4.0)\n\n        result_lbl = Text(\"Classification output ready\", font_size=15, color=\"#10B981\")\n        result_lbl.to_edge(DOWN, buff=0.3)\n        self.play(Transform(fwd_lbl, result_lbl), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "ImageLayerCNNScene"
+  },
+  {
+    "id": "manim_ml_embedding_latent",
+    "scene": "EmbeddingLatentSpaceScene",
+    "originalPrompt": "Visualize a variational autoencoder with a Gaussian latent space embedding layer",
+    "description": "Renders a VAE-style network on a dark (#0e0e1c) background, with encoder and decoder separated by a Gaussian EmbeddingLayer. Title 'Latent Space \u2014 EmbeddingLayer' and subtitle about Gaussian projection are Written first. The NeuralNetwork chains FeedForwardLayer(5) \u2192 FeedForwardLayer(3) \u2192 EmbeddingLayer(dist_theme='gaussian') \u2192 FeedForwardLayer(3) \u2192 FeedForwardLayer(5) with layer_spacing=0.3 and scale(0.95). Architecture labels are placed below each layer using nn.input_layers[i]. Section headers ENCODER / LATENT Z / DECODER float above the corresponding layers. A SurroundingRectangle in orange highlights the EmbeddingLayer briefly before the forward pass. nn.make_forward_pass_animation() renders the dot-flow through the Gaussian ellipse. Ends with 'Reconstruction complete' in green.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "EmbeddingLayer",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "SurroundingRectangle",
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Transform"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Create",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "embedding",
+      "latent-space",
+      "vae",
+      "gaussian",
+      "encoder-decoder",
+      "forward-pass"
+    ],
+    "complexity": "expert",
+    "colorPalette": [
+      "#0e0e1c",
+      "#58C4DD",
+      "#8B5CF6",
+      "#FF862F",
+      "#10B981"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: EmbeddingLayer (latent space / Gaussian distribution) in a VAE-style network.\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n    EmbeddingLayer,\n)\n\n\nclass EmbeddingLatentSpaceScene(ThreeDScene):\n    \"\"\"Encoder \u2192 EmbeddingLayer (Gaussian latent space) \u2192 Decoder forward pass.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0e0e1c\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"Latent Space \u2014 EmbeddingLayer\", font_size=32, color=WHITE)\n        title.to_edge(UP, buff=0.3)\n        subtitle = Text(\n            \"Encoder projects data into a Gaussian distribution\",\n            font_size=16,\n            color=\"#58C4DD\",\n        )\n        subtitle.next_to(title, DOWN, buff=0.12)\n\n        self.play(Write(title), run_time=0.8)\n        self.play(FadeIn(subtitle), run_time=0.5)\n\n        # \u2500\u2500 Network: encoder \u2192 embedding \u2192 decoder \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                FeedForwardLayer(num_nodes=5, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=3, node_color=\"#58C4DD\"),\n                EmbeddingLayer(dist_theme=\"gaussian\"),\n                FeedForwardLayer(num_nodes=3, node_color=\"#8B5CF6\"),\n                FeedForwardLayer(num_nodes=5, node_color=\"#8B5CF6\"),\n            ],\n            layer_spacing=0.3,\n        )\n        nn.scale(0.95)\n        nn.move_to(ORIGIN + DOWN * 0.1)\n\n        # \u2500\u2500 Architecture labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        arch_info = [\n            (\"Encoder\\nin (5)\", \"#58C4DD\"),\n            (\"Encoder\\nhidden (3)\", \"#58C4DD\"),\n            (\"Latent\\nSpace z\", \"#FF862F\"),\n            (\"Decoder\\nhidden (3)\", \"#8B5CF6\"),\n            (\"Decoder\\nout (5)\", \"#8B5CF6\"),\n        ]\n        label_group = VGroup()\n        for i, (lbl, col) in enumerate(arch_info):\n            t = Text(lbl, font_size=12, color=col)\n            t.next_to(nn.input_layers[i], DOWN, buff=0.3)\n            label_group.add(t)\n\n        # \u2500\u2500 Section labels above network \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        enc_label = Text(\"ENCODER\", font_size=11, color=\"#444466\")\n        enc_label.next_to(nn.input_layers[0], UP, buff=0.5)\n        latent_label = Text(\"LATENT Z\", font_size=11, color=\"#FF862F\")\n        latent_label.next_to(nn.input_layers[2], UP, buff=0.5)\n        dec_label = Text(\"DECODER\", font_size=11, color=\"#444466\")\n        dec_label.next_to(nn.input_layers[3], UP, buff=0.5)\n\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(\n            LaggedStart(*[Write(t) for t in label_group], lag_ratio=0.2),\n            run_time=0.9,\n        )\n        self.play(\n            Write(enc_label),\n            Write(latent_label),\n            Write(dec_label),\n            run_time=0.7,\n        )\n        self.wait(0.4)\n\n        # \u2500\u2500 Highlight latent \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        emb_box = SurroundingRectangle(nn.input_layers[2], color=\"#FF862F\", corner_radius=0.1, buff=0.1)\n        self.play(Create(emb_box), run_time=0.5)\n        self.wait(0.3)\n        self.play(FadeOut(emb_box), run_time=0.3)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        fwd_lbl = Text(\"Sampling from latent space \u2026\", font_size=15, color=\"#FF862F\")\n        fwd_lbl.to_edge(DOWN, buff=0.3)\n        self.play(Write(fwd_lbl), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=3.5)\n\n        done = Text(\"Reconstruction complete\", font_size=15, color=\"#10B981\")\n        done.to_edge(DOWN, buff=0.3)\n        self.play(Transform(fwd_lbl, done), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "EmbeddingLatentSpaceScene"
+  },
+  {
+    "id": "manim_ml_vector_layer_output",
+    "scene": "VectorLayerOutputScene",
+    "originalPrompt": "Show a neural network that outputs a dense embedding vector using VectorLayer",
+    "description": "Demonstrates a FeedForward network terminating in a VectorLayer output, analogous to a word-embedding model, on a dark (#0d1117) background. Title 'VectorLayer \u2014 Embedding Output' and subtitle about dense vector representation are Written. NeuralNetwork chains FeedForwardLayer(6) \u2192 FeedForwardLayer(8) \u2192 FeedForwardLayer(4) \u2192 VectorLayer(num_values=4) with layer_spacing=0.3. Layer labels (Input, Hidden, Hidden, Vector[4]) are placed below via nn.input_layers[i] indexing. A green Arrow with text 'dense output vector' grows to point at the VectorLayer from above. Status text 'Computing vector representation \u2026' precedes nn.make_forward_pass_animation(). Ends with Transform to 'Embedding vector produced'.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "VectorLayer",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "Write",
+      "FadeIn",
+      "GrowArrow",
+      "LaggedStart",
+      "Transform",
+      "VGroup"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "GrowArrow",
+      "LaggedStart",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "vectorlayer",
+      "embedding",
+      "dense-vector",
+      "forward-pass",
+      "representation-learning"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#0d1117",
+      "#58C4DD",
+      "#FF862F",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: VectorLayer as output of a neural network.\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n    VectorLayer,\n)\n\n\nclass VectorLayerOutputScene(ThreeDScene):\n    \"\"\"FeedForward network producing a VectorLayer output (e.g. word embeddings).\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0d1117\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"VectorLayer \u2014 Embedding Output\", font_size=32, color=WHITE)\n        title.to_edge(UP, buff=0.3)\n        subtitle = Text(\n            \"Network produces a dense vector representation\",\n            font_size=16,\n            color=\"#58C4DD\",\n        )\n        subtitle.next_to(title, DOWN, buff=0.12)\n\n        self.play(Write(title), run_time=0.8)\n        self.play(FadeIn(subtitle), run_time=0.5)\n\n        # \u2500\u2500 Network \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                FeedForwardLayer(num_nodes=6, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=8, node_color=\"#58C4DD\"),\n                FeedForwardLayer(num_nodes=4, node_color=\"#58C4DD\"),\n                VectorLayer(num_values=4),\n            ],\n            layer_spacing=0.3,\n        )\n        nn.move_to(ORIGIN + DOWN * 0.15)\n\n        # \u2500\u2500 Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        arch_info = [\n            (\"Input\\n(6)\", \"#F59E0B\"),\n            (\"Hidden\\n(8)\", \"#FFFFFF\"),\n            (\"Hidden\\n(4)\", \"#FFFFFF\"),\n            (\"Vector\\n[4]\", \"#10B981\"),\n        ]\n        label_group = VGroup()\n        for i, (lbl, col) in enumerate(arch_info):\n            t = Text(lbl, font_size=13, color=col)\n            t.next_to(nn.input_layers[i], DOWN, buff=0.3)\n            label_group.add(t)\n\n        # \u2500\u2500 Arrow pointing at VectorLayer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        vec_layer = nn.input_layers[-1]\n        vec_arr = Arrow(\n            start=vec_layer.get_top() + UP * 0.7 + RIGHT * 0.3,\n            end=vec_layer.get_top() + UP * 0.12,\n            color=\"#10B981\",\n            stroke_width=2,\n            buff=0.05,\n        )\n        vec_note = Text(\"dense output\\nvector\", font_size=13, color=\"#10B981\")\n        vec_note.next_to(vec_arr.get_start(), UP, buff=0.05)\n\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(\n            LaggedStart(*[Write(t) for t in label_group], lag_ratio=0.2),\n            run_time=0.9,\n        )\n        self.play(GrowArrow(vec_arr), Write(vec_note), run_time=0.6)\n        self.wait(0.3)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        fwd_lbl = Text(\"Computing vector representation \u2026\", font_size=15, color=\"#FF862F\")\n        fwd_lbl.to_edge(DOWN, buff=0.3)\n        self.play(Write(fwd_lbl), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=3.0)\n\n        done = Text(\"Embedding vector produced\", font_size=15, color=\"#10B981\")\n        done.to_edge(DOWN, buff=0.3)\n        self.play(Transform(fwd_lbl, done), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "VectorLayerOutputScene"
+  },
+  {
+    "id": "manim_ml_mathop_activation",
+    "scene": "MathOpActivationScene",
+    "originalPrompt": "Animate a neural network with a residual addition MathOperationLayer and ReLU activations",
+    "description": "Shows a residual-style network with MathOperationLayer and activation functions on a dark (#0f0e18) background. Title 'MathOperationLayer + Activation' and subtitle about residual addition appear first. NeuralNetwork chains FeedForwardLayer(4) \u2192 FeedForwardLayer(4, activation_function='ReLU') \u2192 MathOperationLayer('+', node_radius=0.12) \u2192 FeedForwardLayer(4, activation_function='ReLU') \u2192 FeedForwardLayer(2) with layer_spacing=0.28 and scale(0.95). Labels (Input, FC+ReLU, Add residual, FC+ReLU, Output) are placed below via nn.input_layers[i]. 'ReLU' Text annotations float above the two activated layers. A SurroundingRectangle in orange highlights MathOperationLayer with label 'Residual + operation'. After fade-out of the callout, nn.make_forward_pass_animation() animates the pass through activation functions and the addition node. Ends with 'Residual forward pass complete'.",
+    "apisUsed": [
+      "NeuralNetwork",
+      "MathOperationLayer",
+      "FeedForwardLayer",
+      "make_forward_pass_animation",
+      "ThreeDScene",
+      "SurroundingRectangle",
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Transform",
+      "VGroup"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "FadeOut",
+      "LaggedStart",
+      "Create",
+      "Transform"
+    ],
+    "domain": "ml",
+    "tags": [
+      "manim-ml",
+      "mathoperationlayer",
+      "activation-function",
+      "relu",
+      "residual",
+      "forward-pass",
+      "deep-learning"
+    ],
+    "complexity": "expert",
+    "colorPalette": [
+      "#0f0e18",
+      "#58C4DD",
+      "#8B5CF6",
+      "#FF862F",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "\"\"\"RAG seed scene: MathOperationLayer + ReLU activation function.\"\"\"\nfrom manim import *\nfrom manim_ml.neural_network import (\n    NeuralNetwork,\n    FeedForwardLayer,\n    MathOperationLayer,\n)\n\n\nclass MathOpActivationScene(ThreeDScene):\n    \"\"\"Network showing MathOperationLayer (residual add) and ReLU activation.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0f0e18\"\n\n        # \u2500\u2500 Title \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        title = Text(\"MathOperationLayer + Activation\", font_size=32, color=WHITE)\n        title.to_edge(UP, buff=0.3)\n        subtitle = Text(\n            \"Residual addition and ReLU in a deep network\",\n            font_size=16,\n            color=\"#58C4DD\",\n        )\n        subtitle.next_to(title, DOWN, buff=0.12)\n\n        self.play(Write(title), run_time=0.8)\n        self.play(FadeIn(subtitle), run_time=0.5)\n\n        # \u2500\u2500 Network with MathOperationLayer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        nn = NeuralNetwork(\n            [\n                FeedForwardLayer(num_nodes=4, node_color=\"#58C4DD\"),\n                FeedForwardLayer(\n                    num_nodes=4,\n                    node_color=\"#58C4DD\",\n                    activation_function=\"ReLU\",\n                ),\n                MathOperationLayer(operation_type=\"+\", node_radius=0.12),\n                FeedForwardLayer(\n                    num_nodes=4,\n                    node_color=\"#8B5CF6\",\n                    activation_function=\"ReLU\",\n                ),\n                FeedForwardLayer(num_nodes=2, node_color=\"#10B981\"),\n            ],\n            layer_spacing=0.28,\n        )\n        nn.scale(0.95)\n        nn.move_to(ORIGIN + DOWN * 0.1)\n\n        # \u2500\u2500 Labels \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        arch_info = [\n            (\"Input\\n(4)\", \"#F59E0B\"),\n            (\"FC+ReLU\\n(4)\", \"#58C4DD\"),\n            (\"Add\\nresidual\", \"#FF862F\"),\n            (\"FC+ReLU\\n(4)\", \"#8B5CF6\"),\n            (\"Output\\n(2)\", \"#10B981\"),\n        ]\n        label_group = VGroup()\n        for i, (lbl, col) in enumerate(arch_info):\n            t = Text(lbl, font_size=12, color=col)\n            t.next_to(nn.input_layers[i], DOWN, buff=0.3)\n            label_group.add(t)\n\n        # \u2500\u2500 Callout on MathOperationLayer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        mo_box = SurroundingRectangle(\n            nn.input_layers[2], color=\"#FF862F\", corner_radius=0.1, buff=0.1\n        )\n        mo_note = Text(\"Residual\\n+ operation\", font_size=12, color=\"#FF862F\")\n        mo_note.next_to(mo_box, UP, buff=0.12)\n\n        # \u2500\u2500 ReLU annotations \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        relu_label = Text(\"ReLU\", font_size=12, color=\"#58C4DD\")\n        relu_label.next_to(nn.input_layers[1], UP, buff=0.4)\n        relu_label2 = Text(\"ReLU\", font_size=12, color=\"#8B5CF6\")\n        relu_label2.next_to(nn.input_layers[3], UP, buff=0.4)\n\n        self.play(FadeIn(nn), run_time=0.7)\n        self.play(\n            LaggedStart(*[Write(t) for t in label_group], lag_ratio=0.2),\n            run_time=0.9,\n        )\n        self.play(\n            Create(mo_box),\n            Write(mo_note),\n            Write(relu_label),\n            Write(relu_label2),\n            run_time=0.7,\n        )\n        self.wait(0.4)\n        self.play(FadeOut(mo_box), FadeOut(mo_note), run_time=0.3)\n\n        # \u2500\u2500 Forward pass \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n        fwd_lbl = Text(\"Forward pass with residual \u2026\", font_size=15, color=\"#FF862F\")\n        fwd_lbl.to_edge(DOWN, buff=0.3)\n        self.play(Write(fwd_lbl), run_time=0.4)\n\n        self.play(nn.make_forward_pass_animation(), run_time=3.5)\n\n        done = Text(\"Residual forward pass complete\", font_size=15, color=\"#10B981\")\n        done.to_edge(DOWN, buff=0.3)\n        self.play(Transform(fwd_lbl, done), run_time=0.5)\n        self.wait(1.0)\n",
+    "sceneClassName": "MathOpActivationScene"
+  }
+]

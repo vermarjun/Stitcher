@@ -1,0 +1,32 @@
+{
+  "api": "Star",
+  "plugin": "manim-astronomy",
+  "scene_class": "StarWithPlanet",
+  "description": "Show a star with an orbiting planet by combining the Star mobject with a Planet mobject, demonstrating the complete manim-astronomy solar system setup.",
+  "code": "from manim import *\nfrom manim_Astronomy import Star, Planet\n\nclass StarWithPlanet(Scene):\n    def construct(self):\n        star = Star(\n            radius=0.4,\n            num_of_particles=400,\n            size_of_particle=0.005,\n            colors=[YELLOW],\n        )\n        planet = Planet(\n            center=np.array([2.0, 0.0, 0.0]),\n            radius=0.15,\n        )\n        self.add(star, planet)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FFFF00",
+      "#58C4DD"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Star",
+      "Planet"
+    ],
+    "category": "scenes",
+    "tags": [
+      "astronomy",
+      "star",
+      "planet",
+      "solar-system",
+      "manim-astronomy"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

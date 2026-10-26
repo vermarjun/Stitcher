@@ -1,0 +1,32 @@
+{
+  "api": "Pendulum",
+  "plugin": "manim-physics",
+  "scene_class": "PendulumWithGravity",
+  "description": "Pendulum swinging alongside a static floor, illustrating how rigid body physics interacts with a ground plane.",
+  "code": "from manim import *\nfrom manim_physics import *\n\nclass PendulumWithGravity(SpaceScene):\n    def construct(self):\n        floor = Line([-5, -3, 0], [5, -3, 0])\n        self.add(floor)\n        self.make_static_body(floor)\n        p = Pendulum(length=2.5, initial_theta=0.4, pivot_point=UP * 1.5)\n        self.add(p)\n        self.make_rigid_body(*p.bobs)\n        p.start_swinging()\n        self.wait(2)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FF862F",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Pendulum",
+      "SpaceScene"
+    ],
+    "category": "scenes",
+    "tags": [
+      "physics",
+      "pendulum",
+      "rigid-body",
+      "floor",
+      "manim-physics"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

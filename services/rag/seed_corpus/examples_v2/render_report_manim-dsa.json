@@ -1,0 +1,101 @@
+{
+  "plugin": "manim-dsa",
+  "generated": "2026-05-31",
+  "manimVersion": "0.19.2",
+  "renderScript": "_render_timeout.sh 120 .venv <scene.py> <SceneClass>",
+  "results": [
+    {
+      "feature": "MArray",
+      "sceneClass": "MArraySelectionSort",
+      "selfPlayCount": 30,
+      "durationSeconds": 21.93,
+      "apisCount": 12,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/marray/01.mp4",
+      "thumbnail": "renders_v2/manim-dsa/marray/01.jpg",
+      "notes": "MArrayStyle.BLUE + add_indexes + animate.highlight/unhighlight/swap. 30 plays. 21.9s."
+    },
+    {
+      "feature": "MStack + MVariable",
+      "sceneClass": "MStackPushPop",
+      "selfPlayCount": 37,
+      "durationSeconds": 31.47,
+      "apisCount": 13,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/mstack/01.mp4",
+      "thumbnail": "renders_v2/manim-dsa/mstack/01.jpg",
+      "notes": "MStackStyle.PURPLE + MVariableStyle.PURPLE. animate.append/pop/set_value. 37 plays. 31.5s."
+    },
+    {
+      "feature": "MVariable",
+      "sceneClass": "MVariableTracker",
+      "selfPlayCount": 29,
+      "durationSeconds": 24.27,
+      "apisCount": 14,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/mvariable/01.mp4",
+      "thumbnail": "renders_v2/manim-dsa/mvariable/01.jpg",
+      "notes": "Two MVariable (DEFAULT+GREEN) alongside MArray.BLUE tracking loop index and running max. 29 plays. 24.3s."
+    },
+    {
+      "feature": "MGraph (Dijkstra)",
+      "sceneClass": "MGraphDijkstra",
+      "selfPlayCount": 25,
+      "durationSeconds": 18.73,
+      "apisCount": 12,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/mgraph/01.mp4",
+      "thumbnail": "renders_v2/manim-dsa/mgraph/01.jpg",
+      "notes": "5-node weighted graph MGraphStyle.BLUE. Dijkstra walk: node+edge highlight. 25 plays. 18.7s."
+    },
+    {
+      "feature": "MGraph (Prim MST)",
+      "sceneClass": "MGraphPrimMST",
+      "selfPlayCount": 27,
+      "durationSeconds": 18.47,
+      "apisCount": 12,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/mgraph/02.mp4",
+      "thumbnail": "renders_v2/manim-dsa/mgraph/02.jpg",
+      "notes": "5-node weighted graph MGraphStyle.GREEN. Prim MST edge grow with running cost. 27 plays. 18.5s."
+    },
+    {
+      "feature": "MTree (In-Order DFS)",
+      "sceneClass": "MTreeInOrderTraversal",
+      "selfPlayCount": 24,
+      "durationSeconds": 14.27,
+      "apisCount": 11,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/mtree/01.mp4",
+      "thumbnail": "renders_v2/manim-dsa/mtree/01.jpg",
+      "notes": "9-node BST MTreeStyle.BLUE. In-order sequence highlight + growing result label. 24 plays. 14.3s."
+    },
+    {
+      "feature": "MTree (BFS Level-Order)",
+      "sceneClass": "MTreeBFSLevelOrder",
+      "selfPlayCount": 28,
+      "durationSeconds": 14.80,
+      "apisCount": 11,
+      "exitCode": 0,
+      "verified": true,
+      "mp4": "renders_v2/manim-dsa/mtree/02.mp4",
+      "thumbnail": "renders_v2/manim-dsa/mtree/02.jpg",
+      "notes": "7-node complete binary tree MTreeStyle.PURPLE. BFS with live queue display. 28 plays. 14.8s."
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "verified": 7,
+    "failed": 0,
+    "minDuration": 14.27,
+    "maxDuration": 31.47,
+    "allAboveThreshold": true,
+    "threshold": 1.5
+  }
+}

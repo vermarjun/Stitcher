@@ -1,0 +1,33 @@
+{
+  "api": "MArray",
+  "plugin": "manim-dsa",
+  "scene_class": "MArraySwapHighlight",
+  "description": "Show a swap operation on an array: highlight two elements, swap them, then unhighlight. Uses the GREEN style for variety.",
+  "code": "from manim import *\nfrom manim_dsa import MArray, MArrayStyle\n\nclass MArraySwapHighlight(Scene):\n    def construct(self):\n        arr = (\n            MArray([5, 3, 8, 1, 9], style=MArrayStyle.GREEN)\n            .add_indexes()\n            .add_label(Text(\"Before swap\", font_size=24))\n        )\n        self.play(Create(arr))\n        self.wait(0.3)\n        self.play(arr[0].animate.highlight(), arr[2].animate.highlight())\n        self.wait(0.3)\n        self.play(arr.animate.swap(0, 2))\n        self.wait(0.3)\n        self.play(arr[0].animate.unhighlight(), arr[2].animate.unhighlight())\n        self.wait(0.3)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#4CAF50"
+    ],
+    "animationTypes": [
+      "Create"
+    ],
+    "apisUsed": [
+      "MArray",
+      "MArrayStyle"
+    ],
+    "category": "scenes",
+    "tags": [
+      "data-structures",
+      "array",
+      "swap",
+      "highlight",
+      "manim-dsa"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

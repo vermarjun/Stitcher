@@ -1,0 +1,31 @@
+{
+  "api": "Board",
+  "plugin": "manim-chess",
+  "scene_class": "ChessBoardCustomColors",
+  "description": "Chess board with custom dark/light square colors \u2014 a blue-themed board showing a custom starting position.",
+  "code": "from manim import *\nfrom manim_chess import Board\n\nclass ChessBoardCustomColors(Scene):\n    def construct(self):\n        board = Board(\n            color_dark='#4A7EC1',\n            color_light='#D6E8F5',\n        )\n        board.set_board_from_FEN(\n            \"r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4\"\n        )\n        self.add(board)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "general",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#4A7EC1",
+      "#D6E8F5"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Board"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chess",
+      "board",
+      "custom-colors",
+      "FEN",
+      "manim-chess"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

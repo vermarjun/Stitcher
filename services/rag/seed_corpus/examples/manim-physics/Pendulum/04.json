@@ -1,0 +1,31 @@
+{
+  "api": "Pendulum",
+  "plugin": "manim-physics",
+  "scene_class": "PendulumCustomBob",
+  "description": "Pendulum with a custom red bob and thin rod, demonstrating style customization parameters.",
+  "code": "from manim import *\nfrom manim_physics import *\n\nclass PendulumCustomBob(SpaceScene):\n    def construct(self):\n        p = Pendulum(\n            length=3,\n            initial_theta=0.5,\n            rod_style={\"stroke_width\": 2, \"color\": GREY},\n            bob_style={\"radius\": 0.2, \"color\": RED, \"fill_opacity\": 1},\n        )\n        self.add(p)\n        self.make_rigid_body(*p.bobs)\n        p.start_swinging()\n        self.wait(2)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FC6255",
+      "#888888"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Pendulum",
+      "SpaceScene"
+    ],
+    "category": "scenes",
+    "tags": [
+      "physics",
+      "pendulum",
+      "custom-style",
+      "manim-physics"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

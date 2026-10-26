@@ -1,0 +1,22 @@
+{
+  "manimVersion": "0.19.0",
+  "manimTag": "v0.19.0",
+  "scrapedAt": "2026-04-09T22:13:03.791482+00:00",
+  "modulesScraped": 97,
+  "parseFailures": [],
+  "totalChunks": 1020,
+  "level1Count": 97,
+  "level2Count": 273,
+  "level3Count": 653,
+  "level2WithDocstring": 223,
+  "level2WithExample": 154,
+  "level3WithExample": 128,
+  "chunksByCategory": {
+    "animations": 122,
+    "cameras": 92,
+    "utilities": 100,
+    "mobjects": 562,
+    "scenes": 144
+  },
+  "missingKeyClasses": []
+}

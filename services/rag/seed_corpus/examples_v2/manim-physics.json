@@ -1,0 +1,344 @@
+[
+  {
+    "id": "physics_plugin_multipendulum_chaos",
+    "originalPrompt": "Show a double pendulum and how tiny differences in initial conditions lead to completely different trajectories",
+    "sceneClassName": "MultiPendulumChaosScene",
+    "description": "A SpaceScene demonstrating chaotic motion in a double (multi) pendulum system. The scene opens on a near-black background (#0d0d1a) with a title and subtitle arranged in a VGroup header. A pivot marker Dot is placed at the top with a label. Two MultiPendulum instances are created with bob positions offset by only 0.02 units, visually identical at start but diverging rapidly. TracedPath is added for each end-bob (blue and red) showing the trajectories becoming entirely different over time. A two-row legend panel with SurroundingRectangle identifies each pendulum. The physics runs for 5 seconds of wall-clock simulation time via self.wait(5). A closing annotation fades in at the bottom. Total: 8 self.play calls, background set, VGroup header, TracedPath, SurroundingRectangle legend.",
+    "apisUsed": [
+      "MultiPendulum",
+      "SpaceScene",
+      "TracedPath",
+      "VGroup",
+      "Text",
+      "Dot",
+      "SurroundingRectangle",
+      "GrowFromCenter",
+      "Write",
+      "FadeIn"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "GrowFromCenter"
+    ],
+    "domain": "physics",
+    "tags": [
+      "manim-physics",
+      "MultiPendulum",
+      "SpaceScene",
+      "chaos",
+      "double-pendulum",
+      "rigid-body",
+      "TracedPath",
+      "sensitive-dependence"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#0d0d1a",
+      "#3b82f6",
+      "#ef4444",
+      "#f59e0b",
+      "#94a3b8",
+      "#334155"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "plugin": "manim-physics",
+    "code": "\"\"\"\nRAG Scene — MultiPendulum chaos demo\nFeature: MultiPendulum / SpaceScene\n\"\"\"\nfrom manim import *\nfrom manim_physics import *\nimport numpy as np\n\n\nclass MultiPendulumChaosScene(SpaceScene):\n    \"\"\"Double pendulum showing sensitive dependence on initial conditions.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0d0d1a\"\n\n        # ── Title ──────────────────────────────────────────────────────────────\n        title = Text(\"Double Pendulum\", font_size=38, color=WHITE)\n        subtitle = Text(\"Sensitive Dependence on Initial Conditions\",\n                        font_size=20, color=\"#94a3b8\")\n        header = VGroup(title, subtitle).arrange(DOWN, buff=0.15)\n        header.to_edge(UP, buff=0.35)\n\n        self.play(Write(title), run_time=1.0)\n        self.play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Pivot marker ──────────────────────────────────────────────────\n        pivot_pos = UP * 1.5\n        pivot_dot = Dot(pivot_pos, color=\"#f59e0b\", radius=0.12)\n        pivot_label = Text(\"pivot\", font_size=16, color=\"#f59e0b\")\n        pivot_label.next_to(pivot_dot, RIGHT, buff=0.15)\n\n        self.play(GrowFromCenter(pivot_dot), Write(pivot_label), run_time=0.6)\n\n        # ── Two pendulums with slightly different initial bobs ────────────────\n        p1 = MultiPendulum(\n            RIGHT * 1.5 + DOWN * 0.5,\n            RIGHT * 0.8 + DOWN * 1.8,\n            pivot_point=pivot_pos,\n            bob_style={\"radius\": 0.12, \"color\": \"#3b82f6\", \"fill_opacity\": 1},\n        )\n        p2 = MultiPendulum(\n            RIGHT * 1.52 + DOWN * 0.5,      # tiny offset — chaos demo\n            RIGHT * 0.82 + DOWN * 1.8,\n            pivot_point=pivot_pos,\n            bob_style={\"radius\": 0.12, \"color\": \"#ef4444\", \"fill_opacity\": 1},\n        )\n\n        self.add(p1, p2)\n        self.make_rigid_body(*p1.bobs)\n        self.make_rigid_body(*p2.bobs)\n\n        # Traced paths for each end-bob\n        trace1 = TracedPath(p1.bobs[-1].get_center,\n                            stroke_color=\"#3b82f6\", stroke_width=1.5,\n                            stroke_opacity=0.7)\n        trace2 = TracedPath(p2.bobs[-1].get_center,\n                            stroke_color=\"#ef4444\", stroke_width=1.5,\n                            stroke_opacity=0.7)\n        self.add(trace1, trace2)\n\n        # ── Legend ───────────────────────────────────────────────────\n        legend = VGroup(\n            VGroup(Dot(color=\"#3b82f6\", radius=0.09),\n                   Text(\"Pendulum A\", font_size=16, color=\"#94a3b8\")).arrange(RIGHT, buff=0.1),\n            VGroup(Dot(color=\"#ef4444\", radius=0.09),\n                   Text(\"Pendulum B (Δθ = 0.02°)\", font_size=16, color=\"#94a3b8\")).arrange(RIGHT, buff=0.1),\n        ).arrange(DOWN, buff=0.18, aligned_edge=LEFT)\n        legend_box = SurroundingRectangle(legend, color=\"#334155\",\n                                          buff=0.2, corner_radius=0.1)\n        legend_grp = VGroup(legend_box, legend)\n        legend_grp.to_corner(DR, buff=0.4)\n\n        self.play(FadeIn(legend_grp, shift=UP * 0.2), run_time=0.6)\n\n        # ── Start swinging and advance physics ─────────────────────────────\n        p1.start_swinging()\n        p2.start_swinging()\n        self.wait(5)\n\n        # ── Closing annotation ──────────────────────────────────────────\n        closing = Text(\"Trajectories diverge exponentially — chaos!\",\n                       font_size=18, color=\"#64748b\")\n        closing.to_edge(DOWN, buff=0.3)\n        self.play(Write(closing), run_time=1.0)\n        self.wait(1.0)\n",
+    "render": {
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/pendulum/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/pendulum/01.jpg",
+      "duration_s": 10.266344,
+      "self_play_count": 8,
+      "verified": true
+    }
+  },
+  {
+    "id": "physics_plugin_electric_dipole_field",
+    "originalPrompt": "Visualize the electric field of a dipole with a positive and negative charge",
+    "sceneClassName": "ElectricDipoleScene",
+    "description": "A 2D electrostatics scene visualizing an electric dipole. Dark navy background (#0a0a1a). A title and subtitle VGroup header is written and faded in. Two Charge objects (magnitude ±1.5) are placed at LEFT*2 and RIGHT*2; both are grown from center with MathTex labels +q and −q appearing alongside. An ElectricField computed from both charges fades in over 1.5 seconds, showing the field-line arrow grid. A dashed dipole axis Line connects the two charges with a label. A midpoint Dot marks the ORIGIN with a label and Indicate pulse demonstrating non-zero field there. An info panel with SurroundingRectangle lists field-line rules and charge values. Total: 15 self.play calls, background set, VGroup layout, DashedLine, Indicate.",
+    "apisUsed": [
+      "Charge",
+      "ElectricField",
+      "VGroup",
+      "Text",
+      "MathTex",
+      "Dot",
+      "DashedLine",
+      "SurroundingRectangle",
+      "GrowFromCenter",
+      "Indicate",
+      "FadeIn",
+      "Write"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "GrowFromCenter",
+      "Create",
+      "Indicate"
+    ],
+    "domain": "physics",
+    "tags": [
+      "manim-physics",
+      "Charge",
+      "ElectricField",
+      "dipole",
+      "electrostatics",
+      "field-lines",
+      "superposition"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#0a0a1a",
+      "#ef4444",
+      "#3b82f6",
+      "#f59e0b",
+      "#10b981",
+      "#94a3b8"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "plugin": "manim-physics",
+    "code": "\"\"\"\nRAG Scene — Charge + ElectricField dipole visualization\nFeature: Charge / ElectricField\n\"\"\"\nfrom manim import *\nfrom manim_physics import *\nimport numpy as np\n\n\nclass ElectricDipoleScene(Scene):\n    \"\"\"Electric dipole with animated charge appearance and field overlay.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0a0a1a\"\n\n        # ── Title ──────────────────────────────────────────────────────────────\n        title = Text(\"Electric Dipole Field\", font_size=38, color=WHITE)\n        subtitle = Text(\"+q and −q separated by 4 units\",\n                        font_size=20, color=\"#94a3b8\")\n        header = VGroup(title, subtitle).arrange(DOWN, buff=0.15)\n        header.to_edge(UP, buff=0.35)\n\n        self.play(Write(title), run_time=1.0)\n        self.play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Charges ───────────────────────────────────────────────────\n        pos_charge = Charge(1.5, LEFT * 2)\n        neg_charge = Charge(-1.5, RIGHT * 2)\n\n        # Labels near charges\n        plus_label = MathTex(r\"+q\", font_size=28, color=\"#ef4444\")\n        plus_label.next_to(pos_charge, UP, buff=0.3)\n        minus_label = MathTex(r\"-q\", font_size=28, color=\"#3b82f6\")\n        minus_label.next_to(neg_charge, UP, buff=0.3)\n\n        self.play(\n            GrowFromCenter(pos_charge),\n            GrowFromCenter(neg_charge),\n            run_time=1.0,\n        )\n        self.play(Write(plus_label), Write(minus_label), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Electric field ────────────────────────────────────────────\n        field = ElectricField(pos_charge, neg_charge)\n        self.play(FadeIn(field, lag_ratio=0.02), run_time=1.5)\n        self.wait(0.5)\n\n        # ── Axis line connecting the two charges ────────────────────────\n        dipole_axis = DashedLine(\n            LEFT * 2, RIGHT * 2,\n            color=\"#f59e0b\", stroke_width=1.5, dash_length=0.12\n        )\n        axis_label = Text(\"dipole axis\", font_size=16, color=\"#f59e0b\")\n        axis_label.next_to(dipole_axis, DOWN, buff=0.2)\n\n        self.play(Create(dipole_axis), Write(axis_label), run_time=0.8)\n        self.wait(0.3)\n\n        # ── Highlight midpoint — zero net field ──────────────────────────\n        midpoint_dot = Dot(ORIGIN, color=\"#10b981\", radius=0.10)\n        mid_label = Text(\"E ≠ 0 (net field)\", font_size=16, color=\"#10b981\")\n        mid_label.next_to(midpoint_dot, UP, buff=0.25)\n\n        self.play(GrowFromCenter(midpoint_dot), Write(mid_label), run_time=0.7)\n        self.play(Indicate(midpoint_dot, color=\"#10b981\", scale_factor=2.0),\n                  run_time=0.6)\n        self.wait(0.4)\n\n        # ── Info box ──────────────────────────────────────────────────\n        info_items = VGroup(\n            Text(\"Field lines: + → −\", font_size=16, color=\"#94a3b8\"),\n            Text(\"Superposition principle\", font_size=16, color=\"#94a3b8\"),\n            Text(\"|q₊| = |q₋| = 1.5 C\", font_size=16, color=\"#94a3b8\"),\n        ).arrange(DOWN, buff=0.15, aligned_edge=LEFT)\n        info_box = SurroundingRectangle(info_items, color=\"#334155\",\n                                         buff=0.2, corner_radius=0.1)\n        info_panel = VGroup(info_box, info_items)\n        info_panel.to_corner(DR, buff=0.4)\n\n        self.play(FadeIn(info_panel, shift=LEFT * 0.2), run_time=0.8)\n        self.wait(1.0)\n",
+    "render": {
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/electrostatics/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/electrostatics/01.jpg",
+      "duration_s": 10.599344,
+      "self_play_count": 15,
+      "verified": true
+    }
+  },
+  {
+    "id": "physics_plugin_parallel_wires_magnetic_field",
+    "originalPrompt": "Show the magnetic field produced by two parallel current-carrying wires in 3D",
+    "sceneClassName": "ParallelWiresMagneticFieldScene",
+    "description": "A ThreeDScene displaying two parallel current-carrying circular wires and their combined magnetic field. Background is deep midnight (#060614). Camera is set with phi=70° and theta=−45° for perspective. A 2D Text title and subtitle are fixed in frame (add_fixed_in_frame_mobjects). Two Wire objects wrapping Circle strokes rotated 90° are created in orange and blue. MagneticField is constructed from both wires and faded in with lag_ratio. begin_ambient_camera_rotation animates a slow spin for 3 seconds. A fixed-frame info panel with SurroundingRectangle lists wire currents and the Biot-Savart law. Total: 10 self.play calls, background set, 3D camera, fixed-frame overlays, ambient rotation.",
+    "apisUsed": [
+      "Wire",
+      "MagneticField",
+      "ThreeDScene",
+      "VGroup",
+      "Text",
+      "SurroundingRectangle",
+      "Create",
+      "FadeIn",
+      "Write"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "Create"
+    ],
+    "domain": "physics",
+    "tags": [
+      "manim-physics",
+      "Wire",
+      "MagneticField",
+      "magnetostatics",
+      "3D",
+      "parallel-wires",
+      "Biot-Savart",
+      "ThreeDScene"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#060614",
+      "#f59e0b",
+      "#3b82f6",
+      "#94a3b8",
+      "#334155"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "plugin": "manim-physics",
+    "code": "\"\"\"\nRAG Scene — Wire + MagneticField (two parallel wires)\nFeature: Wire / MagneticField / ThreeDScene\n\"\"\"\nfrom manim import *\nfrom manim_physics import *\nimport numpy as np\n\n\nclass ParallelWiresMagneticFieldScene(ThreeDScene):\n    \"\"\"Two parallel current-carrying wires with their combined magnetic field.\"\"\"\n\n    def construct(self):\n        self.set_camera_orientation(phi=70 * DEGREES, theta=-45 * DEGREES)\n        self.camera.background_color = \"#060614\"\n\n        # ── Title (fixed 2D overlay) ──────────────────────────────────────\n        title = Text(\"Parallel Wires — Magnetic Field\", font_size=34, color=WHITE)\n        subtitle = Text(\"Right-hand rule: B circulates around each wire\",\n                        font_size=18, color=\"#94a3b8\")\n        header = VGroup(title, subtitle).arrange(DOWN, buff=0.12)\n        header.to_edge(UP, buff=0.3)\n        self.add_fixed_in_frame_mobjects(header)\n        self.play(Write(title), run_time=1.0)\n        self.play(FadeIn(subtitle, shift=UP * 0.15), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Two circular wires (representing long straight wires in cross-section)\n        wire1 = Wire(Circle(1.8).rotate(PI / 2, RIGHT).shift(UP * 2),\n                     current=1)\n        wire2 = Wire(Circle(1.8).rotate(PI / 2, RIGHT).shift(DOWN * 2),\n                     current=1)\n\n        # Style the wires\n        wire1.set_stroke(color=\"#f59e0b\", width=4)\n        wire2.set_stroke(color=\"#3b82f6\", width=4)\n\n        # ── Magnetic field from both wires ─────────────────────────────\n        mag_field = MagneticField(wire1, wire2)\n\n        self.play(Create(wire1), Create(wire2), run_time=1.2)\n        self.wait(0.3)\n        self.play(FadeIn(mag_field, lag_ratio=0.02), run_time=1.5)\n        self.wait(0.5)\n\n        # ── Rotate camera for perspective ──────────────────────────────\n        self.begin_ambient_camera_rotation(rate=0.2)\n        self.wait(3)\n        self.stop_ambient_camera_rotation()\n\n        # ── Info overlay ─────────────────────────────────────────────\n        info_items = VGroup(\n            Text(\"Wire 1 (orange): I = +1 A\", font_size=16, color=\"#f59e0b\"),\n            Text(\"Wire 2 (blue): I = +1 A\", font_size=16, color=\"#3b82f6\"),\n            Text(\"B ∝ I/r  (Biot-Savart)\", font_size=16, color=\"#94a3b8\"),\n        ).arrange(DOWN, buff=0.15, aligned_edge=LEFT)\n        info_box = SurroundingRectangle(info_items, color=\"#334155\",\n                                         buff=0.2, corner_radius=0.1)\n        info_panel = VGroup(info_box, info_items)\n        info_panel.to_corner(DR, buff=0.4)\n        self.add_fixed_in_frame_mobjects(info_panel)\n        self.play(FadeIn(info_panel, shift=LEFT * 0.2), run_time=0.8)\n        self.wait(1.0)\n",
+    "render": {
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/magnetostatics/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/magnetostatics/01.jpg",
+      "duration_s": 10.266344,
+      "self_play_count": 10,
+      "verified": true
+    }
+  },
+  {
+    "id": "physics_plugin_standing_wave_harmonics",
+    "originalPrompt": "Animate the first four harmonics of a standing wave on a string",
+    "sceneClassName": "StandingWaveHarmonicsScene",
+    "description": "A 2D Scene showing four standing wave harmonics (n=1 through 4) arranged vertically on a near-black background (#050510). Title and subtitle appear as a VGroup header. Four StandingWave objects (n=1,2,3,4) are created with distinct colors (blue, green, amber, red), arranged with VGroup.arrange(DOWN), and labeled to the right. Vertical DashedLine tick marks indicate the node positions for each harmonic. LaggedStart animates wave creation in succession, then labels appear with LaggedStart Write calls. All four waves are started with start_wave() and oscillate for 4 seconds. An info panel with SurroundingRectangle explains nodes, antinodes, and the wavelength formula λₙ=2L/n. A closing annotation fades in at the bottom. Total: 11 self.play calls, background set, VGroup layout, LaggedStart, DashedLine nodes, SurroundingRectangle.",
+    "apisUsed": [
+      "StandingWave",
+      "VGroup",
+      "Text",
+      "DashedLine",
+      "SurroundingRectangle",
+      "LaggedStart",
+      "Write",
+      "FadeIn",
+      "Create"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "Create",
+      "LaggedStart"
+    ],
+    "domain": "physics",
+    "tags": [
+      "manim-physics",
+      "StandingWave",
+      "harmonics",
+      "wave",
+      "nodes",
+      "antinodes",
+      "standing-wave",
+      "string-vibration"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#050510",
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#94a3b8"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "plugin": "manim-physics",
+    "code": "\"\"\"\nRAG Scene — StandingWave harmonics ladder\nFeature: StandingWave (2D ParametricFunction-based wave)\n\"\"\"\nfrom manim import *\nfrom manim_physics import *\nimport numpy as np\n\n\nclass StandingWaveHarmonicsScene(Scene):\n    \"\"\"Four harmonics of a standing wave arranged vertically with labels.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#050510\"\n\n        # ── Title ──────────────────────────────────────────────────────────────\n        title = Text(\"Standing Wave Harmonics\", font_size=38, color=WHITE)\n        subtitle = Text(\"n = 1, 2, 3, 4  (fundamental + overtones)\",\n                        font_size=20, color=\"#94a3b8\")\n        header = VGroup(title, subtitle).arrange(DOWN, buff=0.15)\n        header.to_edge(UP, buff=0.35)\n\n        self.play(Write(title), run_time=1.0)\n        self.play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Build four standing waves ──────────────────────────────────────\n        COLORS = [\"#3b82f6\", \"#10b981\", \"#f59e0b\", \"#ef4444\"]\n        LABELS = [\"n=1  fundamental\",\n                  \"n=2  1st overtone\",\n                  \"n=3  2nd overtone\",\n                  \"n=4  3rd overtone\"]\n\n        waves = VGroup()\n        labels_grp = VGroup()\n\n        for i, (n, color, lbl) in enumerate(zip(range(1, 5), COLORS, LABELS)):\n            w = StandingWave(n=n, length=4.5, period=1.2, amplitude=0.55)\n            w.set_stroke(color=color, width=2.5)\n            waves.add(w)\n\n            lbl_mob = Text(lbl, font_size=18, color=color)\n            labels_grp.add(lbl_mob)\n\n        # Arrange waves in a vertical stack\n        waves.arrange(DOWN, buff=0.65)\n        waves.move_to(ORIGIN + DOWN * 0.2 + LEFT * 0.5)\n\n        # Position labels to the right of each wave\n        for w, lbl_mob in zip(waves, labels_grp):\n            lbl_mob.next_to(w, RIGHT, buff=0.3)\n\n        # ── Node count markers (vertical dashed lines at nodes) ───────────\n        node_markers = VGroup()\n        for i, w in enumerate(waves):\n            n = i + 1\n            x_center = w.get_center()[0]\n            y_center = w.get_center()[1]\n            x_start = x_center - 2.25\n            for k in range(n + 1):\n                x_node = x_start + k * (4.5 / n)\n                tick = DashedLine(\n                    [x_node, y_center - 0.18, 0],\n                    [x_node, y_center + 0.18, 0],\n                    color=\"#475569\", stroke_width=1.2, dash_length=0.06\n                )\n                node_markers.add(tick)\n\n        # ── Animate waves and labels appearing ───────────────────────────\n        self.play(\n            LaggedStart(*[Create(w) for w in waves], lag_ratio=0.25),\n            run_time=1.8,\n        )\n        self.play(\n            LaggedStart(*[Write(lbl) for lbl in labels_grp], lag_ratio=0.2),\n            run_time=1.2,\n        )\n        self.play(FadeIn(node_markers, lag_ratio=0.05), run_time=0.8)\n        self.wait(0.3)\n\n        # ── Start all waves oscillating ─────────────────────────────────\n        for w in waves:\n            w.start_wave()\n\n        # Info box\n        info_items = VGroup(\n            Text(\"Nodes: fixed points (amplitude = 0)\", font_size=15, color=\"#94a3b8\"),\n            Text(\"Antinodes: max displacement\", font_size=15, color=\"#94a3b8\"),\n            Text(\"λₙ = 2L/n\", font_size=15, color=\"#94a3b8\"),\n        ).arrange(DOWN, buff=0.14, aligned_edge=LEFT)\n        info_box = SurroundingRectangle(info_items, color=\"#1e293b\",\n                                         buff=0.2, corner_radius=0.1)\n        info_panel = VGroup(info_box, info_items)\n        info_panel.to_corner(DL, buff=0.45)\n\n        self.play(FadeIn(info_panel, shift=RIGHT * 0.2), run_time=0.8)\n        self.wait(4.0)\n\n        for w in waves:\n            w.stop_wave()\n\n        closing = Text(\"All harmonics satisfy fixed boundary conditions\",\n                       font_size=17, color=\"#64748b\")\n        closing.to_edge(DOWN, buff=0.25)\n        self.play(Write(closing), run_time=1.0)\n        self.wait(0.8)\n",
+    "render": {
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/wave/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/wave/01.jpg",
+      "duration_s": 12.666344,
+      "self_play_count": 11,
+      "verified": true
+    }
+  },
+  {
+    "id": "physics_plugin_compound_lens_optics",
+    "originalPrompt": "Show how a converging and diverging lens work together in a compound optical system",
+    "sceneClassName": "LensRayOpticsScene",
+    "description": "A 2D Scene demonstrating a compound lens optical system with a converging lens (f=+3) and a diverging lens (f=−4). Background is deep indigo (#050510). Title and subtitle appear as a VGroup header. A DashedLine optical axis spans the scene with a label. Two Lens objects (blue for converging, purple for diverging) are grown from center with Text labels showing focal lengths. Eight parallel Ray objects propagate from left through both lenses using the Snell-law Ray propagation, each rendered in warm colors with LaggedStart. A focal point Dot is placed at the first lens focus with an Indicate pulse. An info panel with SurroundingRectangle lists Snell's law, refractive index, and ray count. Total: 14 self.play calls, background set, VGroup layout, DashedLine, GrowFromCenter, Indicate, SurroundingRectangle.",
+    "apisUsed": [
+      "Lens",
+      "Ray",
+      "VGroup",
+      "Text",
+      "Dot",
+      "DashedLine",
+      "SurroundingRectangle",
+      "GrowFromCenter",
+      "Indicate",
+      "LaggedStart",
+      "Write",
+      "FadeIn",
+      "Create"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "GrowFromCenter",
+      "Create",
+      "Indicate",
+      "LaggedStart"
+    ],
+    "domain": "physics",
+    "tags": [
+      "manim-physics",
+      "Lens",
+      "Ray",
+      "optics",
+      "refraction",
+      "converging",
+      "diverging",
+      "compound-lens",
+      "Snell-law"
+    ],
+    "complexity": "intermediate",
+    "colorPalette": [
+      "#050510",
+      "#38bdf8",
+      "#a78bfa",
+      "#f97316",
+      "#f59e0b",
+      "#94a3b8"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "plugin": "manim-physics",
+    "code": "\"\"\"\nRAG Scene — Converging and diverging lens pair (ray optics)\nFeature: Lens / Ray\n\"\"\"\nfrom manim import *\nfrom manim_physics import *\nimport numpy as np\n\n\nclass LensRayOpticsScene(Scene):\n    \"\"\"Compound optical system: converging lens followed by diverging lens.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#050510\"\n\n        # ── Title ──────────────────────────────────────────────────────────────\n        title = Text(\"Compound Lens System\", font_size=38, color=WHITE)\n        subtitle = Text(\"Converging (f > 0) + Diverging (f < 0) lens\",\n                        font_size=20, color=\"#94a3b8\")\n        header = VGroup(title, subtitle).arrange(DOWN, buff=0.15)\n        header.to_edge(UP, buff=0.35)\n\n        self.play(Write(title), run_time=1.0)\n        self.play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Optical axis ───────────────────────────────────────────────\n        optical_axis = DashedLine(\n            LEFT * 6.5, RIGHT * 6.5,\n            color=\"#334155\", stroke_width=1.0, dash_length=0.15\n        )\n        axis_label = Text(\"optical axis\", font_size=14, color=\"#475569\")\n        axis_label.to_edge(RIGHT, buff=0.2).shift(DOWN * 0.25)\n\n        self.play(Create(optical_axis), Write(axis_label), run_time=0.7)\n\n        # ── Lenses ───────────────────────────────────────────────────\n        lens_style = {\"fill_opacity\": 0.35, \"color\": \"#38bdf8\",\n                      \"stroke_color\": \"#7dd3fc\", \"stroke_width\": 2}\n        converging = Lens(f=3, d=1, **lens_style)\n        converging.shift(LEFT * 1.5)\n\n        diverging = Lens(f=-4, d=1, **lens_style)\n        diverging.set_color(\"#a78bfa\")\n        diverging.set_stroke(color=\"#c4b5fd\", width=2)\n        diverging.shift(RIGHT * 1.8)\n\n        lens_label_c = Text(\"Converging\\nf = +3\", font_size=15, color=\"#38bdf8\")\n        lens_label_c.next_to(converging, DOWN, buff=0.25)\n        lens_label_d = Text(\"Diverging\\nf = −4\", font_size=15, color=\"#a78bfa\")\n        lens_label_d.next_to(diverging, DOWN, buff=0.25)\n\n        self.play(\n            GrowFromCenter(converging),\n            GrowFromCenter(diverging),\n            run_time=1.0,\n        )\n        self.play(\n            Write(lens_label_c),\n            Write(lens_label_d),\n            run_time=0.7,\n        )\n        self.wait(0.3)\n\n        # ── Rays ─────────────────────────────────────────────────────\n        ray_colors = [\"#f97316\", \"#fb923c\", \"#fdba74\", \"#fcd34d\", \"#fde68a\",\n                      \"#d1fae5\", \"#6ee7b7\", \"#34d399\"]\n        rays = VGroup(*[\n            Ray(\n                start=LEFT * 6 + UP * y,\n                direction=RIGHT,\n                init_length=13,\n                propagate=[converging, diverging],\n                color=ray_colors[i % len(ray_colors)],\n                stroke_width=1.8,\n            )\n            for i, y in enumerate(np.linspace(-2.0, 2.0, 8))\n        ])\n\n        self.play(LaggedStart(*[Create(r) for r in rays], lag_ratio=0.08),\n                  run_time=2.0)\n        self.wait(0.5)\n\n        # ── Focal point marker for converging lens ───────────────────────\n        focal_dot = Dot(RIGHT * 1.5 + RIGHT * 3, color=\"#f59e0b\", radius=0.09)\n        focal_label = Text(\"focal\\npoint\", font_size=14, color=\"#f59e0b\")\n        focal_label.next_to(focal_dot, UP, buff=0.2)\n\n        self.play(GrowFromCenter(focal_dot), Write(focal_label), run_time=0.7)\n        self.play(Indicate(focal_dot, color=\"#fbbf24\", scale_factor=2.2),\n                  run_time=0.6)\n        self.wait(0.4)\n\n        # ── Info panel ────────────────────────────────────────────────\n        info_items = VGroup(\n            Text(\"Snell's law: n₁ sinθ₁ = n₂ sinθ₂\", font_size=15, color=\"#94a3b8\"),\n            Text(\"n_glass = 1.52 (default)\", font_size=15, color=\"#94a3b8\"),\n            Text(\"8 parallel rays traced\", font_size=15, color=\"#94a3b8\"),\n        ).arrange(DOWN, buff=0.14, aligned_edge=LEFT)\n        info_box = SurroundingRectangle(info_items, color=\"#1e293b\",\n                                         buff=0.2, corner_radius=0.1)\n        info_panel = VGroup(info_box, info_items)\n        info_panel.to_corner(DR, buff=0.4)\n\n        self.play(FadeIn(info_panel, shift=LEFT * 0.2), run_time=0.8)\n        self.wait(1.2)\n",
+    "render": {
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/optics/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/optics/01.jpg",
+      "duration_s": 10.933000,
+      "self_play_count": 14,
+      "verified": true
+    }
+  },
+  {
+    "id": "physics_plugin_rigid_body_drop",
+    "originalPrompt": "Show several different shapes falling under gravity and bouncing inside a box",
+    "sceneClassName": "RigidBodyDropScene",
+    "description": "A SpaceScene showing rigid-body physics with multiple geometric shapes (two circles, a rotated square, and a triangle) dropped into a static containment box. Background is deep midnight (#0a0a14). Title and subtitle VGroup header appears with Write and FadeIn. Floor and two wall Lines are created and registered as make_static_body. Four shapes are drawn with LaggedStart DrawBorderThenFill, then registered as make_rigid_body. Labels appear with FadeIn listing shape types. The physics simulation runs for 4.5 seconds showing shapes falling, colliding, bouncing and settling. A closing annotation identifies the underlying Chipmunk2D/pymunk physics engine. Total: 10 self.play calls, background set, VGroup layout, LaggedStart, DrawBorderThenFill, make_rigid_body, make_static_body.",
+    "apisUsed": [
+      "SpaceScene",
+      "VGroup",
+      "Text",
+      "Circle",
+      "Square",
+      "Triangle",
+      "Line",
+      "DrawBorderThenFill",
+      "LaggedStart",
+      "Write",
+      "FadeIn",
+      "Create"
+    ],
+    "animationTypes": [
+      "Write",
+      "FadeIn",
+      "Create",
+      "DrawBorderThenFill",
+      "LaggedStart"
+    ],
+    "domain": "physics",
+    "tags": [
+      "manim-physics",
+      "SpaceScene",
+      "make_rigid_body",
+      "make_static_body",
+      "gravity",
+      "collision",
+      "rigid-body",
+      "pymunk"
+    ],
+    "complexity": "beginner",
+    "colorPalette": [
+      "#0a0a14",
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#475569"
+    ],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "plugin": "manim-physics",
+    "code": "\"\"\"\nRAG Scene — Rigid body drop: shapes falling into a box\nFeature: SpaceScene / make_rigid_body / make_static_body\n\"\"\"\nfrom manim import *\nfrom manim_physics import *\nimport numpy as np\n\n\nclass RigidBodyDropScene(SpaceScene):\n    \"\"\"Several geometric shapes fall under gravity into a static containment box.\"\"\"\n\n    def construct(self):\n        self.camera.background_color = \"#0a0a14\"\n\n        # ── Title ──────────────────────────────────────────────────────────────\n        title = Text(\"Rigid Body Simulation\", font_size=38, color=WHITE)\n        subtitle = Text(\"Gravity + collisions — SpaceScene physics engine\",\n                        font_size=20, color=\"#94a3b8\")\n        header = VGroup(title, subtitle).arrange(DOWN, buff=0.15)\n        header.to_edge(UP, buff=0.35)\n\n        self.play(Write(title), run_time=1.0)\n        self.play(FadeIn(subtitle, shift=UP * 0.2), run_time=0.7)\n        self.wait(0.3)\n\n        # ── Static container walls ──────────────────────────────────────\n        floor  = Line([-4.0, -3.0, 0], [ 4.0, -3.0, 0]).set_stroke(color=\"#475569\", width=3)\n        wall_l = Line([-4.0, -3.0, 0], [-4.0,  1.5, 0]).set_stroke(color=\"#475569\", width=3)\n        wall_r = Line([ 4.0, -3.0, 0], [ 4.0,  1.5, 0]).set_stroke(color=\"#475569\", width=3)\n        walls = VGroup(floor, wall_l, wall_r)\n\n        self.play(Create(walls), run_time=0.8)\n        self.make_static_body(floor, wall_l, wall_r)\n\n        # ── Falling shapes ─────────────────────────────────────────────\n        circle1 = Circle(radius=0.35).set_fill(\"#3b82f6\", opacity=1).shift(UP * 3.5 + LEFT * 2)\n        circle2 = Circle(radius=0.28).set_fill(\"#10b981\", opacity=1).shift(UP * 4.2 + RIGHT * 0.5)\n        square  = Square(side_length=0.7).set_fill(\"#f59e0b\", opacity=1).rotate(PI / 6).shift(UP * 5.0 + RIGHT * 2)\n        triangle = Triangle().scale(0.5).set_fill(\"#ef4444\", opacity=1).shift(UP * 4.5 + LEFT * 0.5)\n\n        shapes = VGroup(circle1, circle2, square, triangle)\n\n        self.play(\n            LaggedStart(\n                *[DrawBorderThenFill(s) for s in shapes],\n                lag_ratio=0.3,\n            ),\n            run_time=1.2,\n        )\n        self.wait(0.2)\n\n        # ── Register as rigid bodies and let physics run ──────────────────\n        self.make_rigid_body(circle1, circle2, square, triangle)\n\n        # Add labels for shape types\n        shape_labels = VGroup(\n            Text(\"Circles\", font_size=16, color=\"#3b82f6\").to_edge(RIGHT, buff=0.3).shift(UP * 1.5),\n            Text(\"Square\", font_size=16, color=\"#f59e0b\").to_edge(RIGHT, buff=0.3).shift(UP * 1.0),\n            Text(\"Triangle\", font_size=16, color=\"#ef4444\").to_edge(RIGHT, buff=0.3).shift(UP * 0.5),\n        )\n        self.play(FadeIn(shape_labels, lag_ratio=0.2), run_time=0.6)\n\n        # Advance physics — shapes fall, bounce, settle\n        self.wait(4.5)\n\n        # ── Closing annotation ──────────────────────────────────────────\n        closing = Text(\"Chipmunk2D physics engine via pymunk\",\n                       font_size=17, color=\"#64748b\")\n        closing.to_edge(DOWN, buff=0.25)\n        self.play(Write(closing), run_time=1.0)\n        self.wait(0.8)\n",
+    "render": {
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/rigid_body/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/rigid_body/01.jpg",
+      "duration_s": 11.199344,
+      "self_play_count": 10,
+      "verified": true
+    }
+  }
+]

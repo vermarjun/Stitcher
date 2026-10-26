@@ -1,0 +1,30 @@
+{
+  "api": "Star",
+  "plugin": "manim-astronomy",
+  "scene_class": "StarBasicYellow",
+  "description": "Render a basic yellow star with 500 particles using the manim-astronomy Star mobject \u2014 mimics a sun-like stellar object.",
+  "code": "from manim import *\nfrom manim_Astronomy import Star\n\nclass StarBasicYellow(Scene):\n    def construct(self):\n        star = Star(\n            radius=0.5,\n            num_of_particles=500,\n            size_of_particle=0.005,\n            colors=[YELLOW],\n        )\n        star.move_to(ORIGIN)\n        self.add(star)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "physics",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#FFFF00"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "Star"
+    ],
+    "category": "scenes",
+    "tags": [
+      "astronomy",
+      "star",
+      "solar",
+      "particles",
+      "manim-astronomy"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

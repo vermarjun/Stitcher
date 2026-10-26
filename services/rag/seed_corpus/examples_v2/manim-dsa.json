@@ -1,0 +1,145 @@
+[
+  {
+    "id": "marray_selection_sort",
+    "originalPrompt": "Visualize selection sort on an array with index labels, highlighting the minimum element and swapping it to the front each pass",
+    "sceneClassName": "MArraySelectionSort",
+    "description": "Animates selection sort on a 6-element integer array using MArray with index labels (MArrayStyle.BLUE). Each pass of the outer loop finds the minimum remaining element: the scene computes the minimum index in Python, then calls arr[min_idx].animate.highlight() to visually mark it, followed by arr[min_idx].animate.unhighlight() and arr.animate.swap(i, min_idx) to swap the element into its sorted position. A Text step label below the array is updated each pass via Transform to show the current step, minimum value, and its index. The title and subtitle are written with Write/FadeIn. The scene ends with a green 'Sorted!' label. Background is deep blue-navy (#1a1a2e). Native manim APIs include Write, FadeIn, Create, Transform, and Text; DSA APIs include MArray, MArrayStyle, add_indexes, animate.highlight, animate.unhighlight, and animate.swap.",
+    "apisUsed": [
+      "MArray", "MArrayStyle", "MArray.add_indexes",
+      "MElement.animate.highlight", "MElement.animate.unhighlight", "MArray.animate.swap",
+      "Text", "VGroup", "Write", "FadeIn", "Create", "Transform"
+    ],
+    "animationTypes": ["Write", "FadeIn", "Create", "Transform", "Indicate"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "array", "sorting", "selection-sort", "highlight", "swap", "index"],
+    "complexity": "intermediate",
+    "colorPalette": ["#1a1a2e", "#3B82F6", "#1E3A5F", "#F59E0B", "#10B981", "#9CA3AF"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MArray, MArrayStyle\n\n\nclass MArraySelectionSort(Scene):\n    def construct(self):\n        self.camera.background_color = \"#1a1a2e\"\n\n        title = Text(\"Selection Sort\", font_size=36, color=WHITE).to_edge(UP, buff=0.45)\n        subtitle = Text(\n            \"find minimum, swap to front\", font_size=20, color=\"#9CA3AF\"\n        ).next_to(title, DOWN, buff=0.1)\n        self.play(Write(title), FadeIn(subtitle))\n\n        arr = (\n            MArray([5, 3, 8, 1, 9, 2], style=MArrayStyle.BLUE)\n            .add_indexes()\n            .move_to(ORIGIN + DOWN * 0.1)\n        )\n        self.play(Create(arr))\n        self.wait(0.3)\n\n        values = [5, 3, 8, 1, 9, 2]\n        n = len(values)\n\n        step_label = Text(\"step: —\", font_size=22, color=\"#F59E0B\").next_to(arr, DOWN, buff=0.6)\n        self.play(FadeIn(step_label))\n\n        for i in range(n - 1):\n            min_idx = i\n            for j in range(i + 1, n):\n                if values[j] < values[min_idx]:\n                    min_idx = j\n\n            new_step = Text(\n                f\"step {i+1}: min={values[min_idx]} at [{min_idx}]\",\n                font_size=22, color=\"#F59E0B\"\n            ).next_to(arr, DOWN, buff=0.6)\n            self.play(Transform(step_label, new_step), run_time=0.4)\n\n            self.play(arr[min_idx].animate.highlight())\n            self.wait(0.15)\n            self.play(arr[min_idx].animate.unhighlight())\n\n            if min_idx != i:\n                self.play(arr.animate.swap(i, min_idx))\n                values[i], values[min_idx] = values[min_idx], values[i]\n\n        done = Text(\"Sorted!\", font_size=28, color=\"#10B981\").next_to(arr, DOWN, buff=0.6)\n        self.play(Transform(step_label, done))\n        self.wait(1)\n"
+  },
+  {
+    "id": "mstack_push_pop",
+    "originalPrompt": "Animate a sequence of push and pop operations on a stack and track the current stack size with a variable",
+    "sceneClassName": "MStackPushPop",
+    "description": "Demonstrates stack operations using MStack (MStackStyle.PURPLE) and an MVariable (MVariableStyle.PURPLE) side-by-side. The stack starts empty on the left. Each operation in a predefined sequence (push 10, 20, 30; pop; push 40, 50; pop; pop) is animated with stack.animate.append(val) for push and stack.animate.pop() for pop. An operation label (green for push, red for pop) above the stack is updated with Transform each step. On the right, an MVariable tracks the current size and is animated with size_var.animate.set_value(size) after each operation. Both structures are labeled with add_label(). Native manim APIs include Write, Create, FadeIn, Transform, Text; DSA APIs include MStack, MStackStyle, MVariable, MVariableStyle, animate.append, animate.pop, animate.set_value, add_label.",
+    "apisUsed": [
+      "MStack", "MStackStyle", "MStack.animate.append", "MStack.animate.pop",
+      "MVariable", "MVariableStyle", "MVariable.animate.set_value",
+      "MCollection.add_label", "Text", "Write", "Create", "FadeIn", "Transform"
+    ],
+    "animationTypes": ["Write", "Create", "FadeIn", "Transform"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "stack", "push", "pop", "LIFO", "variable", "data-structure"],
+    "complexity": "beginner",
+    "colorPalette": ["#0f1923", "#8B46D6", "#eb97fc", "#10B981", "#EF4444", "#F59E0B"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MStack, MStackStyle, MVariable, MVariableStyle\n\n\nclass MStackPushPop(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0f1923\"\n\n        title = Text(\"Stack: Push & Pop\", font_size=34, color=WHITE).to_edge(UP, buff=0.4)\n        self.play(Write(title))\n\n        stack = (\n            MStack([], style=MStackStyle.PURPLE)\n            .add_label(Text(\"stack\", font_size=22, color=\"#C084FC\"), LEFT, buff=0.35)\n            .move_to(LEFT * 2.5 + DOWN * 0.3)\n        )\n        self.play(Create(stack))\n\n        size_var = (\n            MVariable(0, style=MVariableStyle.PURPLE)\n            .add_label(Text(\"size\", font_size=22, color=\"#C084FC\"), LEFT, buff=0.3)\n            .move_to(RIGHT * 3.2 + DOWN * 0.3)\n        )\n        self.play(Create(size_var))\n        self.wait(0.3)\n\n        ops = [\n            (\"push\", 10), (\"push\", 20), (\"push\", 30),\n            (\"pop\",  None),\n            (\"push\", 40), (\"push\", 50),\n            (\"pop\",  None), (\"pop\",  None),\n        ]\n\n        op_label = Text(\"\", font_size=24, color=\"#F59E0B\").next_to(title, DOWN, buff=0.1)\n        self.add(op_label)\n        size = 0\n\n        for op, val in ops:\n            if op == \"push\":\n                new_lbl = Text(f\"push({val})\", font_size=24, color=\"#10B981\").next_to(title, DOWN, buff=0.1)\n                self.play(Transform(op_label, new_lbl), run_time=0.3)\n                self.play(stack.animate.append(val))\n                size += 1\n            else:\n                new_lbl = Text(\"pop()\", font_size=24, color=\"#EF4444\").next_to(title, DOWN, buff=0.1)\n                self.play(Transform(op_label, new_lbl), run_time=0.3)\n                self.play(stack.animate.pop())\n                size -= 1\n\n            self.play(size_var.animate.set_value(size))\n            self.wait(0.1)\n\n        self.wait(1)\n"
+  },
+  {
+    "id": "mvariable_max_scan",
+    "originalPrompt": "Show how a variable tracks the current index and maximum value while scanning an array to find the maximum element",
+    "sceneClassName": "MVariableTracker",
+    "description": "Demonstrates MVariable used for live algorithmic state tracking alongside MArray. Two MVariable objects appear below an MArray of six integers: 'i' (MVariableStyle.DEFAULT) tracks the loop index and 'max' (MVariableStyle.GREEN) tracks the running maximum. For each index, the scene animates i_var.animate.set_value(i), arr[i].animate.highlight() to spotlight the current element, and conditionally max_var.animate.set_value(new_max) plus a Transform on a bottom Text label when a new maximum is found. After unhighlighting, the loop advances. All three structures (array, i variable, max variable) are laid out with add_indexes() and add_label() using .next_to() and .move_to(). The background is near-black (#0d1117). Finished with a Transform showing the final maximum.",
+    "apisUsed": [
+      "MArray", "MArrayStyle", "MArray.add_indexes",
+      "MVariable", "MVariableStyle", "MVariable.animate.set_value",
+      "MElement.animate.highlight", "MElement.animate.unhighlight",
+      "MCollection.add_label", "Text", "Write", "Create", "FadeIn", "Transform"
+    ],
+    "animationTypes": ["Write", "Create", "FadeIn", "Transform"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "array", "variable", "loop", "max", "scan", "state-tracking"],
+    "complexity": "beginner",
+    "colorPalette": ["#0d1117", "#3B82F6", "#1E3A5F", "#34D399", "#F59E0B", "#FFFFFF"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MArray, MArrayStyle, MVariable, MVariableStyle\n\n\nclass MVariableTracker(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0d1117\"\n\n        title = Text(\"Find Maximum — Variable Tracking\", font_size=30, color=WHITE).to_edge(UP, buff=0.4)\n        self.play(Write(title))\n\n        arr_vals = [3, 7, 2, 9, 4, 6]\n        arr = (\n            MArray(arr_vals, style=MArrayStyle.BLUE)\n            .add_indexes()\n            .move_to(ORIGIN + UP * 0.5)\n        )\n        self.play(Create(arr))\n\n        i_var = (\n            MVariable(0, style=MVariableStyle.DEFAULT)\n            .add_label(Text(\"i\", font_size=28, color=WHITE), LEFT, buff=0.25)\n            .move_to(LEFT * 3.8 + DOWN * 1.5)\n        )\n        max_var = (\n            MVariable(arr_vals[0], style=MVariableStyle.GREEN)\n            .add_label(Text(\"max\", font_size=24, color=\"#34D399\"), LEFT, buff=0.25)\n            .move_to(RIGHT * 2.5 + DOWN * 1.5)\n        )\n\n        self.play(Create(i_var), Create(max_var))\n        self.wait(0.2)\n\n        max_val = arr_vals[0]\n        cur_max_label = Text(f\"max = {max_val}\", font_size=22, color=\"#34D399\").to_edge(DOWN, buff=0.4)\n        self.play(FadeIn(cur_max_label))\n\n        for i in range(len(arr_vals)):\n            self.play(i_var.animate.set_value(i), run_time=0.4)\n            self.play(arr[i].animate.highlight())\n\n            if arr_vals[i] > max_val:\n                max_val = arr_vals[i]\n                self.play(max_var.animate.set_value(max_val))\n                new_lbl = Text(f\"max = {max_val}\", font_size=22, color=\"#34D399\").to_edge(DOWN, buff=0.4)\n                self.play(Transform(cur_max_label, new_lbl), run_time=0.3)\n\n            self.play(arr[i].animate.unhighlight())\n\n        done = Text(f\"Maximum value: {max_val}\", font_size=26, color=\"#F59E0B\").to_edge(DOWN, buff=0.4)\n        self.play(Transform(cur_max_label, done))\n        self.wait(1)\n"
+  },
+  {
+    "id": "mgraph_dijkstra",
+    "originalPrompt": "Animate Dijkstra's shortest path algorithm on a weighted undirected graph from node A to node E, highlighting visited nodes and relaxed edges",
+    "sceneClassName": "MGraphDijkstra",
+    "description": "Builds a 5-node weighted undirected graph using MGraph with a hand-placed layout (positions dict). Uses MGraphStyle.BLUE for filled node circles. The graph is labeled with add_label(). After Create(g) the scene walks through a pre-computed Dijkstra path (A→C→B→D→E, cost=9): for each step a step-text in the bottom-right is updated via Transform, the visited node is highlighted with g.nodes[node].set_highlight('#10B981', 8) and pulsed with Indicate, then the traversed edge is highlighted with g.edges[key].set_highlight('#F59E0B', 8) and animated with g.edges[key].animate.set_highlight(). A distance Text in the bottom-left is updated on the final step. Background is dark (#0f1923). Native APIs: Text, Write, FadeIn, Create, Transform, Indicate; DSA APIs: MGraph, MGraphStyle, add_label, nodes dict, edges dict, Node.set_highlight, Edge.set_highlight, Edge.animate.set_highlight.",
+    "apisUsed": [
+      "MGraph", "MGraphStyle", "MGraph.add_label",
+      "MGraph.nodes", "MGraph.edges",
+      "MGraph.Node.set_highlight", "MGraph.Edge.set_highlight", "MGraph.Edge.animate.set_highlight",
+      "Text", "Write", "FadeIn", "Create", "Transform", "Indicate"
+    ],
+    "animationTypes": ["Write", "FadeIn", "Create", "Transform", "Indicate"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "graph", "dijkstra", "shortest-path", "weighted-graph", "algorithm", "highlight"],
+    "complexity": "intermediate",
+    "colorPalette": ["#0f1923", "#3B82F6", "#1E3A5F", "#10B981", "#F59E0B", "#93C5FD"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MGraph, MGraphStyle, MVariable, MVariableStyle\n\n\nclass MGraphDijkstra(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0f1923\"\n\n        title = Text(\"Dijkstra's Shortest Path\", font_size=32, color=WHITE).to_edge(UP, buff=0.4)\n        subtitle = Text(\"A → E\", font_size=22, color=\"#F59E0B\").next_to(title, DOWN, buff=0.08)\n        self.play(Write(title), FadeIn(subtitle))\n\n        graph = {\n            \"A\": [(\"B\", 4), (\"C\", 2)],\n            \"B\": [(\"A\", 4), (\"C\", 1), (\"D\", 5)],\n            \"C\": [(\"A\", 2), (\"B\", 1), (\"E\", 8)],\n            \"D\": [(\"B\", 5), (\"E\", 2)],\n            \"E\": [(\"C\", 8), (\"D\", 2)],\n        }\n        positions = {\n            \"A\": LEFT * 3.5,\n            \"B\": LEFT * 1.2 + UP * 1.2,\n            \"C\": LEFT * 1.2 + DOWN * 1.2,\n            \"D\": RIGHT * 1.2 + UP * 1.2,\n            \"E\": RIGHT * 3.5,\n        }\n\n        g = (\n            MGraph(graph, positions, MGraphStyle.BLUE)\n            .add_label(Text(\"G\", font_size=22, color=\"#93C5FD\"), UP, buff=0.4)\n            .move_to(ORIGIN + DOWN * 0.15)\n        )\n        self.play(Create(g))\n        self.wait(0.4)\n\n        dist_label = Text(\"dist[A]=0\", font_size=20, color=\"#34D399\").to_corner(DL, buff=0.4)\n        self.play(FadeIn(dist_label))\n\n        steps = [\n            (\"A\", None,   None,  \"Visit A  dist=0\"),\n            (\"C\", \"A\", \"C\", \"Relax A→C  (cost 2)\"),\n            (\"B\", \"C\", \"B\", \"Relax C→B  (cost 3)\"),\n            (\"D\", \"B\", \"D\", \"Relax B→D  (cost 8)\"),\n            (\"E\", \"D\", \"E\", \"Relax D→E  (cost 10 → 9 via D)\"),\n        ]\n\n        step_text = Text(\"\", font_size=20, color=\"#F59E0B\").to_corner(DR, buff=0.4)\n        self.add(step_text)\n\n        for node, from_node, to_node, msg in steps:\n            new_step = Text(msg, font_size=20, color=\"#F59E0B\").to_corner(DR, buff=0.4)\n            self.play(Transform(step_text, new_step), run_time=0.4)\n\n            g.nodes[node].set_highlight(\"#10B981\", 8)\n            self.play(Indicate(g.nodes[node], color=\"#10B981\", scale_factor=1.2))\n\n            if from_node and to_node:\n                edge_key = (from_node, to_node)\n                rev_key  = (to_node, from_node)\n                if edge_key in g.edges:\n                    g.edges[edge_key].set_highlight(\"#F59E0B\", 8)\n                    self.play(g.edges[edge_key].animate.set_highlight(\"#F59E0B\", 8))\n                elif rev_key in g.edges:\n                    g.edges[rev_key].set_highlight(\"#F59E0B\", 8)\n                    self.play(g.edges[rev_key].animate.set_highlight(\"#F59E0B\", 8))\n\n            self.wait(0.3)\n\n        final = Text(\"Shortest path: A→C→B→D→E  cost=9\", font_size=20, color=\"#10B981\").to_corner(DL, buff=0.4)\n        self.play(Transform(dist_label, final))\n        self.wait(1)\n"
+  },
+  {
+    "id": "mgraph_prim_mst",
+    "originalPrompt": "Visualize Prim's minimum spanning tree algorithm on a weighted graph, growing the MST edge by edge with running cost",
+    "sceneClassName": "MGraphPrimMST",
+    "description": "Animates Prim's MST algorithm on a 5-node weighted graph (MGraphStyle.GREEN). After creating the graph with a hand-placed layout, the starting node A is highlighted with set_highlight and pulsed via Indicate. Each MST edge is then added in greedy order (A-B weight 2, B-C weight 3, B-E weight 5, A-D weight 6): the endpoint node is highlighted green, the chosen edge is highlighted yellow via g.edges[key].animate.set_highlight('#F59E0B', 10), and a running cost Text in the bottom-left is updated with Transform. A step description in the bottom-right is updated each iteration. Background is dark navy (#0f1923). DSA APIs: MGraph, MGraphStyle, add_label, nodes dict, edges dict, Node.set_highlight, Edge.set_highlight, Edge.animate.set_highlight; native: Text, Write, FadeIn, Create, Transform, Indicate.",
+    "apisUsed": [
+      "MGraph", "MGraphStyle", "MGraph.add_label",
+      "MGraph.nodes", "MGraph.edges",
+      "MGraph.Node.set_highlight", "MGraph.Edge.set_highlight", "MGraph.Edge.animate.set_highlight",
+      "Text", "Write", "FadeIn", "Create", "Transform", "Indicate"
+    ],
+    "animationTypes": ["Write", "FadeIn", "Create", "Transform", "Indicate"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "graph", "prim", "mst", "minimum-spanning-tree", "weighted-graph", "greedy"],
+    "complexity": "intermediate",
+    "colorPalette": ["#0f1923", "#2ea556", "#b2ff8c", "#10B981", "#F59E0B", "#86EFAC"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MGraph, MGraphStyle\n\n\nclass MGraphPrimMST(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0f1923\"\n\n        title = Text(\"Prim's MST\", font_size=32, color=WHITE).to_edge(UP, buff=0.4)\n        subtitle = Text(\"minimum spanning tree\", font_size=20, color=\"#9CA3AF\").next_to(title, DOWN, buff=0.08)\n        self.play(Write(title), FadeIn(subtitle))\n\n        graph = {\n            \"A\": [(\"B\", 2), (\"D\", 6)],\n            \"B\": [(\"A\", 2), (\"C\", 3), (\"D\", 8), (\"E\", 5)],\n            \"C\": [(\"B\", 3), (\"E\", 7)],\n            \"D\": [(\"A\", 6), (\"B\", 8), (\"E\", 9)],\n            \"E\": [(\"B\", 5), (\"C\", 7), (\"D\", 9)],\n        }\n        positions = {\n            \"A\": LEFT * 3.5 + UP * 0.5,\n            \"B\": LEFT * 1.2 + UP * 1.3,\n            \"C\": RIGHT * 1.5 + UP * 1.3,\n            \"D\": LEFT * 1.2 + DOWN * 1.3,\n            \"E\": RIGHT * 1.5 + DOWN * 0.2,\n        }\n\n        g = (\n            MGraph(graph, positions, MGraphStyle.GREEN)\n            .add_label(Text(\"G\", font_size=20, color=\"#86EFAC\"), UP, buff=0.4)\n            .move_to(ORIGIN + DOWN * 0.1)\n        )\n        self.play(Create(g))\n        self.wait(0.5)\n\n        mst_edges = [\n            (\"A\", \"B\", 2,  \"Add A-B  weight 2\"),\n            (\"B\", \"C\", 3,  \"Add B-C  weight 3\"),\n            (\"B\", \"E\", 5,  \"Add B-E  weight 5\"),\n            (\"A\", \"D\", 6,  \"Add A-D  weight 6\"),\n        ]\n\n        cost_var = Text(\"MST cost: 0\", font_size=22, color=\"#F59E0B\").to_corner(DL, buff=0.4)\n        step_txt  = Text(\"\", font_size=20, color=\"#86EFAC\").to_corner(DR, buff=0.4)\n        self.play(FadeIn(cost_var))\n        self.add(step_txt)\n\n        total = 0\n        g.nodes[\"A\"].set_highlight(\"#10B981\", 8)\n        self.play(Indicate(g.nodes[\"A\"], color=\"#10B981\", scale_factor=1.2))\n\n        for u, v, w, msg in mst_edges:\n            new_step = Text(msg, font_size=20, color=\"#86EFAC\").to_corner(DR, buff=0.4)\n            self.play(Transform(step_txt, new_step), run_time=0.35)\n\n            g.nodes[v].set_highlight(\"#10B981\", 8)\n            self.play(Indicate(g.nodes[v], color=\"#10B981\", scale_factor=1.2))\n\n            ekey = (u, v)\n            rkey = (v, u)\n            if ekey in g.edges:\n                g.edges[ekey].set_highlight(\"#F59E0B\", 10)\n                self.play(g.edges[ekey].animate.set_highlight(\"#F59E0B\", 10))\n            elif rkey in g.edges:\n                g.edges[rkey].set_highlight(\"#F59E0B\", 10)\n                self.play(g.edges[rkey].animate.set_highlight(\"#F59E0B\", 10))\n\n            total += w\n            new_cost = Text(f\"MST cost: {total}\", font_size=22, color=\"#F59E0B\").to_corner(DL, buff=0.4)\n            self.play(Transform(cost_var, new_cost), run_time=0.4)\n            self.wait(0.2)\n\n        done = Text(\"MST complete  (total=16)\", font_size=22, color=\"#10B981\").to_corner(DL, buff=0.4)\n        self.play(Transform(cost_var, done))\n        self.wait(1)\n"
+  },
+  {
+    "id": "mtree_inorder_traversal",
+    "originalPrompt": "Build a binary search tree and animate its in-order traversal highlighting each visited node in left-root-right order",
+    "sceneClassName": "MTreeInOrderTraversal",
+    "description": "Constructs a 9-node binary search tree using MTree with a dict adjacency list and root='8' (MTreeStyle.BLUE). The tree auto-applies a hierarchical layout. After Create(t) the scene animates in-order traversal (1, 3, 4, 6, 7, 8, 10, 13, 14) by looping through pre-computed in-order sequence: each node is highlighted with t.nodes[node].set_highlight('#F59E0B', 10) and pulsed with Indicate(scale_factor=1.3), then a growing result Text at the bottom is updated via Transform to append the node label. On completion the result label is transformed to green to confirm the sorted output. Background is near-black (#0d1117). DSA APIs: MTree, MTreeStyle, add_label, nodes dict, Node.set_highlight; native: Text, Write, FadeIn, Create, Transform, Indicate.",
+    "apisUsed": [
+      "MTree", "MTreeStyle", "MTree.add_label",
+      "MTree.nodes", "MGraph.Node.set_highlight",
+      "Text", "Write", "FadeIn", "Create", "Transform", "Indicate"
+    ],
+    "animationTypes": ["Write", "FadeIn", "Create", "Transform", "Indicate"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "tree", "binary-search-tree", "bst", "in-order", "traversal", "dfs"],
+    "complexity": "intermediate",
+    "colorPalette": ["#0d1117", "#3B82F6", "#1E3A5F", "#F59E0B", "#10B981", "#93C5FD"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MTree, MTreeStyle\n\n\nclass MTreeInOrderTraversal(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0d1117\"\n\n        title = Text(\"Binary Search Tree\", font_size=32, color=WHITE).to_edge(UP, buff=0.4)\n        subtitle = Text(\"In-Order Traversal: L → Root → R\", font_size=20, color=\"#9CA3AF\").next_to(title, DOWN, buff=0.08)\n        self.play(Write(title), FadeIn(subtitle))\n\n        tree_adj = {\n            \"8\":  [\"3\", \"10\"],\n            \"3\":  [\"1\", \"6\"],\n            \"10\": [\"14\"],\n            \"1\":  [],\n            \"6\":  [\"4\", \"7\"],\n            \"14\": [\"13\"],\n            \"4\":  [],\n            \"7\":  [],\n            \"13\": [],\n        }\n\n        t = (\n            MTree(tree_adj, root=\"8\", style=MTreeStyle.BLUE)\n            .add_label(Text(\"BST\", font_size=20, color=\"#93C5FD\"), UP, buff=0.4)\n            .move_to(ORIGIN + DOWN * 0.35)\n        )\n        self.play(Create(t))\n        self.wait(0.5)\n\n        inorder = [\"1\", \"3\", \"4\", \"6\", \"7\", \"8\", \"10\", \"13\", \"14\"]\n\n        order_label = Text(\"In-order: \", font_size=22, color=\"#F59E0B\").to_edge(DOWN, buff=0.45)\n        self.play(FadeIn(order_label))\n        visited_str = \"\"\n\n        for node in inorder:\n            t.nodes[node].set_highlight(\"#F59E0B\", 10)\n            self.play(Indicate(t.nodes[node], color=\"#F59E0B\", scale_factor=1.3), run_time=0.5)\n            visited_str += node + \" \"\n            new_lbl = Text(f\"In-order: {visited_str.strip()}\", font_size=22, color=\"#F59E0B\").to_edge(DOWN, buff=0.45)\n            self.play(Transform(order_label, new_lbl), run_time=0.3)\n\n        done = Text(f\"Result: {visited_str.strip()} ✓\", font_size=22, color=\"#10B981\").to_edge(DOWN, buff=0.45)\n        self.play(Transform(order_label, done))\n        self.wait(1)\n"
+  },
+  {
+    "id": "mtree_bfs_level_order",
+    "originalPrompt": "Animate BFS level-order traversal of a binary tree showing a live queue state alongside the tree",
+    "sceneClassName": "MTreeBFSLevelOrder",
+    "description": "Animates BFS level-order traversal of a 7-node complete binary tree using MTree (MTreeStyle.PURPLE). The tree is positioned on the left, with a live queue state display on the right showing the next nodes to be visited. The BFS sequence (A, B, C, D, E, F, G) is pre-computed. For each node: it is highlighted with t.nodes[node].set_highlight('#C084FC', 10) and pulsed with Indicate, the Visited: label at the bottom grows via Transform, and the queue state Text is updated to show the next 3 items. The queue display is a simplified Text updated by Transform. Background is dark navy (#0f1923). DSA APIs: MTree, MTreeStyle, add_label, nodes dict, Node.set_highlight; native: Text, Write, FadeIn, Create, Transform, Indicate.",
+    "apisUsed": [
+      "MTree", "MTreeStyle", "MTree.add_label",
+      "MTree.nodes", "MGraph.Node.set_highlight",
+      "Text", "Write", "FadeIn", "Create", "Transform", "Indicate"
+    ],
+    "animationTypes": ["Write", "FadeIn", "Create", "Transform", "Indicate"],
+    "domain": "cs",
+    "tags": ["manim-dsa", "tree", "binary-tree", "bfs", "level-order", "traversal", "queue"],
+    "complexity": "intermediate",
+    "colorPalette": ["#0f1923", "#8B46D6", "#eb97fc", "#C084FC", "#F59E0B", "#10B981"],
+    "quality": 5,
+    "manimVersion": "0.19.2",
+    "sourceType": "plugin_seed",
+    "code": "from manim import *\nfrom manim_dsa import MTree, MTreeStyle, MStack, MStackStyle\n\n\nclass MTreeBFSLevelOrder(Scene):\n    def construct(self):\n        self.camera.background_color = \"#0f1923\"\n\n        title = Text(\"Binary Tree BFS\", font_size=32, color=WHITE).to_edge(UP, buff=0.4)\n        subtitle = Text(\"Level-Order Traversal\", font_size=20, color=\"#9CA3AF\").next_to(title, DOWN, buff=0.08)\n        self.play(Write(title), FadeIn(subtitle))\n\n        tree_adj = {\n            \"A\": [\"B\", \"C\"],\n            \"B\": [\"D\", \"E\"],\n            \"C\": [\"F\", \"G\"],\n            \"D\": [], \"E\": [], \"F\": [], \"G\": [],\n        }\n\n        t = (\n            MTree(tree_adj, root=\"A\", style=MTreeStyle.PURPLE)\n            .add_label(Text(\"T\", font_size=20, color=\"#C084FC\"), UP, buff=0.4)\n            .move_to(LEFT * 1.5 + DOWN * 0.3)\n        )\n        self.play(Create(t))\n        self.wait(0.4)\n\n        bfs_order = [\"A\", \"B\", \"C\", \"D\", \"E\", \"F\", \"G\"]\n\n        queue_label = Text(\"Queue:\", font_size=20, color=\"#C084FC\").move_to(RIGHT * 4.5 + UP * 1.5)\n        result_label = Text(\"Visited: \", font_size=20, color=\"#F59E0B\").to_edge(DOWN, buff=0.45)\n        self.play(FadeIn(queue_label), FadeIn(result_label))\n\n        visited_str = \"\"\n        queue_display = Text(\"[ A ]\", font_size=18, color=WHITE).next_to(queue_label, DOWN, buff=0.2)\n        self.play(FadeIn(queue_display))\n\n        for i, node in enumerate(bfs_order):\n            t.nodes[node].set_highlight(\"#C084FC\", 10)\n            self.play(Indicate(t.nodes[node], color=\"#C084FC\", scale_factor=1.3), run_time=0.5)\n\n            visited_str += node + \" \"\n            new_result = Text(f\"Visited: {visited_str.strip()}\", font_size=20, color=\"#F59E0B\").to_edge(DOWN, buff=0.45)\n            self.play(Transform(result_label, new_result), run_time=0.3)\n\n            remaining = bfs_order[i+1:i+4]\n            if remaining:\n                q_str = \"[ \" + \", \".join(remaining) + (\" ...\" if len(bfs_order[i+1:]) > 3 else \"\") + \" ]\"\n            else:\n                q_str = \"[ empty ]\"\n            new_queue = Text(q_str, font_size=18, color=WHITE).next_to(queue_label, DOWN, buff=0.2)\n            self.play(Transform(queue_display, new_queue), run_time=0.3)\n\n        done = Text(f\"BFS: {visited_str.strip()}\", font_size=20, color=\"#10B981\").to_edge(DOWN, buff=0.45)\n        self.play(Transform(result_label, done))\n        self.wait(1)\n"
+  }
+]

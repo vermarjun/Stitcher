@@ -1,0 +1,32 @@
+{
+  "api": "BohrAtom",
+  "plugin": "manim-chemistry",
+  "scene_class": "BohrAtomComparison",
+  "description": "Side-by-side comparison of Hydrogen and Helium Bohr atoms, demonstrating the scale method and layout.",
+  "code": "from manim import *\nfrom manim_chemistry import BohrAtom\n\nclass BohrAtomComparison(Scene):\n    def construct(self):\n        h = BohrAtom(e=1, p=1, n=0).scale(0.7).shift(LEFT * 3)\n        he = BohrAtom(e=2, p=2, n=2).scale(0.7).shift(RIGHT * 3)\n        h_label = Text(\"H\", font_size=24).next_to(h, DOWN)\n        he_label = Text(\"He\", font_size=24).next_to(he, DOWN)\n        self.add(h, he, h_label, he_label)\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "chemistry",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FC6255"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "BohrAtom"
+    ],
+    "category": "scenes",
+    "tags": [
+      "chemistry",
+      "bohr-atom",
+      "comparison",
+      "hydrogen",
+      "helium",
+      "manim-chemistry"
+    ],
+    "quality": 5,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

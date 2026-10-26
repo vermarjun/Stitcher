@@ -1,0 +1,33 @@
+{
+  "api": "MArray",
+  "plugin": "manim-dsa",
+  "scene_class": "MArrayAppendPop",
+  "description": "Demonstrate dynamic array operations: append a new element and then pop the last element, with label and index display.",
+  "code": "from manim import *\nfrom manim_dsa import MArray, MArrayStyle\n\nclass MArrayAppendPop(Scene):\n    def construct(self):\n        arr = (\n            MArray([10, 20, 30], style=MArrayStyle.BLUE)\n            .add_indexes()\n            .add_label(Text(\"arr\", font_size=28))\n            .to_edge(LEFT)\n        )\n        self.play(Create(arr))\n        self.wait(0.3)\n        self.play(arr.animate.append(40))\n        self.wait(0.3)\n        self.play(arr.animate.pop())\n        self.wait(0.3)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD"
+    ],
+    "animationTypes": [
+      "Create"
+    ],
+    "apisUsed": [
+      "MArray",
+      "MArrayStyle"
+    ],
+    "category": "scenes",
+    "tags": [
+      "data-structures",
+      "array",
+      "append",
+      "pop",
+      "manim-dsa"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

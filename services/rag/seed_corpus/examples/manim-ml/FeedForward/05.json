@@ -1,0 +1,32 @@
+{
+  "api": "FeedForward",
+  "plugin": "manim-ml",
+  "scene_class": "FFNForwardPassSpaced",
+  "description": "Animate a forward pass through a wider network [5, 8, 5] with larger layer spacing to make edge flows visually clear.",
+  "code": "from manim import *\nfrom manim_ml.neural_network import NeuralNetwork, FeedForwardLayer\n\nclass FFNForwardPassSpaced(ThreeDScene):\n    def construct(self):\n        nn = NeuralNetwork([\n            FeedForwardLayer(5),\n            FeedForwardLayer(8),\n            FeedForwardLayer(5),\n        ], layer_spacing=0.4)\n        nn.scale(0.85)\n        nn.move_to(ORIGIN)\n        self.add(nn)\n        self.play(nn.make_forward_pass_animation())\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "intermediate",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FF862F"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "NeuralNetwork",
+      "FeedForwardLayer"
+    ],
+    "category": "scenes",
+    "tags": [
+      "machine-learning",
+      "neural-network",
+      "forward-pass",
+      "wide-network",
+      "manim-ml"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}

@@ -1,0 +1,93 @@
+{
+  "plugin": "manim-physics",
+  "generated_at": "2026-05-31",
+  "manim_version": "0.19.2",
+  "total_scenes": 6,
+  "all_verified": true,
+  "report": [
+    {
+      "feature": "pendulum",
+      "sceneClass": "MultiPendulumChaosScene",
+      "scene_file": "/tmp/manim_physics_rag/scene_pendulum.py",
+      "self_play_count": 8,
+      "duration_s": 10.27,
+      "num_apis": 10,
+      "exit_code": 0,
+      "duration_ok": true,
+      "play_count_ok": true,
+      "verified": true,
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/pendulum/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/pendulum/01.jpg"
+    },
+    {
+      "feature": "electrostatics",
+      "sceneClass": "ElectricDipoleScene",
+      "scene_file": "/tmp/manim_physics_rag/scene_electrostatics.py",
+      "self_play_count": 15,
+      "duration_s": 10.60,
+      "num_apis": 12,
+      "exit_code": 0,
+      "duration_ok": true,
+      "play_count_ok": true,
+      "verified": true,
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/electrostatics/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/electrostatics/01.jpg"
+    },
+    {
+      "feature": "magnetostatics",
+      "sceneClass": "ParallelWiresMagneticFieldScene",
+      "scene_file": "/tmp/manim_physics_rag/scene_magnetostatics.py",
+      "self_play_count": 10,
+      "duration_s": 10.27,
+      "num_apis": 9,
+      "exit_code": 0,
+      "duration_ok": true,
+      "play_count_ok": true,
+      "verified": true,
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/magnetostatics/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/magnetostatics/01.jpg"
+    },
+    {
+      "feature": "wave",
+      "sceneClass": "StandingWaveHarmonicsScene",
+      "scene_file": "/tmp/manim_physics_rag/scene_wave.py",
+      "self_play_count": 11,
+      "duration_s": 12.67,
+      "num_apis": 9,
+      "exit_code": 0,
+      "duration_ok": true,
+      "play_count_ok": true,
+      "verified": true,
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/wave/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/wave/01.jpg"
+    },
+    {
+      "feature": "optics",
+      "sceneClass": "LensRayOpticsScene",
+      "scene_file": "/tmp/manim_physics_rag/scene_optics.py",
+      "self_play_count": 14,
+      "duration_s": 10.93,
+      "num_apis": 13,
+      "exit_code": 0,
+      "duration_ok": true,
+      "play_count_ok": true,
+      "verified": true,
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/optics/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/optics/01.jpg"
+    },
+    {
+      "feature": "rigid_body",
+      "sceneClass": "RigidBodyDropScene",
+      "scene_file": "/tmp/manim_physics_rag/scene_rigid_body.py",
+      "self_play_count": 10,
+      "duration_s": 11.20,
+      "num_apis": 12,
+      "exit_code": 0,
+      "duration_ok": true,
+      "play_count_ok": true,
+      "verified": true,
+      "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/rigid_body/01.mp4",
+      "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-physics/rigid_body/01.jpg"
+    }
+  ]
+}

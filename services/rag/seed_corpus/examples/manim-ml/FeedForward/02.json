@@ -1,0 +1,34 @@
+{
+  "api": "FeedForward",
+  "plugin": "manim-ml",
+  "scene_class": "FFNForwardPass",
+  "description": "Animate a forward pass through a 3-layer neural network [4, 6, 3] using make_forward_pass_animation to show data flowing through layers.",
+  "code": "from manim import *\nfrom manim_ml.neural_network import NeuralNetwork, FeedForwardLayer\n\nclass FFNForwardPass(ThreeDScene):\n    def construct(self):\n        nn = NeuralNetwork([\n            FeedForwardLayer(4),\n            FeedForwardLayer(6),\n            FeedForwardLayer(3),\n        ], layer_spacing=0.25)\n        nn.move_to(ORIGIN)\n        self.add(nn)\n        self.play(nn.make_forward_pass_animation())\n        self.wait(0.5)\n",
+  "metadata": {
+    "domain": "cs",
+    "complexity": "beginner",
+    "manimVersion": "0.19.2",
+    "colorPalette": [
+      "#58C4DD",
+      "#FF862F",
+      "#FFFFFF"
+    ],
+    "animationTypes": [],
+    "apisUsed": [
+      "NeuralNetwork",
+      "FeedForwardLayer"
+    ],
+    "category": "scenes",
+    "tags": [
+      "machine-learning",
+      "neural-network",
+      "feedforward",
+      "forward-pass",
+      "animation",
+      "manim-ml"
+    ],
+    "quality": 4,
+    "source": "plugin_seed"
+  },
+  "verified": true
+}
