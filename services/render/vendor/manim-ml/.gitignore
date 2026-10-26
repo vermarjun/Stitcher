@@ -1,0 +1,12 @@
+__pycache__
+manim_ml.egg-info/
+manim_ml/manim_ml.egg-info/
+dist
+manim_ml/media
+media
+pyproject.toml
+setup.cfg
+!examples/media
+examples/media/videos
+examples/media/text
+examples/media/images

@@ -1,0 +1,6 @@
+{
+  "code": "from manim import *\n\nclass Hello(Scene):\n    def construct(self):\n        title = Text('hello, world', font_size=48)\n        self.play(Write(title))\n        self.wait(0.5)\n",
+  "sceneClass": "Hello",
+  "render": { "quality": "low", "format": "mp4" },
+  "storage": { "backend": "local", "folder": "examples" }
+}

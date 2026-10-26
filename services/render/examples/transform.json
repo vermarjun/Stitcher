@@ -1,0 +1,6 @@
+{
+  "code": "from manim import *\n\nclass Shapes(Scene):\n    def construct(self):\n        c = Circle(radius=1.5, color=BLUE)\n        s = Square(side_length=3, color=YELLOW)\n        self.play(Create(c))\n        self.wait(0.3)\n        self.play(Transform(c, s))\n        self.wait(0.5)\n",
+  "sceneClass": "Shapes",
+  "render": { "quality": "low", "format": "mp4", "background": "#0b1020" },
+  "storage": { "backend": "local", "folder": "examples" }
+}

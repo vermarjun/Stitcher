@@ -1,0 +1,84 @@
+[project]
+name = "manim-dsa"
+version = "0.4.0"
+description = "A Manim plugin to animate common data structures."
+authors = [{name = "Fabio Missagia", email = "fabio.missagia@gmail.com"}]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+	"manim>=0.19.0",
+]
+packages = [{include = "manim_dsa"}]
+
+[project.urls]
+repository = "https://github.com/F4bbi/manim-dsa"
+documentation = "https://manim-dsa.readthedocs.io/"
+
+[dependency-groups]
+dev = [
+	"black>=24.8.0",
+	"isort>=6.0.1",
+	"ruff>=0.11.5",
+  "sphinx>=7.4.7",
+  "furo>=2024.8.6"
+]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+extend-exclude = [
+  ".github",
+  "media",
+]
+fix = true
+
+[tool.ruff.lint]
+select = [
+  "A",
+  "B",
+  "C4",
+  "E",
+  "F",
+  "I",
+  "PT",
+  "SIM",
+  "UP",
+]
+
+ignore = [
+  # copyright variable
+  "A001",
+  # mutable argument defaults (too many changes)
+  "B006",
+  # No function calls in defaults
+  # ignored because np.array() and straight_path()
+  "B008",
+  # due to the import * used in manim
+  "F403",
+  "F405",
+  # Exception too broad (this would require lots of changes + re.escape) for little benefit
+  "PT011",
+  # as recommended by https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+  "E111",
+  "E114",
+  "E117",
+  "E501",
+]
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+  # unused expression
+  "B018",
+  # unused variable
+  "F841",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

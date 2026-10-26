@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "manim-chemistry"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+]
+description = "Manim Chemistry is a plugin for Manim which aims to make easier the animation of molecules and other chemistry-related objects such as orbitals, bohr diagrams and more."
+dependencies = [
+    "manim",
+    "numpy",
+    "pandas",
+    "pytest",
+    "xmltodict",
+    "requests",
+]
+license = {file = "LICENSE.md"}
+readme = "README.md"
+requires-python = ">= 3.10"
+
+authors = [
+    { name = "UMDQ", email = "unmoldequimica@gmail.com" }
+]
+
+maintainers = [
+    { name = "UMDQ", email = "unmoldequimica@gmail.com" }
+]
+
+dynamic = ["version"]
+
+[project.urls]
+Source = "https://github.com/UnMolDeQuimica/manim-Chemistry"
+"Issue tracker" = "https://github.com/UnMolDeQuimica/manim-Chemistry/issues"
+Homepage = "https://github.com/UnMolDeQuimica/manim-Chemistry"
+
+[project.scripts]
+manim_chemistry = "manim_chemistry.cli:cli"
+
+[tools.setuptools.dynamic]
+version = {attr = "manim_chemistry.__version__"}
+readme = {file = ["README.md"]}
+
+[tools.setuptools.packages.find]
+where = ["src"]
+include = ["manim_chemistry"]
+
+[tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "WARNING"
+log_file_level = "INFO"
+
+[project.entry-points."manim.plugins"]
+"manim_chemistry" = "manim_chemistry"
+
+# Ruff config
+[tool.ruff.lint]
+ignore = ["E741", "F405", "F403"]

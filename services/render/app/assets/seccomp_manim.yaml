@@ -1,0 +1,189 @@
+# Seccomp-BPF allowlist for Manim renders.
+#
+# This is a policy spec, not the compiled filter. scripts/build_seccomp.py compiles it into
+# a .bpf blob consumed by bwrap --seccomp at runtime. We rebuild on every image to pick up
+# kernel/syscall changes.
+#
+# Philosophy:
+#   - Default DENY (SCMP_ACT_ERRNO(EPERM)).
+#   - Allow the read/write/compute syscalls Python + ffmpeg + cairo actually use.
+#   - Explicitly KILL anything that escalates privileges, loads kernel modules, changes
+#     namespaces further, or touches bpf/ptrace/process_vm_*.
+#
+# This list was derived by stracing a full Manim render (Scene with MathTex + Transform +
+# audio), diffing against a baseline "python -c 'pass'", and removing anything the renderer
+# doesn't demonstrably need.
+#
+# If you see EPERM from a legitimate syscall after a Manim upgrade, add it HERE — don't
+# disable the filter.
+
+default_action: SCMP_ACT_ERRNO
+default_errno: EPERM
+
+# Hard kills — these indicate active exploitation, not a missed syscall.
+kill_syscalls:
+  - ptrace
+  - process_vm_readv
+  - process_vm_writev
+  - kexec_load
+  - kexec_file_load
+  - init_module
+  - finit_module
+  - delete_module
+  - bpf
+  - perf_event_open
+  - userfaultfd
+  - unshare
+  - setns
+  - pivot_root
+  - swapon
+  - swapoff
+  - mount
+  - umount
+  - umount2
+  - reboot
+  - acct
+
+allow_syscalls:
+  # --- file I/O (read paths) ---
+  - read
+  - readv
+  - pread64
+  - preadv
+  - preadv2
+  - openat
+  - openat2
+  - close
+  - close_range
+  - fstat
+  - newfstatat
+  - statx
+  - lseek
+  - getdents64
+  - readlink
+  - readlinkat
+  - access
+  - faccessat
+  - faccessat2
+
+  # --- file I/O (write paths, confined by bwrap bind mounts) ---
+  - write
+  - writev
+  - pwrite64
+  - pwritev
+  - pwritev2
+  - mkdir
+  - mkdirat
+  - unlink
+  - unlinkat
+  - rename
+  - renameat
+  - renameat2
+  - fsync
+  - fdatasync
+  - ftruncate
+  - truncate
+  - utimensat
+  - chmod
+  - fchmod
+  - fchmodat
+
+  # --- memory ---
+  - brk
+  - mmap
+  - munmap
+  - mprotect
+  - mremap
+  - madvise
+  - mlock
+  - munlock
+
+  # --- process / thread basics ---
+  - clone
+  - clone3
+  - fork
+  - vfork
+  - execve
+  - execveat
+  - exit
+  - exit_group
+  - wait4
+  - waitid
+  - getpid
+  - gettid
+  - getppid
+  - getuid
+  - geteuid
+  - getgid
+  - getegid
+  - getgroups
+  - setpgid
+  - getpgid
+  - getpgrp
+  - getsid
+  - arch_prctl
+  - prctl
+  - set_tid_address
+  - set_robust_list
+  - get_robust_list
+  - rseq
+
+  # --- signals ---
+  - rt_sigaction
+  - rt_sigprocmask
+  - rt_sigreturn
+  - rt_sigpending
+  - rt_sigsuspend
+  - rt_sigtimedwait
+  - rt_sigqueueinfo
+  - kill
+  - tkill
+  - tgkill
+  - pause
+  - sigaltstack
+
+  # --- time ---
+  - clock_gettime
+  - clock_gettime64
+  - clock_getres
+  - clock_nanosleep
+  - nanosleep
+  - gettimeofday
+  - time
+
+  # --- fd manipulation / pipes ---
+  - pipe
+  - pipe2
+  - dup
+  - dup2
+  - dup3
+  - fcntl
+  - ioctl           # needed for terminal detection; confined by fd-owned objects
+  - select
+  - pselect6
+  - poll
+  - ppoll
+  - epoll_create
+  - epoll_create1
+  - epoll_ctl
+  - epoll_wait
+  - epoll_pwait
+
+  # --- scheduling ---
+  - sched_yield
+  - sched_getaffinity
+  - sched_setaffinity
+  - sched_getparam
+  - sched_getscheduler
+
+  # --- misc the CPython runtime genuinely needs ---
+  - futex
+  - futex_waitv
+  - getrandom
+  - getrusage
+  - getcwd
+  - chdir
+  - fchdir
+  - uname
+  - sysinfo
+  - membarrier
