@@ -190,7 +190,7 @@ export async function reflect(
     turn: ConversationTurn
 ): Promise<MemoryAction[]> {
     if (!isLlmConfigured()) {
-        logger.warn({ message: "[memory] reflect skipped — OPENCODE_GO_API_KEY not set", userId });
+        logger.warn({ message: "[memory] reflect skipped — LLM not configured", userId });
         return [];
     }
     if (!turn.userMessage?.trim()) return [];

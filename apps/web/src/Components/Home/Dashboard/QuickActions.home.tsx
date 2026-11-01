@@ -14,13 +14,11 @@ import { Textarea } from "@/Components/ui/textarea";
 import {
   Plus,
   Compass,
-  Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type NavigateFunction } from "react-router-dom";
 import api from "@/api";
 import { ShineBorder } from "../../magicui/shine-border";
-import { LINKS } from "@/config/links";
 import { startReplayTour } from "@/lib/onboardingTour";
 
 interface Props3 {
@@ -93,7 +91,7 @@ const QuickActions = ({ navigate }: Props3) => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
               <Card
@@ -205,8 +203,8 @@ const QuickActions = ({ navigate }: Props3) => {
             </DialogContent>
           </Dialog>
 
-          {/* Replaces "Browse Templates" (already in the left panel). Starts the
-              guided cat-meme tour from here; finishing Act 1 arms the editor leg
+          {/* Starts the
+              guided tour from here; finishing Act 1 arms the editor leg
               to auto-run once the user opens a project. */}
           <Card
             onClick={() => {
@@ -244,27 +242,7 @@ const QuickActions = ({ navigate }: Props3) => {
                     Take the Tour
                   </h3>
                   <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
-                    Guided demo 🐱
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card
-            onClick={() => { window.open(LINKS.docs, "_blank"); }}
-            className="hidden md:flex flex-col border border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-900 h-full min-h-[110px]">
-            <CardContent className="p-4 flex flex-col items-center justify-center h-full w-full">
-              <div className="flex flex-col items-center text-center space-y-3">
-                <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-zinc-700 transition-all duration-200 ring-1 ring-white/5">
-                  <Terminal className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors duration-200" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-medium text-white text-sm group-hover:text-white transition-colors duration-200">
-                    API, MCP &amp; Agent
-                  </h3>
-                  <p className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-200 hidden sm:block">
-                    Use Stitcher in your stack
+                    Quick guided walkthrough
                   </p>
                 </div>
               </div>

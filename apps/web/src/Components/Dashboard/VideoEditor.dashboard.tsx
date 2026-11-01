@@ -11,27 +11,36 @@ import {
 } from "@/Components/ui/resizable";
 import type { Project, Timeline, ITrack, ITimelineItemBase } from "@/State/Types";
 import { toast } from "sonner";
-import * as Y from "yjs";
 
 import { useRefreshTimeline } from "./RefreshContextProvider";
-import { useCollabDoc } from "@/collab/useCollabDoc";
-import {
-  yDocToReactTimeline,
-  applyItemUpdate,
-  deleteYItem,
-  addYItem,
-  createHydration,
-  harvestHydration,
-  hasUnresolvedAssets,
-} from "@/collab/yjsTimeline";
-import { useCollabAwareness } from "./context";
 
 interface Props {
   currentProject?: Project;
 }
 
-/** Unique local-origin tag so observeDeep can skip our own writes. */
-const LOCAL_ORIGIN = "local-edit";
+/** Edits are saved this long after the last change. */
+const SAVE_DEBOUNCE_MS = 500;
+
+/**
+ * The API stores asset references as ids. The timeline we hold has the asset
+ * documents populated, so collapse them back to ids before saving.
+ */
+function toSavePayload(tl: Timeline): Timeline {
+  return {
+    ...tl,
+    tracks: (tl.tracks as ITrack[]).map((track) => ({
+      ...track,
+      items: track.items.map((it) => {
+        const asset = (it as ITimelineItemBase).assetId as unknown;
+        return {
+          ...it,
+          assetId:
+            asset && typeof asset === "object" ? (asset as { _id: string })._id : asset,
+        };
+      }),
+    })),
+  } as Timeline;
+}
 
 const VideoEditor = ({ currentProject }: Props) => {
   const [currentTime, setCurrentTime] = useState(0);
@@ -41,52 +50,73 @@ const VideoEditor = ({ currentProject }: Props) => {
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [isLoading, setLoading] = useState<boolean>(false);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
-  // Snapshot of the timeline as fetched from HTTP (used as base for Y.Doc hydration)
-  const baseTimelineRef = useRef<Timeline | null>(null);
-  // Cache of fully-populated items/assets so re-deriving from the Y.Doc never
-  // strips asset objects (the cause of remote-collaborator timeline corruption).
-  const hydrationRef = useRef(createHydration());
-  const rehydratingRef = useRef(false);
 
-  // Viewers are read-only: default permissive when role is unknown (older payloads).
-  const canEdit = (currentProject?.myRole ?? "owner") !== "viewer";
+  // Latest timeline for the debounced saver, plus its save bookkeeping.
+  const timelineRef = useRef<Timeline | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyRef = useRef(false);
+  const loadedOnceRef = useRef(false);
 
   const { refreshKey: timelineRefreshKey } = useRefreshTimeline();
 
-  // ─── Auth token ─────────────────────────────────────────────────────────
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  /** Replace the timeline in state and in the ref the saver reads. */
+  const applyTimeline = useCallback((next: Timeline | null) => {
+    timelineRef.current = next;
+    setTimeline(next);
+  }, []);
 
-  // ─── Collab doc ──────────────────────────────────────────────────────────
-  const collabDoc = useCollabDoc(currentProject?._id ?? null, token);
+  // ─── Persistence: PUT /timeline/:id, debounced ───────────────────────────
+  const saveNow = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const tl = timelineRef.current;
+    if (!dirtyRef.current || !tl?._id) return;
+    dirtyRef.current = false;
+    try {
+      await api.put(`/timeline/${tl._id}`, toSavePayload(tl));
+    } catch (err) {
+      dirtyRef.current = true;
+      console.error("Error saving timeline:", err);
+      toast.error("Could not save timeline changes");
+    }
+  }, []);
 
-  // ─── Publish awareness to context so Header can access it ────────────────
-  const { setAwareness } = useCollabAwareness();
+  const scheduleSave = useCallback(() => {
+    dirtyRef.current = true;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveNow();
+    }, SAVE_DEBOUNCE_MS);
+  }, [saveNow]);
+
+  // Save pending edits when leaving the editor or closing the tab.
   useEffect(() => {
-    setAwareness(collabDoc?.awareness ?? null);
-    return () => { setAwareness(null); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabDoc?.awareness]);
+    const onUnload = () => {
+      void saveNow();
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onUnload);
+      void saveNow();
+    };
+  }, [saveNow]);
 
-  // ─── Fetch timeline (used as base; Y.Doc is authoritative once synced) ──
+  // ─── Load: GET /timeline/project/:projectId ──────────────────────────────
   const fetchTimeline = async () => {
     const projectId = currentProject?._id;
     if (!projectId) return;
     // Only show the full-screen loader on the VERY FIRST load. A refetch (e.g.
-    // after an asset drop) must not blank the editor — that caused a visible
-    // flicker/glitch where the timeline briefly vanished and reappeared.
-    const firstLoad = !baseTimelineRef.current;
+    // after an asset drop or a finished generation) must not blank the editor.
+    const firstLoad = !loadedOnceRef.current;
     try {
       if (firstLoad) setLoading(true);
+      // Never overwrite edits that have not reached the server yet.
+      await saveNow();
       const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
-      const tl = response.data;
-      baseTimelineRef.current = tl;
-      // Learn every populated asset/item so Y.Doc-derived state can be rehydrated.
-      harvestHydration(tl, hydrationRef.current);
-      // Only set React timeline from HTTP if Y.Doc isn't synced yet
-      if (!collabDoc?.synced) {
-        setTimeline(tl);
-      }
+      applyTimeline(response.data);
+      loadedOnceRef.current = true;
     } catch (err) {
       console.error("Error fetching timeline:", err);
       toast.error("Error fetching timeline");
@@ -95,77 +125,12 @@ const VideoEditor = ({ currentProject }: Props) => {
     }
   };
 
+  // Runs on mount and whenever something else (a finished generation or edit,
+  // an asset drop) bumps the refresh key.
   useEffect(() => {
     fetchTimeline();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineRefreshKey]);
-
-  // ─── Re-fetch populated assets when the Y.Doc references one we don't know ──
-  // A collaborator can add a brand-new generated/uploaded asset; remote clients
-  // first see it as a bare id. Pull the populated timeline once to learn it, then
-  // re-derive. Guarded so it can't loop.
-  const hydrateFromServer = useCallback(async () => {
-    if (rehydratingRef.current) return;
-    const projectId = currentProject?._id;
-    if (!projectId || !collabDoc) return;
-    rehydratingRef.current = true;
-    try {
-      const response = await api.get<Timeline>(`/timeline/project/${projectId}`);
-      harvestHydration(response.data, hydrationRef.current);
-      if (baseTimelineRef.current) {
-        setTimeline(
-          yDocToReactTimeline(
-            collabDoc.timelineMap,
-            baseTimelineRef.current,
-            hydrationRef.current
-          )
-        );
-      }
-    } catch {
-      /* best-effort */
-    } finally {
-      rehydratingRef.current = false;
-    }
-  }, [currentProject?._id, collabDoc]);
-
-  // ─── Seed React state from Y.Doc once synced ─────────────────────────────
-  useEffect(() => {
-    if (!collabDoc?.synced || !baseTimelineRef.current) return;
-    const derived = yDocToReactTimeline(
-      collabDoc.timelineMap,
-      baseTimelineRef.current,
-      hydrationRef.current
-    );
-    setTimeline(derived);
-    if (hasUnresolvedAssets(derived)) void hydrateFromServer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabDoc?.synced]);
-
-  // ─── Observe Y.Doc for remote edits ──────────────────────────────────────
-  useEffect(() => {
-    if (!collabDoc) return;
-    const { timelineMap } = collabDoc;
-
-    const handler = (_events: Y.YEvent<any>[], txn: Y.Transaction) => {
-      // Skip echoes from our own local writes
-      if (txn.origin === LOCAL_ORIGIN) return;
-      // Apply remote changes to React state, rehydrating asset objects so the
-      // remote edit doesn't strip thumbnails/playback for this client.
-      if (!baseTimelineRef.current) return;
-      const derived = yDocToReactTimeline(
-        timelineMap,
-        baseTimelineRef.current,
-        hydrationRef.current
-      );
-      setTimeline(derived);
-      if (hasUnresolvedAssets(derived)) void hydrateFromServer();
-    };
-
-    timelineMap.observeDeep(handler);
-    return () => {
-      timelineMap.unobserveDeep(handler);
-    };
-  }, [collabDoc, hydrateFromServer]);
 
   // Effective duration = the stored duration OR the furthest clip end, whichever
   // is larger. Local edits move/extend clips without updating timeline.duration
@@ -230,154 +195,59 @@ const VideoEditor = ({ currentProject }: Props) => {
     itemId: string,
     updates: Partial<ITimelineItemBase>
   ) => {
-    if (!timeline) return;
-    if (!canEdit) return; // viewers are read-only
-
-    // Write to Y.Doc (the observeDeep handler skips LOCAL_ORIGIN echoes)
-    if (collabDoc?.synced) {
-      const tracksArray = collabDoc.timelineMap.get("tracks") as
-        | Y.Array<Y.Map<unknown>>
-        | undefined;
-      if (tracksArray) {
-        const tracks = timeline.tracks as ITrack[];
-        const track = tracks.find((t: ITrack) =>
-          t.items.some((it) => it._id === itemId)
-        );
-        if (track) {
-          collabDoc.doc.transact(() => {
-            applyItemUpdate(tracksArray, track._id, itemId, updates as Record<string, unknown>);
-          }, LOCAL_ORIGIN);
-        }
-      }
-    }
-
-    // Optimistic React update
-    setTimeline((prev) =>
-      prev
-        ? {
-            ...prev,
-            tracks: (prev.tracks as ITrack[]).map((track: ITrack) =>
-              track.type === "text"
-                ? {
-                    ...track,
-                    items: track.items.map((it: ITimelineItemBase) =>
-                      it._id === itemId ? { ...it, ...updates } : it
-                    ),
-                  }
-                : track
-            ),
-          }
-        : prev
-    );
-  };
-
-  // ─── onTimelineUpdate: called by TimelineEditor on every drag/resize ──────
-  /**
-   * For collab-aware updates we receive the full updated React timeline from
-   * the editor, diff it against the previous state, and write the delta to Y.Doc.
-   *
-   * This approach is intentionally conservative: only startTime/endTime/
-   * sourceStartTime/sourceEndTime changes are diffed (drag/resize). Track-level
-   * changes (mute/lock) and item deletion/addition go through dedicated handlers.
-   */
-  const handleTimelineUpdate = useCallback(
-    (updated: Timeline) => {
-      setTimeline(updated);
-
-      if (!collabDoc?.synced) return;
-      const tracksArray = collabDoc.timelineMap.get("tracks") as
-        | Y.Array<Y.Map<unknown>>
-        | undefined;
-      if (!tracksArray) return;
-
-      collabDoc.doc.transact(() => {
-        const updatedTracks = updated.tracks as ITrack[];
-        for (const track of updatedTracks) {
-          for (const item of track.items) {
-            applyItemUpdate(tracksArray, track._id, item._id, {
-              startTime: item.startTime,
-              endTime: item.endTime,
-              ...(item.type === "video" || item.type === "audio"
-                ? {
-                    sourceStartTime: (item as any).sourceStartTime,
-                    sourceEndTime: (item as any).sourceEndTime,
-                  }
-                : {}),
-            });
-          }
-        }
-      }, LOCAL_ORIGIN);
-    },
-    [collabDoc]
-  );
-
-  // ─── Sync (force-save) ────────────────────────────────────────────────────
-  /**
-   * Persistence is now automatic via Y.Doc materialization.
-   * The "Sync" button remains as a best-effort HTTP save for safety.
-   */
-  const syncToBackend = useCallback(
-    async (tl: Timeline) => {
-      const res = await api.put<{ success: boolean; message: string }>(
-        `/timeline/${tl._id}`,
-        tl
-      );
-      if (!res.data.success) throw new Error("Failed to sync");
-    },
-    []
-  );
-
-  // ─── Delete item (called from TimelineEditor) ─────────────────────────────
-  const handleDeleteItem = useCallback(
-    (itemId: string, trackId: string) => {
-      if (!collabDoc?.synced) return;
-      const tracksArray = collabDoc.timelineMap.get("tracks") as
-        | Y.Array<Y.Map<unknown>>
-        | undefined;
-      if (!tracksArray) return;
-
-      collabDoc.doc.transact(() => {
-        deleteYItem(tracksArray, trackId, itemId);
-      }, LOCAL_ORIGIN);
-    },
-    [collabDoc]
-  );
-
-  // ─── Add asset item: optimistic React-only update ────────────────────────
-  // Server already injects the item into the Y.Doc (so collaborators see it via
-  // the observer). We must NOT write to the Y.Doc here — that would duplicate
-  // the clip. We only update local React state so the drop is instant for the
-  // dropping client instead of waiting on the racy server→Y.Doc→observer path.
-  const handleAddAssetItem = useCallback(
-    (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
-      setTimeline((prev) =>
-        prev
+    const current = timelineRef.current;
+    if (!current) return;
+    applyTimeline({
+      ...current,
+      tracks: (current.tracks as ITrack[]).map((track: ITrack) =>
+        track.type === "text"
           ? {
-              ...prev,
-              tracks: (prev.tracks as ITrack[]).map((t) =>
-                t._id === trackId ? { ...t, items: [...t.items, item] } : t
+              ...track,
+              items: track.items.map((it: ITimelineItemBase) =>
+                it._id === itemId ? { ...it, ...updates } : it
               ),
             }
-          : prev
-      );
+          : track
+      ),
+    });
+    scheduleSave();
+  };
+
+  // ─── onTimelineUpdate: called by TimelineEditor on every drag/resize/toggle ──
+  const handleTimelineUpdate = useCallback(
+    (updated: Timeline) => {
+      applyTimeline(updated);
+      scheduleSave();
     },
-    []
+    [applyTimeline, scheduleSave]
   );
 
-  // ─── Add text item (called from TimelineEditor) ───────────────────────────
-  const handleAddTextItem = useCallback(
-    (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
-      if (!collabDoc?.synced) return;
-      const tracksArray = collabDoc.timelineMap.get("tracks") as
-        | Y.Array<Y.Map<unknown>>
-        | undefined;
-      if (!tracksArray) return;
-
-      collabDoc.doc.transact(() => {
-        addYItem(tracksArray, trackId, item);
-      }, LOCAL_ORIGIN);
+  // ─── Explicit "Sync" button: save right now ────────────────────────────────
+  const syncToBackend = useCallback(
+    async (tl: Timeline) => {
+      applyTimeline(tl);
+      dirtyRef.current = true;
+      await saveNow();
+      if (dirtyRef.current) throw new Error("Failed to sync");
     },
-    [collabDoc]
+    [applyTimeline, saveNow]
+  );
+
+  // ─── Add asset item: optimistic local update ──────────────────────────────
+  // The API has already stored the item (POST /track/:trackId/asset), so this
+  // only updates what we show and must not trigger a save.
+  const handleAddAssetItem = useCallback(
+    (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => {
+      const current = timelineRef.current;
+      if (!current) return;
+      applyTimeline({
+        ...current,
+        tracks: (current.tracks as ITrack[]).map((t) =>
+          t._id === trackId ? { ...t, items: [...t.items, item] } : t
+        ),
+      } as Timeline);
+    },
+    [applyTimeline]
   );
 
   const [defaultLayout] = useState(() => {
@@ -404,15 +274,7 @@ const VideoEditor = ({ currentProject }: Props) => {
     onTimeUpdate: handleTimeUpdate,
     onTimelineUpdate: handleTimelineUpdate,
     onSync: syncToBackend,
-    onDeleteItem: handleDeleteItem,
-    onAddTextItem: handleAddTextItem,
     onAddAssetItem: handleAddAssetItem,
-    canEdit,
-    collabDoc,
-    localOrigin: LOCAL_ORIGIN,
-    awareness: collabDoc?.awareness ?? null,
-    setAwarenessCursor: collabDoc?.setAwarenessCursor ?? null,
-    setAwarenessSelection: collabDoc?.setAwarenessSelection ?? null,
   };
 
   return (

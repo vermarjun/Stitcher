@@ -71,7 +71,9 @@ const Settings: React.FC<{ currentUser: IUser }> = ({ currentUser }) => {
     try {
       await api.delete<any>("/users/me");
       toast.success("Account deleted successfully");
-      window.location.href = "/";
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/auth";
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to delete account");
       setLoading(false);

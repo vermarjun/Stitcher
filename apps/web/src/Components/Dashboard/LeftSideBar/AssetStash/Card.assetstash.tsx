@@ -36,8 +36,8 @@ const AssetCardComponent = ({
   return (
     <div className="space-y-2">
       <p className="text-[10px] text-zinc-200 bg-green-950 p-2 rounded-md">
-        For Editing, drag the asset below to Right Side Bar. Only Generated or
-        Template videos can be edited.
+        For Editing, drag the asset below to Right Side Bar. Only Generated
+        videos can be edited.
       </p>
       {filteredAssets.map((asset: Asset) => (
         <div

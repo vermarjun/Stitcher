@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
 // Decode a JWT payload without verifying signature (client-side only check)
 function isTokenExpired(token: string): boolean {
@@ -15,7 +16,7 @@ function isTokenExpired(token: string): boolean {
 
 // Create an axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3100/api',
+  baseURL: API_BASE_URL,
 });
 
 const ON_AUTH_PAGE = () => window.location.pathname.startsWith('/auth');

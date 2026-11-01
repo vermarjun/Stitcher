@@ -115,6 +115,13 @@ describe("agentClient.plan", () => {
 
 // ─── /code ────────────────────────────────────────────────────────────────────
 
+// /code takes the raw prompt (single-scene flow), not a planner scene spec.
+const CODE_INPUT = {
+    prompt: "Show a sine wave",
+    voiceover: true as const,
+    styleManifest: STYLE_MANIFEST,
+};
+
 describe("agentClient.code", () => {
     it("happy path: returns CodeResponse with success true", async () => {
         const body: CodeResponse = {
@@ -131,10 +138,7 @@ describe("agentClient.code", () => {
 
         nock(BASE).post("/code").reply(200, body);
 
-        const result = await agentClient.code({
-            scenePlan: SCENE_SPEC,
-            styleManifest: STYLE_MANIFEST,
-        });
+        const result = await agentClient.code(CODE_INPUT);
 
         expect(result.success).toBe(true);
         expect(result.output?.sceneClass).toBe("SineWaveScene");
@@ -150,10 +154,7 @@ describe("agentClient.code", () => {
 
         nock(BASE).post("/code").reply(200, body);
 
-        const result = await agentClient.code({
-            scenePlan: SCENE_SPEC,
-            styleManifest: STYLE_MANIFEST,
-        });
+        const result = await agentClient.code(CODE_INPUT);
         expect(result.success).toBe(false);
     });
 
@@ -163,7 +164,7 @@ describe("agentClient.code", () => {
             .reply(503, { error: "overloaded" }, { "retry-after": "10" });
 
         const err = await agentClient
-            .code({ scenePlan: SCENE_SPEC, styleManifest: STYLE_MANIFEST })
+            .code(CODE_INPUT)
             .catch((e) => e as ServiceError);
 
         expect(err).toBeInstanceOf(ServiceError);

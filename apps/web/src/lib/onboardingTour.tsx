@@ -185,7 +185,7 @@ function buildDriver(
     doneBtnText: "Let's go",
     allowClose: false, // must complete or reach the last step to exit
     // Read-only walkthrough: don't let clicks fall through to the highlighted
-    // element. Otherwise tapping (say) the "Collaborators" button mid-tour opens
+    // element. Otherwise tapping (say) a header button mid-tour opens
     // a dialog *behind* driver's overlay and traps the user. They advance with
     // the popover buttons; our programmatic openRailTab() clicks still work.
     disableActiveInteraction: true,
@@ -208,20 +208,10 @@ function buildDriver(
 }
 
 // ─── Copy ────────────────────────────────────────────────────────────────────
-// The whole point of this tour is that it does NOT read like docs. Each step is a
-// reaction-cat meme + ONE short line (≤7 words). Gen-Z attention span is the spec:
-// a paragraph in a popover gets skipped, a funny cat gets remembered.
-//
-// Every cat lives in /public/cats (served at the site root). Swapping the meme for
-// any step is a one-word filename change — the full collection is in that folder.
+// Each step is one short line. A paragraph in a popover gets skipped.
 
-/**
- * Build a popover body: cat PNG pinned to the right, subtitle line on the left.
- * Pass "cat-photo" as extraClass for images that keep their original (opaque)
- * background — those get framed with rounded corners instead of floating free.
- */
-const cat = (file: string, line: string, extraClass = "") =>
-  `<div class="stitcher-tour-cat-float"><img class="stitcher-tour-cat ${extraClass}" src="/cats/${file}" alt="" draggable="false" /></div>` +
+/** Popover body for a step: a single short line. */
+const tourLine = (line: string) =>
   `<span class="stitcher-tour-line">${line}</span>`;
 
 // Act 1 is a single welcome step — the "Take me in" click auto-opens/creates
@@ -230,14 +220,14 @@ const ACT1_WELCOME: DriveStep[] = [
   {
     popover: {
       title: "Welcome to Stitcher",
-      description: cat("big-grin.png", "Describe what you want to make and Stitcher builds the video for you. Let's take a quick look around.", "cat-photo"),
+      description: tourLine("Describe what you want to make and Stitcher builds the video for you. Let's take a quick look around."),
       doneBtnText: "Take me in",
     },
   },
 ];
 
-// Act 2 lives in the editor. Some anchors are desktop-only (the left rail + the
-// header "Collaborators" button collapse on mobile); buildEditorSteps() filters
+// Act 2 lives in the editor. Some anchors are desktop-only (the left rail
+// collapses on mobile); buildEditorSteps() filters
 // to whatever's actually on screen so the tour never points at a ghost.
 function buildEditorSteps(): DriveStep[] {
   // Reveal a left-rail panel by clicking its icon button (the strip is always
@@ -250,7 +240,7 @@ function buildEditorSteps(): DriveStep[] {
     {
       popover: {
         title: "You're in",
-        description: cat("headset-cockpit.png", "Timeline at the bottom, assets on the left, AI chat on the right. These four panels are your whole workspace.", "cat-photo"),
+        description: tourLine("Timeline at the bottom, assets on the left, AI chat on the right. These four panels are your whole workspace."),
         nextBtnText: "Show me around",
       },
     },
@@ -259,7 +249,7 @@ function buildEditorSteps(): DriveStep[] {
       element: '[data-tour="timeline"]',
       popover: {
         title: "The timeline",
-        description: cat("pointing-watch.png", "Drag clips, scenes, and audio here in order. Trim and reorder them however you like. This is your video."),
+        description: tourLine("Drag clips and audio here in order. Trim and reorder them however you like. This is your video."),
         side: "top",
         align: "center",
       },
@@ -270,7 +260,7 @@ function buildEditorSteps(): DriveStep[] {
       onHighlightStarted: openRailTab("assetstash"),
       popover: {
         title: "Your media",
-        description: cat("nerd-pointing.png", "All your uploads live here. Drag images, video, or audio directly onto the timeline to use them."),
+        description: tourLine("Your generated videos and uploads live here. Drag video or audio onto the timeline to use it."),
         side: "right",
         align: "start",
       },
@@ -284,7 +274,7 @@ function buildEditorSteps(): DriveStep[] {
         : '[data-tour="ai-chat"]',
       popover: {
         title: "Generate a scene",
-        description: cat("amazed-glasses.png", "Tap here to open the AI panel. Type what you want and Stitcher builds a video for you."),
+        description: tourLine("Describe what you want and Stitcher builds a video. Switch to Edit to change an existing one."),
         side: typeof window !== 'undefined' && window.innerWidth < 768 ? "bottom" : "left",
         align: "start",
       },
@@ -295,25 +285,15 @@ function buildEditorSteps(): DriveStep[] {
       onHighlightStarted: openRailTab("memory"),
       popover: {
         title: "Style memory",
-        description: cat("thinking-suit-dog.png", "Drop your brand guidelines, style references, and recurring context here. The AI picks them up automatically."),
+        description: tourLine("Save style notes and recurring context here. The AI picks them up automatically."),
         side: "right",
         align: "start",
       },
     },
     {
-      _need: '[data-tour="collaborators"]',
-      element: '[data-tour="collaborators"]',
-      popover: {
-        title: "Collaborate",
-        description: cat("tongue-shaka.png", "Invite others and edit the same project together. You'll see each other's changes as they happen."),
-        side: "bottom",
-        align: "end",
-      },
-    },
-    {
       popover: {
         title: "That's the tour",
-        description: cat("empty-wallet.png", "You know the essentials now. The rest you'll pick up as you go. Good luck."),
+        description: tourLine("You know the essentials now. The rest you'll pick up as you go. Good luck."),
         doneBtnText: "Get started",
       },
     },

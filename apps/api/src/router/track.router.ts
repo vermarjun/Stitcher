@@ -7,11 +7,7 @@ import {
     deleteTimelineItem
 } from '../controller/track.controller';
 import auth from '../middleware/auth.middleware';
-import {
-    requireTimelineAccess,
-    requireTrackEditor,
-    requireTimelineItemEditor,
-} from '../middleware/access.middleware';
+import { requireTimelineItemOwnership, requireTimelineOwnership, requireTrackOwnership } from '../middleware/ownership.middleware';
 
 const router = express.Router();
 
@@ -22,30 +18,30 @@ router.use(auth);
  * @desc    Get all tracks for a timeline with populated items and assets
  * @param   timelineId - The ID of the timeline
  */
-router.get('/timeline/:timelineId', requireTimelineAccess('params', 'timelineId'), getAllTracks);
+router.get('/timeline/:timelineId', requireTimelineOwnership('params', 'timelineId'), getAllTracks);
 
 /**
  * @desc    Add an asset to a track (creates timeline item)
  * @param   trackId - The ID of the track to add asset to
  */
-router.post('/:trackId/asset', requireTrackEditor('params', 'trackId'), addAssetToTrack);
+router.post('/:trackId/asset', requireTrackOwnership('params', 'trackId'), addAssetToTrack);
 
 /**
  * @desc    Add text to a track (creates text timeline item)
  * @param   trackId - The ID of the track to add text to
  */
-router.post('/:trackId/text', requireTrackEditor('params', 'trackId'), addTextToTrack);
+router.post('/:trackId/text', requireTrackOwnership('params', 'trackId'), addTextToTrack);
 
 /**
  * @desc    Update a timeline item
  * @param   itemId - The ID of the timeline item to update
  */
-router.put('/items/:itemId', requireTimelineItemEditor('params', 'itemId'), updateTimelineItem);
+router.put('/items/:itemId', requireTimelineItemOwnership('params', 'itemId'), updateTimelineItem);
 
 /**
  * @desc    Delete a timeline item and remove from track
  * @param   itemId - The ID of the timeline item to delete
  */
-router.delete('/items/:timelineItemId', requireTimelineItemEditor('params', 'timelineItemId'), deleteTimelineItem);
+router.delete('/items/:timelineItemId', requireTimelineItemOwnership('params', 'timelineItemId'), deleteTimelineItem);
 
 export default router;

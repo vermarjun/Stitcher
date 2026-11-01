@@ -2,7 +2,7 @@
  * BullMQ queue for outbound transactional email.
  *
  * Email is enqueued (never sent inline) so that:
- *   - HTTP requests (signup, invite, password reset) never block on SMTP,
+ *   - HTTP requests (signup, password reset) never block on SMTP,
  *   - transient send failures retry with backoff instead of being lost.
  *
  * defaultJobOptions mirror the generation queue: 3 attempts, exponential

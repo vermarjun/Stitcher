@@ -1,8 +1,5 @@
 import { io } from 'socket.io-client';
-
-const URL = import.meta.env.VITE_BACKEND_URL
-    ? import.meta.env.VITE_BACKEND_URL.replace('/api', '')
-    : 'http://localhost:3000';
+import { SOCKET_ORIGIN } from './config';
 
 // ---------------------------------------------------------------------------
 // Active-chat tracker for reconnect re-join
@@ -44,7 +41,7 @@ function socketForceLogout(notice?: string) {
   }
 }
 
-export const socket = io(URL, {
+export const socket = io(SOCKET_ORIGIN, {
     // Don't connect at module-import time; we don't have the JWT yet then.
     // Auth.page sets the token, then calls socket.connect() (see below).
     autoConnect: false,

@@ -1,17 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Send, Square } from "lucide-react";
 
-function maybeAutoShowPossibilities() {
-  try {
-    // Don't collide with the onboarding tour walkthrough.
-    if (document.querySelector(".driver-popover, .stitcher-tour")) return;
-    const raw = localStorage.getItem("user");
-    const uid = raw ? (JSON.parse(raw)?._id ?? "") : "";
-    const seen = localStorage.getItem("stitcher_possibilities_seen");
-    if (seen && (seen === uid || !uid)) return; // this user already saw it
-    window.dispatchEvent(new CustomEvent("stitcher:show-possibilities"));
-  } catch { /* ignore */ }
-}
 import { cn } from "@/lib/utils";
 import { Button } from "@/Components/ui/button";
 import { Textarea } from "@/Components/ui/textarea";
@@ -24,7 +13,8 @@ interface Props {
   isProcessing: boolean;
   placeholder: string;
   mode?: "generate" | "edit";
-  onCancel: () => void;
+  /** Shows a stop button while processing. Omit when the flow cannot be cancelled. */
+  onCancel?: () => void;
   // Kept for backward-compat with Edit component — not used in this redesign
   onFileDrop?: (files: FileList) => void;
   onAssetDrop?: (asset: Asset) => void;
@@ -72,7 +62,6 @@ const MessageInput = ({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={maybeAutoShowPossibilities}
           placeholder={placeholder}
           disabled={isProcessing}
           className={cn(
@@ -86,7 +75,7 @@ const MessageInput = ({
 
         {/* Bottom action row inside the container */}
         <div className="flex items-center justify-end gap-1 px-2 pb-2">
-          {isProcessing && (
+          {isProcessing && onCancel && (
             <Button
               onClick={onCancel}
               size="sm"

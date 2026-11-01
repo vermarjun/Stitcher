@@ -22,6 +22,7 @@ import { Types } from "mongoose";
 import Project from "../model/project.model";
 import EditChat from "../model/editChat.model";
 import TimelineItem from "../model/timelineitem.model";
+import Asset from "../model/asset.model";
 import { enqueueEdit } from "../queue/editQueue";
 import { publishProgress } from "../queue/eventPublisher.util";
 import { createJobRecord } from "../queue/jobTracker.util";
@@ -70,9 +71,15 @@ export const processEditChat = async (req: Request, res: Response) => {
         return;
     }
 
+    // The asset must belong to this project.
+    const sourceAsset = await Asset.exists({ _id: assetId, projectId: new Types.ObjectId(projectId) });
+    if (!sourceAsset) {
+        res.status(404).json({ success: false, error: "Asset not found in this project" });
+        return;
+    }
+
     // ── Get or create THIS USER's private EditChat for this project ───────────
-    // Edit chats are per-user (like memory): each collaborator has their own
-    // conversation and spends their own editing credits (userId === req.userId).
+    // Edit chats are per-user: userId === req.userId.
     let editChat = await EditChat.findOne({
         projectId: new Types.ObjectId(projectId),
         userId: new Types.ObjectId(userId),

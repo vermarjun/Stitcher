@@ -16,9 +16,8 @@ import {
   RefreshProviderTracks,
 } from "@/Components/Dashboard/RefreshContextProvider";
 import { DragAssetProvider } from "@/Components/Dashboard/DragAssetContext";
-import { PollingProvider, RefreshHeaderProvider, CollabAwarenessProvider } from "./context";
+import { PollingProvider } from "./context";
 import { maybeRunEditorTour } from "@/lib/onboardingTour";
-import PossibilitiesDialog from "@/Components/Dashboard/PossibilitiesDialog";
 
 import type { Project, IUser, Asset } from "@/State/Types";
 
@@ -28,7 +27,6 @@ const DashboardLayout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState<Project>();
   const [user, setUser] = useState<IUser>();
-  const [showPossibilities, setShowPossibilities] = useState(false);
 
   const [droppedAssets, setDroppedAssets] = useState<Asset[]>([]);
   
@@ -64,9 +62,8 @@ const DashboardLayout = () => {
 
       // FETCH USER DATA FOR THIS PROJECT ID
       const user = JSON.parse(localStorage.getItem("user") || "");
-      if (user.profilePhoto == "") {
-        user.profilePhoto =
-          "https://www.gstatic.com/images/branding/product/1x/avatar_circle_blue_512dp.png";
+      if (!user.profilePhoto) {
+        user.profilePhoto = "/default-avatar.svg";
       }
       setUser(user);
 
@@ -90,22 +87,6 @@ const DashboardLayout = () => {
     }
   }, []);
 
-  const openPossibilities = () => {
-    setShowPossibilities(true);
-    try {
-      const raw = localStorage.getItem("user");
-      const uid = raw ? (JSON.parse(raw)?._id ?? "") : "";
-      localStorage.setItem("stitcher_possibilities_seen", uid || "1");
-    } catch { /* ignore */ }
-  };
-
-  useEffect(() => {
-    const handler = () => openPossibilities();
-    window.addEventListener("stitcher:show-possibilities", handler);
-    return () => window.removeEventListener("stitcher:show-possibilities", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // First-time product tour, Act 2 (the editor walkthrough). Fires once the
   // project has loaded and the editor chrome is mounted. No-ops unless the user
   // is mid-tour (or hasn't seen it) — see maybeRunEditorTour() for the gating.
@@ -115,9 +96,7 @@ const DashboardLayout = () => {
   }, [isLoading, project]);
 
   return (
-    <RefreshHeaderProvider>
-      <CollabAwarenessProvider>
-      <PollingProvider>
+    <PollingProvider>
         <div>
           {isLoading ? (
             <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
@@ -128,8 +107,7 @@ const DashboardLayout = () => {
               <RefreshProviderTimeline>
                 <RefreshProviderAssetStash>
                     <div className="h-screen w-full bg-black text-white flex flex-col overflow-hidden">
-                    <PossibilitiesDialog open={showPossibilities} onClose={() => setShowPossibilities(false)} />
-                    <Header currentProject={project} user={user} onShowPossibilities={openPossibilities} />
+                    <Header currentProject={project} user={user} />
 
                     {/* Mobile: AI chat trigger bar — sits just below the header */}
                     <div className="md:hidden flex items-center gap-3 px-4 h-11 border-b border-zinc-800 bg-neutral-950 flex-shrink-0">
@@ -145,7 +123,7 @@ const DashboardLayout = () => {
 
                     <DragAssetProvider>
                     <div className="flex-1 flex overflow-hidden relative">
-                      <LeftSideBar currentProject={project} user={user} />
+                      <LeftSideBar currentProject={project} />
 
                       <main className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-0">
                         <VideoEditor currentProject={project} />
@@ -157,7 +135,6 @@ const DashboardLayout = () => {
                         onRemoveItem={handleRemoveAsset}
                         currentProject={project}
                         user={user}
-                        mode="generate"
                         isOpen={isRightSidebarOpen}
                         onClose={() => setIsRightSidebarOpen(false)}
                       />
@@ -171,9 +148,7 @@ const DashboardLayout = () => {
             </RefreshProviderTracks>
           )}
         </div>
-      </PollingProvider>
-      </CollabAwarenessProvider>
-    </RefreshHeaderProvider>
+    </PollingProvider>
   );
 };
 

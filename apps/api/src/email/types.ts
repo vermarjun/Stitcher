@@ -3,7 +3,7 @@
  *
  * The design goal is provider-independence: controllers/services build a fully
  * rendered `EmailMessage`, and a swappable `EmailProvider` is responsible only
- * for transport. Swapping Gmail → Resend/SES is a one-line factory change in
+ * for transport. Swapping SMTP for Resend or SES is a change in
  * providers/index.ts; nothing upstream changes.
  */
 
@@ -24,7 +24,7 @@ export interface EmailSendResult {
 
 /** Transport contract every provider implements. */
 export interface EmailProvider {
-  /** Stable identifier, e.g. "gmail" | "console" — used in logs/results. */
+  /** Stable identifier, e.g. "smtp" | "console" — used in logs/results. */
   readonly name: string;
   send(message: EmailMessage): Promise<EmailSendResult>;
 }
@@ -37,7 +37,6 @@ export type EmailKind =
   | "welcome"
   | "verify_email"
   | "signup_otp"
-  | "collab_invite"
   | "password_reset";
 
 /** BullMQ payload for the `email` queue. */

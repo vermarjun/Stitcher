@@ -1,13 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import type { Project } from "@/State/Types";
 import RecentProjects from "./RecentProjects.home";
-import GettingStarted from "./GettingStarted.home";
 import QuickActions from "./QuickActions.home";
-import RecentNotifications from "./RecentNotifications.home";
-import CollabSections from "./CollabSections.home";
-import { ArrowUpRight, ChevronDown } from "lucide-react";
-import { FEATURES } from "@/config/features";
-// import ProfileProgress from "./ProfileCompleteProgressbar.home";
+import { ChevronDown } from "lucide-react";
 
 interface Props {
   recentProjects: Project[];
@@ -38,20 +33,6 @@ const TopDesign = () => {
            </p>
          </div>
 
-         {/* Images added back as requested, positioned for theme */}
-         <div className="hidden md:flex items-center space-x-4 absolute right-0 top-0 h-full opacity-40 pointer-events-none fade-in mask-image-gradient">
-            <img
-              className="h-full object-cover mix-blend-screen"
-              src="https://res.cloudinary.com/dodlenepk/image/upload/v1760094972/image-removebg-preview_fshtui.png"
-              alt="math-theme-1"
-            />
-            <div className="h-full w-px bg-gradient-to-b from-transparent via-zinc-700 to-transparent"></div>
-            <img
-              className="h-full object-cover mix-blend-screen pr-4"
-              src="https://res.cloudinary.com/dodlenepk/image/upload/v1760094545/LqaDfYdr-removebg-preview_fvjrsm.png"
-              alt="math-theme-2"
-            />
-         </div>
        </div>
     </div>
   );
@@ -69,15 +50,6 @@ const Dashboard = ({
         <TopDesign />
         <QuickActions navigate={navigate} onNavigate={onNavigate} />
         
-        {/* Mobile: Upgrade Banner */}
-        <button 
-          onClick={() => onNavigate("pricing")}
-          className="w-full bg-emerald-900/10 border border-emerald-500/20 p-2.5 rounded-lg flex items-center justify-between group md:hidden active:scale-[0.98] transition-all"
-        >
-          <span className="text-xs font-medium text-emerald-400">Upgrade to premium and create unrestricted</span>
-          <ArrowUpRight size={14} className="text-emerald-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-        </button>
-
         <RecentProjects
           projectsToDisplay={recentProjects.slice(-2, recentProjects.length)}
           navigate={navigate}
@@ -95,18 +67,6 @@ const Dashboard = ({
             <div className="h-px bg-zinc-800 flex-1"></div>
         </button>
 
-        {FEATURES.community && <RecentNotifications onNavigate={onNavigate} />}
-
-        {/* Collaboration: invitations + shared-with-me (not gated by FEATURES.community) */}
-        <CollabSections />
-
-        {/* <ProfileProgress
-          progress={60}
-          missingFields={["Add a profile photo", "Verify your email"]}
-          onContinue={() => navigate("/settings")}
-        /> */}
-        <GettingStarted onNavigate={onNavigate} />
-        
         {/* Bottom Nav Spacer — handled by pb-24 on outer container */}
       </div>
     </div>

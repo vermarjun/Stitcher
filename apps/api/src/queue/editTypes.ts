@@ -14,7 +14,7 @@ export interface EditJobData {
     /**
      * W3C Trace Context carrier injected at enqueue time so the edit worker can
      * continue the originating request's distributed trace across the BullMQ
-     * boundary. See Plan/OBSERVABILITY.md §3a. Optional for back-compat.
+     * boundary. Optional for back-compat.
      */
     otelCarrier?: Record<string, string>;
 }

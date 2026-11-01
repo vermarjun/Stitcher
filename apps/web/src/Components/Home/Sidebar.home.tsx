@@ -3,79 +3,14 @@ import {
   Home,
   FolderOpen,
   Settings,
-  CreditCard,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  LayoutTemplate,
-  Users,
-  Backpack,
-  BellIcon,
   Clapperboard,
 } from "lucide-react";
 import type { IUser } from "@/State/Types";
 import type { NavigateFunction } from "react-router-dom";
 import { AuroraText } from "../magicui/aurora-text";
-import api from "@/api";
-import { Card, CardContent } from "@/Components/ui/card";
-import { FEATURES } from "@/config/features";
-import { PlanBadge } from "@/Components/ui/PlanBadge";
-
-const UserSidebarInfo = () => {
-  const [tier, setTier] = useState("free");
-  const [editingCredits, setEditingCredits] = useState(0);
-  const [generationCredits, setGenerationCredits] = useState(0);
-  const [, setExpiresAt] = useState("");
-
-  // const formattedDate = new Date(expiresAt).toLocaleDateString();
-
-  const fetchData = async ()=>{
-    const response = await api.get<any>("/users/me/credits");
-    if ((response.data as any).success){
-      setTier((response.data as any).message.plan)
-      setEditingCredits((response.data as any).message.credits.editing);
-      setGenerationCredits((response.data as any).message.credits.generation);
-      setExpiresAt((response.data as any).message.credits.expiresAt);
-    }
-  }
-
-  useEffect(()=>{
-    fetchData();
-  }, []);
-
-  return (
-    <Card className="bg-transparent text-zinc-300 p-3 w-full border-0 shadow-none">
-      <CardContent className="space-y-3 p-0 text-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-zinc-500 text-xs">Current Plan</p>
-          <PlanBadge plan={tier} />
-        </div>
-
-        <div className="border-t border-zinc-800 pt-3 space-y-2.5">
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-zinc-400">
-                <span>Editing Credits</span>
-                <span className="text-white font-medium">{editingCredits}</span>
-            </div>
-            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="h-full bg-zinc-600 rounded-full" style={{ width: `${Math.min(editingCredits, 100)}%` }}></div>
-            </div>
-          </div>
-          
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-zinc-400">
-                <span>Generation Credits</span>
-                <span className="text-white font-medium">{generationCredits}</span>
-            </div>
-            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600/70 rounded-full" style={{ width: `${Math.min(generationCredits, 100)}%` }}></div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 
 interface Props {
   collapsed: Boolean;
@@ -96,7 +31,6 @@ const Sidebar: React.FC<Props> = ({
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -120,50 +54,11 @@ const Sidebar: React.FC<Props> = ({
     }
   }, [collapsed]);
 
-  const fetchUnread = async () => {
-    if (!FEATURES.community) return;
-    try {
-      const res = await api.get<any>("/notifications/unread-count");
-      const count = res.data?.data?.count ?? 0;
-      setUnreadCount(count);
-    } catch (err: any) {
-      console.error("fetchUnread", err);
-    }
-  };
-
-  useEffect(() => {
-    if (!FEATURES.community) return;
-    fetchUnread();
-    const handler = () => fetchUnread();
-    window.addEventListener("notifications-updated", handler as EventListener);
-    const interval = setInterval(fetchUnread, 30000);
-    return () => {
-      window.removeEventListener(
-        "notifications-updated",
-        handler as EventListener
-      );
-      clearInterval(interval);
-    };
-  }, []);
-
-  const menuItems = {
-    create: [
-      { icon: Home, label: "Home", key: "home" },
-      { icon: FolderOpen, label: "All Projects", key: "projects" },
-      { icon: Clapperboard, label: "Generations", key: "generations" },
-      ...(FEATURES.community ? [
-        { icon: Users, label: "Community", key: "community" },
-        { icon: Backpack, label: "Backpack", key: "backpack" },
-        { icon: BellIcon, label: "Notifications", key: "notifications" },
-      ] : []),
-    ],
-    api_keys: [
-      // PRICING — hidden for sideproject mode; uncomment to re-enable
-      // { icon: CreditCard, label: "Pricing", key: "pricing" },
-      // API Keys (BYOT) hidden for v1 relaunch — provided keys are enforced.
-    ],
-    browse: [{ icon: LayoutTemplate, label: "Templates", key: "templates" }],
-  };
+  const menuItems = [
+    { icon: Home, label: "Home", key: "home" },
+    { icon: FolderOpen, label: "All Projects", key: "projects" },
+    { icon: Clapperboard, label: "Generations", key: "generations" },
+  ];
 
   function onSignOut() {
     localStorage.removeItem("token");
@@ -226,7 +121,7 @@ const Sidebar: React.FC<Props> = ({
                   Main
                 </h3>
               )}
-              {menuItems.create.map((item, index) => {
+              {menuItems.map((item, index) => {
                 const active = activeItem === item.key;
                 return (
                   <button
@@ -239,12 +134,6 @@ const Sidebar: React.FC<Props> = ({
                   >
                     <div className="relative flex items-center justify-center">
                       <item.icon size={20} className={active ? "text-emerald-400" : "text-zinc-400"} />
-                      {/* show unread badge for notifications */}
-                      {item.key === "notifications" && unreadCount > 0 && (
-                        <div className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-0.5 rounded-full bg-emerald-600 border border-black text-white text-[10px] font-bold flex items-center justify-center">
-                          {unreadCount > 9 ? "9+" : unreadCount}
-                        </div>
-                      )}
                     </div>
                     {!collapsed && (
                       <span className="truncate">{item.label}</span>
@@ -257,53 +146,9 @@ const Sidebar: React.FC<Props> = ({
             <div className="space-y-1">
               {!collapsed && (
                 <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-600">
-                  Settings
+                  Account
                 </h3>
               )}
-              {menuItems.api_keys.map((item, index) => {
-                const active = activeItem === item.key;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => onNavigate(item.key)}
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium border
-                    transition-all duration-200 
-                    ${active ? activeClass : inactiveClass}
-                    ${collapsed ? "justify-center px-2" : ""}`}
-                  >
-                    <item.icon size={20} className={active ? "text-emerald-400" : "text-zinc-400"} />
-                    {!collapsed && (
-                      <span className="truncate">{item.label}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="space-y-1">
-              {!collapsed && (
-                <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-zinc-600">
-                  Resources
-                </h3>
-              )}
-              {menuItems.browse.map((item, index) => {
-                const active = activeItem === item.key;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => onNavigate(item.key)}
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium border
-                    transition-all duration-200 
-                    ${active ? activeClass : inactiveClass}
-                    ${collapsed ? "justify-center px-2" : ""}`}
-                  >
-                    <item.icon size={20} className={active ? "text-emerald-400" : "text-zinc-400"} />
-                    {!collapsed && (
-                      <span className="truncate">{item.label}</span>
-                    )}
-                  </button>
-                );
-              })}
                <button
                 onClick={() => onNavigate("settings")}
                 className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium border
@@ -375,8 +220,6 @@ const Sidebar: React.FC<Props> = ({
                     </div>
                   </div>
                 </div>
-                <UserSidebarInfo/>
-
                 <button
                   onClick={onSignOut}
                   className="flex w-full items-center gap-2 p-3 text-sm font-medium text-zinc-400 

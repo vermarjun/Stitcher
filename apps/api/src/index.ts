@@ -10,7 +10,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 
 // Config & logger — must be imported before anything that reads config
-import { API_PREFIX, PORT, config, JWT_CONFIG, ADMIN_DASHBOARD_ENABLED } from "./config";
+import { API_PREFIX, PORT, config, JWT_CONFIG } from "./config";
 import logger from "./util/logger.util";
 import jwt from "jsonwebtoken";
 import { canAccessProject } from "./util/projectAccess.util";
@@ -20,22 +20,18 @@ import connectDB from "./util/database.util";
 import { initRedisSubscriber, redisSubscriber } from "./util/redis.util";
 import { pubClient } from "./queue/connection";
 
-// Observability: queue dashboard + queue-depth metrics sampler
-import { createBullBoard } from "@bull-board/api";
-import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
-import { ExpressAdapter } from "@bull-board/express";
+// Queue-depth metrics sampler (only runs when OpenTelemetry is enabled)
 import { generationQueue } from "./queue/generationQueue";
 import { editQueue } from "./queue/editQueue";
-import { emailQueue } from "./queue/emailQueue";
 import { startQueueDepthSampler, stopQueueDepthSampler } from "./util/metrics.util";
-import auth from "./middleware/auth.middleware";
 import GenerateChat from "./model/generateChat.model";
 import User from "./model/user.model";
 import { Types } from "mongoose";
+import { providerWarnings } from "./providers.config";
+import { storage, STORAGE_ROOT } from "./storage";
 
 // Middleware
 import { globalErrorHandler } from "./middleware/error.middleware";
-import { requireFeature } from "./middleware/feature.middleware";
 
 // Queue workers — import after express setup so workers boot with the server
 import { generationWorker } from "./queue/generationWorker";
@@ -45,38 +41,14 @@ import { emailWorker } from "./queue/emailWorker";
 // Import Routes
 import userRoutes from "./router/user.router";
 import projectRoutes from "./router/project.router";
-import templateRoutes from "./router/templates.router";
 import assetRoutes from "./router/asset.router";
 import trackRoutes from "./router/track.router";
 import editChatRoutes from "./router/editChat.router";
 import generateChatRoutes from "./router/generateChat.router";
 import timelineRoutes from "./router/timeline.router";
-import shareRoutes from "./router/share.router";
-import userApiKeyRoutes from "./router/userapikeys.router";
 import projectScriptRoutes from "./router/script.router";
-import communityPostRoutes from "./router/communityPost.router";
-import backpackRoutes from "./router/backpack.router";
-import leaderboardRoutes from "./router/leaderboard.router";
-import notificationRoutes from "./router/notification.router";
-import paymentRoutes from "./router/payment.router";
 import memoryRoutes from "./router/memory.router";
-import collabRoutes from "./router/collab.router";
-import adminLiveRoutes from "./router/adminLive.router";
-import feedbackRoutes from "./router/feedback.router";
-import adminFeedbackRoutes from "./router/adminFeedback.router";
-import adminMetricsRoutes from "./router/adminMetrics.router";
-import adminPrometheusRoutes from "./router/adminPrometheus.router";
-import adminHealthRoutes from "./router/adminHealth.router";
-import adminActionsRoutes from "./router/adminActions.router";
-import adminProvidersRoutes from "./router/adminProviders.router";
-import adminRlhfRoutes from "./router/adminRlhf.router";
-import gatewayRoutes from "./router/gateway.router";
-import analyticsRoutes from "./router/analytics.router";
-import { codexAuthCallback } from "./controller/gateway.controller";
-import { startHealthPoller, stopHealthPoller } from "./services/adminHealth.service";
 import { startStuckJobCleaner, stopStuckJobCleaner } from "./util/stuckJobCleaner.util";
-import { isAdminUser, requireAdmin } from "./middleware/admin.middleware";
-import { initYjsServer } from "./collab/yjs.server";
 
 // ─── CORS origins ─────────────────────────────────────────────────────────────
 const allowedOrigins = config.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
@@ -106,9 +78,6 @@ export const io = new Server(httpServer, {
     },
 });
 
-// ─── Yjs real-time collaboration (attaches /yjs|<projectId> namespaces) ──────
-initYjsServer(io);
-
 // ─── Request ID middleware ────────────────────────────────────────────────────
 app.use((req: Request & { id?: string }, _res: Response, next: NextFunction) => {
     req.id = crypto.randomUUID();
@@ -119,18 +88,7 @@ app.use((req: Request & { id?: string }, _res: Response, next: NextFunction) => 
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(cookieParser());
-app.use(
-    express.json({
-        limit: "1mb",
-        // Stash the exact raw request bytes on req.rawBody so the Razorpay
-        // webhook handler can verify X-Razorpay-Signature against the original
-        // payload. Re-stringifying the parsed body does NOT reproduce the bytes
-        // Razorpay signed, so signature verification must use the raw buffer.
-        verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
-            req.rawBody = buf;
-        },
-    })
-);
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
 // ─── Global rate limit ────────────────────────────────────────────────────────
@@ -143,7 +101,6 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // Stricter limiters for auth endpoints
-// TODO (Phase B): move these into user.router.ts instead of applying here
 const authLimiter = rateLimit({
     windowMs: 60 * 1000,
     limit: 10,
@@ -154,8 +111,7 @@ app.use(`${API_PREFIX}/users/login`, authLimiter);
 app.use(`${API_PREFIX}/users/signup`, authLimiter);
 
 // Stricter per-IP cap on the account-creation entry point: each /signup/start
-// sends an OTP email and can mint a (free-credit) account, so throttle hard to
-// blunt scripted throwaway-account abuse on the public launch.
+// sends an OTP email, so throttle it.
 const signupLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 6,
@@ -166,7 +122,7 @@ const signupLimiter = rateLimit({
 app.use(`${API_PREFIX}/users/signup/start`, signupLimiter);
 
 // Email-sending endpoints (password reset, resend verification/OTP) — strict cap
-// to prevent email-bombing and exhausting the single Gmail App Password quota.
+// to prevent email-bombing and exhausting the mail quota.
 const mailerLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 min
     limit: 5,
@@ -219,7 +175,7 @@ io.on("connection", (socket) => {
                 return;
             }
 
-            // Check ownership: direct chat.userId match or project membership
+            // Check ownership: direct chat.userId match or project owner
             let authorized = false;
 
             if (chat.userId && chat.userId.toString() === userId) {
@@ -271,25 +227,6 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ── Admin live "god view" firehose (OBSERVABILITY §5) ───────────────────
-    // An admin joins the `admin:live` room to receive `admin_update` events for
-    // EVERY in-flight job (relayed in redis.util.ts). Gated with the SAME policy
-    // as bull-board: ADMIN_DASHBOARD_ENABLED + valid JWT + admin role. The
-    // socket already passed the io.use() JWT middleware, so socket.data.userId
-    // is trustworthy here.
-    socket.on("join_admin_live", async () => {
-        const userId = socket.data.userId as string | undefined;
-        const ok = await isAdminUser(userId);
-        if (!ok) {
-            logger.warn({ message: "join_admin_live denied", socketId: socket.id, userId });
-            socket.emit("admin_live_denied", { message: "Admin access required" });
-            return;
-        }
-        socket.join("admin:live");
-        socket.emit("admin_live_joined");
-        logger.info({ message: "Socket joined admin:live", socketId: socket.id, userId });
-    });
-
     socket.on("disconnect", () => {
         logger.debug({ message: "Socket disconnected", socketId: socket.id });
     });
@@ -332,79 +269,41 @@ app.get(`${API_PREFIX}/health`, async (_req: Request, res: Response) => {
     });
 });
 
+// ─── Media (local storage) ────────────────────────────────────────────────────
+// Files written by the local storage backend are served here. URLs contain
+// unguessable ids, so this route is public. Range requests work (video seek).
+if (storage.name === "local") {
+    const mediaCors = cors(corsOptions);
+    app.use(
+        `${API_PREFIX}/media`,
+        mediaCors,
+        (req: Request, res: Response, next: NextFunction) => {
+            // The web app runs on another origin and embeds these files.
+            res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+            // Uploaded files must never run scripts in the API origin.
+            res.setHeader("Content-Security-Policy", "sandbox");
+            const download = typeof req.query.download === "string" ? req.query.download : "";
+            if (download) {
+                const safe = download.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "download";
+                const ext = req.path.match(/\.[a-zA-Z0-9]{1,5}$/)?.[0] ?? "";
+                res.setHeader("Content-Disposition", `attachment; filename="${safe}${ext}"`);
+            }
+            next();
+        },
+        express.static(STORAGE_ROOT, { index: false, dotfiles: "deny", fallthrough: true })
+    );
+}
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/project`, projectRoutes);
-app.use(`${API_PREFIX}/template`, templateRoutes);
 app.use(`${API_PREFIX}/asset`, assetRoutes);
 app.use(`${API_PREFIX}/track`, trackRoutes);
 app.use(`${API_PREFIX}/editchat`, editChatRoutes);
 app.use(`${API_PREFIX}/generatechat`, generateChatRoutes);
 app.use(`${API_PREFIX}/timeline`, timelineRoutes);
-app.use(`${API_PREFIX}/share`, shareRoutes); // public — no auth
-app.use(`${API_PREFIX}`, analyticsRoutes); // public — POST /analytics/collect (best-effort auth)
-app.use(`${API_PREFIX}/apikeys`, userApiKeyRoutes);
 app.use(`${API_PREFIX}/script`, projectScriptRoutes);
-// Community surface — gated behind FEATURE_COMMUNITY (off for v1 relaunch).
-// When disabled, requireFeature("community") makes every route here 404.
-app.use(`${API_PREFIX}/community`, requireFeature("community"), communityPostRoutes);
-app.use(`${API_PREFIX}/backpack`, requireFeature("community"), backpackRoutes);
-app.use(`${API_PREFIX}/leaderboard`, requireFeature("community"), leaderboardRoutes);
-app.use(`${API_PREFIX}/notifications`, requireFeature("community"), notificationRoutes);
-app.use(`${API_PREFIX}/payments`, paymentRoutes);
 app.use(`${API_PREFIX}/memory`, memoryRoutes);
-app.use(`${API_PREFIX}/collab`, collabRoutes);
-// Admin live "god view" (OBSERVABILITY §5) — internal ops surface, NOT a
-// community feature, so it is intentionally outside the requireFeature("community")
-// block above. Each route is gated by auth + requireAdmin (see the router); when
-// ADMIN_DASHBOARD_ENABLED=false every route here 404s.
-app.use(`${API_PREFIX}/admin/live`, adminLiveRoutes);
-
-// User feedback intake — any logged-in user may POST (auth only, gated in the
-// router). NOT a community feature, so kept outside the requireFeature block.
-app.use(`${API_PREFIX}/feedback`, feedbackRoutes);
-
-// Admin portal surfaces (OBSERVABILITY §5 + admin dashboard). Every router below
-// is internally double-gated by auth + requireAdmin and 404s when
-// ADMIN_DASHBOARD_ENABLED=false. Mounted outside requireFeature("community").
-app.use(`${API_PREFIX}/admin/feedback`, adminFeedbackRoutes);
-app.use(`${API_PREFIX}/admin/metrics`, adminMetricsRoutes);
-app.use(`${API_PREFIX}/admin/prometheus`, adminPrometheusRoutes);
-app.use(`${API_PREFIX}/admin/health`, adminHealthRoutes);
-app.use(`${API_PREFIX}/admin/actions`, adminActionsRoutes);
-app.use(`${API_PREFIX}/admin/providers`, adminProvidersRoutes);
-app.use(`${API_PREFIX}/admin/rlhf`, adminRlhfRoutes);
-// Gateway: admin management + internal proxy (Agent service calls /gateway/proxy/*)
-app.use(`${API_PREFIX}`, gatewayRoutes);
-// Codex OAuth callback — OpenAI ALWAYS redirects to http://localhost:1455/auth/callback
-// (hardcoded in OpenAI's Hydra allowlist). Port 1455 maps to this container in docker-compose.
-// This route must be at /auth/callback with NO API prefix.
-app.get('/auth/callback', codexAuthCallback);
-
-// ─── bull-board queue dashboard (OBSERVABILITY §6) ───────────────────────────
-// Instant queue/job/step visibility at ${API_PREFIX}/admin/queues.
-//
-// Gating: this surface exposes job payloads and controls, so it is only mounted
-// when ADMIN_DASHBOARD_ENABLED=true AND the request passes JWT auth.
-// TODO (RBAC): the env flag + plain JWT auth is a stopgap. Replace with a proper
-// admin role check (e.g. user.role === "admin") once an admin/RBAC concept
-// exists, so any authenticated user can no longer reach the dashboard.
-if (ADMIN_DASHBOARD_ENABLED) {
-    const bullBoardPath = `${API_PREFIX}/admin/queues`;
-    const serverAdapter = new ExpressAdapter();
-    serverAdapter.setBasePath(bullBoardPath);
-
-    createBullBoard({
-        queues: [new BullMQAdapter(generationQueue), new BullMQAdapter(editQueue), new BullMQAdapter(emailQueue)],
-        serverAdapter,
-    });
-
-    // Gated by auth + requireAdmin (role check) — NOT just a valid JWT. This surface
-    // exposes/controls job payloads, so any logged-in non-admin (e.g. a launch tester)
-    // must NOT reach it.
-    app.use(bullBoardPath, auth, requireAdmin, serverAdapter.getRouter());
-    logger.info({ message: "bull-board mounted (auth + admin gated)", path: bullBoardPath });
-}
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
@@ -421,16 +320,19 @@ const server = httpServer.listen(PORT, async () => {
         logger.info({ message: `Server running`, port: PORT });
         await initRedisSubscriber(io);
 
-        // OBSERVABILITY §3d: periodically sample BullMQ job counts into the
-        // stitcher.queue.depth{queue,state} gauge. Best-effort; never throws.
-        startQueueDepthSampler([
-            { queue: generationQueue, label: "video-generation" },
-            { queue: editQueue, label: "video-edit" },
-        ]);
+        for (const warning of providerWarnings()) {
+            logger.warn({ message: `[providers] ${warning}` });
+        }
 
-        // Admin portal: poll dependency health (mongo/redis/agent/render/rag) on
-        // a 30s interval so /admin/health serves a cached snapshot. Best-effort.
-        startHealthPoller();
+        // Sample BullMQ job counts into the stitcher.queue.depth gauge. Only
+        // useful when OpenTelemetry is on, so skip the Redis polling otherwise.
+        if (config.OTEL_EXPORTER_OTLP_ENDPOINT) {
+            startQueueDepthSampler([
+                { queue: generationQueue, label: "video-generation" },
+                { queue: editQueue, label: "video-edit" },
+            ]);
+        }
+
         startStuckJobCleaner();
     } catch (error) {
         logger.error({ message: "Failed to start services", error: String(error) });
@@ -455,7 +357,6 @@ async function shutdown(signal: string) {
 
         try {
             stopQueueDepthSampler();
-            stopHealthPoller();
             stopStuckJobCleaner();
 
             await generationWorker.close();

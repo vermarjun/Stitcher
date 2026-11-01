@@ -10,10 +10,6 @@ import {
   Trash2,
   X,
   Download,
-  Share2,
-  Link as LinkIcon,
-  Copy,
-  Eye
 } from "lucide-react";
 import { Button } from "@/Components/ui/button";
 import type {
@@ -26,11 +22,6 @@ import type {
 } from "@/State/Types";
 import api from "@/api";
 import { toast } from "sonner";
-import type { CollabDoc } from "@/collab/useCollabDoc";
-import { newObjectIdHex } from "@/collab/yjsTimeline";
-import type { Awareness } from "y-protocols/awareness";
-import { usePresence } from "@/collab/usePresence";
-import TimelineCursors from "@/Components/Dashboard/Presence/TimelineCursors";
 
 import { useRefreshTracks, useRefreshTimeline } from "../RefreshContextProvider";
 import { useDragAsset } from "@/Components/Dashboard/DragAssetContext";
@@ -98,51 +89,29 @@ const AudioWaveform = ({
   );
 };
 
-// Component to render video frames background
-const VideoFramesBackground = ({ 
-  videoUrl, 
-  sourceStartTime,
-  sourceEndTime,
-  width 
-}: { 
-  videoUrl: string;
-  duration?: number;
-  sourceStartTime: number;
-  sourceEndTime: number;
+// Component to render video frames background.
+// Repeats the asset's stored thumbnail across the clip; storage backends do not
+// expose per-timestamp frames, so there is one image per clip.
+const VideoFramesBackground = ({
+  thumbnailUrl,
+  width
+}: {
+  thumbnailUrl?: string;
   width: number;
 }) => {
-  const clipDuration = sourceEndTime - sourceStartTime;
-  // Calculate how many frames we need based on width (one frame every ~40px)
+  // One tile every ~40px
   const frameCount = Math.max(3, Math.ceil(width / 40));
-  
-  const [thumbnails, setThumbnails] = useState<string[]>([]);
-  
-  useEffect(() => {
-    // Generate thumbnails based on the source time range
-    const thumbs: string[] = [];
-    const interval = clipDuration / frameCount;
-    
-    for (let i = 0; i < frameCount; i++) {
-      const timeOffset = Math.floor(sourceStartTime + (i * interval));
-      const thumbnailUrl = videoUrl.replace(
-        '/upload/',
-        `/upload/so_${timeOffset},w_80,h_60,c_fill,q_auto:low/`
-      ).replace('.mp4', '.jpg');
-      thumbs.push(thumbnailUrl);
-    }
-    
-    setThumbnails(thumbs);
-  }, [videoUrl, clipDuration, sourceStartTime, frameCount]);
-  
+  if (!thumbnailUrl) return null;
+
   return (
     <div className="absolute inset-0 flex overflow-hidden rounded-md">
-      {thumbnails.map((thumb, idx) => (
+      {Array.from({ length: frameCount }, (_, idx) => (
         <div
           key={idx}
           className="flex-shrink-0 bg-cover bg-center border-r border-purple-900/30"
           style={{
             width: `${width / frameCount}px`,
-            backgroundImage: `url(${thumb})`,
+            backgroundImage: `url(${thumbnailUrl})`,
             backgroundSize: 'cover',
           }}
         />
@@ -159,37 +128,15 @@ const TimelineEditor = ({
   onTimeUpdate,
   onTimelineUpdate,
   onSync,
-  onDeleteItem,
-  onAddTextItem,
   onAddAssetItem,
-  canEdit = true,
-  collabDoc: _collabDoc,
-  localOrigin: _localOrigin,
-  awareness,
-  setAwarenessCursor,
-  setAwarenessSelection,
 }: {
   timeline: Timeline;
   currentTime: number;
   onTimeUpdate: (time: number) => void;
   onTimelineUpdate: (timeline: Timeline) => void;
   onSync: (timeline: Timeline) => Promise<void>;
-  /** Called after HTTP delete succeeds — writes removal to Y.Doc */
-  onDeleteItem?: (itemId: string, trackId: string) => void;
-  /** Called after HTTP add-text succeeds — writes new item to Y.Doc */
-  onAddTextItem?: (trackId: string, item: ITimelineItemBase & Record<string, unknown>) => void;
-  /** Called after HTTP asset-drop succeeds — updates local React state immediately
-   *  (server already injects the item into the Y.Doc, so we must NOT write it
-   *  to the Y.Doc here or it would create a duplicate clip). */
+  /** Called after the API stored a dropped asset; shows it locally right away. */
   onAddAssetItem?: (trackId: string, item: any) => void;
-  /** Viewers are read-only — when false, all mutating controls are disabled/hidden. */
-  canEdit?: boolean;
-  collabDoc?: CollabDoc | null;
-  localOrigin?: string;
-  /** Phase 4: awareness for presence cursors / selections */
-  awareness?: Awareness | null;
-  setAwarenessCursor?: ((xPx: number, ts: number) => void) | null;
-  setAwarenessSelection?: ((itemId: string | null) => void) | null;
 }) => {
   const [selectedItem, setSelectedItem] = useState<ITimelineItemBase | null>(
     null
@@ -226,57 +173,8 @@ const TimelineEditor = ({
   // Ruler ticks span the whole canvas so the time labels never get clipped.
   const rulerDuration = viewDuration + 1;
   const [isLoading, setLoading] = useState(false);
-  // Share/export dialog state machine.
-  const [shareOpen, setShareOpen] = useState(false);
-  const [sharePhase, setSharePhase] = useState<"choose" | "working" | "link">("choose");
-  const [shareLink, setShareLink] = useState<string>("");
-  const [shareBusy, setShareBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // ─── Phase 4: Presence ───────────────────────────────────────────────────────
-  const others = usePresence(awareness);
-  // Throttle cursor awareness writes — keep a ref to the last timeout id
-  const cursorThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingCursorRef = useRef<{ xPx: number; ts: number } | null>(null);
-
-  const handleTimelineMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!setAwarenessCursor) return;
-      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-      const xPx = e.clientX - rect.left;
-      const ts = xPx / pixelsPerSecond;
-      pendingCursorRef.current = { xPx, ts };
-
-      if (!cursorThrottleRef.current) {
-        cursorThrottleRef.current = setTimeout(() => {
-          cursorThrottleRef.current = null;
-          const pending = pendingCursorRef.current;
-          if (pending) {
-            setAwarenessCursor(pending.xPx, pending.ts);
-            pendingCursorRef.current = null;
-          }
-        }, 40); // ~25fps throttle
-      }
-    },
-    [setAwarenessCursor, pixelsPerSecond],
-  );
-
-  const handleTimelineMouseLeave = useCallback(() => {
-    if (!setAwarenessCursor) return;
-    // Clear cursor so remote users don't see a stale caret
-    if (cursorThrottleRef.current) {
-      clearTimeout(cursorThrottleRef.current);
-      cursorThrottleRef.current = null;
-    }
-    pendingCursorRef.current = null;
-    // We intentionally don't clear the awareness cursor field here —
-    // it expires automatically when the awareness connection drops.
-  }, [setAwarenessCursor]);
-
-  // When local selectedItem changes, write to awareness
-  useEffect(() => {
-    setAwarenessSelection?.(selectedItem?._id ?? null);
-  }, [selectedItem, setAwarenessSelection]);
 
   // Get trigger to refresh Tracks and Timeline
   const { triggerRefresh: triggerTracksRefresh } = useRefreshTracks();
@@ -295,7 +193,7 @@ const TimelineEditor = ({
 
   const handleTrackDrop = async (e: React.DragEvent, track: ITrack) => {
     e.preventDefault();
-    if (!canEdit || isDropping) return;
+    if (isDropping) return;
 
     let asset: Asset | null = null;
     try {
@@ -335,11 +233,7 @@ const TimelineEditor = ({
           onAddAssetItem?.(track._id, { ...created, trackId: track._id });
         }
         triggerTracksRefresh();
-        // When collab is synced, the new clip arrives via the server's Y.Doc
-        // inject + observer (hydrateFromServer then resolves its asset), so a
-        // timeline refetch would be redundant and racy. Only refetch the
-        // timeline in the non-collab path.
-        if (!_collabDoc?.synced) triggerTimelineRefresh();
+        triggerTimelineRefresh();
         toast.success("Successfully added to timeline");
       } else {
         toast.error(response.data.message || "Failed to add asset to timeline");
@@ -356,13 +250,10 @@ const TimelineEditor = ({
 
   const handleDeleteItem = async () => {
     if (!selectedItem) return;
-    if (!canEdit) return; // viewers are read-only
     setIsDeleting(true);
     try {
       const response = await api.delete(`/track/items/${selectedItem._id}`);
       if ((response.data as any).success) {
-        // Write deletion to Y.Doc (collab-aware)
-        onDeleteItem?.(selectedItem._id, selectedItem.trackId);
         // Remove the item from React state
         const updatedTimeline = {
           ...timeline,
@@ -429,16 +320,8 @@ const TimelineEditor = ({
   ) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!canEdit) return; // viewers cannot drag / resize
     const rect = timelineRef.current?.getBoundingClientRect();
     if (!rect) return;
-
-    // Get asset duration based on item type
-    let assetDuration = item.endTime - item.startTime;
-    if (item.type === "video" || item.type === "audio") {
-      const mediaItem = item as IVideoTimelineItem | IAudioTimelineItem;
-      assetDuration = mediaItem.assetId?.duration || assetDuration;
-    }
 
     setDragAction(action);
     setDragData({
@@ -557,8 +440,8 @@ const TimelineEditor = ({
 
                 // Validate source range doesn't exceed asset duration — but ONLY
                 // when a real positive duration is known. An unpopulated assetId
-                // (bare id string after a collab re-derive) has no .duration; the
-                // old `|| 0` made this guard always true and FROZE the drag.
+                // (a bare id string) has no .duration; the old `|| 0` made this
+                // guard always true and froze the drag.
                 if (it.type === "video" || it.type === "audio") {
                   const mediaItem = it as IVideoTimelineItem | IAudioTimelineItem;
                   const assetDuration = mediaItem.assetId?.duration;
@@ -687,7 +570,6 @@ const TimelineEditor = ({
 
   // Add new text item (duration default 3s); position is later adjusted in VideoPlayer by dragging
   const handleTextTrackClick = async (e: React.MouseEvent) => {
-    if (!canEdit) return; // viewers are read-only
     if (!isAddingText || !timelineRef.current) return;
 
     const rect = timelineRef.current.getBoundingClientRect();
@@ -698,13 +580,9 @@ const TimelineEditor = ({
     const textTrack = tracks.find((t) => t.type === "text");
     if (!textTrack) return;
 
-    // Use a client-generated 24-hex ObjectId so the Y.Doc id and Mongo _id match
-    const clientId = newObjectIdHex();
-
-    let newTextItem: ITextTimelineItem = {
-      _id: clientId,
+    // The API assigns the item id; the created item comes back in the response.
+    const newTextBody = {
       type: "text",
-      trackId: textTrack._id,
       startTime: clickTime,
       endTime: clickTime + 3,
       content: "New Text",
@@ -719,7 +597,7 @@ const TimelineEditor = ({
     try {
       const response = await api.post(
         `/track/${textTrack._id}/text`,
-        { ...newTextItem, _id: clientId }
+        newTextBody
       );
       if (!(response.data as any).success) {
         throw Error(
@@ -727,12 +605,7 @@ const TimelineEditor = ({
           (response.data as any).error
         );
       } else {
-        newTextItem = (response.data as any).data.timelineItem;
-        // Write new item to Y.Doc (collab-aware) using the server-confirmed _id
-        onAddTextItem?.(textTrack._id, {
-          ...newTextItem,
-          id: newTextItem._id,
-        } as ITimelineItemBase & Record<string, unknown>);
+        const newTextItem: ITextTimelineItem = (response.data as any).data.timelineItem;
         const updated: Timeline = {
           ...timeline,
           tracks: tracks.map((t) =>
@@ -754,7 +627,6 @@ const TimelineEditor = ({
   };
 
   const handleAddTextClick = () => {
-    if (!canEdit) return; // viewers are read-only
     setIsAddingText(true);
     setTool("move");
   };
@@ -762,7 +634,6 @@ const TimelineEditor = ({
   const handleSyncClick = async () => {
     setLoading(true);
     try {
-      console.log("Syncing timeline:", timeline); // Debug log
       await onSync(timeline); // Now this will have the updated timeline
       toast.success("Project Synced Successfully!");
     } catch (e) {
@@ -773,74 +644,44 @@ const TimelineEditor = ({
     }
   };
 
-  // Open the Share dialog (choose download vs shareable link).
-  const openShareDialog = () => {
-    setShareLink("");
-    setSharePhase("choose");
-    setShareOpen(true);
-  };
-
-  // Render the current timeline server-side, then either force a real file
-  // download or produce a Stitcher share link — never expose Cloudinary URLs.
-  const runExport = async (mode: "download" | "share") => {
+  // Save current edits, render the timeline server-side, then download the MP4.
+  const runExport = async () => {
     const projectId = String(timeline.projectId);
     if (!projectId) {
       toast.error("Missing project id — cannot export");
       return;
     }
-    setShareBusy(true);
-    setSharePhase("working");
-    const pending = toast.loading(
-      mode === "download" ? "Rendering your video…" : "Creating a shareable link…"
-    );
+    setExportBusy(true);
+    const pending = toast.loading("Rendering your video…");
     try {
       // Persist current edits first so the server exports what the user sees.
       try { await onSync(timeline); } catch { /* best-effort; export reads DB */ }
 
       const res = await api.post<{
         success: boolean;
-        data?: { mode: string; downloadUrl?: string; shareUrl?: string; warnings?: string[] };
+        data?: { mode: string; downloadUrl?: string; durationSec?: number; warnings?: string[] };
         message?: string;
-      }>(`/timeline/project/${projectId}/export`, { mode });
+      }>(`/timeline/project/${projectId}/export`, {});
 
-      if (!res.data.success || !res.data.data) {
+      const downloadUrl = res.data.data?.downloadUrl;
+      if (!res.data.success || !downloadUrl) {
         throw new Error(res.data.message || "Export failed");
       }
-      (res.data.data.warnings ?? []).forEach((w) => toast.warning(w, { duration: 8000 }));
+      (res.data.data?.warnings ?? []).forEach((w) => toast.warning(w, { duration: 8000 }));
 
-      if (mode === "download") {
-        const dl = res.data.data.downloadUrl!;
-        // fl_attachment makes Cloudinary serve Content-Disposition: attachment,
-        // so this downloads the file directly rather than opening a tab.
-        const a = document.createElement("a");
-        a.href = dl;
-        a.download = `stitcher-video-${projectId}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        toast.success("Download started", { id: pending });
-        setShareOpen(false);
-      } else {
-        const link = res.data.data.shareUrl!;
-        setShareLink(link);
-        setSharePhase("link");
-        toast.success("Share link ready", { id: pending });
-      }
+      // The API sends Content-Disposition: attachment for this URL, so a plain
+      // link saves the file instead of navigating away.
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success("Download started", { id: pending });
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || "Export failed", { id: pending });
       console.error("export error", e);
-      setSharePhase("choose");
     } finally {
-      setShareBusy(false);
-    }
-  };
-
-  const copyShareLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      toast.success("Link copied to clipboard");
-    } catch {
-      toast.error("Couldn't copy — select and copy manually");
+      setExportBusy(false);
     }
   };
 
@@ -884,29 +725,19 @@ const TimelineEditor = ({
         </div>
 
         {/* Add Text Button with modern styling */}
-        {canEdit && (
-          <Button
-            className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex-shrink-0 ${
-              isAddingText
-                ? "bg-green-600 text-white border-green-500 shadow-md shadow-green-600/25"
-                : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 border-zinc-700 hover:border-zinc-600"
-            }`}
-            title="Add text overlay"
-            onClick={handleAddTextClick}
-          >
-            <Plus className="w-3 h-3" />
-            <Type className="w-3 h-3" />
-            <span className="hidden sm:inline">Add Text</span>
-          </Button>
-        )}
-
-        {/* Read-only badge for viewers */}
-        {!canEdit && (
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded-md flex-shrink-0">
-            <Eye className="w-3 h-3 text-zinc-400" />
-            <span className="text-zinc-400 text-xs font-medium hidden sm:inline">View only</span>
-          </div>
-        )}
+        <Button
+          className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border flex-shrink-0 ${
+            isAddingText
+              ? "bg-green-600 text-white border-green-500 shadow-md shadow-green-600/25"
+              : "bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 border-zinc-700 hover:border-zinc-600"
+          }`}
+          title="Add text overlay"
+          onClick={handleAddTextClick}
+        >
+          <Plus className="w-3 h-3" />
+          <Type className="w-3 h-3" />
+          <span className="hidden sm:inline">Add Text</span>
+        </Button>
 
         {/* Status indicator with better visibility */}
         {isAddingText && (
@@ -932,7 +763,7 @@ const TimelineEditor = ({
           </Button>
         )}
 
-        {selectedItem && canEdit && (
+        {selectedItem && (
           <Button
             onClick={handleDeleteItem}
             disabled={isDeleting}
@@ -951,147 +782,46 @@ const TimelineEditor = ({
           </Button>
         )}
 
-        {/* Sync Icon Button — writes to the project, so editors/owners only */}
-        {canEdit && (
-          <Button
-            onClick={handleSyncClick}
-            disabled={isLoading}
-            className={`p-2 rounded-lg transition-all duration-200 shadow-md flex-shrink-0 ${
-              isLoading
-                ? "bg-amber-600 text-white shadow-amber-600/25 animate-pulse cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/25"
-            } border border-opacity-20 ${
-              isLoading ? "border-amber-400" : "border-blue-400"
-            }`}
-            title={isLoading ? "Syncing..." : "Sync (save) timeline to backend"}
-          >
-            {isLoading ? (
-              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            <span className="hidden sm:inline">{isLoading ? "Syncing..." : "Sync"}</span>
-          </Button>
-        )}
-
-        {/* Share Button — opens a dialog to download or get a shareable link */}
+        {/* Sync Icon Button — saves the timeline right now */}
         <Button
-          onClick={openShareDialog}
-          disabled={shareBusy || isLoading}
+          onClick={handleSyncClick}
+          disabled={isLoading}
+          className={`p-2 rounded-lg transition-all duration-200 shadow-md flex-shrink-0 ${
+            isLoading
+              ? "bg-amber-600 text-white shadow-amber-600/25 animate-pulse cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/25"
+          } border border-opacity-20 ${
+            isLoading ? "border-amber-400" : "border-blue-400"
+          }`}
+          title={isLoading ? "Syncing..." : "Sync (save) timeline to backend"}
+        >
+          {isLoading ? (
+            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          <span className="hidden sm:inline">{isLoading ? "Syncing..." : "Sync"}</span>
+        </Button>
+
+        {/* Export Button — renders the timeline and downloads the MP4 */}
+        <Button
+          onClick={runExport}
+          disabled={exportBusy || isLoading}
           className={`p-2 rounded-lg transition-all duration-200 shadow-md flex items-center gap-1 flex-shrink-0 ${
-            shareBusy
+            exportBusy
               ? "bg-zinc-700 text-white animate-pulse cursor-not-allowed"
               : "bg-zinc-100 text-black hover:bg-white shadow-white/10"
           } border border-zinc-500/40`}
-          title="Share or download this video"
+          title="Render and download this video as an MP4"
         >
-          {shareBusy ? (
+          {exportBusy ? (
             <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
           ) : (
-            <Share2 className="w-4 h-4" />
+            <Download className="w-4 h-4" />
           )}
-          <span className="hidden sm:inline">{shareBusy ? "Working..." : "Share"}</span>
+          <span className="hidden sm:inline">{exportBusy ? "Rendering..." : "Export"}</span>
         </Button>
       </div>
-
-      {/* ── Share dialog ──────────────────────────────────────────────── */}
-      {shareOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
-          onClick={() => !shareBusy && setShareOpen(false)}
-        >
-          <div
-            className="w-full max-w-[460px] rounded-xl border border-zinc-700 bg-black p-5 text-zinc-100 shadow-2xl shadow-black/60"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-base font-semibold text-white">Share video</h3>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Export video as an MP4 or a public Stitcher link.
-                </p>
-              </div>
-              <button
-                onClick={() => !shareBusy && setShareOpen(false)}
-                className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
-                disabled={shareBusy}
-                aria-label="Close share dialog"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {sharePhase === "choose" && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  onClick={() => runExport("download")}
-                  className="group rounded-lg border border-zinc-700 bg-zinc-900/60 p-4 text-left transition-colors hover:bg-zinc-800/80"
-                >
-                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-black text-zinc-200 group-hover:text-white">
-                    <Download className="h-4 w-4" />
-                  </div>
-                  <div className="text-sm font-medium text-white">Download MP4</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-400">
-                    Save the rendered file locally.
-                  </div>
-                </button>
-                <button
-                  onClick={() => runExport("share")}
-                  className="group rounded-lg border border-zinc-700 bg-zinc-900/60 p-4 text-left transition-colors hover:bg-zinc-800/80"
-                >
-                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-black text-zinc-200 group-hover:text-white">
-                    <LinkIcon className="h-4 w-4" />
-                  </div>
-                  <div className="text-sm font-medium text-white">Public link</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-400">
-                    Create a Stitcher watch page.
-                  </div>
-                </button>
-              </div>
-            )}
-
-            {sharePhase === "working" && (
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/60 p-4 text-zinc-300">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
-                <div>
-                  <p className="text-sm font-medium text-white">Rendering video</p>
-                  <p className="text-xs text-zinc-400">This can take a minute.</p>
-                </div>
-              </div>
-            )}
-
-            {sharePhase === "link" && (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-2">
-                  <input
-                    readOnly
-                    value={shareLink}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="w-full bg-transparent px-2 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <a
-                    href={shareLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-zinc-400 transition-colors hover:text-white"
-                  >
-                    Open link
-                  </a>
-                  <button
-                    onClick={copyShareLink}
-                    className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
-                  >
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Timeline content with improved visual depth */}
       <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-black to-zinc-950">
@@ -1136,12 +866,7 @@ const TimelineEditor = ({
             <div
               ref={timelineRef}
               className="flex flex-col gap-2 p-2 relative"
-              onMouseMove={handleTimelineMouseMove}
-              onMouseLeave={handleTimelineMouseLeave}
             >
-              {/* Phase 4: other users' live cursors */}
-              <TimelineCursors others={others} pixelsPerSecond={pixelsPerSecond} />
-
               {tracks.map((track) => {
                 // Compute drag-highlight state for this track
                 const validDropType = draggingAsset ? assetTargetTrackType(draggingAsset.type) : null;
@@ -1228,11 +953,6 @@ const TimelineEditor = ({
                       return "Unknown";
                     };
 
-                    // Phase 4: find remote users who have selected this item
-                    const remoteSelectors = others.filter(
-                      (p) => p.selection?.itemId === item._id && p.user,
-                    );
-
                     return (
                       <div
                         key={item._id}
@@ -1241,12 +961,6 @@ const TimelineEditor = ({
                           left: `${leftPx}px`,
                           width: `${widthPx}px`,
                           cursor: tool === "move" ? "move" : "default",
-                          // Layered box-shadow for remote selections
-                          boxShadow: remoteSelectors.length > 0
-                            ? remoteSelectors
-                                .map((p, i) => `0 0 0 ${(i + 2) * 2}px ${p.user!.color}`)
-                                .join(', ')
-                            : undefined,
                         }}
                         onClick={(e) => handleItemClick(item, e)}
                         onMouseDown={(e) =>
@@ -1256,10 +970,7 @@ const TimelineEditor = ({
                         {/* Video frames background */}
                         {item.type === "video" && (item as IVideoTimelineItem).assetId?.url && (
                           <VideoFramesBackground
-                            videoUrl={(item as IVideoTimelineItem).assetId!.url}
-                            duration={(item as IVideoTimelineItem).assetId!.duration}
-                            sourceStartTime={(item as IVideoTimelineItem).sourceStartTime}
-                            sourceEndTime={(item as IVideoTimelineItem).sourceEndTime}
+                            thumbnailUrl={(item as IVideoTimelineItem).assetId!.thumbnail}
                             width={widthPx}
                           />
                         )}
@@ -1289,7 +1000,7 @@ const TimelineEditor = ({
                         </div>
 
                         {/* Enhanced resize handles */}
-                        {tool === "crop" && canEdit && (
+                        {tool === "crop" && (
                           <>
                             <div
                               className="absolute left-0 top-0 bottom-0 w-2 bg-white/80 cursor-ew-resize rounded-l-lg flex items-center justify-center hover:bg-white transition-colors z-20"
@@ -1320,20 +1031,6 @@ const TimelineEditor = ({
                           </>
                         )}
 
-                        {/* Phase 4: remote selection name tags */}
-                        {remoteSelectors.length > 0 && (
-                          <div className="absolute -top-5 left-0 flex gap-1 pointer-events-none z-30">
-                            {remoteSelectors.map((p) => (
-                              <span
-                                key={p.user!.id}
-                                className="text-[9px] font-semibold text-white px-1 py-0.5 rounded whitespace-nowrap"
-                                style={{ background: p.user!.color }}
-                              >
-                                {p.user!.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     );
                   })}

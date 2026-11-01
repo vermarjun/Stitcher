@@ -1,16 +1,12 @@
-import { useState } from "react";
 import { toast } from "sonner";
 import api from "@/api";
 import {
   Trash2,
-  UserPlus,
   Sparkles,
   Ghost,
   Plus,
 } from "lucide-react";
 import type { Project } from "@/State/Types";
-import CollaboratorsDialog from "@/Components/Dashboard/Collaborators.dialog";
-import { MemberAvatars } from "@/Components/Home/Dashboard/CollabSections.home";
 
 interface Props2 {
   projectsToDisplay: Project[];
@@ -58,9 +54,6 @@ const RecentProjects = ({
   const handleResumeProject = (projectId: string) => {
     navigate(`/dashboard/${projectId}`);
   };
-
-  // Project whose "add collaborators" dialog is currently open.
-  const [collabProjectId, setCollabProjectId] = useState<string | null>(null);
 
   // THIS PLACE HOLDER SHOULD ACT AS LOADING SKELETON THAT IS TO BE DISPLAYED WHILE THE PROJECTS ARE BEING LAODED (no isloading variable just the logic that project.lenght === 0 means it is loading rightnow!)
   const GhostPlaceholder = () => (
@@ -218,7 +211,6 @@ const RecentProjects = ({
                 >
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-3">
-                      <MemberAvatars members={project.members} />
                       <span className="text-white text-sm font-medium truncate">
                         {project.name}
                       </span>
@@ -229,16 +221,6 @@ const RecentProjects = ({
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex justify-center items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCollabProjectId(project._id);
-                        }}
-                        className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-white transition-colors"
-                        title="Add Collaborators"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -269,7 +251,6 @@ const RecentProjects = ({
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3 min-w-0">
-                <MemberAvatars members={project.members} />
                 <div className="min-w-0">
                   <h3 className="text-white text-sm font-medium truncate">{project.name}</h3>
                   <p className="text-zinc-500 text-xs">{timeAgo(project.updatedAt)}</p>
@@ -278,16 +259,6 @@ const RecentProjects = ({
             </div>
 
             <div className="flex items-center gap-2 pt-3 border-t border-zinc-800">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCollabProjectId(project._id);
-                  }}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs py-2 rounded-md transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Add
-                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -301,16 +272,6 @@ const RecentProjects = ({
           </div>
         ))}
       </div>
-
-      {collabProjectId && (
-        <CollaboratorsDialog
-          projectId={collabProjectId}
-          onClose={() => {
-            setCollabProjectId(null);
-            fecthRecentProjects();
-          }}
-        />
-      )}
 
       <style>{`
         @keyframes fadeIn {

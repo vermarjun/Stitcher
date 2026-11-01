@@ -1,17 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Play,
-  FileText,
   Layers,
   Upload,
   Filter,
   Loader2
 } from "lucide-react";
 import type { Asset, ITrack, Project } from "@/State/Types";
-import { AssetOrigin, AssetType } from "@/State/Types";
+import { AssetOrigin } from "@/State/Types";
 import api from "@/api";
 import { toast } from "sonner";
-import BeautifulLoader from "@/Components/LoadingScreens/Templatestore.loader.tsx";
+import ThreeDotLoader from "@/Components/LoadingScreens/ThreeDotLoader";
 
 import {
   useRefreshAssetStash,
@@ -149,8 +148,6 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
   const getOriginIcon = (origin: AssetOrigin) => {
     switch (origin) {
-      case AssetOrigin.TEMPLATE:
-        return <FileText className="w-3 h-3" />;
       case AssetOrigin.UPLOAD:
         return <Layers className="w-3 h-3" />;
       case AssetOrigin.GENERATED_VIDEO:
@@ -162,8 +159,6 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
   const getOriginLabel = (origin: AssetOrigin): string => {
     switch (origin) {
-      case AssetOrigin.TEMPLATE:
-        return "Template";
       case AssetOrigin.UPLOAD:
         return "Upload";
       case AssetOrigin.GENERATED_VIDEO:
@@ -252,175 +247,68 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
     }
   };
 
-  const uploadFileToCloudinary = async (
-    file: File,
-    uploadParams: any,
-    signature: string,
-    apiKey: string,
-    cloudName: string,
-    fileId: string
-  ) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("signature", signature);
-    formData.append("api_key", apiKey);
-    formData.append("timestamp", uploadParams.timestamp.toString());
-    formData.append("folder", uploadParams.folder);
-    formData.append("resource_type", uploadParams.resource_type);
-    formData.append("quality", uploadParams.quality);
-    formData.append("fetch_format", uploadParams.fetch_format);
-
-    const xhr = new XMLHttpRequest();
-
-    return new Promise((resolve, reject) => {
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setUploadProgress((prev) => ({
-            ...prev,
-            [fileId]: { ...prev[fileId], progress },
-          }));
-        }
-      });
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status === 200) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            resolve(response);
-          } catch (error) {
-            reject(new Error("Failed to parse response"));
-          }
-        } else {
-          reject(new Error(`Upload failed with status ${xhr.status}`));
-        }
-      });
-
-      xhr.addEventListener("error", () => {
-        reject(new Error("Upload failed"));
-      });
-
-      xhr.open(
-        "POST",
-        `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`
-      );
-      xhr.send(formData);
-    });
-  };
-
+  // Uploads go through the API (POST /asset/upload, multipart). The API stores
+  // the file, probes duration/size, makes the thumbnail and returns the Asset.
   const processUploadedFile = async (file: File, fileId: string) => {
-    try {
-      const isVideo = file.type.startsWith("video/");
-      // const isAudio = file.type.startsWith("audio/");
-      const resourceType = isVideo ? "video" : "audio";
+    const clearLater = (ms: number) =>
+      setTimeout(() => {
+        setUploadProgress((prev) => {
+          const { [fileId]: _removed, ...rest } = prev;
+          return rest;
+        });
+      }, ms);
 
+    try {
       setUploadProgress((prev) => ({
         ...prev,
         [fileId]: { progress: 0, status: "uploading" },
       }));
 
-      // Step 1: Get upload signature
-      const signatureResponse = await api.post<any>("/asset/upload-signature", {
-        projectId: currentProject?._id, // You might want to make this dynamic
-        resourceType,
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", file.name);
+      formData.append("projectId", currentProject?._id ?? "");
+
+      const response = await api.post<{ asset: Asset }>("/asset/upload", formData, {
+        // Large videos can take a while; the API enforces its own size limit.
+        timeout: 0,
+        onUploadProgress: (e) => {
+          if (!e.total) return;
+          // Hold at 99% until the API answers (it still probes the file).
+          const progress = Math.min(99, Math.round((e.loaded / e.total) * 100));
+          setUploadProgress((prev) => ({
+            ...prev,
+            [fileId]: {
+              progress,
+              status: progress >= 99 ? "processing" : "uploading",
+            },
+          }));
+        },
       });
 
-      const { signature, cloudName, apiKey, uploadParams } =
-        signatureResponse.data;
-
-      // Step 2: Upload to Cloudinary
-      const cloudinaryResponse: any = await uploadFileToCloudinary(
-        file,
-        uploadParams,
-        signature,
-        apiKey,
-        cloudName,
-        fileId
-      );
-
-      setUploadProgress((prev) => ({
-        ...prev,
-        [fileId]: { progress: 100, status: "processing" },
-      }));
-
-      // Step 3: Save metadata to backend
-      const metadataPayload = {
-        name: file.name,
-        type: resourceType,
-        url: cloudinaryResponse.secure_url,
-        thumbnail: isVideo
-          ? cloudinaryResponse.secure_url.replace(
-              "/video/upload/",
-              "/video/upload/w_400,h_120,c_fill/"
-            )
-          : "",
-        duration: cloudinaryResponse.duration || undefined,
-        width: cloudinaryResponse.width || undefined,
-        height: cloudinaryResponse.height || undefined,
-        bytes: cloudinaryResponse.bytes,
-        metadata: {
-          format: cloudinaryResponse.format,
-          originalFilename: cloudinaryResponse.original_filename,
-        },
-        projectId: "project1",
-        cloudinaryPublicId: cloudinaryResponse.public_id,
-      };
-      const metadataResponse = await api.post(
-        "/asset/save-metadata",
-        metadataPayload
-      );
-
-      // Add the new asset to the local state
-      const newAsset: Asset = {
-        _id: (metadataResponse.data as any).asset._id,
-        name: file.name,
-        type: isVideo ? AssetType.VIDEO : AssetType.AUDIO,
-        origin: AssetOrigin.UPLOAD,
-        url: cloudinaryResponse.secure_url,
-        thumbnail: isVideo
-          ? cloudinaryResponse.secure_url.replace(
-              "/video/upload/",
-              "/video/upload/w_400,h_120,c_fill/"
-            )
-          : "",
-        duration: cloudinaryResponse.duration || undefined,
-        width: cloudinaryResponse.width || undefined,
-        height: cloudinaryResponse.height || undefined,
-        bytes: cloudinaryResponse.bytes,
-        metadata: (metadataResponse.data as any).asset.metadata,
-        projectId: "project1",
-        createdAt: (metadataResponse.data as any).asset.createdAt,
-        updatedAt: (metadataResponse.data as any).asset.updatedAt,
-      };
-
-      setAssets((prev) => [newAsset, ...prev]);
-
+      setAssets((prev) => [response.data.asset, ...prev]);
       setUploadProgress((prev) => ({
         ...prev,
         [fileId]: { progress: 100, status: "complete" },
       }));
-
-      // Remove progress after a delay
-      setTimeout(() => {
-        setUploadProgress((prev) => {
-          const { [fileId]: removed, ...rest } = prev;
-          return rest;
-        });
-      }, 2000);
-    } catch (error) {
+      clearLater(2000);
+    } catch (error: any) {
       console.error("Upload error:", error);
+      const status = error?.response?.status;
+      toast.error(
+        status === 413
+          ? "File is too large for this server"
+          : status === 415
+          ? "Only video and audio files can be uploaded"
+          : error?.response?.data?.message ||
+            error?.response?.data?.error ||
+            "Upload failed"
+      );
       setUploadProgress((prev) => ({
         ...prev,
         [fileId]: { progress: 0, status: "error" },
       }));
-
-      // Remove error status after delay
-      setTimeout(() => {
-        setUploadProgress((prev) => {
-          const { [fileId]: removed, ...rest } = prev;
-          return rest;
-        });
-      }, 3000);
+      clearLater(3000);
     }
   };
 
@@ -478,7 +366,7 @@ const AssetStashSidebar = ({ currentProject }: Props) => {
 
   const hasActiveUploads = Object.keys(uploadProgress).length > 0;
 
-  if (isLoading) return <BeautifulLoader />;
+  if (isLoading) return <ThreeDotLoader />;
 
   return (
     <div className="bg-black border-r border-zinc-800 h-screen flex flex-col">

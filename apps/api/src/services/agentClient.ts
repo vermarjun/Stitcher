@@ -26,7 +26,7 @@ import { toServiceError } from "./ServiceError";
  * One entry in the per-stage LLM call log emitted by the agent service.
  * Matches the shape the agent already builds in `finalState.llmCallLog`.
  *
- * Extended with full I/O fields for the RLHF visibility feature.
+ * Extended with full I/O fields for per-call visibility.
  * All I/O fields are optional so this type stays backward-compatible with
  * agent versions that do not yet emit them.
  */
@@ -37,7 +37,7 @@ export interface LlmCallLogEntry {
     inputTokens: number;
     outputTokens: number;
     durationMs: number;
-    // ── Full I/O visibility (RLHF Feature 2) ──────────────────────────────────
+    // ── Full I/O visibility  ──────────────────────────────────
     /** Full system message sent to the model. */
     systemPrompt?: string;
     /** Full user message sent to the model. */
@@ -65,7 +65,7 @@ export interface LlmRoleConfig {
     /**
      * Per-request API key. Field name matches the agent service's
      * ModelConfigSchema (apiKey) and its factory getModel(cfg.apiKey) exactly,
-     * so a user's BYOK key reaches the provider rather than being stripped by
+     * so the configured key reaches the provider rather than being stripped by
      * the agent's Zod parse.
      */
     apiKey?: string;
@@ -190,7 +190,7 @@ export interface CodeInput {
     limits?: { maxValidationRetries?: number; timeoutSec?: number };
     meta?: { traceId?: string };
     /**
-     * RLHF Feature 3 — Coder mistake-memory.
+     * Coder mistake-memory.
      * Past lessons learned from previously debugged generations. Each is a
      * 1–2 line string. The agent prepends these to the coder system prompt
      * as "PAST MISTAKES TO AVOID".
@@ -280,7 +280,7 @@ export interface ReflectInput {
     finalError?: string;
     /** Full debug history [{code, error, changeSummary}] across all attempts. */
     debugHistory: DebugHistoryEntry[];
-    /** Model config to use for the reflection (debugger tier recommended). */
+    /** Model config to use for the reflection (usually the debugger role). */
     modelConfig?: {
         debugger?: LlmRoleConfig;
     };

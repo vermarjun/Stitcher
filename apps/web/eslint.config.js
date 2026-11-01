@@ -19,5 +19,15 @@ export default tseslint.config([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // The API responses are loosely typed; these are reported but do not fail lint.
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-wrapper-object-types': 'warn',
+      'react-refresh/only-export-components': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
+      ],
+    },
   },
 ])

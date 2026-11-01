@@ -2,7 +2,7 @@
  * BullMQ worker for the video-edit pipeline.
  *
  * Pipeline steps per job:
- *   1. Credit check (user.credits.editing)
+ *   1. Resolve provider config from env
  *   2. Load existing Asset (code, scene_name, scene_description, metadata)
  *   3. Build synthetic SceneSpec from asset metadata + editPrompt
  *   4. RAG enhance the editPrompt with the existing code as context
@@ -11,8 +11,7 @@
  *   7. Persist new Asset (metadata.parentAssetId links to original)
  *   8. If timelineItemId provided: update TimelineItem.assetId to new asset
  *   9. Append assistant message to EditChat with new asset ID + URL
- *  10. Decrement user.credits.editing (atomic $gt:0 guard)
- *  11. Best-effort RAG corpusAdd
+ *  10. Reflect on the edit into user memory (best effort)
  *
  * Worker concurrency = 4; lockDuration = 600 s (render is slow).
  */
@@ -32,14 +31,14 @@ import { ragClient } from "../services/ragClient";
 import { agentClient } from "../services/agentClient";
 import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
-import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
+import { resolveModelConfig, resolveRagProviderConfig } from "../providers.config";
+import { ingestRenderedFile } from "../storage/ingest";
 import { publishProgress } from "./eventPublisher.util";
 import { setJobStatus, setJobSceneTotal, incrementJobScene } from "./jobTracker.util";
 import { recall, reflect } from "../services/memoryService";
 import EditChat from "../model/editChat.model";
 import Asset, { AssetType, AssetOrigin } from "../model/asset.model";
 import TimelineItem from "../model/timelineitem.model";
-import User from "../model/user.model";
 import logger from "../util/logger.util";
 import { AppError } from "../util/AppError";
 import type { EditJobData, EditJobResult } from "./editTypes";
@@ -138,29 +137,8 @@ async function runEditPipeline(
         logger.debug({ message: `[editWorker] ${type}`, editChatId, traceId, phase });
     };
 
-    // ── Step 1: Load user (credit gate applied after model config resolves) ──
-    const user = await User.findById(userId).select("credits isTestAccount").lean();
-    if (!user) {
-        throw new AppError(404, `User ${userId} not found`, "user_not_found");
-    }
-
-    // ── Step 2: Resolve model config ─────────────────────────────────────────
-    // Resolved first so the credit gate can grant a BYOT (bring-your-own-token)
-    // exhaust path when the user supplied their own provider keys.
-    const modelConfig = await resolveModelConfig(userId);
-
-    // ── Step 2b: Credit gate ─────────────────────────────────────────────────
-    // Allow the run when ANY of: test account / editing credits remaining /
-    // user supplied their own keys (BYOT). Otherwise block. Conservative: if
-    // hasOwnKeys can't be confirmed we keep requiring credits.
-    const usingOwnKeys = hasOwnKeys(modelConfig);
-    const hasCredits = user.credits.editing > 0;
-    if (!user.isTestAccount && !hasCredits && !usingOwnKeys) {
-        throw new AppError(402, "Insufficient editing credits", "insufficient_credits");
-    }
-    // True only when the run proceeds purely on the user's own keys (no credits
-    // to spend) — in that case we must NOT decrement credits below.
-    const runOnOwnKeys = !user.isTestAccount && !hasCredits && usingOwnKeys;
+    // ── Step 1: Resolve model config from env ────────────────────────────────
+    const modelConfig = resolveModelConfig();
 
     // ── Step 3: Load source asset ────────────────────────────────────────────
     progress("edit_started", "load_asset");
@@ -204,7 +182,8 @@ async function runEditPipeline(
         const ragResult = await withStep(jobCtx, "rag_enhance", {}, () =>
             ragClient.enhance(
                 { prompt: `${editPrompt} --- existing code context: ${existingCode.slice(0, 400)}` },
-                traceId
+                traceId,
+                resolveRagProviderConfig()
             )
         );
         groundedPrompt = ragResult.groundedPrompt;
@@ -291,7 +270,9 @@ async function runEditPipeline(
                     sceneClass: newSceneClass,
                     render: { quality: "medium" },
                     storage: {
-                        backend: "cloudinary",
+                        // The render service keeps the file on its own volume; the
+                        // worker copies it into API storage below.
+                        backend: "local",
                         folder: `stitcher/scenes/${projectId}`,
                         public: false,
                         generateThumbnail: true,
@@ -370,6 +351,14 @@ async function runEditPipeline(
         );
     }
 
+    // ── Step 7b: Copy the render into API storage ────────────────────────────
+    const stored = await ingestRenderedFile(
+        renderUrl,
+        `edits/${projectId}/${editChatId}-${Date.now()}.mp4`,
+        { contentType: "video/mp4" }
+    );
+    renderUrl = stored.url;
+
     // ── Step 8: Persist new Asset ────────────────────────────────────────────
     const newAsset = new Asset({
         name: `${newSceneClass}-edit-${editChatId}`,
@@ -379,11 +368,12 @@ async function runEditPipeline(
         scene_description: sceneDescription,
         origin: AssetOrigin.GENERATED_VIDEO,
         url: renderUrl,
-        thumbnail: renderUrl,
+        thumbnail: stored.thumbnailUrl ?? renderUrl,
         duration: renderDurationSec,
-        bytes: 0,
+        bytes: stored.bytes,
         metadata: {
             traceId,
+            storageKey: stored.key,
             parentAssetId: assetId,
             editPrompt,
         },
@@ -427,19 +417,6 @@ async function runEditPipeline(
             },
         }
     );
-
-    // ── Step 11: Decrement editing credits (atomic; won't go below zero) ─────
-    // Skip the decrement for BYOT runs (credits<=0 && own keys): the user
-    // funded this edit with their own provider key. The credit-funded path is
-    // unchanged.
-    if (!user.isTestAccount && !runOnOwnKeys) {
-        await User.updateOne(
-            { _id: userId, "credits.editing": { $gt: 0 } },
-            { $inc: { "credits.editing": -1 } }
-        );
-    }
-
-    // RAG corpus is populated exclusively via admin RLHF approval — no auto-add here.
 
     // ── Step 13: Memory reflection (fire-and-forget; never blocks the result) ─
     reflect(userId, {

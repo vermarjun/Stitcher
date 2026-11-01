@@ -5,6 +5,7 @@ import { socket } from "@/socket";
 import { toast } from "sonner";
 import type { IUser } from "@/State/Types";
 import { useGoogleLogin } from "@react-oauth/google";
+import { GOOGLE_CLIENT_ID } from "@/config";
 import { SignInPage, type AuthFormData } from "@/Components/ui/sign-in";
 
 interface AuthResponse {
@@ -14,7 +15,27 @@ interface AuthResponse {
 
 export type SignupStep = "form" | "confirm" | "otp";
 
+// useGoogleLogin needs <GoogleOAuthProvider>, which only exists when
+// VITE_GOOGLE_CLIENT_ID is set. This bridge is rendered only in that case and
+// hands the login trigger up to the page.
+const GoogleLoginBridge: React.FC<{
+  onResult: (authResult: any) => void;
+  onReady: (login: () => void) => void;
+}> = ({ onResult, onReady }) => {
+  const login = useGoogleLogin({
+    onSuccess: onResult,
+    onError: onResult,
+    flow: "auth-code",
+  });
+  useEffect(() => {
+    onReady(() => login());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+};
+
 const AuthPage: React.FC = () => {
+  const [googleLogin, setGoogleLogin] = useState<(() => void) | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [formData, setFormData] = useState<AuthFormData>({
     name: "",
@@ -23,7 +44,6 @@ const AuthPage: React.FC = () => {
     confirmPassword: "",
   });
   const [isLoading, setLoading] = useState(false);
-  const [isBanned, setIsBanned] = useState(false);
   const [signupStep, setSignupStep] = useState<SignupStep>("form");
   const [otpCode, setOtpCode] = useState("");
   const [isResending, setIsResending] = useState(false);
@@ -72,26 +92,10 @@ const AuthPage: React.FC = () => {
       _id: rawUser._id || "",
       username: rawUser.username || "",
       email: rawUser.email || "",
-      profilePhoto:
-        rawUser.profilePhoto || "https://www.gravatar.com/avatar/?d=mp",
-      profileBanner: rawUser.profileBanner || "",
+      profilePhoto: rawUser.profilePhoto || "",
       createdAt,
       bio: rawUser.bio || "",
-      role: rawUser.role,
-      plan: rawUser.plan || "free",
-      credits: rawUser.credits,
-      aura: typeof rawUser.aura === "number" ? rawUser.aura : 0,
-      stats: rawUser.stats || {
-        totalPosts: 0,
-        totalLikes: 0,
-        totalComments: 0,
-        totalViews: 0,
-        followersCount: 0,
-        followingCount: 0,
-        lastUpdated: new Date(),
-      },
-      followers: rawUser.followers || [],
-      following: rawUser.following || [],
+      onboardingTourCompletedAt: rawUser.onboardingTourCompletedAt ?? null,
     };
 
     localStorage.setItem("token", token);
@@ -136,9 +140,7 @@ const AuthPage: React.FC = () => {
       );
 
       // Handle specific error cases
-      if (error.response?.status === 403 && error.response?.data?.banned) {
-        setIsBanned(true);
-      } else if (error.response?.status === 401) {
+      if (error.response?.status === 401) {
         toast.error(
           error.response?.data.message ||
             "Invalid credentials. Please try again."
@@ -258,9 +260,7 @@ const AuthPage: React.FC = () => {
         error.response?.data.message || error.message
       );
 
-      if (error.response?.status === 403 && error.response?.data?.banned) {
-        setIsBanned(true);
-      } else if (error.response?.status === 401) {
+      if (error.response?.status === 401) {
         toast.error(
           error.response?.data.message ||
             "Invalid credentials. Please try again."
@@ -280,25 +280,22 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: responseGoogle,
-    onError: responseGoogle,
-    flow: "auth-code",
-  });
-
   return (
+    <>
+    {GOOGLE_CLIENT_ID && (
+      <GoogleLoginBridge
+        onResult={responseGoogle}
+        onReady={(login) => setGoogleLogin(() => login)}
+      />
+    )}
     <SignInPage
       mode={mode}
       onModeChange={handleModeChange}
       formData={formData}
       onInputChange={handleInputChange}
       onSubmit={handleSubmit}
-      onGoogleSignIn={() => googleLogin()}
-      onResetPassword={() =>
-        toast.info("Password reset is coming soon — try Google sign-in.")
-      }
+      onGoogleSignIn={googleLogin ?? undefined}
       isLoading={isLoading}
-      isBanned={isBanned}
       lastMethod={lastMethod}
       signupStep={signupStep}
       onConfirmEmail={handleConfirmEmail}
@@ -309,6 +306,7 @@ const AuthPage: React.FC = () => {
       onResendOtp={handleResendOtp}
       isResending={isResending}
     />
+    </>
   );
 };
 

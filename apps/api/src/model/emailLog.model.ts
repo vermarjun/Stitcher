@@ -16,7 +16,7 @@ export interface IEmailLog extends Document {
 
 const EmailLogSchema = new Schema<IEmailLog>(
   {
-    kind: { type: String, required: true, enum: ["welcome", "verify_email", "collab_invite", "password_reset"] },
+    kind: { type: String, required: true, enum: ["welcome", "verify_email", "password_reset"] },
     to: { type: String, required: true, index: true },
     subject: { type: String, required: true },
     provider: { type: String, required: true },

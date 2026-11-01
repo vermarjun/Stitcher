@@ -2,21 +2,21 @@
  * BullMQ worker for the video-generation pipeline.
  *
  * Pipeline steps per job (LINEAR, SINGLE-SCENE):
- *   1. Credit gate + model config resolution
+ *   1. Resolve provider config from env
  *   2. RAG enhance  → examples (similarScripts) + requiredApis
  *   3. Agent /code  → { code, sceneClass } (single LLM completion, no planner)
  *   4. Validate (code response success flag)
  *   5. Voiceover (ALWAYS ON, NON-FATAL): extract self.voiceover texts → TTS bundle
  *   6. Render → finalUrl
  *   7. Debug loop (max 3): on validate/render failure → agent /debug → re-render
- *   8. Persist Asset + GenerateChat + tokens + stages; decrement credits
+ *   8. Persist Asset + GenerateChat + tokens + stages
  *   9. Emit job_complete { finalUrl }
  *
  * Removed: planner (agent /plan), per-scene fan-out loop + concurrency cap,
- *          ffmpeg concat, upload to Cloudinary, voiceover on/off branching.
+ *          ffmpeg concat, voiceover on/off branching.
  *
  * Preserved: withStep() + appendJobStage + setJobTokens (observability),
- *            OTEL trace propagation, socket/UI events, credit gate.
+ *            OTEL trace propagation, socket/UI events.
  */
 
 import { Worker, Job, UnrecoverableError } from "bullmq";
@@ -35,17 +35,13 @@ import { ragClient } from "../services/ragClient";
 import { agentClient } from "../services/agentClient";
 import { renderClient } from "../services/renderClient";
 import { ServiceError } from "../services/ServiceError";
-import { resolveModelConfig, hasOwnKeys } from "./modelConfig.util";
-import { resolveServiceConfig, tierForUser, normalizeGatewayBaseURL } from "../util/serviceConfig.util";
+import { resolveModelConfig, resolveRagProviderConfig, resolveTts } from "../providers.config";
 import type { ResolvedTtsConfig } from "../services/ttsClient";
 import { publishProgress } from "./eventPublisher.util";
 import { setJobStatus, setJobSceneTotal, incrementJobScene, appendJobStage, setJobTokens, setJobProgress } from "./jobTracker.util";
 import { getPhaseMeta, type GenerationPhase } from "./pipelinePhases";
 import { buildAudioBundle } from "../services/ttsClient";
-import { uploadConcatToCloudinary } from "../util/ffmpegConcat.util";
-import { promises as fsp } from "fs";
-import * as os from "os";
-import * as path from "path";
+import { ingestRenderedFile } from "../storage/ingest";
 import type { VoiceoverSpec } from "../services/renderClient";
 import { recall, reflect } from "../services/memoryService";
 import GenerateChat from "../model/generateChat.model";
@@ -55,7 +51,6 @@ import type { RagTrace } from "../services/ragClient";
 import CoderLesson from "../model/coderLesson.model";
 import GenerationJob from "../model/generationJob.model";
 import type { LlmCallLogEntry, DebugHistoryEntry, LlmRoleConfig } from "../services/agentClient";
-import User from "../model/user.model";
 import logger from "../util/logger.util";
 import { buildFallbackSceneCode, FALLBACK_SCENE_CLASS } from "../util/fallbackScene.util";
 
@@ -87,7 +82,6 @@ import type {
 } from "./types";
 import type { AgentTokensUsed } from "../services/agentClient";
 import type { StageId, StageService, IJobStage } from "../model/generationJob.model";
-import { computeCostUsd } from "../util/pricing";
 
 // ─── Stage → service mapping ──────────────────────────────────────────────────
 
@@ -130,8 +124,8 @@ async function persistLlmIO(opts: {
     const entries = opts.entries;
     if (!entries || entries.length === 0) {
         // Even if no llmCallLog was returned (agent didn't emit it yet or call failed
-        // before any LLM call), persist a single placeholder row so the admin can
-        // see that the stage was attempted.
+        // before any LLM call), persist a single placeholder row so the job detail
+        // shows that the stage was attempted.
         if (opts.error) {
             try {
                 await GenerationLlmIO.create({
@@ -195,7 +189,7 @@ async function persistRagTrace(opts: {
     const t = opts.trace;
 
     // Row 1: query_transform LLM call. Persist whenever the trace exists — including
-    // the degraded (ran:false) case (timeout/no-JSON), so the admin can SEE why a
+    // the degraded (ran:false) case (timeout/no-JSON), so the log shows why a
     // job got no plugins instead of the transform silently vanishing from the I/O log.
     if (t?.queryTransform) {
         try {
@@ -470,7 +464,7 @@ async function runGenerationPipeline(
     jobCtx: Context,
     rootSpan: Span
 ): Promise<VideoGenerationJobResult> {
-    const { chatId, userId, projectId, prompt, traceId, modelConfigOverride, generationOptions } =
+    const { chatId, userId, projectId, prompt, traceId, generationOptions } =
         job.data;
 
     const jobId = job.id;
@@ -505,127 +499,17 @@ async function runGenerationPipeline(
         logger.debug({ message: `[worker] phase ${key}`, chatId, traceId, percent: meta.percent });
     };
 
-    // ── Step 1: Load user (credit gate applied after model config resolves) ──
-    const user = await User.findById(userId).select("credits isTestAccount plan").lean();
-    if (!user) {
-        throw new AppError(404, `User ${userId} not found`, "user_not_found");
+    // ── Step 1: Resolve provider config from env ─────────────────────────────
+    // Throws a clear error when a provider has no default model (openrouter
+    // needs LLM_MODEL), so the job fails with a message the operator can act on.
+    let modelConfig: ReturnType<typeof resolveModelConfig>;
+    try {
+        modelConfig = resolveModelConfig();
+    } catch (cfgErr) {
+        throw new AppError(500, (cfgErr as Error).message, "llm_not_configured");
     }
-
-    // ── Step 1b: Determine user's service tier ───────────────────────────────
-    const tier = tierForUser((user as { plan?: string }).plan ?? "free");
-
-    // ── Step 2: Resolve model config + tier-based service configs ────────────
-    // Resolve all 5 service configs in parallel (each is cached with 15s TTL).
-    const [
-        modelConfig,
-        tierCoderCfg,
-        tierDebuggerCfg,
-        tierRagQueryTransformCfg,
-        tierRagEmbedderCfg,
-        tierTtsCfg,
-    ] = await Promise.all([
-        resolveModelConfig(userId, modelConfigOverride),
-        resolveServiceConfig("coder", tier),
-        resolveServiceConfig("debugger", tier),
-        resolveServiceConfig("query_transform", tier),
-        resolveServiceConfig("embedder", tier),
-        resolveServiceConfig("tts", tier),
-    ]);
-
-    // ── Step 2b: Credit gate ─────────────────────────────────────────────────
-    const usingOwnKeys = hasOwnKeys(modelConfig);
-    const hasCredits = user.credits.generation > 0;
-    if (!user.isTestAccount && !hasCredits && !usingOwnKeys) {
-        throw new AppError(402, "Insufficient generation credits", "insufficient_credits");
-    }
-    const runOnOwnKeys = !user.isTestAccount && !hasCredits && usingOwnKeys;
-
-    // ── Step 2c: Apply tier service config to modelConfig (BYOK wins) ────────
-    // BYOK precedence: resolveModelConfig already overlays user BYOK keys onto
-    // the env defaults. We only override coder/debugger from the tier config when
-    // the user did NOT supply their own BYOK key for that role (i.e., apiKey is
-    // absent/empty in the BYOK-resolved config). This preserves the existing
-    // contract: user BYOK > tier config > env default.
-    // Normalise ServiceConfig params for the agent factory:
-    // The factory reads cfg.params.maxTokens (camelCase) for the token cap,
-    // and passes everything else through as modelKwargs (enable_thinking,
-    // reasoning_effort, thinking_budget, top_p, etc.).
-    // We store max_tokens (OpenAI convention) in the DB so rename it here.
-    function normaliseParams(p: Record<string, unknown>, provider?: string): Record<string, unknown> {
-        // Codex backend only accepts reasoning_effort — strip everything else.
-        // The gateway also strips on its end, but avoid sending junk to the factory.
-        if (provider === 'codex') {
-            return p.reasoning_effort ? { reasoning_effort: p.reasoning_effort } : {};
-        }
-        // For all other providers: rename max_tokens → maxTokens (factory convention)
-        const { max_tokens, ...rest } = p as Record<string, unknown> & { max_tokens?: unknown };
-        return max_tokens !== undefined ? { ...rest, maxTokens: max_tokens } : rest;
-    }
-
-    // Convert a resolved (service,tier) config — primary OR fallback — into the
-    // LlmRoleConfig the agent service consumes. Coerces codex→openai for the
-    // factory, normalises params, and forces gateway-proxy baseURLs to the
-    // docker-internal origin so the agent can always reach them.
-    function toRoleConfig(
-        cfg: { provider: string; model: string | null; apiKey: string; baseURL: string | null; params: Record<string, unknown> },
-        defaultModel: string
-    ): LlmRoleConfig {
-        return {
-            provider: cfg.provider === 'codex' ? 'openai' : cfg.provider,
-            model: cfg.model ?? defaultModel,
-            apiKey: cfg.apiKey || undefined,
-            baseURL: normalizeGatewayBaseURL(cfg.baseURL) ?? undefined,
-            params: normaliseParams(cfg.params, cfg.provider),
-        };
-    }
-
-    // Fallback role-configs (admin-defined). Only present when the user is NOT on
-    // BYOK for that role (tier config governs) AND the admin enabled a fallback.
-    let coderFallbackCfg: LlmRoleConfig | undefined;
-    let debuggerFallbackCfg: LlmRoleConfig | undefined;
-
-    if (!modelConfig.coder.apiKey) {
-        modelConfig.coder = toRoleConfig(tierCoderCfg, modelConfig.coder.model);
-        if (tierCoderCfg.fallback) {
-            coderFallbackCfg = toRoleConfig(tierCoderCfg.fallback, modelConfig.coder.model);
-        }
-    }
-    if (!modelConfig.debugger.apiKey) {
-        modelConfig.debugger = toRoleConfig(tierDebuggerCfg, modelConfig.debugger.model);
-        if (tierDebuggerCfg.fallback) {
-            debuggerFallbackCfg = toRoleConfig(tierDebuggerCfg.fallback, modelConfig.debugger.model);
-        }
-    }
-
-    // Build RAG providerConfig from the resolved tier configs. Strip the nested
-    // `fallback` field before sending downstream (RAG only needs the active config).
-    const stripFallback = <T extends { fallback?: unknown }>(c: T) => {
-        const { fallback: _omit, ...rest } = c;
-        return rest;
-    };
-    const ragProviderConfig = {
-        queryTransform: stripFallback(tierRagQueryTransformCfg),
-        embedder: stripFallback(tierRagEmbedderCfg),
-    };
-    // Admin-defined query_transform fallback — retried if the primary RAG enhance throws.
-    const ragProviderConfigFallback = tierRagQueryTransformCfg.fallback
-        ? { queryTransform: tierRagQueryTransformCfg.fallback, embedder: stripFallback(tierRagEmbedderCfg) }
-        : undefined;
-
-    // Build the TTS config for this tier (cast to the expected type).
-    const toTtsConfig = (c: { provider: string; apiKey: string; baseURL: string | null; params: Record<string, unknown> }): ResolvedTtsConfig => ({
-        provider: c.provider,
-        apiKey: c.apiKey,
-        baseURL: c.baseURL,
-        params: {
-            region: typeof c.params.region === "string" ? c.params.region : undefined,
-            voice: typeof c.params.voice === "string" ? c.params.voice : undefined,
-        },
-    });
-    const resolvedTtsConfig: ResolvedTtsConfig = toTtsConfig(tierTtsCfg);
-    // Admin-defined TTS fallback (e.g. azure → gtts) — used if the primary TTS throws.
-    const resolvedTtsFallbackConfig: ResolvedTtsConfig | undefined =
-        tierTtsCfg.fallback ? toTtsConfig(tierTtsCfg.fallback) : undefined;
+    const ragProviderConfig = resolveRagProviderConfig();
+    const resolvedTtsConfig: ResolvedTtsConfig = resolveTts();
 
     // ── Cancellation gate ────────────────────────────────────────────────────
     await assertNotCancelled(chatId);
@@ -640,55 +524,24 @@ async function runGenerationPipeline(
     let ragRequiredApis: string[] = [];
     let ragRequiredPlugins: string[] = [];
 
-    const doEnhance = (cfg: typeof ragProviderConfig, fb: boolean) => withStep(
-        jobCtx,
-        "rag_enhance",
-        { "scene.index": 0, fallback: fb },
-        () => ragClient.enhance({ prompt }, traceId, cfg),
-        {
-            jobId,
-            stageId: "rag_enhance",
-            onSuccess: (r) => {
-                const scriptCount = Array.isArray(r.structuredContext.similarScripts)
-                    ? r.structuredContext.similarScripts.length
-                    : 0;
-                return { outputSummary: `${fb ? "[fallback] " : ""}${scriptCount} similarScripts` };
-            },
-            onFail: () => ({ outputSummary: `${fb ? "[fallback] " : ""}RAG down → raw prompt` }),
-        }
-    );
-
     try {
-        let ragResult: Awaited<ReturnType<typeof ragClient.enhance>>;
-        try {
-            ragResult = await doEnhance(ragProviderConfig, false);
-            // A timeout in query_transform does NOT throw — transformQuery swallows it
-            // and returns HTTP 200 with an empty transform (ran:false, no requiredPlugins).
-            // So the throw-based fallback below never fires for the real failure mode.
-            // Detect the degraded case explicitly and retry the enhance via the fallback
-            // provider (e.g. gpt-5.5) so the coder still gets requiredPlugins + skills.
-            if (
-                ragResult.trace?.queryTransform &&
-                ragResult.trace.queryTransform.ran === false &&
-                ragProviderConfigFallback
-            ) {
-                logger.warn({ message: "[worker] query_transform degraded (did not run) — retrying enhance with fallback provider", traceId });
-                try {
-                    const fbResult = await doEnhance(ragProviderConfigFallback as typeof ragProviderConfig, true);
-                    if (fbResult.trace?.queryTransform?.ran) ragResult = fbResult;
-                } catch (fbErr) {
-                    logger.warn({ message: "[worker] fallback enhance failed; keeping primary result", traceId, error: String(fbErr) });
-                }
+        const ragResult = await withStep(
+            jobCtx,
+            "rag_enhance",
+            { "scene.index": 0 },
+            () => ragClient.enhance({ prompt }, traceId, ragProviderConfig),
+            {
+                jobId,
+                stageId: "rag_enhance",
+                onSuccess: (r) => {
+                    const scriptCount = Array.isArray(r.structuredContext.similarScripts)
+                        ? r.structuredContext.similarScripts.length
+                        : 0;
+                    return { outputSummary: `${scriptCount} similarScripts` };
+                },
+                onFail: () => ({ outputSummary: "RAG down → raw prompt" }),
             }
-        } catch (primaryRagErr) {
-            // query_transform FALLBACK: retry enhance with the fallback provider.
-            if (ragProviderConfigFallback) {
-                logger.warn({ message: "[worker] primary RAG/query_transform failed — retrying with fallback", traceId, error: String(primaryRagErr) });
-                ragResult = await doEnhance(ragProviderConfigFallback as typeof ragProviderConfig, true);
-            } else {
-                throw primaryRagErr;
-            }
-        }
+        );
 
         // Persist RAG pipeline trace on success (best-effort, non-fatal)
         void persistRagTrace({ jobId, chatId, trace: ragResult.trace });
@@ -724,7 +577,7 @@ async function runGenerationPipeline(
     } catch (err) {
         // RAG is best-effort; proceed with empty examples + raw prompt
         logger.warn({ message: "[worker] RAG enhance failed; using raw prompt", traceId, error: String(err) });
-        // Persist error row so admin job-detail shows RAG was attempted (best-effort)
+        // Persist an error row so the job detail shows RAG was attempted (best-effort)
         void persistRagTrace({ jobId, chatId, trace: undefined, error: String(err) });
     }
 
@@ -765,8 +618,8 @@ async function runGenerationPipeline(
     rootSpan.setAttribute("scene.count", 1);
 
     // Default to 480p15 ("low"): renders ~4x faster than 720p30, which keeps the
-    // box well inside the render budget and frees time for richer codegen. A paid
-    // tier can still pass an explicit quality to override this default.
+    // box well inside the render budget and frees time for richer codegen. A request
+    // can still pass an explicit quality to override this default.
     const renderQuality = generationOptions?.quality ?? "low";
 
     // Mutable code/sceneClass — updated by debug loop
@@ -774,7 +627,7 @@ async function runGenerationPipeline(
     let currentSceneClass = "";
     let lastError = "";
     let debugAttempts = 0;
-    // RLHF Feature 3 tracking
+    // Coder-lesson tracking
     let debugInvoked = false;
     let debugResolved = false;
     // True when the LLM pipeline was bypassed and we rendered the guaranteed fallback scene
@@ -783,8 +636,7 @@ async function runGenerationPipeline(
     const debugHistory: DebugHistoryEntry[] = [];
 
     // Run one codegen attempt with a given coder config. Records its own
-    // agent_code stage (attempt index distinguishes primary vs fallback) and
-    // persists the LLM I/O. Returns the response + error string (if any).
+    // agent_code stage and persists the LLM I/O. Returns the response + error string (if any).
     async function runCodeGen(
         coderCfg: LlmRoleConfig,
         attempt: number
@@ -831,12 +683,12 @@ async function runGenerationPipeline(
                         return {
                             tokens: codeTokens,
                             model: coderCfg.model,
-                            outputSummary: `${attempt > 0 ? "[fallback] " : ""}${cls} ${codeLen}chars`,
+                            outputSummary: `${cls} ${codeLen}chars`,
                         };
                     },
                     onFail: () => ({
                         model: coderCfg.model,
-                        outputSummary: `${attempt > 0 ? "[fallback] " : ""}code generation failed`,
+                        outputSummary: `code generation failed`,
                     }),
                 }
             );
@@ -861,37 +713,15 @@ async function runGenerationPipeline(
     const codeIsEmpty = (r: { response: Awaited<ReturnType<typeof agentClient.code>> | undefined; error: string | undefined }) =>
         !!r.error || !r.response?.success || !r.response?.output?.code;
 
-    // Resilience telemetry persisted on the job for the admin "real vs fallback"
-    // visibility (set below + at final persist).
-    let usedFallbackLlm = false;
-
     // Primary codegen attempt
-    let codeResult = await runCodeGen(modelConfig.coder, 0);
-
-    // LLM FALLBACK: if the primary coder failed/returned empty AND an admin
-    // fallback is configured, retry the whole codegen with the fallback provider
-    // before giving up to the guaranteed title-card. This is what keeps real
-    // animations flowing when one LLM backend (codex token, opencode key, …) dies.
-    if (codeIsEmpty(codeResult) && coderFallbackCfg) {
-        logger.warn({
-            message: "[worker] primary coder failed — retrying with fallback provider",
-            jobId, traceId,
-            primaryModel: modelConfig.coder.model,
-            fallbackModel: coderFallbackCfg.model,
-            error: codeResult.error ?? codeResult.response?.error?.summary ?? "empty",
-        });
-        progress("planning", "agent_code", { fallback: true, model: coderFallbackCfg.model });
-        codeResult = await runCodeGen(coderFallbackCfg, 1);
-        // The fallback LLM produced usable code → record it engaged successfully.
-        if (!codeIsEmpty(codeResult)) usedFallbackLlm = true;
-    }
+    const codeResult = await runCodeGen(modelConfig.coder, 0);
 
     const codeResponse = codeResult.response;
     const codeCallError = codeResult.error;
 
     if (codeIsEmpty(codeResult)) {
         logger.warn({
-            message: "[worker] codegen failed (all providers) — falling back to guaranteed title-card scene",
+            message: "[worker] codegen failed — falling back to guaranteed title-card scene",
             jobId, traceId,
             error: codeCallError ?? codeResponse?.error?.summary ?? "unknown",
         });
@@ -930,25 +760,7 @@ async function runGenerationPipeline(
                 jobCtx,
                 "tts",
                 { "scene.index": 0, beats: voiceoverTexts.length },
-                async () => {
-                    try {
-                        return await synth(resolvedTtsConfig);
-                    } catch (primaryErr) {
-                        // TTS FALLBACK: retry with the admin-defined fallback provider
-                        // (e.g. azure → gtts) before giving up on audio entirely.
-                        if (resolvedTtsFallbackConfig) {
-                            logger.warn({
-                                message: "[worker] primary TTS failed — retrying with fallback provider",
-                                traceId,
-                                primary: resolvedTtsConfig.provider,
-                                fallback: resolvedTtsFallbackConfig.provider,
-                                error: String(primaryErr),
-                            });
-                            return await synth(resolvedTtsFallbackConfig);
-                        }
-                        throw primaryErr;
-                    }
-                },
+                () => synth(resolvedTtsConfig),
                 {
                     jobId,
                     stageId: "tts",
@@ -979,7 +791,8 @@ async function runGenerationPipeline(
     let finalUrl: string | undefined;
     let thumbnailUrl: string | undefined;
     let durationSec = 0;
-    let renderBytes = 0; // real output size for storage metrics (was hardcoded 0)
+    let renderBytes = 0; // real output size for storage metrics
+    let storageKey: string | undefined; // key of the stored final video (used to delete it later)
 
     // Loop: initial render + up to MAX_DEBUG_ATTEMPTS debug-retry cycles
     // Each cycle: render → on failure → debug → update code → try render again
@@ -1004,7 +817,7 @@ async function runGenerationPipeline(
                         storage: {
                             // Render to the service's local store (reachable from the worker
                             // inside docker); the worker then uploads the final video to
-                            // Cloudinary below so the URL is reachable from the browser.
+                            // API storage below so the URL is reachable from the browser.
                             backend: "local",
                             folder: `stitcher/scenes/${projectId ?? userId}`,
                             public: false,
@@ -1095,7 +908,7 @@ async function runGenerationPipeline(
         const codeBeforeDebug = currentCode;
         const errorForDebug = lastError;
 
-        // One debug attempt with a given debugger config (primary or fallback).
+        // One debug attempt with a given debugger config.
         const callDebug = async (
             dbgCfg: LlmRoleConfig,
             dbgAttempt: number
@@ -1141,12 +954,12 @@ async function runGenerationPipeline(
                             return {
                                 tokens: debugTokens,
                                 model: dbgCfg.model,
-                                outputSummary: `${dbgAttempt > 0 ? "[fallback] " : ""}${r.output?.changeSummary ?? "debugged"}`,
+                                outputSummary: `${r.output?.changeSummary ?? "debugged"}`,
                             };
                         },
                         onFail: () => ({
                             model: dbgCfg.model,
-                            outputSummary: `${dbgAttempt > 0 ? "[fallback] " : ""}debug call failed`,
+                            outputSummary: `debug call failed`,
                             failedCode: currentCode.slice(0, 8192),
                         }),
                     }
@@ -1171,19 +984,8 @@ async function runGenerationPipeline(
             return { resp: dResp, err: dErr };
         };
 
-        let { resp: debugResponse, err: debugCallError } = await callDebug(modelConfig.debugger, 0);
+        const { resp: debugResponse, err: debugCallError } = await callDebug(modelConfig.debugger, 0);
 
-        // LLM FALLBACK for the debugger: if the primary produced no usable fix
-        // and an admin fallback is configured, try once more with the fallback.
-        if ((debugCallError || !debugResponse?.success || !debugResponse?.output?.code) && debuggerFallbackCfg) {
-            logger.warn({
-                message: "[worker] primary debugger failed — retrying with fallback provider",
-                jobId, traceId,
-                primaryModel: modelConfig.debugger.model,
-                fallbackModel: debuggerFallbackCfg.model,
-            });
-            ({ resp: debugResponse, err: debugCallError } = await callDebug(debuggerFallbackCfg, 1));
-        }
         void debugCallError;
 
         // Track debug history for reflection
@@ -1291,13 +1093,12 @@ async function runGenerationPipeline(
         // Persist partial token spend, finalCode, and debug flags before throwing
         try {
             const partialTotal = { input: tokens.acc.input, output: tokens.acc.output, total: tokens.acc.input + tokens.acc.output };
-            const costResult = computeCostUsd(tokens.acc.calls);
-            void setJobTokens(jobId, partialTotal, costResult.costUsd);
+            void setJobTokens(jobId, partialTotal, null);
         } catch { /* instrumentation must not throw */ }
         try {
             await GenerationJob.updateOne(
                 { jobId },
-                { $set: { finalCode: currentCode || undefined, debugInvoked, debugResolved, usedFallbackLlm, usedFallbackScene: usingFallback } }
+                { $set: { finalCode: currentCode || undefined, debugInvoked, debugResolved, usedFallbackScene: usingFallback } }
             );
         } catch { /* non-fatal */ }
 
@@ -1308,23 +1109,23 @@ async function runGenerationPipeline(
         );
     }
 
-    // ── Step 7.5: Upload the final video to Cloudinary ────────────────────────
-    // The render service stores to its local volume and returns an internal docker
-    // URL the browser can't reach. The single-scene flow has no concat-upload step,
-    // so download the render and push it to Cloudinary here for a public URL.
+    // ── Step 7.5: Copy the final video into API storage ──────────────────────
+    // The render service keeps its output on its own volume and returns a URL
+    // the browser may not reach. Download it and store it through the storage
+    // layer (local disk or Cloudinary) so the web app gets a public URL.
     {
         phase("upload");
         const uploadStartedAt = new Date();
         try {
-            const resp = await fetch(finalUrl);
-            if (!resp.ok) throw new Error(`fetch render HTTP ${resp.status}`);
-            const buf = Buffer.from(await resp.arrayBuffer());
-            const tmp = path.join(os.tmpdir(), `stitcher-${jobId}-${Date.now()}.mp4`);
-            await fsp.writeFile(tmp, buf);
-            const uploaded = await uploadConcatToCloudinary(tmp, `stitcher/final/${projectId ?? userId}`);
-            await fsp.unlink(tmp).catch(() => {});
-            finalUrl = uploaded.url;
-            if (uploaded.thumbnailUrl) thumbnailUrl = uploaded.thumbnailUrl;
+            const stored = await ingestRenderedFile(
+                finalUrl,
+                `final/${projectId ?? userId}/${chatId}-${Date.now()}.mp4`,
+                { contentType: "video/mp4" }
+            );
+            finalUrl = stored.url;
+            thumbnailUrl = stored.thumbnailUrl; // the render service's thumbnail URL is internal; drop it
+            renderBytes = stored.bytes || renderBytes;
+            storageKey = stored.key;
             void appendJobStage(jobId, {
                 stage: "upload", service: "stitcher-api", status: "ok",
                 startedAt: uploadStartedAt, endedAt: new Date(),
@@ -1333,14 +1134,16 @@ async function runGenerationPipeline(
             });
             progress("scene_render_complete", "upload", { url: finalUrl });
         } catch (uploadErr) {
-            logger.warn({ message: "[worker] cloudinary upload failed; keeping internal render url", jobId, error: String(uploadErr) });
+            logger.error({ message: "[worker] storing the rendered video failed", jobId, error: String(uploadErr) });
             void appendJobStage(jobId, {
                 stage: "upload", service: "stitcher-api", status: "failed",
                 startedAt: uploadStartedAt, endedAt: new Date(),
                 durationMs: Date.now() - uploadStartedAt.getTime(),
                 error: String(uploadErr),
             });
-            // Non-fatal: finalUrl stays as the internal render url (job still completes).
+            throw uploadErr instanceof AppError
+                ? uploadErr
+                : new AppError(502, `Could not store the rendered video: ${String(uploadErr)}`, "storage_failed");
         }
     }
 
@@ -1360,7 +1163,7 @@ async function runGenerationPipeline(
             thumbnail: thumbnailUrl ?? finalUrl,
             duration: durationSec,
             bytes: renderBytes,
-            metadata: { traceId },
+            metadata: { traceId, ...(storageKey ? { storageKey } : {}) },
             projectId: new Types.ObjectId(projectId ?? userId),
             isOnTimeline: false,
         });
@@ -1371,13 +1174,11 @@ async function runGenerationPipeline(
     }
 
     // Persist final code + debug flags on the GenerationJob (best-effort, non-fatal).
-    // finalCode is used by /curate to build the RagCandidate.
     try {
         const jobUpdate: Record<string, unknown> = {
             finalCode: currentCode,
             debugInvoked,
             debugResolved,
-            usedFallbackLlm,
             usedFallbackScene: usingFallback,
         };
         await GenerationJob.updateOne({ jobId }, { $set: jobUpdate });
@@ -1396,16 +1197,7 @@ async function runGenerationPipeline(
         arrayFilters: [{ "last.role": "assistant", "last.completed": false }],
     });
 
-    // Decrement credits (skip for test accounts, BYOK-only runs, and fallback-only renders)
-    if (!user.isTestAccount && !runOnOwnKeys && !usingFallback) {
-        await User.updateOne(
-            { _id: userId, "credits.generation": { $gt: 0 } },
-            { $inc: { "credits.generation": -1 } }
-        );
-    }
-
-    // RAG corpus is populated exclusively via admin RLHF approval (Admin → Generation → Approve → Sync).
-    // Auto-adding here would bypass quality control and pollute the corpus with unreviewed code.
+    // Generated code is not added to the RAG corpus automatically; that needs a manual review step.
     const ragCorpusStored = false;
 
     // Memory reflection (fire-and-forget)
@@ -1416,14 +1208,10 @@ async function runGenerationPipeline(
         logger.warn({ message: "[worker] memory reflect failed (non-fatal)", traceId, error: String(err) });
     });
 
-    // Persist token totals + cost
+    // Persist token totals
     try {
         const totalTokens = { input: tokens.acc.input, output: tokens.acc.output, total: tokens.acc.input + tokens.acc.output };
-        const costResult = computeCostUsd(tokens.acc.calls);
-        void setJobTokens(jobId, totalTokens, costResult.costUsd);
-        if (costResult.unknownModels.length > 0) {
-            logger.warn({ message: "[worker] unknown models in pricing table (cost=null)", models: costResult.unknownModels, jobId });
-        }
+        void setJobTokens(jobId, totalTokens, null);
     } catch { /* instrumentation must not throw */ }
 
     return {

@@ -3,8 +3,9 @@
  *
  * The heavy generation/edit pipeline talks to the external Agent service. This
  * helper is for small, latency-tolerant calls the API makes itself — currently
- * just memory reflection. It targets OpenCode Go, which is OpenAI-completions
- * compatible (base URL hardcoded per the project's OPENCODE_GO guide).
+ * just memory reflection. It uses the default LLM (LLM_PROVIDER, LLM_MODEL,
+ * LLM_API_KEY, LLM_BASE_URL) through its OpenAI-compatible chat-completions
+ * endpoint.
  *
  * RATE LIMIT: capped at LLM_HOURLY_CALL_LIMIT calls per hour (default 60) via
  * a Redis sliding-window counter. If the limit is hit the call is skipped and
@@ -13,12 +14,10 @@
  */
 
 import axios from "axios";
-import { config } from "../config";
+import { resolveDirectLlm } from "../providers.config";
 import logger from "./logger.util";
 import { metrics } from "@opentelemetry/api";
 import { pubClient } from "../queue/connection";
-
-const OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 // ─── Rate limiter ─────────────────────────────────────────────────────────────
 
@@ -83,7 +82,7 @@ export interface ChatCompletionParams {
 }
 
 export function isLlmConfigured(): boolean {
-    return config.OPENCODE_GO_API_KEY.length > 0;
+    return resolveDirectLlm() !== null;
 }
 
 /**
@@ -92,8 +91,9 @@ export function isLlmConfigured(): boolean {
  * Returns "" silently when the hourly rate limit is exceeded.
  */
 export async function chatCompletion(params: ChatCompletionParams): Promise<string> {
-    if (!isLlmConfigured()) {
-        throw new Error("OPENCODE_GO_API_KEY is not set");
+    const target = resolveDirectLlm();
+    if (!target) {
+        throw new Error("LLM is not configured (set LLM_API_KEY, or use LLM_PROVIDER=ollama)");
     }
 
     const allowed = await checkRateLimit();
@@ -102,14 +102,14 @@ export async function chatCompletion(params: ChatCompletionParams): Promise<stri
         return "";
     }
 
-    llmCallCounter.add(1, { model: params.model ?? config.OPENCODE_GO_DEFAULT_MODEL });
+    llmCallCounter.add(1, { model: params.model ?? target.model });
 
     const res = await axios.post<{
         choices?: Array<{ message?: { content?: string } }>;
     }>(
-        `${OPENCODE_GO_BASE_URL}/chat/completions`,
+        `${target.baseUrl}/chat/completions`,
         {
-            model: params.model ?? config.OPENCODE_GO_DEFAULT_MODEL,
+            model: params.model ?? target.model,
             messages: params.messages,
             temperature: params.temperature ?? 0.2,
             max_tokens: params.maxTokens ?? 512,
@@ -117,7 +117,7 @@ export async function chatCompletion(params: ChatCompletionParams): Promise<stri
         {
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${config.OPENCODE_GO_API_KEY}`,
+                Authorization: `Bearer ${target.apiKey}`,
             },
             timeout: params.timeoutMs ?? 30_000,
         }
@@ -129,17 +129,4 @@ export async function chatCompletion(params: ChatCompletionParams): Promise<stri
         return "";
     }
     return content;
-}
-
-/**
- * Current hourly call count (for the admin health endpoint).
- * Returns null when Redis is unavailable.
- */
-export async function getLlmHourlyCallCount(): Promise<{ count: number; cap: number } | null> {
-    try {
-        const val = await pubClient.get(RATE_LIMIT_KEY);
-        return { count: val ? parseInt(val, 10) : 0, cap: RATE_LIMIT_CAP };
-    } catch {
-        return null;
-    }
 }

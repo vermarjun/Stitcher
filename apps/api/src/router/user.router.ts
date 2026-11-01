@@ -1,28 +1,16 @@
 import express, { Router } from 'express';
 import {
   login,
-  getUser, 
-  updateUser, 
+  getUser,
+  updateUser,
   changePassword,
   uploadProfilePhoto,
-  deleteUser, 
+  deleteUser,
   requestPasswordReset,
   resetPassword,
   verifyEmail,
   resendVerification,
-  getUserProfile,
-  // NEW: Follow system controllers
-  followUser,
-  unfollowUser,
-  getFollowers,
-  getFollowing,
-  checkFollowStatus,
-  getSuggestedUsers,
-  removeFollower,
-  searchUsers,
-  uploadProfileBanner,
   authWithGoogle,
-  getUserCredits,
   completeOnboardingTour,
   startSignup,
   verifySignupOtp,
@@ -30,15 +18,11 @@ import {
 } from "../controller/user.controller";
 import auth from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
-import { requireFeature } from '../middleware/feature.middleware';
 
 const router: Router = express.Router();
 
-// Public routes
-// NOTE: the legacy no-OTP POST /signup route was REMOVED for the public launch.
-// It granted free generation credits without any email verification (a budget-
-// drain / throwaway-account vector). All signups now go through the OTP flow
-// (/signup/start → /signup/verify), which requires control of a real inbox.
+// Public routes. Signup always goes through the OTP flow
+// (/signup/start then /signup/verify).
 router.post('/signup/start', startSignup);
 router.post('/signup/verify', verifySignupOtp);
 router.post('/signup/resend', resendSignupOtp);
@@ -50,38 +34,12 @@ router.get('/verify-email/:token', verifyEmail);
 router.post('/resend-verification', resendVerification);
 
 // Protected routes
-// Get Update Delete user's profile:
 router.get('/me', auth, getUser);
-router.get('/me/credits', auth, getUserCredits);
 router.post('/me/onboarding/complete', auth, completeOnboardingTour);
 router.put('/me', auth, updateUser);
 router.delete('/me', auth, deleteUser);
 
-// Password and profile photo:
 router.put('/change-password', auth, changePassword);
 router.post('/profile-photo', auth, upload.single('profilePhoto'), uploadProfilePhoto);
-router.post('/profile-banner', auth, upload.single('profileBanner'), uploadProfileBanner);
-
-// Follow system + public profiles — community surface, gated for v1 relaunch.
-// requireFeature("community") makes these 404 while the flag is off.
-const community = requireFeature('community');
-router.post('/:userId/follow', community, auth, followUser); // Follow a user
-router.delete('/:userId/unfollow', community, auth, unfollowUser); // Unfollow a user
-router.delete('/:userId/remove-follower', community, auth, removeFollower); // Remove a follower from your followers list
-router.get('/:userId/followers', community, getFollowers); // Get list of followers (public)
-router.get('/:userId/following', community, getFollowing); // Get list of following (public)
-router.get('/:userId/follow-status', community, auth, checkFollowStatus); // Check if current user follows this user
-router.get('/suggestions', community, auth, getSuggestedUsers); // Get suggested users to follow
-
-// Public profile route (should be last to avoid conflicts)
-router.get('/:userId/profile', community, getUserProfile); // Can be username or user ID
-
-/**
- * @route   GET /api/users/search
- * @desc    Search users by username (contains query)
- * @query   q - Search query string
- * @example /api/users/search?q=john
- */
-router.get('/search', auth, searchUsers);
 
 export default router;

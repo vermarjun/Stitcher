@@ -3,13 +3,12 @@
  *
  * Usage:
  *   npm run smoke            # Full live run (talks to real services)
- *   npm run smoke:mock       # Pre-flight only — no LLM credits burned
+ *   npm run smoke:mock       # Pre-flight only — no LLM calls made
  *   SMOKE_MOCK=true tsx scripts/smoke.ts
  *
  * Required env (same .env that the API uses):
  *   MONGODB_URL, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
  *   RAG_SERVICE_URL, AGENT_SERVICE_URL, RENDER_SERVICE_URL
- *   CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
  *   JWT_SECRET, API_PREFIX
  *
  * Optional env:
@@ -37,7 +36,7 @@ const API_BASE = (
     process.env["SMOKE_API_BASE_URL"] ?? "http://localhost:3000"
 ).replace(/\/$/, "");
 
-const API_PREFIX = process.env["API_PREFIX"] ?? "";
+const API_PREFIX = process.env["API_PREFIX"] ?? "/api";
 
 const TIMEOUT_SEC = parseInt(process.env["SMOKE_TIMEOUT_SEC"] ?? "300", 10);
 
@@ -51,10 +50,6 @@ const RAG_URL        = process.env["RAG_SERVICE_URL"]    ?? "";
 const AGENT_URL      = process.env["AGENT_SERVICE_URL"]  ?? "";
 const RENDER_URL     = process.env["RENDER_SERVICE_URL"] ?? "";
 const JWT_SECRET     = process.env["JWT_SECRET"]     ?? "";
-
-const CLOUDINARY_CLOUD_NAME  = process.env["CLOUDINARY_CLOUD_NAME"]  ?? "";
-const CLOUDINARY_API_KEY     = process.env["CLOUDINARY_API_KEY"]     ?? "";
-const CLOUDINARY_API_SECRET  = process.env["CLOUDINARY_API_SECRET"]  ?? "";
 
 // ─── Timing helpers ───────────────────────────────────────────────────────────
 
@@ -177,20 +172,6 @@ async function checkRender(): Promise<string | null> {
     return checkServiceHealth("Render service", "RENDER_SERVICE_URL", RENDER_URL);
 }
 
-async function checkCloudinary(): Promise<string | null> {
-    const missing: string[] = [];
-    if (!CLOUDINARY_CLOUD_NAME) missing.push("CLOUDINARY_CLOUD_NAME");
-    if (!CLOUDINARY_API_KEY)    missing.push("CLOUDINARY_API_KEY");
-    if (!CLOUDINARY_API_SECRET) missing.push("CLOUDINARY_API_SECRET");
-    if (missing.length > 0) {
-        return (
-            `Cloudinary credentials missing: ${missing.join(", ")}. ` +
-            "Add them to your .env (get them from https://console.cloudinary.com)."
-        );
-    }
-    return null;
-}
-
 async function checkFfmpeg(): Promise<string | null> {
     const result = spawnSync("ffmpeg", ["-version"], { encoding: "utf8" });
     if (result.status !== 0 || result.error) {
@@ -220,7 +201,6 @@ const CHECKS: Check[] = [
     { name: "RAG service",    fn: checkRag         },
     { name: "Agent service",  fn: checkAgent       },
     { name: "Render service", fn: checkRender      },
-    { name: "Cloudinary",     fn: checkCloudinary  },
     { name: "ffmpeg",         fn: checkFfmpeg      },
     { name: "JWT_SECRET",     fn: checkJwtSecret   },
 ];
@@ -253,13 +233,12 @@ async function runPreflightChecks(): Promise<boolean> {
 
 // ─── Auth setup ───────────────────────────────────────────────────────────────
 
-const TEST_EMAIL    = "smoke-test@stitcher.dev";
+const TEST_EMAIL    = "smoke-test@example.com";
 const TEST_PASSWORD = "SmokeTest!2024";
 const TEST_USERNAME = "smoke_test_user";
 
 interface LeanUser {
     _id: mongoose.Types.ObjectId;
-    isTestAccount: boolean;
 }
 
 async function setupTestUser(): Promise<{ userId: string; token: string }> {
@@ -277,13 +256,6 @@ async function setupTestUser(): Promise<{ userId: string; token: string }> {
             username: TEST_USERNAME,
             email: TEST_EMAIL,
             password: hashed,
-            isTestAccount: true,
-            plan: "max",
-            credits: {
-                generation: 9999,
-                editing: 9999,
-                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            },
         });
         await created.save();
         user = created.toObject() as LeanUser;
@@ -440,7 +412,7 @@ async function runGenerationFlow(token: string, projectId: string): Promise<bool
                 resolved = true;
                 clearTimeout(timeoutHandle);
 
-                // Assert finalUrl looks like a Cloudinary URL
+                // Assert finalUrl is a playable http(s) URL
                 const data = ev.data as { finalUrl?: string } | undefined;
                 const finalUrl = data?.finalUrl ?? "";
 
@@ -451,13 +423,9 @@ async function runGenerationFlow(token: string, projectId: string): Promise<bool
                     return;
                 }
 
-                const isCloudinaryUrl =
-                    finalUrl.includes("cloudinary.com") ||
-                    finalUrl.includes("res.cloudinary.com");
-
-                if (!isCloudinaryUrl) {
+                if (!/^https?:\/\//.test(finalUrl)) {
                     fail(
-                        `finalUrl does not look like a Cloudinary URL: ${finalUrl}`
+                        `finalUrl is not an http(s) URL: ${finalUrl}`
                     );
                     socket.disconnect();
                     resolve(false);

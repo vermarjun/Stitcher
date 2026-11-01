@@ -106,12 +106,12 @@ export interface SynthesizeOptions {
     /** Overrides config default when set. */
     provider?: TtsProvider | string;
     /**
-     * Internal: per-call Azure key override (set from resolved tier config).
+     * Internal: per-call Azure key override (set from the resolved TTS config).
      * Takes precedence over config.AZURE_SPEECH_KEY when non-empty.
      */
     _azureKey?: string;
     /**
-     * Internal: per-call Azure region override (set from resolved tier config).
+     * Internal: per-call Azure region override (set from the resolved TTS config).
      * Takes precedence over config.AZURE_SPEECH_REGION when non-empty.
      */
     _azureRegion?: string;
@@ -123,7 +123,7 @@ export interface AudioBundleEntry {
 }
 
 /**
- * Resolved TTS config passed from the worker (from resolveServiceConfig("tts", tier)).
+ * Resolved TTS config passed from the worker (from providers.config resolveTts()).
  * When provided, it takes precedence over global config/env for provider, key, region, and voice.
  */
 export interface ResolvedTtsConfig {
@@ -183,7 +183,7 @@ const gttsAdapter: TtsAdapter = {
  */
 const azureAdapter: TtsAdapter = {
     async synthesize(text: string, opts: SynthesizeOptions): Promise<Buffer> {
-        // Per-call overrides (from resolved tier config) take precedence over global config.
+        // Per-call overrides (from the resolved TTS config) take precedence over global config.
         const key = (opts._azureKey && opts._azureKey.trim()) ? opts._azureKey : config.AZURE_SPEECH_KEY;
         const region = (opts._azureRegion && opts._azureRegion.trim()) ? opts._azureRegion : config.AZURE_SPEECH_REGION;
         if (!key || !region) {
@@ -350,7 +350,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
  * Synthesize a single beat to mp3 bytes.
  *
  * Provider precedence (highest wins):
- *   1. resolvedTtsConfig.provider  (from admin-controlled tier config)
+ *   1. resolvedTtsConfig.provider  (from the resolved TTS config)
  *   2. opts.provider               (per-job option from generationOptions.voiceover)
  *   3. config.TTS_PROVIDER / "gtts" (global env default)
  *
@@ -362,12 +362,12 @@ export async function synthesize(
     opts: SynthesizeOptions = {},
     resolvedTtsConfig?: ResolvedTtsConfig
 ): Promise<Buffer> {
-    // Merge tier config into opts so adapters see a unified options object.
+    // Merge the resolved config into opts so adapters see a unified options object.
     const mergedOpts: SynthesizeOptions = { ...opts };
     if (resolvedTtsConfig) {
-        // provider from tier config overrides per-job opt (which itself overrides env)
+        // provider from the resolved config overrides per-job opt (which itself overrides env)
         if (!mergedOpts.provider) mergedOpts.provider = resolvedTtsConfig.provider;
-        // voice from tier config params fills in when not set by caller
+        // voice from the resolved config params fills in when not set by caller
         if (!mergedOpts.voice && resolvedTtsConfig.params.voice) {
             mergedOpts.voice = String(resolvedTtsConfig.params.voice);
         }
@@ -401,9 +401,9 @@ export async function synthesize(
  *
  * Throws if `beats` is empty — the worker guards against sending a half-bundle.
  *
- * @param resolvedTtsConfig — optional resolved tier config from resolveServiceConfig("tts", tier).
+ * @param resolvedTtsConfig — optional resolved TTS config from providers.config.
  *   When provided, the provider/apiKey/region/voice from it take precedence over
- *   global config/env, enabling per-tier TTS routing.
+ *   global config/env.
  */
 export async function buildAudioBundle(
     beats: string[],

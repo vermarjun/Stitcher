@@ -8,7 +8,7 @@
  *     without audio get a silent track so stream-copy concat stays uniform
  *   - a separate audio track item (if any) is mixed OVER the result, so adding
  *     background music never silences the narration
- *   - the result is uploaded to Cloudinary and the secure URL returned
+ *   - the result is stored through the storage layer and its URL returned
  *
  * Design notes:
  *   - Re-encodes each segment (libx264) because source clips can have different
@@ -25,10 +25,11 @@ import crypto from "crypto";
 import { spawn } from "child_process";
 import https from "https";
 import http from "http";
-import cloudinary from "./cloudinary.util";
+import { storage } from "../storage";
+import { probeMedia } from "./probe.util";
 import { AppError } from "./AppError";
 import logger from "./logger.util";
-import { assertHttpUrl } from "./ffmpegConcat.util";
+import { assertHttpUrl } from "./url.util";
 
 export interface ExportVideoClip {
     url: string;
@@ -267,7 +268,7 @@ function runFfmpeg(args: string[]): Promise<void> {
 export async function exportTimeline(
     videoClips: ExportVideoClip[],
     audioClips: ExportAudioClip[],
-    cloudinaryFolder: string,
+    storageFolder: string,
     textClips: ExportTextClip[] = []
 ): Promise<ExportResult> {
     if (videoClips.length === 0) {
@@ -434,21 +435,15 @@ export async function exportTimeline(
             finalPath = withAudio;
         }
 
-        // 4. Upload to Cloudinary.
-        const uploaded = await cloudinary.uploader.upload(finalPath, {
-            resource_type: "video",
-            folder: cloudinaryFolder,
-            eager: [{ width: 640, height: 360, crop: "fill", format: "jpg", start_offset: "1" }],
-            eager_async: false,
-        });
-        const thumbnailUrl = Array.isArray(uploaded.eager) && uploaded.eager.length > 0
-            ? (uploaded.eager[0] as { secure_url?: string }).secure_url
-            : undefined;
+        // 4. Store the result.
+        const key = `${storageFolder}/${crypto.randomUUID()}.mp4`;
+        const stored = await storage.putFile(finalPath, key, { contentType: "video/mp4" });
+        const probed = await probeMedia(finalPath);
 
         return {
-            url: uploaded.secure_url,
-            thumbnailUrl,
-            durationSec: Number(uploaded.duration ?? totalDuration ?? 0),
+            url: stored.url,
+            thumbnailUrl: stored.thumbnailUrl,
+            durationSec: Number(probed?.durationSec ?? stored.durationSec ?? totalDuration ?? 0),
             warnings: warnings.length ? warnings : undefined,
         };
     } finally {

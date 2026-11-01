@@ -3,7 +3,7 @@
  *
  * Each function renders the appropriate template and enqueues it onto the email
  * queue. They deliberately NEVER throw: a transient Redis/enqueue failure must
- * not break signup, invites, or password reset. Failures are logged; the worker
+ * not break signup or password reset. Failures are logged; the worker
  * + BullMQ retries handle transient transport errors after enqueue.
  */
 
@@ -13,7 +13,6 @@ import {
   welcomeTemplate,
   verifyEmailTemplate,
   signupOtpTemplate,
-  collabInviteTemplate,
   passwordResetTemplate,
 } from "./templates";
 import type { EmailKind } from "./types";
@@ -49,18 +48,6 @@ export function sendVerificationEmail(params: {
 export function sendSignupOtpEmail(params: { to: string; username: string; code: string }): Promise<void> {
   const { to, username, code } = params;
   return enqueueSafe("signup_otp", to, signupOtpTemplate({ username, code }));
-}
-
-export function sendCollabInviteEmail(params: {
-  to: string;
-  inviterName: string;
-  projectName: string;
-  role: "editor" | "viewer";
-  acceptUrl: string;
-  hasAccount: boolean;
-}): Promise<void> {
-  const { to, ...rest } = params;
-  return enqueueSafe("collab_invite", to, collabInviteTemplate(rest));
 }
 
 export function sendPasswordResetEmail(params: { to: string; resetUrl: string }): Promise<void> {

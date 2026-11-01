@@ -1,18 +1,24 @@
-import { RecoilRoot } from "recoil";
+import type { ReactNode } from "react";
 import RouterConfig from "./Router/RouterConfig";
 import { NavProvider } from "./Context/HomeNavigation.context";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+import { GOOGLE_CLIENT_ID } from "./config";
+
+// Google sign-in is optional: the provider is only mounted when a client id is set.
+function GoogleOptional({ children }: { children: ReactNode }) {
+  if (!GOOGLE_CLIENT_ID) return <>{children}</>;
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{children}</GoogleOAuthProvider>
+  );
+}
 
 function App() {
   return (
-    <GoogleOAuthProvider clientId={clientId}>
+    <GoogleOptional>
       <NavProvider>
-        <RecoilRoot>
-          <RouterConfig />
-        </RecoilRoot>
+        <RouterConfig />
       </NavProvider>
-    </GoogleOAuthProvider>
+    </GoogleOptional>
   );
 }
 
