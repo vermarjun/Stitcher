@@ -38,6 +38,8 @@ describe("resolveSettings", () => {
     const s = resolveSettings();
     if (["opencode", "opencodego"].includes(config.LLM_PROVIDER) && config.OPENCODE_DISABLE_THINKING) {
       expect(s.llm.extraBody).toEqual({ thinking: { type: "disabled" } });
+    } else if (config.LLM_PROVIDER === "gemini" && /flash/i.test(config.LLM_MODEL)) {
+      expect(s.llm.extraBody).toEqual({ reasoning_effort: "none" });
     } else {
       expect(s.llm.extraBody).toEqual({});
     }

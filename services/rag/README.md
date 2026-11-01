@@ -26,9 +26,10 @@ required search APIs. This command uses an isolated local port:
 docker run -d --name oss-rag-atlas -p 127.0.0.1:27187:27017 mongodb/mongodb-atlas-local:8.0
 ```
 
-Set `MONGODB_URL=mongodb://localhost:27187/?directConnection=true`, a
-`RAG_API_KEY` with at least 16 characters, and `LLM_API_KEY` in your environment
-or a gitignored `.env`. The default OpenAI embedder shares `LLM_API_KEY`.
+Set `MONGODB_URL=mongodb://localhost:27187/?directConnection=true` and a
+`RAG_API_KEY` with at least 16 characters in your environment or a gitignored
+`.env`. No other key is needed: the default embedder is local and runs on CPU.
+The model weights (about 34 MB) download into `.models/` on first use.
 `.env.example` lists common settings. Then run:
 
 ```sh
@@ -42,6 +43,11 @@ embedding provider, model or dimensions. A model change requires re-embedding ev
 when dimensions stay the same. Both seed and startup create indexes and wait for
 `queryable: true`; incompatible index dimensions fail with a reset instruction.
 Atlas and the local image use the same MongoDB driver and search pipeline.
+
+Docker: `docker build -t rag .` uses a Debian slim base (the ONNX runtime has no
+Alpine build), downloads the embedding weights during the build and sets
+`EMBEDDER_OFFLINE=true`. The image is about 690 MB, of which the model is 34 MB.
+Run it with `MONGODB_URL` and `RAG_API_KEY`; no embedding key is needed.
 
 `notebooks/` records how the API corpus was built. Its generated output is not a
 runtime dependency. `seed_corpus/` contains separate plugin authoring and ingestion
@@ -80,12 +86,20 @@ Explicit per-request `extraBody` or `params` are passed through.
 | ollama | `http://localhost:11434/v1` | `llama3.2` |
 | opencodego | `https://opencode.ai/zen/go/v1` | `glm-5.1` |
 
-Embedders: `openai` defaults to `text-embedding-3-small` (1536 dimensions),
+Embedders: `local` (the default) runs `Xenova/bge-small-en-v1.5` (384 dimensions,
+8-bit weights) inside the service with `@huggingface/transformers`. It needs no key
+and no network once the weights are cached. The Docker image bakes the weights in
+and sets `EMBEDDER_OFFLINE=true`. `openai` defaults to `text-embedding-3-small` (1536 dimensions),
 `gemini` to `gemini-embedding-001` (3072), and `ollama` to `nomic-embed-text`
 (768). Known alternatives include `text-embedding-3-large` (3072),
 `text-embedding-ada-002` (1536), `bge-m3` (1024), and `all-minilm` (384).
 Unknown models require `EMBEDDING_DIM`. Wrong output dimensions are rejected.
 Ollama models must already be downloaded. Hosted providers need a key.
+
+Gemini free tier caps embedding at 1000 requests per day, and each text in a batch
+counts as one request. The 1,333-document corpus cannot be seeded in one day on
+that tier, and query embedding fails with 429 once the cap is hit. Use `local` or a
+billed key.
 
 Endpoint references: [Gemini](https://ai.google.dev/gemini-api/docs/openai),
 [OpenRouter](https://openrouter.ai/docs/api/reference/overview),
@@ -93,8 +107,9 @@ Endpoint references: [Gemini](https://ai.google.dev/gemini-api/docs/openai),
 
 ## Environment
 
-Only `RAG_API_KEY` is required to start HTTP. A hosted embedder requires
-`EMBEDDER_API_KEY`, `EMBEDDER_API_KEYS`, or the shared `LLM_API_KEY` to serve queries.
+Only `RAG_API_KEY` is required to start HTTP. A hosted embedder (`openai`, `gemini`) requires
+`EMBEDDER_API_KEY`, `EMBEDDER_API_KEYS`, or the shared `LLM_API_KEY`. The default
+`local` embedder needs none.
 Other settings are optional. Chat keys are required only for enabled hosted stages.
 
 | Variable | Required | Default |
@@ -106,7 +121,7 @@ Other settings are optional. Chat keys are required only for enabled hosted stag
 | `VECTOR_INDEX_NAME` | no | `manimrag_vector_index` |
 | `TEXT_INDEX_NAME` | no | `manimrag_text_index` |
 | `RAG_API_KEY` | yes, HTTP | no usable default; minimum 16 characters |
-| `LLM_API_KEY` | hosted stages or shared embeddings | empty |
+| `LLM_API_KEY` | hosted LLM stages, or shared hosted embeddings | empty |
 | `LLM_PROVIDER` | no | `openai` |
 | `LLM_MODEL` | no | provider default above |
 | `LLM_BASE_URL` | no | provider default above |
@@ -118,12 +133,15 @@ Other settings are optional. Chat keys are required only for enabled hosted stag
 | `OPENCODE_GO_BASE_URL` | no | `https://opencode.ai/zen/go/v1` |
 | `OPENCODE_DISABLE_THINKING` | no | `true`; OpenCode Go only |
 | `ALLOWED_LLM_BASE_URLS` | no | empty; comma-separated override URL prefixes |
-| `EMBEDDER_PROVIDER` | no | `openai` |
+| `EMBEDDER_PROVIDER` | no | `local` (also `openai`, `gemini`, `ollama`) |
+| `MODELS_DIR` | no | `.models`; Docker image uses `/app/models` |
+| `EMBEDDER_OFFLINE` | no | `false`; `true` in Docker, blocks weight downloads |
+| `LOCAL_EMBED_DTYPE` | no | `q8` (also `fp32`, `fp16`, `q4`) |
 | `EMBEDDER_MODEL` | no | provider default above |
-| `EMBEDDER_API_KEY` | hosted embeddings | `LLM_API_KEY` fallback |
+| `EMBEDDER_API_KEY` | `openai` and `gemini` embeddings | `LLM_API_KEY` fallback |
 | `EMBEDDER_API_KEYS` | no | empty; comma-separated rotation, takes precedence |
 | `EMBEDDER_BASE_URL` | no | provider endpoint below |
-| `EMBEDDING_DIM` | unknown embedding models | inferred from known model above |
+| `EMBEDDING_DIM` | unknown embedding models | inferred from known model above (`local`: 384) |
 | `EMBED_BATCH_SIZE` | no | `100` |
 | `OPENAI_BASE_URL` | no | `https://api.openai.com/v1`; embeddings |
 | `GEMINI_BASE_URL` | no | `https://generativelanguage.googleapis.com/v1beta`; native embeddings |

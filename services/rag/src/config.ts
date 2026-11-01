@@ -25,7 +25,12 @@ const ConfigSchema = z.object({
   TEXT_INDEX_NAME: z.string().default("manimrag_text_index"),
 
   // ─── Embedder ───────────────────────────────────────────────────
-  EMBEDDER_PROVIDER: z.enum(["gemini", "openai", "ollama"]).default("openai"),
+  EMBEDDER_PROVIDER: z.enum(["local", "gemini", "openai", "ollama"]).default("local"),
+  // "local" runs a small ONNX model on CPU inside this process (no key, no network
+  // once the weights are cached). MODELS_DIR is where the weights live.
+  MODELS_DIR: z.string().default(".models"),
+  EMBEDDER_OFFLINE: boolEnv(false),
+  LOCAL_EMBED_DTYPE: z.enum(["fp32", "fp16", "q8", "q4"]).default("q8"),
   // Single key (back-compat) OR a comma-separated list rotated across requests.
   EMBEDDER_API_KEY: z.string().default(""),
   EMBEDDER_API_KEYS: z.string().default(""),
@@ -111,9 +116,9 @@ function parseConfig() {
   const llm = providerDefaults(c.LLM_PROVIDER);
   const rerankerProvider = c.RERANKER_PROVIDER ?? c.LLM_PROVIDER;
   const reranker = providerDefaults(rerankerProvider);
-  const embedModel = c.EMBEDDER_MODEL ?? ({ gemini: "gemini-embedding-001", openai: "text-embedding-3-small", ollama: "nomic-embed-text" }[c.EMBEDDER_PROVIDER]);
+  const embedModel = c.EMBEDDER_MODEL ?? ({ local: "Xenova/bge-small-en-v1.5", gemini: "gemini-embedding-001", openai: "text-embedding-3-small", ollama: "nomic-embed-text" }[c.EMBEDDER_PROVIDER]);
   if (!embedModel) throw new Error(`Unsupported EMBEDDER_PROVIDER: ${c.EMBEDDER_PROVIDER}`);
-  const dimensions: Record<string, number> = { "gemini-embedding-001": 3072, "text-embedding-3-small": 1536, "text-embedding-3-large": 3072, "text-embedding-ada-002": 1536, "nomic-embed-text": 768, "bge-m3": 1024, "all-minilm": 384 };
+  const dimensions: Record<string, number> = { "gemini-embedding-001": 3072, "text-embedding-3-small": 1536, "text-embedding-3-large": 3072, "text-embedding-ada-002": 1536, "nomic-embed-text": 768, "Xenova/bge-small-en-v1.5": 384, "Xenova/all-MiniLM-L6-v2": 384, "Xenova/bge-base-en-v1.5": 768, "bge-m3": 1024, "all-minilm": 384 };
   const dim = c.EMBEDDING_DIM ?? dimensions[embedModel];
   if (!dim) throw new Error("Set EMBEDDING_DIM for an unknown embedding model");
   const llmBase = c.LLM_BASE_URL ?? (llm.provider === "opencodego" ? c.OPENCODE_GO_BASE_URL : llm.baseUrl);

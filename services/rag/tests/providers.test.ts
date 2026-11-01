@@ -29,6 +29,7 @@ describe("provider configuration", () => {
     const [url, req] = fetchMock.mock.calls[0];
     expect(url).toBe("http://localhost:1234/v1/chat/completions");
     expect(JSON.parse(req.body).thinking).toEqual(provider === "opencodego" ? { type: "disabled" } : undefined);
+    expect(JSON.parse(req.body).reasoning_effort).toBe(provider === "gemini" ? "none" : undefined);
   });
   it("embeds OpenAI batches in input order and requests matching dimensions", async () => {
     vi.stubEnv("EMBEDDER_PROVIDER", "openai");
@@ -47,5 +48,43 @@ describe("provider configuration", () => {
     const { embedBatch } = await import("../src/providers/embedder.js");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [{ index: 0, embedding: [1] }] }))));
     await expect(embedBatch(["a"])).rejects.toThrow("dimension mismatch");
+  });
+});
+
+describe("local embedder", () => {
+  it("is the default provider with a 384-dim index", async () => {
+    vi.doMock("dotenv", () => ({ config: () => ({}) })); // ignore any local .env
+    delete process.env.EMBEDDER_PROVIDER;
+    delete process.env.EMBEDDER_MODEL;
+    delete process.env.EMBEDDING_DIM;
+    const { config } = await import("../src/config.js");
+    expect(config.EMBEDDER_PROVIDER).toBe("local");
+    expect(config.EMBEDDER_MODEL).toBe("Xenova/bge-small-en-v1.5");
+    expect(config.EMBEDDING_DIM).toBe(384);
+  });
+  it("prefixes queries only and rejects wrong dimensions", async () => {
+    vi.stubEnv("EMBEDDER_PROVIDER", "local");
+    const seen: string[][] = [];
+    vi.doMock("@huggingface/transformers", () => ({
+      env: {},
+      pipeline: async () => async (texts: string[]) => {
+        seen.push(texts);
+        return { dims: [texts.length, 384], data: new Float32Array(texts.length * 384).fill(0.05) };
+      },
+    }));
+    const { embedQuery, embedBatch, embedderInfo } = await import("../src/providers/embedder.js");
+    expect((await embedQuery("bubble sort")).length).toBe(384);
+    await embedBatch(["doc a", "doc b"]);
+    expect(seen[0]![0]).toMatch(/^Represent this sentence for searching relevant passages: bubble sort/);
+    expect(seen[1]).toEqual(["doc a", "doc b"]);
+    expect(embedderInfo()).toMatchObject({ provider: "local", dim: 384, keys: 0 });
+    vi.stubEnv("EMBEDDING_DIM", "8");
+    vi.resetModules();
+    vi.doMock("@huggingface/transformers", () => ({
+      env: {},
+      pipeline: async () => async (texts: string[]) => ({ dims: [texts.length, 384], data: new Float32Array(texts.length * 384) }),
+    }));
+    const m = await import("../src/providers/embedder.js");
+    await expect(m.embedQuery("x")).rejects.toThrow("dimension mismatch");
   });
 });

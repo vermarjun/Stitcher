@@ -17,3 +17,6 @@ node_modules/
 
 # Notebook-generated corpus output (data/chunks_all.json is the committed copy)
 notebooks/output/
+
+# Local embedding model weights (downloaded on first use)
+.models/
