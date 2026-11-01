@@ -193,6 +193,10 @@ class Sandbox:
             "--setenv", "HOME", "/work",
             "--setenv", "PATH", "/opt/venv/bin:/usr/bin:/bin",
             "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
+            # OpenBLAS reserves memory per thread (one thread per host core by default). Capping
+            # the pool keeps start-up memory flat, so RLIMIT_DATA does not depend on core count.
+            "--setenv", "OPENBLAS_NUM_THREADS", "2",
+            "--setenv", "OMP_NUM_THREADS", "2",
             "--cap-drop", "ALL",
             "--new-session",
         ]
@@ -221,9 +225,12 @@ def _apply_rlimits(limits: SandboxLimits):
         # gif-combining step. Needs Linux >= 4.7 to cover mmap; on macOS it is best effort.
         with contextlib.suppress(ValueError, OSError):
             resource.setrlimit(resource.RLIMIT_DATA, (mem, mem))
-        # RLIMIT_NPROC is deliberately not set: it is counted per user, not per sandbox, so a
-        # cap here would also throttle the API process and concurrent renders. Process count
-        # is bounded by the PID namespace and the wall-clock kill instead.
+        # Process cap. RLIMIT_NPROC is counted per user namespace on Linux >= 5.14, so inside
+        # the bwrap user namespace it bounds the sandbox's own processes and threads, not the
+        # API process. (On older kernels it would be counted per host uid and could throttle
+        # concurrent renders; there the 256 is still far above a normal render.)
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))
     return _inner
 
 

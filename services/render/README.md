@@ -129,11 +129,11 @@ The sandbox is the boundary between the service and untrusted Manim code. What i
 1. **Namespaces**: `bwrap --unshare-all` gives the render its own network (empty), PID, UTS, IPC, user, cgroup and mount namespaces.
 2. **Filesystem**: `/usr`, `/etc`, `/lib`, `/opt` and `/var/lib/texmf` are read-only. `/tmp` is a fresh tmpfs. `/work` is a bind mount of a per-job directory (created under the container's `/tmp`, deleted after the job) and is the only writable place that outlives the process.
 3. **Identity and capabilities**: uid/gid 99999, all capabilities dropped.
-4. **rlimits** (per process, applied before `bwrap` starts, so everything inside inherits them): CPU time, file size (512 MB), open files (1024), core dumps off, and data segment size equal to the request's memory limit.
+4. **rlimits** (per process, applied before `bwrap` starts, so everything inside inherits them): CPU time, file size (512 MB), open files (1024), tasks (256), core dumps off, and data segment size equal to the request's memory limit.
 5. **Wall-clock**: `asyncio.wait_for` kills the whole process group on timeout.
 6. **AST pre-guard**: cheap rejection of obviously hostile code before a sandbox is started. A filter, not a boundary.
 
-What is NOT enforced: there is no seccomp filter (the policy file and build script in the tree are not wired in), no cgroup memory or PID limit, and no per-sandbox process cap. A fork bomb is stopped by the wall-clock kill, not by a limit. See [docs/SANDBOX.md](docs/SANDBOX.md) and [SECURITY.md](SECURITY.md).
+What is NOT enforced: there is no seccomp filter (the policy file and build script in the tree are not wired in), no cgroup memory or PID limit, and memory is capped per process, not in total. A fork bomb is bounded to 256 tasks and ended by the wall-clock kill. See [docs/SANDBOX.md](docs/SANDBOX.md) and [SECURITY.md](SECURITY.md).
 
 Test battery at `tests/security/test_sandbox_escape.py` covers network exfil, fs escape, fork bomb, memory bomb, and wall-clock timeout.
 

@@ -56,14 +56,18 @@ Applied in the child process before it execs `bwrap` (`preexec_fn` in `app/core/
 | `RLIMIT_FSIZE`  | 512 MB                 | No render needs a >512 MB output file.            |
 | `RLIMIT_NOFILE` | 1024                   | Blocks fd-leaking attacks.                        |
 | `RLIMIT_CORE`   | 0                      | No core dumps.                                    |
+| `RLIMIT_NPROC`  | 256                    | Caps tasks (processes and threads). Counted per user namespace on Linux 5.14 or newer, so it bounds the sandbox, not the API. |
 | `RLIMIT_DATA`   | `memory_mb` from the request (default 2048) | The memory cap. Counts heap and private writable mappings, per process. |
+
+Very small `memory_mb` values break Manim itself: it needs several hundred MB to import numpy and scipy, and near 768 MB the import can die with a stray `KeyboardInterrupt` from the BLAS runtime. Use 1024 or more. The sandbox also sets `OPENBLAS_NUM_THREADS=2` and `OMP_NUM_THREADS=2`, because OpenBLAS reserves memory per thread and would otherwise make the needed memory depend on the host core count.
 
 Not set, on purpose:
 
 - `RLIMIT_AS`. Python, ffmpeg and Cairo map several GB of virtual address space at low physical use, so an AS cap kills the ffmpeg step.
-- `RLIMIT_NPROC`. It is counted per user, not per sandbox, so it would also throttle the API process and concurrent renders. There is no process-count cap. A fork bomb is stopped by the wall-clock kill.
 
-There is no cgroup memory or PID limit. Set `--memory` and `--pids-limit` on the container if you need hard aggregate caps.
+On kernels older than 5.14, `RLIMIT_NPROC` is counted per host uid, so the API process and concurrent renders share the 256.
+
+A fork bomb is bounded to 256 tasks and ended by the wall-clock kill, but tearing down that many busy processes can take tens of seconds on a loaded host. There is no cgroup memory or PID limit. Set `--memory` and `--pids-limit` on the container if you need hard aggregate caps.
 
 ## Seccomp: not enabled
 
@@ -79,7 +83,7 @@ There is no seccomp filter. An earlier version passed `--seccomp 10` to `bwrap` 
 | ---------------------- | -------------------------------------------- |
 | `net_exfil.py`         | `--unshare-net` blocks all socket traffic    |
 | `fs_escape.py`         | bind-mount layout denies `/etc/shadow`, `/home` |
-| `fork_bomb.py`         | wall-clock kill ends a fork bomb             |
+| `fork_bomb.py`         | `RLIMIT_NPROC` bounds the bomb, wall-clock kill ends it |
 | `memory_bomb.py`       | `RLIMIT_DATA` makes the allocation fail      |
 | `slow_infinite_loop.py`| `asyncio.wait_for` wall-clock cancels bwrap   |
 

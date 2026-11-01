@@ -41,5 +41,12 @@ def test_rlimits_cover_memory_and_files(monkeypatch: pytest.MonkeyPatch) -> None
     assert calls[resource.RLIMIT_DATA] == (mem, mem)
     assert calls[resource.RLIMIT_NOFILE] == (1024, 1024)
     assert calls[resource.RLIMIT_CORE] == (0, 0)
+    assert calls[resource.RLIMIT_NPROC] == (256, 256)
     cpu = 10 * max(os.cpu_count() or 1, 1) + 5
     assert calls[resource.RLIMIT_CPU] == (cpu, cpu)
+
+
+def test_blas_threads_capped(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cmd = _sandbox_with_fake_bwrap(monkeypatch)._build_cmd(tmp_path, "Scene", LIMITS)
+    i = cmd.index("OPENBLAS_NUM_THREADS")
+    assert cmd[i - 1] == "--setenv" and cmd[i + 1] == "2"
