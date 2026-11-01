@@ -146,7 +146,7 @@ def configure_observability(app: FastAPI) -> bool:
             description="Renders currently executing (live concurrency).",
         )
         return True
-    except Exception:  # noqa: BLE001 — observability must never break boot
+    except Exception:
         import logging
 
         logging.getLogger("observability").warning(
@@ -218,11 +218,11 @@ def span(name: str, **attributes: Any) -> Iterator[Span | None]:
     with _tracer.start_as_current_span(name, attributes=clean) as sp:
         try:
             yield sp
-        except Exception as exc:  # noqa: BLE001 — record then re-raise, never swallow
+        except Exception as exc:
             try:
                 sp.record_exception(exc)
                 sp.set_status(Status(StatusCode.ERROR, str(exc)))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             raise
 

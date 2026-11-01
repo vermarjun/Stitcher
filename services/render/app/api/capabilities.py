@@ -34,9 +34,6 @@ def _detect_installed_storage_backends() -> list[str]:
     installed: list[str] = ["local"]  # always available
     for name, module in (
         ("cloudinary", "cloudinary"),
-        ("s3", "boto3"),
-        ("gcs", "google.cloud.storage"),
-        ("azure", "azure.storage.blob"),
     ):
         try:
             __import__(module)

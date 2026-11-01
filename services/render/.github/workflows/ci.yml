@@ -83,8 +83,9 @@ jobs:
         run: |
           docker run --rm \
             --cap-add SYS_ADMIN --security-opt apparmor=unconfined \
+            --security-opt seccomp=unconfined --security-opt systempaths=unconfined \
             -e RENDER_API_KEY=test-key-at-least-sixteen-chars \
             -e SANDBOX_ENABLED=true \
             -v "$PWD":/repo -w /repo \
             mrs:ci \
-            sh -c "pip install pytest pytest-asyncio && pytest -m security -q"
+            sh -c "pip install -q --target /tmp/pt pytest pytest-asyncio && PYTHONPATH=/tmp/pt python -m pytest tests/security -m security -q"

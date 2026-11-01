@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [
-  { name = "vermarjun", email = "vermarjun@gmail.com" }
+  { name = "Stitcher contributors" }
 ]
 keywords = ["manim", "animation", "rendering", "sandbox", "fastapi"]
 classifiers = [
@@ -56,9 +56,6 @@ dependencies = [
 
 [project.optional-dependencies]
 cloudinary = ["cloudinary>=1.36"]
-s3 = ["boto3>=1.34"]
-gcs = ["google-cloud-storage>=2.14"]
-azure = ["azure-storage-blob>=12.19"]
 
 dev = [
   "pytest>=8.0",
@@ -69,11 +66,6 @@ dev = [
   "types-requests",
 ]
 
-[project.urls]
-Homepage = "https://github.com/vermarjun/manim-render-service"
-Repository = "https://github.com/vermarjun/manim-render-service"
-Issues = "https://github.com/vermarjun/manim-render-service/issues"
-
 [tool.hatch.build.targets.wheel]
 packages = ["app", "stitcher_voiceover"]
 
@@ -81,6 +73,7 @@ packages = ["app", "stitcher_voiceover"]
 line-length = 110
 target-version = "py311"
 extend-exclude = [
+  "vendor/**",                  # third-party plugins, patched copies; not our style
   "tests/fixtures/**",          # contains intentionally broken Python for contract tests
   "tests/security/fixtures/**", # sandbox-escape attempts
 ]

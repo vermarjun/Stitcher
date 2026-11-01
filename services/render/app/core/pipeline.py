@@ -251,7 +251,7 @@ async def run(req: RenderRequest) -> RenderSuccessResponse | RenderFailureRespon
     if req.render.format in {"mp4", "webm", "mov", "gif"}:
         try:
             duration_sec = probe_duration(host_artifact)
-        except Exception as e:  # noqa: BLE001 — duration is non-critical metadata
+        except Exception as e:
             log.warning("pipeline.duration_probe_failed", error=str(e))
 
     # --- 5. Clean up workdir ---

@@ -15,23 +15,25 @@ through the live `/render` HTTP endpoint.
 | manim-dsa | `vendor/manim-dsa/` | `manim_dsa` | `typing.override` Python 3.12-only → `typing_extensions.override` |
 | manim-astronomy | `vendor/manim-astronomy/` | `manim_Astronomy` | Lazy vedo import (Star/Planet/SpaceTimeFabric work without vtk); absolute `.obj` asset paths; `JamesWebbSpaceTelescope` added to `__all__` |
 
-Patched sources live at `/Users/vermarjun/Desktop/Manim plugins/<name>/`. Each has
-a `FIXES.md` and `smoke_tests.py`. The vendor copies match the patched sources exactly.
+The vendor copies are the patched sources. Upstream URLs, versions and licenses are
+in [vendor/README.md](vendor/README.md). Each plugin directory keeps its upstream license.
 
 ## Dockerfile changes
 
-All changes are in `/Users/vermarjun/Desktop/manim-render-service/Dockerfile`:
+All changes are in `Dockerfile` in this directory:
 
-1. **`COPY vendor/ ./vendor/`** — copies all 6 plugin trees into the build context.
-2. **Build deps** — `pip install poetry-core setuptools_scm setuptools` before plugin installs.
-3. **Plugin installs (steps 1–6)** — each uses `pip install --no-deps ./vendor/<name>` then
+1. **`COPY vendor/ ./vendor/`** - copies all 6 plugin trees into the build context.
+2. **Build deps** - `pip install poetry-core setuptools_scm setuptools` before plugin installs.
+3. **Plugin installs (steps 1-6)** - each uses `pip install --no-deps ./vendor/<name>` then
    installs real third-party deps separately to avoid bumping manim.
-4. **`SETUPTOOLS_SCM_PRETEND_VERSION_FOR_MANIM_CHEMISTRY=0.5.0`** — prevents setuptools-scm
+4. **`SETUPTOOLS_SCM_PRETEND_VERSION_FOR_MANIM_CHEMISTRY=0.5.0`** - prevents setuptools-scm
    from failing on the vendor tree (no `.git` history).
-5. **astronomy install is failure-tolerant** — `pip install vedo || echo WARNING` so a vtk
+5. **astronomy install is failure-tolerant** - `pip install vedo || echo WARNING` so a vtk
    download failure cannot block the other 5 plugins. vedo 2026.6.1 / vtk 9.6.2 did install
    successfully; all 7 astronomy classes (including Hubble/JWST) work.
-6. **`chmod a+rwx` on plugin SVG dirs** — Manim 0.19 `SVGMobject.generate_mobject()` writes
+   Building with `--build-arg SLIM=1` skips vedo on purpose (and `texlive-science`), so
+   Hubble/JWST are unavailable in that image.
+6. **`chmod a+rwx` on plugin SVG dirs** - Manim 0.19 `SVGMobject.generate_mobject()` writes
    a modified SVG next to the source file. `manim_chess/piece_svgs/` and
    `manim_Astronomy/Assets/` are root-owned in the image; the renderer user needs write
    access. The chmod runs in `pydeps` so it propagates via `COPY --from=pydeps /opt/venv`.
@@ -45,18 +47,13 @@ does not reject scenes that import them.
 ## Rebuild steps
 
 ```bash
-# From Stitcher project root (the standard way to rebuild the render service):
-docker compose -f docker-compose.yml -f docker-compose.services.yml build render-service
-docker compose -f docker-compose.yml -f docker-compose.services.yml up -d render-service
-
-# Or from the manim-render-service repo directly:
-cd /Users/vermarjun/Desktop/manim-render-service
+# From services/render:
 docker compose build render
 docker compose up -d render
 ```
 
 Docker layer cache means re-runs that haven't changed the plugin install steps are fast
-(only the changed layers rebuild). A full cold build takes ~5 min on Apple Silicon.
+(only the changed layers rebuild).
 
 ## Verification
 
@@ -65,10 +62,10 @@ Check health:
 curl -s http://localhost:8000/health | python3 -m json.tool
 ```
 
-Test a plugin (example — chess):
+Test a plugin (example - chess):
 ```bash
 curl -s -X POST http://localhost:8000/render \
-  -H "x-api-key: change_me_render_api_key" \
+  -H "x-api-key: $RENDER_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "code": "from manim import *\nfrom manim_chess import Board\nDEFAULT_FEN = \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\"\nclass BoardScene(Scene):\n    def construct(self):\n        board = Board()\n        board.set_board_from_FEN(DEFAULT_FEN)\n        self.add(board)\n        self.wait(0.2)\n",
@@ -89,4 +86,4 @@ curl -s -X POST http://localhost:8000/render \
 | manim-dsa | yes | PASS | SmokeMArray (animated array) |
 | manim-astronomy | yes | PASS | Star (particle), SpaceTimeFabric, HubbleSpaceTelescope (vedo/vtk) |
 
-Manim version inside container: **0.19.2** (unchanged — no plugin dependency bumped it).
+Manim version inside container: **0.19.2** (unchanged - no plugin dependency bumped it).

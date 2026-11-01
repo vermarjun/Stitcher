@@ -1,6 +1,12 @@
 MIT License
 
-Copyright (c) 2026 vermarjun
+Copyright (c) Fabio Missagia (manim-dsa authors)
+
+NOTE FROM STITCHER: the upstream repository (https://github.com/F4bbi/manim-dsa) and the
+PyPI sdist for 0.4.0 ship no LICENSE file. Upstream declares the MIT License in
+pyproject.toml (license = "MIT"), CITATION.cff and README.md. This file holds the
+standard MIT text with the author named in pyproject.toml, so that the notice travels with
+the vendored copy. It was not copied from upstream. No copyright year is stated upstream.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +25,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+

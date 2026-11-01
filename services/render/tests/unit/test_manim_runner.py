@@ -63,5 +63,6 @@ def test_frame_range_and_transparent_flags(defaults: dict) -> None:
     defaults["background"] = "#112233"
     inv = build_invocation(**defaults)
     assert "-t" in inv.argv
-    assert "--background_color" in inv.argv and "#112233" in inv.argv
+    # The background colour is not a CLI flag: pipeline.py injects it into the scene code.
+    assert "--background_color" not in inv.argv
     assert "--from_animation_number" in inv.argv
