@@ -6,9 +6,14 @@
 process.env["AGENT_API_KEY"] = "test-key-for-contract-tests";
 process.env["MANIM_API_INDEX_PATH"] = require("path").join(__dirname, "../../src/assets/manim_api_index.json");
 
+import "./mocks";
 import Fastify from "fastify";
 import { registerGenerate } from "../../src/api/generate";
 import { registerHealth } from "../../src/api/health";
+
+jest.mock("../../src/graph/generateGraph", () => ({
+  buildGenerateGraph: () => ({ invoke: async (state: object) => ({ ...state, scenes: [], sceneStates: {} }) }),
+}));
 
 const API_KEY = "test-key-for-contract-tests";
 
@@ -74,14 +79,14 @@ describe("POST /generate contract", () => {
     });
     // Will return 202 (background run) or error from graph — not 401/400
     const body = resp.json<{ jobId?: string; streamUrl?: string; error?: string }>();
-    expect([202, 500]).toContain(resp.statusCode);
+    expect(resp.statusCode).toBe(202);
     if (resp.statusCode === 202) {
       expect(body).toHaveProperty("jobId");
       expect(body).toHaveProperty("streamUrl");
     }
   });
 
-  it("returns 400 for unknown field in constraints (strict schema)", async () => {
+  it("strips unknown constraint fields", async () => {
     const resp = await app.inject({
       method: "POST",
       url: "/generate",
@@ -93,6 +98,6 @@ describe("POST /generate contract", () => {
       },
     });
     // Zod strips unknown fields by default, so this won't 400 — verify it doesn't crash
-    expect([202, 500]).toContain(resp.statusCode);
+    expect(resp.statusCode).toBe(202);
   });
 });

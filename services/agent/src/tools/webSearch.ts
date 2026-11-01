@@ -9,7 +9,6 @@
  */
 
 import { tool } from "@langchain/core/tools";
-import { z } from "zod";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
 
@@ -84,9 +83,11 @@ export async function webSearchImpl(query: string, maxResults = 5): Promise<Sear
 // Per-job call counter — enforces WEB_SEARCH_MAX_CALLS_PER_JOB
 const jobSearchCounts = new Map<string, number>();
 
+// JSON Schema instead of zod: zod 3.25 + @langchain/core 0.3.80 make tsc blow up (TS2589, multi-GB heap).
 export function createWebSearchTool(jobId: string) {
   return tool(
-    async ({ query, maxResults = 5 }: { query: string; maxResults?: number }): Promise<string> => {
+    async (input): Promise<string> => {
+      const { query, maxResults = 5 } = input as { query: string; maxResults?: number };
       const count = jobSearchCounts.get(jobId) ?? 0;
       if (count >= config.webSearchMaxCallsPerJob) {
         log.warn({ jobId, query }, "webSearch: rate limit hit for job");
@@ -102,10 +103,14 @@ export function createWebSearchTool(jobId: string) {
         "Search the web for factual grounding on niche topics. " +
         "Use for algorithm specifics, domain math, or obscure CS concepts where your knowledge may be incomplete. " +
         "Limited to " + config.webSearchMaxCallsPerJob + " calls per job. Returns { results: [{title, url, snippet}] }.",
-      schema: z.object({
-        query: z.string().describe("Search query"),
-        maxResults: z.number().optional().describe("Max results to return (default 5)"),
-      }),
+      schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query" },
+          maxResults: { type: "number", description: "Max results to return (default 5)" },
+        },
+        required: ["query"],
+      } as const,
     }
   );
 }

@@ -7,7 +7,7 @@
 
 import { Annotation, messagesStateReducer } from "@langchain/langgraph";
 import { BaseMessage } from "@langchain/core/messages";
-import { ModelConfig, ModelConfigParams } from "../models/factory.js";
+import { ModelConfigParams } from "../models/factory.js";
 
 /**
  * A partial per-role config accepted from API callers.

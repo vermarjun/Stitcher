@@ -143,6 +143,7 @@ export async function codeGenNode(
       ...(takeLastUsage() ?? {
         role: "coder", provider: "unknown", model: "unknown",
         inputTokens: 0, outputTokens: 0, durationMs: Date.now() - t0,
+        timestamp: new Date().toISOString(),
       }),
       systemPrompt,
       userPrompt: userContent,
@@ -199,6 +200,7 @@ export async function codeGenNode(
       ...(takeLastUsage() ?? {
         role: "coder", provider: "unknown", model: "unknown",
         inputTokens: 0, outputTokens: 0, durationMs: Date.now() - t0,
+        timestamp: new Date().toISOString(),
       }),
       systemPrompt,
       userPrompt: userContent,

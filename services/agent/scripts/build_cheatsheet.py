@@ -4,21 +4,21 @@ Build manim_cheatsheet.json — unified API cheat sheet for Manim core + 6 plugi
 
 Merges:
   - src/assets/manim_api_index.json (manim core, 403 symbols)
-  - /Users/vermarjun/Desktop/Manim plugins/<plugin>/api_index.json (6 plugins)
+  - <MANIM_PLUGINS_DIR>/<plugin>/api_index.json (6 plugins)
   - extracts minimal usage snippets from each plugin's smoke_tests.py
 
 Output: src/assets/manim_cheatsheet.json
 Each entry: { name, source, import, signature, kind, bases, description, example }
 
-Run:
-    python scripts/build_cheatsheet.py [--out src/assets/manim_cheatsheet.json]
-    # or using the plugin venv:
-    /Users/vermarjun/Desktop/Manim\ plugins/manim-dsa/.venv/bin/python scripts/build_cheatsheet.py
+Run from services/agent:
+    python3 scripts/build_cheatsheet.py --plugins-root ../render/vendor
+    MANIM_PLUGINS_DIR can also select the plugin root.
 """
 
 import argparse
 import ast
 import inspect
+import os
 import json
 import re
 import sys
@@ -28,7 +28,7 @@ from pathlib import Path
 # ── Paths ────────────────────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLUGINS_ROOT = Path("/Users/vermarjun/Desktop/Manim plugins")
+PLUGINS_ROOT = Path(os.environ.get("MANIM_PLUGINS_DIR") or str(REPO_ROOT.parent / "render" / "vendor"))
 
 CORE_INDEX = REPO_ROOT / "src" / "assets" / "manim_api_index.json"
 

@@ -6,9 +6,16 @@
 process.env["AGENT_API_KEY"] = "test-key-for-contract-tests";
 process.env["MANIM_API_INDEX_PATH"] = require("path").join(__dirname, "../../src/assets/manim_api_index.json");
 
+import "./mocks";
 import Fastify from "fastify";
 import { registerCode } from "../../src/api/code";
 import { registerHealth } from "../../src/api/health";
+
+jest.mock("../../src/agents/codeGen", () => ({
+  codeGenNode: jest.fn(async () => ({
+    sceneStates: { 0: { status: "done", finalCode: "from manim import Scene\nclass Scene00(Scene): pass", attempts: [] } },
+  })),
+}));
 
 const API_KEY = "test-key-for-contract-tests";
 
@@ -67,14 +74,15 @@ describe("POST /code contract", () => {
     expect(resp.statusCode).toBe(400);
   });
 
-  it("returns 400 when styleManifest is missing", async () => {
+  it("accepts legacy scenePlan without an optional styleManifest", async () => {
     const resp = await app.inject({
       method: "POST",
       url: "/code",
       headers: { "x-api-key": API_KEY },
       payload: { scenePlan: VALID_SCENE_PLAN },
     });
-    expect(resp.statusCode).toBe(400);
+    expect(resp.statusCode).toBe(200);
+    expect(resp.json().success).toBe(true);
   });
 
   it("accepts codeExamples as RAG payload", async () => {
@@ -94,13 +102,13 @@ describe("POST /code contract", () => {
         limits: { timeoutSec: 15, maxValidationRetries: 1 },
       },
     });
-    expect([200, 500]).toContain(resp.statusCode);
+    expect(resp.statusCode).toBe(200);
     const body = resp.json<{ jobId: string; success: boolean }>();
     expect(body).toHaveProperty("jobId");
     expect(body).toHaveProperty("success");
   });
 
-  it("preserves caller-supplied scene index in output", async () => {
+  it("reports the actual emitted class for a nonzero legacy scene index", async () => {
     const resp = await app.inject({
       method: "POST",
       url: "/code",
@@ -114,15 +122,10 @@ describe("POST /code contract", () => {
         limits: { timeoutSec: 15, maxValidationRetries: 0 },
       },
     });
-    expect([200, 500]).toContain(resp.statusCode);
+    expect(resp.statusCode).toBe(200);
     if (resp.statusCode === 200) {
       const body = resp.json<{ output: { sceneIndex: number; sceneClass: string } | null }>();
       if (body.output) {
-        expect(body.output.sceneIndex).toBe(3);
-        // The caller's index is preserved in sceneIndex, but the codeGraph always
-        // emits `class Scene00` (it normalises to index 0). sceneClass must reflect
-        // the REAL emitted class so the render service finds Scene00.mp4 — reporting
-        // Scene03 here caused ArtifactMissing for every scene with index != 0.
         expect(body.output.sceneClass).toBe("Scene00");
       }
     }

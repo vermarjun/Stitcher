@@ -56,7 +56,11 @@ export async function refinerNode(
     return { sceneStates: { [sceneIndex]: updated } };
   }
 
-  const coderCfg = modelConfig.coder ?? { provider: config.defaultProvider, model: config.defaultModelCoder };
+  const coderCfg = {
+    ...modelConfig.coder,
+    provider: modelConfig.coder?.provider ?? config.defaultProvider,
+    model: modelConfig.coder?.model ?? config.defaultModelCoder,
+  };
   const model = getModel(coderCfg);
   const { systemPrompt } = getPrompt("refiner");
   const tools = [manimApiCheckTool, astPreviewTool];

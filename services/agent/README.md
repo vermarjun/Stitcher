@@ -1,296 +1,127 @@
-# Manim Agent Service
+# Manim agent service
 
-A standalone HTTP service that turns a natural-language prompt into validated Manim Python scenes, or fixes broken Manim code.
+This Fastify service plans Manim scenes, writes Python, repairs code after render
+errors, and extracts reusable lessons. Stitcher's API orchestrates retrieval,
+voice synthesis, and rendering in separate services. This service accepts retrieved
+examples and returns source code. Redis stores job snapshots; SSE events live in memory.
 
-**Input:** `POST /generate` with a prompt (and optional RAG context)
-**Output:** N complete, statically-validated Manim `.py` files — one class per scene
+`src/agents` holds the planner, coder, debugger, and validation refiner.
+`src/prompts/registry.ts` loads versioned Markdown prompts from role directories.
+The voiceover coder uses `coder/v1_voiceover.md`. Plugin guides live in
+`src/prompts/skills`; `requiredPlugins` selects guides to inject. The cheatsheet in
+`src/assets/manim_cheatsheet.json` supplies API signatures and usage examples for
+`requiredApis`. `coderMemory` supplies lessons from earlier failures. `/reflect`
+has its own short system prompt in its route module.
 
-Zero rendering. Zero RAG. Zero database. Pure `(prompt | broken_code) → code`.
+The legacy `/generate` graph validates and refines generated scenes. `/code` makes
+one coder completion; the caller handles subsequent validation and debug cycles.
+Static validation runs Python syntax, pyflakes, ruff, bytecode compilation,
+restricted-operation checks, expected scene class checks, and optional narration
+beat checks. The API symbol index check is advisory. Validation does not import or
+execute generated Manim code. The image bundles pyflakes and ruff; Manim belongs in
+the render service.
 
----
+## HTTP interface
 
-## Architecture
+Send `X-Api-Key: <AGENT_API_KEY>` on job routes. `/health` and `/capabilities` are public.
+Requests and responses use JSON except SSE. Invalid bodies return HTTP 400.
 
-The agents are exposed as **independent endpoints** so an external orchestrator
-(e.g. the stitcher) can run RAG / rendering as separate services.
+| Endpoint | Request | Response |
+| --- | --- | --- |
+| `POST /plan` | `{prompt, voiceover?, constraints?, modelConfig?}` | `{success, jobId, output: {scenes, styleManifest}, ...}` |
+| `POST /code` | `{prompt, examples?: [{description,code}], requiredApis?: [], requiredPlugins?: [], voiceover?, coderMemory?: [], modelConfig?}` | `{success, jobId, output: {code,sceneClass}, tokensUsed, llmCallLog, ...}` |
+| `POST /debug` | `{code, error?: string, prompt?, apiReference?: [], voiceover?, narration?: [], modelConfig?}` | `{success, jobId, output: {code,sceneClass,changeSummary}, tokensUsed, llmCallLog, ...}` |
+| `POST /reflect` | `{prompt,originalCode,finalError?,debugHistory:[{code?,error?,changeSummary?}],modelConfig?}` | `{success,lesson,llmIO}` |
+| `POST /generate` | `{prompt,voiceover?,constraints?,context?,modelConfig?}` | HTTP 202 `{jobId,streamUrl,syncUrl}`; `?wait=true` returns graph state |
+| `GET /jobs/:jobId` | none | Stored job state, or HTTP 404 |
+| `POST /jobs/:jobId/cancel` | none | `{cancelled:true,jobId}`; cancellation is cooperative |
+| `GET /stream/:jobId` | none | SSE job and agent events with heartbeats |
+| `GET /capabilities` | none | `{supportedProviders,supportedRoles,endpoints,validationTools,...}` |
+| `GET /health` | none | `{status,checks:{redis,manimApiIndex},version}`; HTTP 503 if degraded |
 
-```
-POST /plan                  ──→  Planner Agent  ──→ scenes[] + styleManifest
-POST /code  (per scene)     ──→  Coder + Validator + Refiner loop  ──→ final code
-POST /debug                 ──→  Debugger + Validator loop  ──→ fixed code
+`/code` also accepts legacy `scenePlan` and `codeExamples`. `/debug` accepts legacy
+`brokenCode`, structured `error`, `sceneClass`, and `originalPrompt`.
+`/code` and `/debug` default `voiceover` to true; `/plan` and `/generate` default it
+to false. Voiceover plans include narration beats. Generated scenes use
+`VoiceoverScene` and matching `self.voiceover(text=...)` blocks; audio is produced
+by the caller's render pipeline.
 
-POST /generate              ──→  legacy convenience: plan → code-per-scene end-to-end
-```
+`modelConfig` is keyed by role (`planner`, `coder`, `debugger`). Each role accepts
+`{provider,model,apiKey?,baseURL?,temperature?,maxTokens?}`. Code, debug and reflect
+also accept `params`. The default models by provider are listed together in
+`src/config.ts`. Request settings override defaults. Set a key for the selected
+provider or pass `apiKey` in the request. Missing keys fail on first model use.
+Ollama needs no key and defaults to `http://localhost:11434/v1`.
+Only `opencodego` receives `enable_thinking`.
 
-Recommended orchestration (the service does NOT do RAG itself):
+## Build and checks
 
-```
-prompt
-  │
-  ▼
-POST /plan ──→ scenes[] (each with description, concepts, visualElements)
-  │
-  ▼  for each scene
-RAG service (separate) ──→ codeExamples[]   (parent NLP doc → child code)
-  │
-  ▼
-POST /code  (scenePlan + styleManifest + codeExamples)
-  │
-  ▼
-Renderer service (separate) ──→ MP4
-```
+From `services/agent`:
 
-Validator pipeline (deterministic, no LLM):
-`ast → apiSurface → pyflakes → ruff → compile → manimLint → sceneClass`
-
-**Tech stack:** TypeScript + Fastify + LangGraph + LangChain (OpenAI/Anthropic/Gemini adapters) + Redis + Python subprocess for validation
-
----
-
-## Quick start
-
-```bash
-cp .env.example .env
-# Edit .env — set AGENT_API_KEY and at least one provider key
-
-docker compose up
-```
-
-Service runs on port 4000.
-
----
-
-## API
-
-### `POST /plan`
-
-Runs the planner agent only. Returns a list of scene plans + a style manifest.
-Each scene plan exposes `description`, `concepts`, and `visualElements` for an
-external RAG service to use as retrieval queries.
-
-```bash
-curl -X POST http://localhost:4000/plan \
-  -H "X-Api-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Explain binary search on a sorted array",
-    "modelConfig": {
-      "planner": { "provider": "openai", "model": "gpt-4o", "apiKey": "sk-..." }
-    },
-    "constraints": { "maxScenes": 3 }
-  }'
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "jobId": "...",
-  "output": {
-    "scenes": [
-      {
-        "index": 0,
-        "prompt": "Show a sorted array with markers at left, mid, right",
-        "description": "An array of boxes appears, each labeled with a number...",
-        "concepts": ["binary search", "sorted array", "pointers"],
-        "visualElements": ["row of boxes", "left/right pointers", "highlighted mid"],
-        "durationSec": 8,
-        "manimFeatures": ["Rectangle", "Text", "FadeIn"],
-        "requiredSymbols": ["Scene", "Rectangle", "Text", "FadeIn"]
-      }
-    ],
-    "styleManifest": { "...": "..." }
-  }
-}
-```
-
-### `POST /code`
-
-Runs the coder + validator/refiner loop for ONE scene. The orchestrator passes
-the scene plan from `/plan`, the style manifest, and code examples that an
-external RAG service has already retrieved.
-
-```bash
-curl -X POST http://localhost:4000/code \
-  -H "X-Api-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "scenePlan": { "index": 0, "prompt": "...", "durationSec": 8, "manimFeatures": [...], "requiredSymbols": [...] },
-    "styleManifest": { "...": "..." },
-    "codeExamples": [
-      { "description": "Draw a row of squares", "code": "from manim import *\n..." }
-    ],
-    "modelConfig": {
-      "coder": { "provider": "openai", "model": "gpt-4o", "apiKey": "sk-..." }
-    },
-    "limits": { "maxValidationRetries": 3 }
-  }'
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "jobId": "...",
-  "output": {
-    "sceneIndex": 0,
-    "sceneClass": "Scene00",
-    "code": "from manim import *\nclass Scene00(Scene):\n    ...",
-    "status": "done",
-    "attempts": [...]
-  }
-}
-```
-
-### `POST /generate` (legacy convenience)
-
-```bash
-curl -X POST http://localhost:4000/generate \
-  -H "X-Api-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Explain binary search on a sorted array",
-    "modelConfig": {
-      "planner":  { "provider": "openai",    "model": "gpt-4o",      "apiKey": "sk-..." },
-      "coder":    { "provider": "opencodego","model": "kimi-k2.5",   "apiKey": "sk-..." },
-      "debugger": { "provider": "anthropic", "model": "claude-3-5-haiku-latest", "apiKey": "sk-ant-..." }
-    },
-    "constraints": { "maxScenes": 3 }
-  }'
-```
-
-Returns `202` with `{ jobId, streamUrl, syncUrl }`.
-
-Stream progress:
-```bash
-curl -N http://localhost:4000/stream/<jobId> -H "X-Api-Key: your-key"
-```
-
-### `POST /debug`
-
-```bash
-curl -X POST http://localhost:4000/debug \
-  -H "X-Api-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "brokenCode": "from manim import *\nclass S(Scene):\n    def construct(self):\n        self.play(FadeIn(Squaer()))",
-    "sceneClass": "S",
-    "error": { "stderr": "NameError: name 'Squaer' is not defined", "summary": "NameError", "line": 3 }
-  }'
-```
-
-### `GET /stream/:jobId`
-
-Server-Sent Events. Events:
-- `job_started`, `job_complete`, `job_failed`, `job_cancelled`
-- `planner_started`, `planner_complete`
-- `codegen_started`, `codegen_complete`
-- `validator_started`, `validator_result`, `validator_retrying`
-- `debugger_started`, `debugger_complete`
-- `heartbeat` (every 15s)
-
-### `GET /jobs/:jobId`
-
-Polling fallback. Returns the full job state.
-
-### `POST /jobs/:jobId/cancel`
-
-Cancel an in-flight job.
-
-### `GET /capabilities`
-
-Returns supported providers, tools, and limits.
-
-### `GET /health`
-
-Returns service health including Redis connectivity.
-
----
-
-## Supported providers
-
-| Provider | `"provider"` value | Notes |
-|---|---|---|
-| OpenAI | `"openai"` | GPT-4o, o1, etc. |
-| Anthropic | `"anthropic"` | Claude 3.5, claude-opus-4-7, etc. |
-| Google | `"gemini"` | Gemini 2.0 Flash, etc. |
-| OpenRouter | `"openrouter"` | Routes to any model |
-| Groq | `"groq"` | Ultra-fast inference |
-| Ollama | `"ollama"` | Local; set `baseURL` |
-| OpenCodeGo | `"opencodego"` | kimi-k2.5, minimax-m2.5, glm-5, mimo-v2-pro |
-| AWS Bedrock | `"bedrock"` | Claude/Llama via AWS |
-
----
-
-## Injecting RAG context
-
-The service has **no built-in RAG**. RAG is expected to be a separate service.
-
-**Recommended flow** (per scene):
-
-1. Call `POST /plan` with the user prompt → get scenes[] + styleManifest.
-2. For each scene, build a RAG query from `scene.description` + `scene.concepts`
-   + `scene.visualElements` and ask your RAG service for relevant code
-   examples. The recommended store shape is parent–child: parent doc is an NLP
-   description (e.g. *"Draw red circle animation"*), child is the corresponding
-   Manim code.
-3. Call `POST /code` with `scenePlan`, `styleManifest`, and `codeExamples` —
-   an array of `{ description, code }` from RAG. The coder uses these as
-   ground-truth templates.
-
-**Legacy** `POST /generate` also accepts a `context.retrievalContext` blob
-(`apiExamples`, `similarScripts`, `styleRecommendations`, `pitfalls`) for
-backwards compatibility, but new integrations should use `/plan` + `/code`.
-
----
-
-## Configuration
-
-See `.env.example` for all variables. Key ones:
-
-| Variable | Default | Description |
-|---|---|---|
-| `AGENT_API_KEY` | required | Service authentication key |
-| `CHECKPOINT_REDIS_URL` | `redis://localhost:6379` | Job state storage |
-| `ENABLE_WEB_SEARCH` | `false` | Enable web search tool for planner |
-| `WEB_SEARCH_PROVIDER` | `tavily` | `tavily` \| `serper` \| `brave` |
-| `MAX_PARALLEL_SCENES` | `6` | Concurrent CodeGen workers |
-| `DEFAULT_MAX_VALIDATION_RETRIES` | `3` | Refiner retry cap per scene |
-
----
-
-## Development
-
-```bash
-npm install
-cp .env.example .env   # fill in keys
-
-# Run locally (needs Redis)
-docker compose up redis -d
-npm run dev
-
-# Tests
+```sh
+npm ci
+npx tsc --noEmit
 npm test
-
-# Type check
-npm run typecheck
-
-# Build manim API index (needs manim installed)
-python3 scripts/build_manim_api_index.py
 ```
 
----
+Tests include unit tests and HTTP contract tests with mocked providers. They do
+not need real LLM keys. The obsolete eval and unconfigured lint scripts were
+removed. `npm run dev` runs TypeScript; `npm run build` compiles it and copies Markdown, Python, and JSON/TOML runtime
+assets. Docker uses the same build command.
 
-## Adding a provider
+From the repository root:
 
-1. Add a `case` in `src/models/factory.ts`.
-2. Add the string to `SUPPORTED_PROVIDERS`.
-3. That's it — the factory is the only provider-specific file.
+```sh
+docker build -t oss-agent-test services/agent
+```
 
-## Adding a validator check
+The TypeScript compile step peaks under 1 GB of memory.
 
-1. Add a function in `src/validation/runner.py`.
-2. Add the name to the `check_map` dict.
-3. Add the name to the pipeline's `pythonChecks` array in `src/validation/pipeline.ts`.
+The bundled `docker-compose.yml` defines the service and Redis. Set
+`AGENT_API_KEY` and a provider key in its environment before starting it.
+A standalone container can start without Redis, but `/health` is degraded and
+job persistence requires `CHECKPOINT_REDIS_URL` to point to a reachable Redis.
+For host Ollama from Docker Desktop, use `OLLAMA_BASE_URL=http://host.docker.internal:11434/v1`.
+
+## Rebuild the cheatsheet
+
+From `services/agent`:
+
+```sh
+python3 scripts/build_cheatsheet.py --help
+python3 scripts/build_cheatsheet.py --plugins-root ../render/vendor --out /tmp/oss-agent-cheatsheet.json
+```
+
+Omit `--out` to replace the checked-in cheatsheet. `MANIM_PLUGINS_DIR` also selects
+the plugin root; `--plugins-root` takes precedence. The script combines the core
+index with each plugin's `api_index.json` and optional `smoke_tests.py` examples.
+Vendored plugins currently lack those indexes, so the command above warns and
+produces 403 core entries only. Keep the shipped cheatsheet for full plugin
+coverage unless supplying external plugin indexes. The build never regenerates it.
+
+## Environment
+
+See `.env.example` for the complete list. Paths default beside the executing
+source or compiled module. Empty optional values use defaults.
+
+| Variables | Required | Default / purpose |
+| --- | --- | --- |
+| `AGENT_API_KEY` | yes | Auth secret |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `OPENCODE_GO_API_KEY` | selected provider, unless passed in request | unset |
+| `DEFAULT_PROVIDER` | no | `openai` |
+| `DEFAULT_MODEL_PLANNER`, `DEFAULT_MODEL_CODER`, `DEFAULT_MODEL_DEBUGGER` | no | Selected provider's model in `src/config.ts` |
+| `OLLAMA_BASE_URL` | no | `http://localhost:11434/v1` |
+| `AWS_REGION` | no | `us-east-1`; Bedrock uses the AWS SDK credential chain |
+| `HOST`, `PORT`, `NODE_ENV` | no | `0.0.0.0`, `4000`, `development` |
+| `CHECKPOINT_REDIS_URL` | no | `redis://localhost:6379` |
+| `ENABLE_WEB_SEARCH`, `WEB_SEARCH_PROVIDER`, `WEB_SEARCH_MAX_CALLS_PER_JOB` | no | `false`, `tavily`, `3` |
+| `TAVILY_API_KEY`, `SERPER_API_KEY`, `BRAVE_API_KEY` | selected search backend | unset |
+| `MAX_PARALLEL_SCENES`, `DEFAULT_MAX_VALIDATION_RETRIES`, `DEFAULT_TIMEOUT_SEC`, `MAX_CODE_SIZE_BYTES` | no | `6`, `3`, `300`, `524288` |
+| `PROMPT_VERSION_PLANNER`, `PROMPT_VERSION_CODER`, `PROMPT_VERSION_DEBUGGER`, `PROMPT_VERSION_REFINER` | no | `active` |
+| `MANIM_API_INDEX_PATH`, `MANIM_CHEATSHEET_PATH`, `RUFF_CONFIG_PATH`, `SKILLS_DIR` | no | Bundled assets and prompts/skills |
+| `PYTHON_PATH` | no | `python3`; image uses `/opt/validator/bin/python` |
+| `LOG_LEVEL`, `CAPTURE_LLM_IO`, `LLM_IO_SINK`, `LLM_IO_LOCAL_PATH` | no | `info`, `false`, `local`, `./llm_captures` |
+| `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` | no | Both unset disables callbacks |
+| `LANGFUSE_HOST`, `LANGFUSE_BASEURL` | no | `https://cloud.langfuse.com`; HOST wins |
+| `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_DIAG_DEBUG` | no | `stitcher-agent`, `http://localhost:4318`, `false` |
+| `MANIM_PLUGINS_DIR` | no | Build script only: `../render/vendor` relative to service directory |
