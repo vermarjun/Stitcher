@@ -22,6 +22,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { config } from "../config.js";
+import { MODEL_MAX_RETRIES, onRateLimitedAttempt } from "./retry.js";
 
 export interface ModelConfigParams {
   temperature?: number;
@@ -98,6 +99,8 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
       openAIApiKey: apiKey,
       configuration: baseURL ? { baseURL } : undefined,
       modelKwargs,
+      maxRetries: MODEL_MAX_RETRIES,
+      onFailedAttempt: onRateLimitedAttempt,
     });
     return chat as BaseChatModel;
   }
@@ -111,6 +114,8 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
       temperature,
       maxTokens,
       anthropicApiKey: apiKey,
+      maxRetries: MODEL_MAX_RETRIES,
+      onFailedAttempt: onRateLimitedAttempt,
     });
   }
 
@@ -123,6 +128,8 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
       temperature,
       maxOutputTokens: maxTokens,
       apiKey,
+      maxRetries: MODEL_MAX_RETRIES,
+      onFailedAttempt: onRateLimitedAttempt,
     });
     return chat as BaseChatModel;
   }

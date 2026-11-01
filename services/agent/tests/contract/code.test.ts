@@ -130,4 +130,21 @@ describe("POST /code contract", () => {
       }
     }
   });
+
+  it("says why the coder failed instead of a generic message", async () => {
+    const { codeGenNode } = require("../../src/agents/codeGen");
+    (codeGenNode as jest.Mock).mockResolvedValueOnce({
+      sceneStates: { 0: { status: "failed", attempts: [] } },
+      llmCallLog: [{ role: "coder", error: "rate_limited: daily quota used up for this model." }],
+    });
+    const resp = await app.inject({
+      method: "POST",
+      url: "/code",
+      headers: { "x-api-key": API_KEY },
+      payload: { prompt: "Show an array being split in half" },
+    });
+    const body = resp.json();
+    expect(body.success).toBe(false);
+    expect(body.error.summary).toMatch(/^CodeGen failed: rate_limited: daily quota/);
+  });
 });

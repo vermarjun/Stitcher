@@ -22,6 +22,7 @@ import { config } from "../config.js";
 import { getLogger } from "../logging.js";
 import { extractLlmCallLog, sumLlmCallLog } from "./tokenUtils.js";
 import { codeGenNode } from "../agents/codeGen.js";
+import { describeModelError } from "../models/retry.js";
 import type { GraphState } from "../graph/state.js";
 
 const log = getLogger("code");
@@ -111,6 +112,14 @@ const CodeRequestSchema = z.object({
     .optional(),
   meta: z.object({ traceId: z.string().optional() }).optional(),
 });
+
+/** Say why the coder failed: the model error if there was one, else no usable code. */
+function failureSummary(llmCallLog: unknown[]): string {
+  const failed = (llmCallLog as Array<{ error?: unknown }>).find((e) => typeof e?.error === "string");
+  return failed
+    ? `CodeGen failed: ${describeModelError(failed.error as string)}`
+    : "CodeGen failed to produce valid code: the model reply had no Python code block";
+}
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -230,7 +239,7 @@ export function registerCode(app: FastifyInstance): void {
                 status: sceneState!.status,
               }
             : null,
-          error: success ? null : { summary: "CodeGen failed to produce valid code" },
+          error: success ? null : { summary: failureSummary(llmCallLog) },
           llmCallLog,
           tokensUsed,
         });

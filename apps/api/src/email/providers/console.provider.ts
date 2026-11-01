@@ -14,7 +14,8 @@ export class ConsoleProvider implements EmailProvider {
 
   async send(message: EmailMessage): Promise<EmailSendResult> {
     logger.info({
-      message: "[email:console] (not actually sent)",
+      // "OTP" is in the message so `docker compose logs api | grep -i otp` finds the signup code.
+      message: "[email:console] (not actually sent; a signup OTP code, if any, is in text)",
       to: message.to,
       subject: message.subject,
       text: message.text,

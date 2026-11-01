@@ -105,7 +105,10 @@ const ConfigSchema = z.object({
 });
 
 function parseConfig() {
-  const result = ConfigSchema.safeParse(process.env);
+  // An empty value ("FOO=" in a .env file or a compose pass-through) counts as unset,
+  // so optional settings fall back to their defaults instead of failing validation.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ""));
+  const result = ConfigSchema.safeParse(env);
   if (!result.success) {
     const errors = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)

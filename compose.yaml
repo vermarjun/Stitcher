@@ -1,0 +1,473 @@
+# Stitcher: the whole stack in one file.
+#
+#   ./scripts/setup.sh          # writes .env with random secrets and your LLM key
+#   docker compose up -d        # builds the images on first run, then starts everything
+#   open http://localhost:8080
+#
+# Optional observability (Grafana, Tempo, Loki, Prometheus, Langfuse):
+#   docker compose --profile obs up -d
+# See observability/README.md.
+#
+# Each service gets only the variables it needs, mapped from the root .env.
+# Names and defaults are listed in docs/CONFIGURATION.md.
+
+name: stitcher
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Lets containers reach a host service such as Ollama at host.docker.internal.
+# Docker Desktop defines the name already. On Linux this line is what defines it.
+x-host-gateway: &host-gateway
+  - "host.docker.internal:host-gateway"
+
+x-rag-build: &rag-build
+  context: ./services/rag
+
+x-rag-embedder-env: &rag-embedder-env
+  MONGODB_URL: mongodb://mongo:27017/?directConnection=true
+  RAG_API_KEY: ${RAG_API_KEY:?Run ./scripts/setup.sh to create .env}
+  # The corpus vectors and the query vectors must come from the same embedder.
+  EMBEDDER_PROVIDER: ${EMBEDDER_PROVIDER:-local}
+  EMBEDDER_MODEL: ${EMBEDDER_MODEL:-}
+  EMBEDDER_API_KEY: ${EMBEDDER_API_KEY:-}
+  EMBEDDER_BASE_URL: ${EMBEDDER_BASE_URL:-}
+  EMBEDDING_DIM: ${EMBEDDING_DIM:-}
+  OLLAMA_BASE_URL: ${EMBEDDER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  # ── Data stores ────────────────────────────────────────────────────────────
+  mongo:
+    # Atlas Local, not plain mongo: the RAG service needs vector search.
+    image: mongodb/mongodb-atlas-local:8.0.34
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    # Not published to the host. Services reach it as mongo:27017.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/runner", "healthcheck"]
+      interval: 10s
+      timeout: 30s
+      retries: 6
+      start_period: 60s
+    logging: *logging
+
+  redis:
+    image: redis:7.4.10-alpine
+    restart: unless-stopped
+    # noeviction: BullMQ must get an error under memory pressure, not lose queued jobs.
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?Run ./scripts/setup.sh to create .env}
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    logging: *logging
+
+  # ── RAG: seed once, then serve ─────────────────────────────────────────────
+  # Loads the corpus and creates the vector index. Safe to run again: it skips
+  # documents that already exist. Reset after changing the embedder:
+  #   docker compose run --rm rag-seed node dist/seed.cjs --reset
+  rag-seed:
+    build: *rag-build
+    image: stitcher/rag:local
+    command: ["node", "dist/seed.cjs"]
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment: *rag-embedder-env
+    extra_hosts: *host-gateway
+    logging: *logging
+
+  rag:
+    build: *rag-build
+    image: stitcher/rag:local
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rag-seed:
+        condition: service_completed_successfully
+    environment:
+      <<: *rag-embedder-env
+      PORT: "7000"
+      HOST: 0.0.0.0
+      # Query transform returns requiredPlugins. Without it the coder never
+      # picks the chess, dsa, ml, physics, chemistry or astronomy plugins.
+      STAGE_QUERY_TRANSFORM: "true"
+      # Hosted models take 1.7 to 3.6 s here. The 2200 ms default is too tight.
+      QUERY_TRANSFORM_TIMEOUT_MS: ${QUERY_TRANSFORM_TIMEOUT_MS:-6000}
+      # Fallback LLM for query transform. The API also sends the provider and key
+      # with each request, so these only matter for direct calls. The service
+      # supports openai, gemini, openrouter, ollama and opencodego. For anthropic
+      # or groq, setup.sh sets RAG_LLM_* to an OpenAI-compatible endpoint.
+      LLM_PROVIDER: ${RAG_LLM_PROVIDER:-${LLM_PROVIDER:-openai}}
+      LLM_API_KEY: ${RAG_LLM_API_KEY:-${LLM_API_KEY:-}}
+      LLM_MODEL: ${RAG_LLM_MODEL:-${LLM_MODEL:-}}
+      LLM_BASE_URL: ${RAG_LLM_BASE_URL:-${LLM_BASE_URL:-}}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+    extra_hosts: *host-gateway
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    logging: *logging
+
+  # ── Agent: plans scenes, writes and fixes Manim code ───────────────────────
+  agent:
+    build:
+      context: ./services/agent
+    image: stitcher/agent:local
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      AGENT_API_KEY: ${AGENT_API_KEY:?Run ./scripts/setup.sh to create .env}
+      CHECKPOINT_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      # The API sends the provider, model and key with each request. These are
+      # the fallbacks when a request leaves them out.
+      DEFAULT_PROVIDER: ${LLM_PROVIDER:-openai}
+      DEFAULT_MODEL_PLANNER: ${LLM_MODEL:-}
+      DEFAULT_MODEL_CODER: ${LLM_MODEL:-}
+      DEFAULT_MODEL_DEBUGGER: ${LLM_MODEL:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+    extra_hosts: *host-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  # ── Render: runs Manim in a bubblewrap sandbox ─────────────────────────────
+  render:
+    build:
+      context: ./services/render
+      args:
+        SLIM: ${RENDER_SLIM:-0}
+        APT_MIRROR: ${APT_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+    image: stitcher/render:local
+    restart: unless-stopped
+    # bubblewrap makes namespaces and mounts /proc inside the container. That
+    # needs CAP_SYS_ADMIN and the default AppArmor, seccomp and masked /proc
+    # paths turned off. The container is not privileged. See
+    # services/render/README.md.
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor=unconfined
+      - seccomp=unconfined
+      - systempaths=unconfined
+    tmpfs:
+      - /tmp:size=2g
+    volumes:
+      - render-files:/tmp/renders
+    environment:
+      ENV: production
+      RENDER_API_KEY: ${RENDER_API_KEY:?Run ./scripts/setup.sh to create .env}
+      SANDBOX_ENABLED: "true"
+      LOG_FORMAT: json
+      MAX_CONCURRENT_RENDERS: ${RENDER_MAX_CONCURRENT:-2}
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /tmp/renders
+      # The API downloads each video from this address over the compose network.
+      LOCAL_STORAGE_PUBLIC_URL_BASE: http://render:8000/files/
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+
+  # ── API: accounts, projects, queue workers ─────────────────────────────────
+  api:
+    build:
+      context: ./apps/api
+      args:
+        APK_MIRROR: ${APK_MIRROR:-}
+    image: stitcher/api:local
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rag:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+      render:
+        condition: service_healthy
+    volumes:
+      - media:/app/data/media
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      API_PREFIX: /api
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # The browser reaches the API through the web container, so both URLs
+      # are the public address of the web app.
+      PUBLIC_APP_URL: ${PUBLIC_URL:-http://localhost:8080}
+      PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:8080}
+      ALLOWED_ORIGINS: ${PUBLIC_URL:-http://localhost:8080}
+
+      MONGODB_URL: mongodb://mongo:27017/stitcher?directConnection=true
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run ./scripts/setup.sh to create .env}
+      JWT_SECRET: ${JWT_SECRET:?Run ./scripts/setup.sh to create .env}
+
+      RAG_SERVICE_URL: http://rag:7000
+      RAG_API_KEY: ${RAG_API_KEY}
+      AGENT_SERVICE_URL: http://agent:4000
+      AGENT_API_KEY: ${AGENT_API_KEY}
+      RENDER_SERVICE_URL: http://render:8000
+      RENDER_API_KEY: ${RENDER_API_KEY}
+
+      # LLM. One default model serves every role. CODER_*, DEBUGGER_* and
+      # QUERY_TRANSFORM_* override a single role.
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      CODER_PROVIDER: ${CODER_PROVIDER:-}
+      CODER_MODEL: ${CODER_MODEL:-}
+      CODER_API_KEY: ${CODER_API_KEY:-}
+      CODER_BASE_URL: ${CODER_BASE_URL:-}
+      DEBUGGER_PROVIDER: ${DEBUGGER_PROVIDER:-}
+      DEBUGGER_MODEL: ${DEBUGGER_MODEL:-}
+      DEBUGGER_API_KEY: ${DEBUGGER_API_KEY:-}
+      DEBUGGER_BASE_URL: ${DEBUGGER_BASE_URL:-}
+      QUERY_TRANSFORM_PROVIDER: ${QUERY_TRANSFORM_PROVIDER:-}
+      QUERY_TRANSFORM_MODEL: ${QUERY_TRANSFORM_MODEL:-}
+      QUERY_TRANSFORM_API_KEY: ${QUERY_TRANSFORM_API_KEY:-}
+      QUERY_TRANSFORM_BASE_URL: ${QUERY_TRANSFORM_BASE_URL:-}
+      # EMBEDDER_* is not sent from here. The RAG service embeds with its own
+      # embedder so queries match the seeded vectors.
+
+      # Voiceover
+      TTS_PROVIDER: ${TTS_PROVIDER:-gtts}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-}
+      DEFAULT_VOICEOVER_VOICE: ${DEFAULT_VOICEOVER_VOICE:-}
+      DEFAULT_VOICEOVER_LANG: ${DEFAULT_VOICEOVER_LANG:-en}
+      TTS_MAX_CONCURRENCY: ${TTS_MAX_CONCURRENCY:-3}
+
+      # Storage
+      STORAGE: ${STORAGE:-local}
+      STORAGE_DIR: /app/data/media
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-500}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+
+      # Email. console prints signup codes to this container's log.
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+
+      # Tracing stays off while the endpoint is empty.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    extra_hosts: *host-gateway
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  # ── Web: static app and reverse proxy ──────────────────────────────────────
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_BACKEND_URL: /api
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    image: stitcher/web:local
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging: *logging
+
+  # ── Observability (profile "obs", off by default) ──────────────────────────
+  # Turn it on with `docker compose --profile obs up -d` and set
+  # OTEL_SDK_DISABLED=false and OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+  # in .env. Every port below is bound to 127.0.0.1.
+  otel-collector:
+    profiles: [obs]
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      - tempo
+      - loki
+    logging: *logging
+
+  tempo:
+    profiles: [obs]
+    image: grafana/tempo:2.10.10
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    user: "0:0"
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    logging: *logging
+
+  prometheus:
+    profiles: [obs]
+    image: prom/prometheus:v3.15.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      # Tempo writes span metrics here.
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    logging: *logging
+
+  loki:
+    profiles: [obs]
+    image: grafana/loki:3.7.9
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    user: "0:0"
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    logging: *logging
+
+  grafana:
+    profiles: [obs]
+    image: grafana/grafana:13.2.5
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: dark
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor traceToMetrics
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    logging: *logging
+
+  langfuse-db:
+    profiles: [obs]
+    image: postgres:16.15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *logging
+
+  # Langfuse v2 needs only Postgres. v3 adds ClickHouse, Redis and MinIO.
+  langfuse:
+    profiles: [obs]
+    image: langfuse/langfuse:2.95.11
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3002}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-run-setup-sh}
+      SALT: ${LANGFUSE_SALT:-change-me-run-setup-sh}
+      # 64 hex characters.
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${LANGFUSE_PORT:-3002}:3000"
+    logging: *logging
+
+volumes:
+  mongo-data:
+  mongo-config:
+  redis-data:
+  media:
+  render-files:
+  tempo-data:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+  langfuse-db-data:

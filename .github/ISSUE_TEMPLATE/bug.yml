@@ -1,0 +1,50 @@
+name: Bug report
+description: Something failed, looks wrong, or produced a bad video.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A bug we can reproduce gets fixed faster.
+        Remove API keys and passwords from anything you paste.
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Prompt
+      description: The exact prompt you gave Stitcher. Say if the failure happens for every prompt.
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: LLM provider and model
+      description: For example gemini / gemini-2.5-flash, or ollama / qwen3:8b. Include per-role overrides if you set any.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Output of `docker compose logs --tail=200 api agent rag render`.
+        For a failed render, include the lines around the error.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Setup
+      description: |
+        OS, Docker version (`docker --version`), whether you used `./scripts/setup.sh`,
+        and any non-default values in `.env` (without keys).
+      placeholder: "macOS 15, Docker 28.5, default .env except EMBEDDER_PROVIDER=ollama"
+    validations:
+      required: false

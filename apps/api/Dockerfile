@@ -27,7 +27,13 @@ FROM node:20-alpine AS runtime
 # ffmpeg is required by the BullMQ video worker. fontconfig + a DejaVu font are
 # required by ffmpeg's drawtext filter when burning in text overlays — without
 # a font on the host, drawtext falls back to the "Sans" family and fails.
-RUN apk add --no-cache ffmpeg fontconfig font-dejavu
+# APK_MIRROR replaces the Alpine mirror root, for slow networks, for example
+# --build-arg APK_MIRROR=https://mirrors.edge.kernel.org/alpine (default: unchanged).
+ARG APK_MIRROR=""
+RUN if [ -n "$APK_MIRROR" ]; then \
+      sed -i "s|https\?://dl-cdn.alpinelinux.org/alpine|${APK_MIRROR%/}|g" /etc/apk/repositories; \
+    fi \
+    && apk add --no-cache ffmpeg fontconfig font-dejavu
 
 ENV NODE_ENV=production
 

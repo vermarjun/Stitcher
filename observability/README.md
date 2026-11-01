@@ -1,160 +1,115 @@
-# Stitcher Observability Backend
+# Observability
 
-Self-hosted, **opt-in** observability stack for the Stitcher video-generation
-pipeline. Traces, metrics, and logs from every service compose into one view.
-This stack lives in its own compose file so it never disturbs the core stack.
+Optional dashboards for traces, metrics, logs and LLM calls. It is off by default and costs nothing
+when off. Everything is defined in the root `compose.yaml` under the `obs` profile.
 
-Conforms to the engineering contract in [`../Plan/OBSERVABILITY.md`](../Plan/OBSERVABILITY.md).
+| Container | Image | Host port | What it does |
+|---|---|---|---|
+| `otel-collector` | `otel/opentelemetry-collector-contrib:0.164.0` | 127.0.0.1:4318 | Receives OTLP, sends traces to Tempo, metrics to Prometheus, logs to Loki. |
+| `tempo` | `grafana/tempo:2.10.10` | none | Trace store. |
+| `prometheus` | `prom/prometheus:v3.15.1` | 127.0.0.1:9090 | Metric store. Scrapes the collector. |
+| `loki` | `grafana/loki:3.7.9` | none | Log store. |
+| `grafana` | `grafana/grafana:13.2.5` | 127.0.0.1:3001 | Dashboards. Data sources are set up for you. |
+| `langfuse`, `langfuse-db` | `langfuse/langfuse:2.95.11`, `postgres:16.15-alpine` | 127.0.0.1:3002 | Prompt and cost view for LLM calls. |
 
-## What's in the box
+Every port is bound to 127.0.0.1. Change the host ports with `GRAFANA_PORT`, `PROMETHEUS_PORT` and `LANGFUSE_PORT`.
 
-| Container        | Image                                       | Host port | Role                                  |
-|------------------|---------------------------------------------|-----------|---------------------------------------|
-| otel-collector   | `otel/opentelemetry-collector-contrib:latest` | 4317/4318, 8889 | OTLP ingress → fan out          |
-| tempo            | `grafana/tempo:latest`                      | 3200      | Trace store                           |
-| prometheus       | `prom/prometheus:latest`                    | 9090      | Metric store (scrapes collector :8889) |
-| loki             | `grafana/loki:latest`                       | 3100      | Log store (native OTLP ingest)        |
-| grafana          | `grafana/grafana:latest`                    | **3001**  | Dashboards (datasources provisioned)  |
-| langfuse + db    | `langfuse/langfuse:2`, `postgres:16`        | **3002**  | LLM cost/prompt UI                    |
+## Turn it on
 
-Grafana is on **3001** (not 3000 — the API owns 3000); Langfuse on **3002**.
+1. In `.env`, uncomment these two lines:
 
-Telemetry flow:
+   ```
+   OTEL_SDK_DISABLED=false
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+   ```
 
-```
-app services ──OTLP/HTTP :4318──▶ otel-collector ─┬─ traces  ──▶ Tempo
-                                                  ├─ metrics ──▶ :8889 ◀─scrape─ Prometheus
-                                                  └─ logs    ──▶ Loki (/otlp)
-                                          Grafana reads Tempo + Prometheus + Loki
-```
+2. Start the stack with the profile:
 
-## Run it
+   ```bash
+   docker compose --profile obs up -d
+   ```
 
-From the repo root (`Stitcher_new/Stitcher/`):
+3. Open Grafana at http://localhost:3001. The user is `admin`. The password is `GRAFANA_ADMIN_PASSWORD` in `.env`
+   (`setup.sh` generates it). If the variable is missing, it is `admin`.
 
-```bash
-# Full app + observability
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.services.yml \
-  -f docker-compose.observability.yml up -d
+The **Stitcher Pipeline** dashboard shows step durations, tokens by model, queue depth, job errors, render time
+and a log panel. Panels read "No data" until a job has run.
 
-# Observability backend only (no app)
-docker compose -f docker-compose.observability.yml up -d
-```
-
-Tear down (keeps data in named volumes):
+To stop it, include the profile, otherwise compose leaves the obs containers running:
 
 ```bash
-docker compose -f docker-compose.observability.yml down
-# add -v to also wipe all telemetry/Langfuse data
+docker compose --profile obs down
 ```
 
-## URLs
+Add `-v` to also delete the stored telemetry.
 
-| Service    | URL                       | Login                              |
-|------------|---------------------------|------------------------------------|
-| Grafana    | http://localhost:3001     | `admin` / `admin` (anonymous Admin also on) |
-| Prometheus | http://localhost:9090     | —                                  |
-| Langfuse   | http://localhost:3002     | self-register on first visit       |
-| Tempo API  | http://localhost:3200     | (used by Grafana)                  |
-| Loki API   | http://localhost:3100     | (used by Grafana)                  |
+## How data flows
 
-In Grafana, the **Stitcher Pipeline** dashboard (folder *Stitcher*) is
-auto-provisioned: p50/p95 step durations, tokens by model, queue depth, job
-error rate, render p95, and a Loki logs panel. Panels show "No data" until the
-app services emit telemetry — that's expected.
+```
+api, agent, rag, render --OTLP/HTTP :4318--> otel-collector --+-- traces  --> Tempo
+                                                              +-- metrics --> :8889 <-- Prometheus
+                                                              +-- logs    --> Loki
+                                              Grafana reads Tempo, Prometheus and Loki
+```
 
-**Trace ↔ logs correlation** is wired both ways: in a Tempo trace, "Logs for
-this span" jumps to Loki filtered by trace; in a Loki log line a `trace_id`
-becomes a clickable link into Tempo.
+All four services send to `http://otel-collector:4318` over the compose network. The service names are
+`stitcher-api`, `stitcher-agent`, `stitcher-rag` and `stitcher-render`. The API sends nothing while
+`OTEL_EXPORTER_OTLP_ENDPOINT` is empty. The agent, rag and render services skip telemetry while `OTEL_SDK_DISABLED` is `true`.
 
-## Getting Langfuse API keys
+In a Tempo trace, "Logs for this span" opens Loki filtered by trace. A `trace_id` in a Loki log line links back to Tempo.
 
-1. Open http://localhost:3002 and create an account (any email/password — dev).
-2. Create an **Organization** → **Project**.
-3. Project **Settings → API Keys → Create new API key**.
-4. Copy the **Public key** (`pk-lf-…`) and **Secret key** (`sk-lf-…`).
-5. Give them to the Agent/RAG services as:
+## Langfuse
+
+Langfuse shows each prompt, reply, token count and cost.
+
+1. Open http://localhost:3002 and create an account. Signup is open, so keep the port on 127.0.0.1.
+2. Create an organization and a project, then **Settings, API Keys, Create new API key**.
+3. Put the keys in `.env`:
 
    ```
    LANGFUSE_PUBLIC_KEY=pk-lf-...
    LANGFUSE_SECRET_KEY=sk-lf-...
-   LANGFUSE_HOST=http://langfuse:3000      # inside compose
-   # LANGFUSE_HOST=http://localhost:3002   # local dev
    ```
 
-## Connecting the app services (you must do this)
+4. Restart the agent: `docker compose --profile obs up -d agent`.
 
-The core compose files are intentionally **not** edited. For api / agent-service
-/ rag-service / render-service to emit telemetry they must:
+The agent reads `LANGFUSE_HOST` (default `http://langfuse:3000` in compose). Langfuse is pinned to version 2, which
+needs only Postgres. Version 3 also needs ClickHouse, Redis and MinIO.
 
-1. Join the `stitcher-observability` network.
-2. Set `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` (and ideally
-   `OTEL_SERVICE_NAME` per the contract: `stitcher-api`, `stitcher-agent`,
-   `stitcher-rag`, `stitcher-render`).
+## Metric names
 
-A ready-to-paste override block is at the **bottom of
-`docker-compose.observability.yml`** — copy it into
-`docker-compose.observability.override.yml` and add it to your `-f` chain.
+OpenTelemetry names turn into Prometheus names with underscores. Histograms add `_bucket`, `_sum` and `_count`, and
+counters add `_total`.
 
-For **local (non-Docker) dev**, point each service at
-`OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` instead.
-
-> The service-side OTel SDK wiring (instrumentation init, span naming, the
-> BullMQ trace bridge, the `stitcher.*` metrics) is owned by the
-> service-instrumentation work — see `Plan/OBSERVABILITY.md` §3. This README
-> only covers the backend that receives it.
-
-## Metric name mapping (OTel → Prometheus)
-
-OTel dot-names become underscores in Prometheus; histograms gain
-`_bucket`/`_sum`/`_count`, counters gain `_total`:
-
-| Contract (OTel)                   | Prometheus                                    |
-|-----------------------------------|-----------------------------------------------|
+| OpenTelemetry | Prometheus |
+|---|---|
 | `stitcher.pipeline.step.duration` | `stitcher_pipeline_step_duration_milliseconds_*` |
-| `stitcher.llm.tokens`             | `stitcher_llm_tokens_total`                   |
-| `stitcher.queue.depth`            | `stitcher_queue_depth`                        |
-| `stitcher.render.duration`        | `stitcher_render_duration_milliseconds_*`     |
-| `stitcher.render.concurrency`     | `stitcher_render_concurrency`                 |
+| `stitcher.llm.tokens` | `stitcher_llm_tokens_total` |
+| `stitcher.queue.depth` | `stitcher_queue_depth` |
+| `stitcher.render.duration` | `stitcher_render_duration_milliseconds_*` |
+| `stitcher.render.concurrency` | `stitcher_render_concurrency` |
 
-The dashboard queries already use the underscore names.
-
-## Troubleshooting
-
-- **Loki fails with `bind: address already in use` on 3100.** Something on the
-  host already owns port 3100 (commonly a *locally-run* Stitcher API dev server
-  — `ts-node src/index.ts` listens on 3100). Stop that process, or remap Loki's
-  host port in `docker-compose.observability.yml` (e.g. `"3110:3100"`) and
-  update the Loki datasource URL if you query it directly. The Loki container
-  config itself is valid; this is only a host-port collision. When the API runs
-  *inside* Docker it uses 3000, so there's no clash in the full-stack case.
-- **Tempo `ingester`/`compactor` config rejected.** Some Tempo builds' strict
-  `-config.verify` rejects those top-level blocks; `tempo.yaml` is kept minimal
-  (defaults) to guarantee a clean boot. Verify any additions with
-  `docker run --rm -v $PWD/observability/tempo.yaml:/etc/tempo.yaml grafana/tempo:latest -config.verify -config.file=/etc/tempo.yaml`.
-
-## TODO before non-dev use
-
-- **Rotate all secrets** in `docker-compose.observability.yml`:
-  Grafana admin password, Langfuse `NEXTAUTH_SECRET` / `SALT` /
-  `ENCRYPTION_KEY` (`openssl rand -hex 32`), and the Postgres password.
-- Disable Grafana anonymous Admin (`GF_AUTH_ANONYMOUS_ENABLED=false`).
-- Disable Langfuse open signup (`AUTH_DISABLE_SIGNUP=true`) after creating users.
-- Langfuse is pinned to **v2** (Postgres-only). v3 needs ClickHouse + Redis +
-  MinIO — only move to `langfuse/langfuse:latest` if you add those.
-
-## Config files
+## Files
 
 ```
 observability/
-├── otel-collector-config.yaml                 # OTLP in → Tempo/Prometheus/Loki
-├── tempo.yaml                                  # trace store + span-metrics
-├── prometheus.yml                              # scrape collector :8889
-├── loki-config.yaml                            # log store, OTLP ingest
-└── grafana/
-    ├── provisioning/datasources/datasources.yaml   # Tempo+Prom+Loki + correlation
-    ├── provisioning/dashboards/dashboards.yaml      # dashboard loader
-    └── dashboards/stitcher-pipeline.json            # starter dashboard
+  otel-collector-config.yaml                   OTLP in, fan out to Tempo, Prometheus, Loki
+  tempo.yaml                                   trace store
+  prometheus.yml                               scrapes the collector on :8889
+  loki-config.yaml                             log store with OTLP ingest, 7 day retention
+  grafana/provisioning/datasources/            Tempo, Prometheus and Loki, linked to each other
+  grafana/provisioning/dashboards/             dashboard loader
+  grafana/dashboards/stitcher-pipeline.json    the starter dashboard
 ```
+
+The config files are mounted read-only into the containers, so edit them and run
+`docker compose --profile obs restart <service>`.
+
+## Before you expose it
+
+The defaults suit one person on one machine.
+
+- Set a real `GRAFANA_ADMIN_PASSWORD`. Anonymous access is off.
+- Langfuse allows anyone who can reach port 3002 to sign up. Keep it on 127.0.0.1, or set `AUTH_DISABLE_SIGNUP=true`
+  on the container after you create your account.
+- `setup.sh` generates the Langfuse secrets. If you write `.env` by hand, use `openssl rand -hex 32` for each.

@@ -1,0 +1,19 @@
+# Developer override: publish MongoDB and Redis on this computer's loopback
+# address so a service running on the host can reach them.
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d mongo redis
+#
+# Then point the service at them, for example in apps/api/.env:
+#   MONGODB_URL=mongodb://localhost:27017/stitcher?directConnection=true
+#   REDIS_HOST=localhost
+#   REDIS_PASSWORD=<REDIS_PASSWORD from the root .env>
+#
+# Do not use it on a shared host. Both ports are bound to 127.0.0.1 only.
+
+services:
+  mongo:
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
