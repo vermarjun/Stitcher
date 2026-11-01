@@ -28,7 +28,7 @@ This service executes **untrusted Python code submitted over HTTP**. The design 
 2. **Bubblewrap namespaces**: `--unshare-all` gives the render new network (empty), PID, UTS, IPC, user, cgroup and mount namespaces.
 3. **Filesystem layout**: `/usr`, `/etc`, `/lib`, `/opt` and `/var/lib/texmf` are mounted read-only; `/tmp` is a fresh tmpfs; `/work` is a bind mount of a per-job host directory and is the only writable path that outlives the process. No `/home` or `/root`.
 4. **Identity**: uid and gid 99999, all capabilities dropped (`--cap-drop ALL`).
-5. **rlimits**, set before `bwrap` starts so every process inside inherits them: `RLIMIT_CPU`, `RLIMIT_FSIZE` (512 MB), `RLIMIT_NOFILE` (1024), `RLIMIT_CORE=0`, and `RLIMIT_DATA` set to the request's memory limit.
+5. **rlimits**, set before `bwrap` starts so every process inside inherits them: `RLIMIT_CPU`, `RLIMIT_FSIZE` (512 MB), `RLIMIT_NOFILE` (1024), `RLIMIT_NPROC` (256), `RLIMIT_CORE=0`, and `RLIMIT_DATA` set to the request's memory limit.
 6. **Wall-clock timeout**: `asyncio.wait_for` plus process-group kill.
 
 The test battery at `tests/security/test_sandbox_escape.py` checks network isolation, filesystem confinement, the fork bomb, the memory bomb and the wall-clock timeout.
@@ -36,7 +36,7 @@ The test battery at `tests/security/test_sandbox_escape.py` checks network isola
 ## Known gaps
 
 - **No seccomp.** `app/assets/seccomp_manim.yaml` and `scripts/build_seccomp.py` exist but are not built into the image or passed to `bwrap`.
-- **No process-count or aggregate memory cap.** rlimits apply per process. `RLIMIT_NPROC` is counted per user rather than per sandbox, so it is not set. A fork bomb is stopped by the wall-clock kill, and a render can use `memory_mb` in each of several processes. Set a container-level limit (`--pids-limit`, `--memory`) in your orchestrator.
+- **No aggregate memory cap, and a soft process cap.** rlimits apply per process, so a render can use `memory_mb` in each of several processes. `RLIMIT_NPROC` (256) bounds a fork bomb per sandbox on Linux 5.14 or newer, but killing it can still take tens of seconds. Set container-level limits (`--pids-limit`, `--memory`) in your orchestrator.
 - **`/work` is not a tmpfs.** It is a host directory under the container's `/tmp`. The compose file mounts `/tmp` as a 2 GB tmpfs, which bounds its size; outside compose, bound it yourself.
 - **Local storage is public by URL.** See the checklist below.
 
