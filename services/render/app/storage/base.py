@@ -21,9 +21,9 @@ class Storage(Protocol):
             content_type: str | None = None) -> tuple[str, int]:
         """Upload `local_path` and return (url, bytes_written).
 
-        `folder` is a hint, not a guarantee — local backend treats it as a subdirectory,
-        cloudinary treats it as its folder tag, s3 treats it as a key prefix. Callers
-        shouldn't parse the URL to discover where the file ended up.
+        `folder` is a hint, not a guarantee: the local backend treats it as a subdirectory,
+        cloudinary treats it as its folder tag. Callers shouldn't parse the URL to
+        discover where the file ended up.
         """
         ...
 

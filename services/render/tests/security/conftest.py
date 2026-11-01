@@ -1,9 +1,9 @@
 """Security tests need the real bwrap sandbox, not the dev-only unsandboxed path.
 
-Also probes whether bwrap can actually set up its namespaces here — Docker Desktop on
-macOS disallows `pivot_root` even with SYS_ADMIN, in which case the whole suite must
-skip rather than fail spuriously. Real Linux hosts and GitHub Actions Linux runners
-satisfy the probe.
+Also probes whether bwrap can actually set up its namespaces here. Inside Docker it needs
+`--cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt seccomp=unconfined
+--security-opt systempaths=unconfined`; without systempaths=unconfined the proc mount is
+refused. When the probe fails the whole suite skips rather than fails spuriously.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ def _bwrap_works() -> bool:
         r = subprocess.run(
             ["bwrap", "--unshare-all", "--die-with-parent", "--proc", "/proc",
              "--dev", "/dev", "--tmpfs", "/tmp", "--ro-bind", "/usr", "/usr",
+             "--ro-bind", "/lib", "/lib",
              "--", "/usr/bin/true"],
             capture_output=True, text=True, timeout=5,
         )
@@ -39,8 +40,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if _BWRAP_OK:
         return
     skip = pytest.mark.skip(
-        reason="bwrap can't initialise its namespaces here (likely Docker-Desktop-on-macOS "
-               "blocking pivot_root). Run on a real Linux host or in Linux CI."
+        reason="bwrap can't initialise its namespaces here. In Docker, add --cap-add SYS_ADMIN and "
+               "--security-opt apparmor=unconfined seccomp=unconfined systempaths=unconfined."
     )
     for item in items:
         # Only skip items under tests/security/ — this conftest runs globally.

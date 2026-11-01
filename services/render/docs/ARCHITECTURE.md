@@ -6,7 +6,7 @@ The render service has ONE job: turn Manim Python code into a video URL. Every d
 
 1. **Stateless.** No DB, no cache, no queue. A single request is self-contained; N replicas scale linearly.
 2. **Sandbox-first.** Untrusted code must never touch the host. Everything else is a convenience.
-3. **Honest failure modes.** User errors are structured data in a 200 response. Service errors are 5xx. A 503 means "full, retry later" — not "code broken".
+3. **Honest failure modes.** User errors are structured data in a 200 response. Service errors are 5xx. A 503 means "full, retry later" - not "code broken".
 4. **No orchestration features.** No retries, no dead-letter queue, no progress callbacks. Those live in the caller.
 
 ## Request lifecycle
@@ -63,17 +63,17 @@ A single uvicorn process handles all requests. Concurrency is bounded by an asyn
 - `QUEUE_FULL_POLICY=reject` (default): return 503 immediately.
 - `QUEUE_FULL_POLICY=block`: wait up to `QUEUE_WAIT_TIMEOUT_SEC`, then 503.
 
-We do **not** run a thread or process pool internal to the service. Manim execution is a subprocess (`bwrap ... manim ...`), so concurrency gating happens at the "number of concurrent subprocesses" level — exactly what the semaphore measures.
+We do **not** run a thread or process pool internal to the service. Manim execution is a subprocess (`bwrap ... manim ...`), so concurrency gating happens at the "number of concurrent subprocesses" level - exactly what the semaphore measures.
 
 ## Sandbox
 
 See [SANDBOX.md](SANDBOX.md) for the threat model and escape-test battery.
 
-Short version: every render runs inside a bubblewrap child with a fresh mount namespace, no network namespace, a private `/work` directory, rlimits for CPU/RAM/FDs/processes, and (if the policy blob is present) a seccomp-BPF allowlist of syscalls. The only way out is a kernel bug, which is explicitly outside the service's threat model — run recent kernels and keep them patched.
+Short version: every render runs inside a bubblewrap child with a fresh mount namespace, no network namespace, a private `/work` directory, rlimits for CPU/RAM/FDs/processes, and (if the policy blob is present) a seccomp-BPF allowlist of syscalls. The only way out is a kernel bug, which is explicitly outside the service's threat model - run recent kernels and keep them patched.
 
 ## Storage
 
-Backends implement a `Storage` protocol: `put(local_path, folder, public, content_type) -> (url, bytes)`. The selector picks one by env var and caches it. Cloud SDKs are installed as Python extras — a local-only deployment doesn't pay the install cost for boto3 or google-cloud-storage.
+Backends implement a `Storage` protocol: `put(local_path, folder, public, content_type) -> (url, bytes)`. The selector picks one by env var and caches it. The cloudinary SDK is a Python extra, so a local-only deployment does not install it. Only `local` and `cloudinary` exist.
 
 Adding a new backend = one file in `app/storage/`, one branch in `selector.py`, one entry in the `[project.optional-dependencies]` table.
 
@@ -90,4 +90,4 @@ Adding a new backend = one file in `app/storage/`, one branch in `selector.py`, 
 - **No job persistence.** A process restart loses in-flight renders. Callers must retry.
 - **No webhooks.** The caller waits for the HTTP response. If it takes too long, they hit `timeoutSec` and get a structured failure.
 
-These are features this service will never grow — each one pulls in state, and state belongs in the layer above.
+These are features this service will never grow - each one pulls in state, and state belongs in the layer above.

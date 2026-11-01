@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 Quality = Literal["low", "medium", "high", "production", "fourk"]
 VideoFormat = Literal["mp4", "webm", "mov", "gif", "png", "svg"]
 RenderBackend = Literal["cairo", "opengl"]
-StorageBackend = Literal["local", "cloudinary", "s3", "gcs", "azure"]
+StorageBackend = Literal["local", "cloudinary"]
 SandboxTool = Literal["bubblewrap", "disabled"]
 FailurePhase = Literal[
     "validation",

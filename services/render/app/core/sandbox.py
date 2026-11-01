@@ -1,4 +1,4 @@
-"""Bubblewrap sandbox — run untrusted Manim code with namespaces + rlimits + seccomp.
+"""Bubblewrap sandbox — run untrusted Manim code with namespaces + rlimits.
 
 Threat model: the code we execute is arbitrary Python written (or pasted) by someone we don't
 trust. We assume it may try to read /etc/passwd, fork forever, eat all memory, exfiltrate data,
@@ -6,14 +6,18 @@ or write to random paths. We do NOT assume a kernel 0-day — if the attacker ha
 userspace sandbox saves us.
 
 Defences (layered, each one cheap):
-  1. Filesystem: --unshare-all gives a fresh mount namespace; we bind ONLY /usr (ro), /etc (ro),
-     /opt/venv (ro), and a private work dir (rw). No /home, no /root, no /var.
+  1. Filesystem: --unshare-all gives a fresh mount namespace; we bind /usr, /etc, /lib, /opt
+     and /var/lib/texmf read-only, a fresh tmpfs /tmp, and a per-job host directory
+     read-write at /work. No /home, no /root.
   2. Network: --unshare-net drops the net namespace entirely. No sockets resolve.
   3. PIDs: --unshare-pid; process sees itself as PID 1, can't signal the host.
-  4. UID: --uid 99999 --gid 99999 — a user that doesn't exist on the host.
-  5. Resources: setrlimit() applied via a preexec shim (RSS, CPU, FSIZE, NOFILE, NPROC).
+  4. UID: --uid 99999 --gid 99999 — a user that doesn't exist on the host. All capabilities dropped.
+  5. Resources: setrlimit() applied in the child before it execs bwrap, so the limits are
+     inherited by everything inside the sandbox: CPU time, file size, core dumps, open files,
+     and data segment size (the memory cap).
   6. Wall-clock: asyncio.wait_for — if bwrap itself hangs, we kill the whole process group.
-  7. Syscalls: optional seccomp-bpf filter loaded from a compiled .bpf file (see scripts/).
+
+There is NO seccomp filter. The policy in app/assets and scripts/build_seccomp.py are not wired in.
 
 If bwrap isn't available (macOS dev, CI without --privileged) we fall back to a no-sandbox
 subprocess when SANDBOX_ENABLED=false — the config layer refuses this in prod.
@@ -22,6 +26,7 @@ subprocess when SANDBOX_ENABLED=false — the config layer refuses this in prod.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import resource
 import shutil
@@ -75,7 +80,6 @@ class Sandbox:
         self.enabled = s.sandbox_enabled
         self.bwrap = shutil.which("bwrap")
         self.python = s.python_path  # inside-sandbox interpreter path
-        self.seccomp_path = s.sandbox_seccomp_policy_path  # may be None
         if self.enabled and self.bwrap is None:
             raise RuntimeError(
                 "SANDBOX_ENABLED=true but bwrap binary not found on PATH. "
@@ -108,7 +112,7 @@ class Sandbox:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 start_new_session=True,  # own process group so we can SIGKILL the tree
-                preexec_fn=None if self.enabled else _apply_rlimits(limits),
+                preexec_fn=_apply_rlimits(limits),
             )
         except (OSError, FileNotFoundError) as e:
             return SandboxResult(
@@ -192,34 +196,38 @@ class Sandbox:
             "--cap-drop", "ALL",
             "--new-session",
         ]
-        if self.seccomp_path and Path(self.seccomp_path).exists():
-            bwrap_args += ["--seccomp", "10"]  # fd 10, we'd pipe the bpf in via pass_fds
-            # NB: wiring the seccomp fd is done in a later commit (needs custom subprocess dance)
         return [*bwrap_args, "--", *inner]
 
 
 def _apply_rlimits(limits: SandboxLimits):
-    """preexec_fn for the no-sandbox fallback path. Applied in the child before exec().
+    """preexec_fn: apply rlimits in the child before it execs bwrap (or manim, unsandboxed).
 
-    These rlimits also apply inside bwrap (it inherits them), but we rely mainly on namespaces
-    for the sandboxed path — rlimits are defence in depth, not the primary boundary.
+    rlimits survive exec and are inherited by every process inside the sandbox, so the same
+    caps hold in both modes. Each process gets its own copy of the limit; none of them is an
+    aggregate across the sandbox.
     """
     def _inner() -> None:
-        cpu_sec = int(limits.timeout_sec * max(limits.cpu_count, 1.0)) + 5
-        # RLIMIT_AS (virtual address space) is intentionally omitted: Python + ffmpeg + Cairo
-        # map several GB of virtual space even when physical usage is low, so any 2GB cap
-        # silently kills the ffmpeg gif-combining step.  In production, memory is bounded by
-        # bubblewrap cgroup limits, not rlimits.
+        # Backstop only: the most CPU time a process could burn inside the wall-clock limit
+        # (every host core busy), so multi-threaded renders are never cut off early.
+        cpu_sec = int(limits.timeout_sec * max(limits.cpu_count, os.cpu_count() or 1, 1.0)) + 5
+        mem = limits.memory_mb * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_sec, cpu_sec))
         resource.setrlimit(resource.RLIMIT_FSIZE, (512 * 1024 * 1024, 512 * 1024 * 1024))
-        # RLIMIT_NPROC is user-level (not per-process) — setting it in preexec_fn would cap
-        # the entire renderer user's thread count, breaking concurrent renders.
+        resource.setrlimit(resource.RLIMIT_NOFILE, (1024, 1024))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        # Memory cap. RLIMIT_DATA counts heap and private writable mappings (what a memory
+        # bomb allocates), per process. RLIMIT_AS is NOT used: Python + ffmpeg + Cairo map
+        # several GB of virtual space at low physical usage, so any AS cap kills the ffmpeg
+        # gif-combining step. Needs Linux >= 4.7 to cover mmap; on macOS it is best effort.
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_DATA, (mem, mem))
+        # RLIMIT_NPROC is deliberately not set: it is counted per user, not per sandbox, so a
+        # cap here would also throttle the API process and concurrent renders. Process count
+        # is bounded by the PID namespace and the wall-clock kill instead.
     return _inner
 
 
 def _kill_tree(pid: int) -> None:
-    import contextlib
     with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(os.getpgid(pid), signal.SIGKILL)
 

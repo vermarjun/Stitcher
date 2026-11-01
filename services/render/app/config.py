@@ -35,23 +35,14 @@ class Settings(BaseSettings):
     sandbox_timeout_default: int = 120
     sandbox_memory_mb_default: int = 2048
     sandbox_cpu_default: float = 1.5
-    sandbox_seccomp_policy_path: Path | None = None
-    """If set, passed to bwrap --seccomp. Generated at image build time."""
 
     # --- Storage ---
-    storage_backend: Literal["local", "cloudinary", "s3", "gcs", "azure"] = "local"
+    storage_backend: Literal["local", "cloudinary"] = "local"
     local_storage_path: Path = Path("/tmp/renders")
     local_storage_public_url_base: str = "file://"
 
     # Cloudinary
     cloudinary_url: str | None = None
-
-    # S3 / R2 / MinIO
-    s3_endpoint: str | None = None
-    s3_bucket: str | None = None
-    s3_access_key: str | None = None
-    s3_secret_key: str | None = None
-    s3_region: str = "us-east-1"
 
     # --- Concurrency ---
     max_concurrent_renders: int = Field(default_factory=lambda: multiprocessing.cpu_count())
@@ -72,10 +63,6 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "text"] = "json"
     metrics_enabled: bool = True
-
-    # --- Host / port ---
-    host: str = "0.0.0.0"
-    port: int = 8000
 
     @field_validator("sandbox_enabled")
     @classmethod

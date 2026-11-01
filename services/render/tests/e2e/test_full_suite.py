@@ -9,9 +9,7 @@ Run: python tests/e2e/test_full_suite.py
 """
 
 import base64
-import json
 import os
-import struct
 import sys
 import time
 import wave
@@ -289,7 +287,7 @@ from manim import *
 class MultilineAlign(Scene):
     def construct(self):
         eq = MathTex(
-            r"\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}",
+            r"\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}",
             font_size=48,
         )
         self.play(Write(eq))
@@ -323,7 +321,7 @@ from manim import *
 
 class ColorHighlight(Scene):
     def construct(self):
-        eq = MathTex(r"e^{i\pi} + 1 = 0", font_size=64)
+        eq = MathTex(r"e^{i\\pi} + 1 = 0", font_size=64)
         eq.set_color_by_tex("e", YELLOW)
         eq.set_color_by_tex("i", BLUE)
         eq.set_color_by_tex("\\pi", RED)
@@ -331,7 +329,7 @@ class ColorHighlight(Scene):
         self.wait(0.5)
 """, "ColorHighlight")
 
-    render("latex_invalid_raises_error", """
+    render("latex_invalid_raises_error", r"""
 from manim import *
 
 class BadLatex(Scene):
@@ -614,7 +612,7 @@ class WithAudio(Scene):
             "gain": 0,
         },
     }
-    r = run("audio_mux_wav", payload, expect_success=True,
+    run("audio_mux_wav", payload, expect_success=True,
             extra_checks=[("render.hasAudio", True)])
 
 
@@ -749,7 +747,7 @@ def test_edge_cases_and_errors():
     print("\n── Edge Cases & Error Handling ─────────────────────────────────────")
 
     # Syntax error
-    r = run("error_syntax", {
+    run("error_syntax", {
         "code": "from manim import *\n\nclass Bad(Scene:\n    pass",
         "sceneClass": "Bad",
         "render": {"quality": "low", "format": "mp4"},
@@ -863,7 +861,7 @@ def print_results():
     failed = [r for r in results if not r.passed]
 
     print("\n" + "=" * 70)
-    print(f"  E2E TEST REPORT — manim-render-service")
+    print("  E2E TEST REPORT — manim-render-service")
     print("=" * 70)
 
     for r in results:
@@ -890,7 +888,7 @@ def print_results():
 
 
 if __name__ == "__main__":
-    print(f"\nmanim-render-service E2E Test Suite")
+    print("\nmanim-render-service E2E Test Suite")
     print(f"Target: {BASE_URL}")
     print(f"API Key: {'*' * 8}{API_KEY[-4:]}")
 

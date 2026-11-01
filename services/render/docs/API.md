@@ -1,6 +1,6 @@
 # API Reference
 
-All endpoints return JSON. All request bodies are validated strictly — unknown fields are rejected.
+All endpoints return JSON. All request bodies are validated strictly - unknown fields are rejected.
 
 Authentication: every non-observability endpoint requires `X-Api-Key: <RENDER_API_KEY>`.
 `/health`, `/capabilities`, `/metrics`, `/`, `/docs`, `/openapi.json` are public.
@@ -37,7 +37,7 @@ Submit Manim code; get back a rendered video URL or a structured failure.
   },
 
   "storage": {
-    "backend": "local",          // local | cloudinary | s3 | gcs | azure
+    "backend": "local",          // local | cloudinary
     "folder": "renders",
     "public": true,
     "generateThumbnail": true,
@@ -56,7 +56,7 @@ Submit Manim code; get back a rendered video URL or a structured failure.
 }
 ```
 
-### Response — success
+### Response - success
 
 HTTP 200.
 
@@ -85,7 +85,7 @@ HTTP 200.
 }
 ```
 
-### Response — failure (HTTP 200, `success: false`)
+### Response - failure (HTTP 200, `success: false`)
 
 The user's code was bad. Still a 200 so callers don't conflate "their code broke" with "my service broke".
 
@@ -108,7 +108,7 @@ The user's code was bad. Still a 200 so callers don't conflate "their code broke
 }
 ```
 
-### Saturation — HTTP 503
+### Saturation - HTTP 503
 
 When all render slots are busy:
 
@@ -129,7 +129,7 @@ Treat as a signal to back off, not a user-level error.
 | 400  | Malformed JSON |
 | 401  | Missing / invalid `X-Api-Key` |
 | 422  | Schema violation (wrong type, unknown field, bad `sceneClass` pattern) |
-| 500  | Bug in the service — alert, don't retry |
+| 500  | Bug in the service - alert, don't retry |
 | 503  | Saturation (above) or dependency down (see `/health`) |
 
 ---
@@ -138,9 +138,9 @@ Treat as a signal to back off, not a user-level error.
 
 Probe of every dependency the service needs. Returns `status: "ok" | "degraded" | "down"`.
 
-- `"ok"` — all checks pass, HTTP 200.
-- `"degraded"` — only advisory checks fail (e.g. no LaTeX), HTTP 200. `MathTex` scenes won't render.
-- `"down"` — at least one critical check fails, HTTP 503.
+- `"ok"` - all checks pass, HTTP 200.
+- `"degraded"` - only advisory checks fail (e.g. no LaTeX), HTTP 200. `MathTex` scenes won't render.
+- `"down"` - at least one critical check fails, HTTP 503.
 
 Suitable for Kubernetes liveness AND readiness probes.
 
@@ -165,7 +165,7 @@ What this particular deployment can actually do. Use before sending unusual work
 }
 ```
 
-`storage` reflects which backends actually have their SDKs installed in this image — not the full list the code supports.
+`storage` reflects which backends actually have their SDKs installed in this image - not the full list the code supports.
 
 ---
 
@@ -173,10 +173,10 @@ What this particular deployment can actually do. Use before sending unusual work
 
 Prometheus exposition. Four series:
 
-- `mrs_renders_total{status, category}` — completed renders
-- `mrs_render_seconds{phase}` — per-phase duration histogram
-- `mrs_active_renders` — current in-flight count (matches `/health.checks.semaphore.active`)
-- `mrs_saturated_rejections_total` — 503s due to full slots
+- `mrs_renders_total{status, category}` - completed renders
+- `mrs_render_seconds{phase}` - per-phase duration histogram
+- `mrs_active_renders` - current in-flight count (matches `/health.checks.semaphore.active`)
+- `mrs_saturated_rejections_total` - 503s due to full slots
 
 Disabled entirely when `METRICS_ENABLED=false`.
 

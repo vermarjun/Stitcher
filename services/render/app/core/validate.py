@@ -39,7 +39,7 @@ ALLOWED_TOP_LEVEL_IMPORTS: frozenset[str] = frozenset({
     "manim_chess", "manim_physics", "manim_chemistry",
     "manim_ml", "manim_dsa", "manim_Astronomy",
     # Extra deps pulled in by plugins (networkx for DSA, PIL/Pillow for ML).
-    "networkx", "PIL", "pymunk", "shapely", "pandas", "xmltodict",
+    "networkx", "pymunk", "shapely", "pandas", "xmltodict",
     "__future__",
 })
 
