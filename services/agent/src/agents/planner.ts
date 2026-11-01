@@ -40,9 +40,10 @@ export async function plannerNode(state: GraphState): Promise<Partial<GraphState
   publishEvent(jobId, "planner_started", { jobId, voiceover });
   log.info({ jobId, voiceover }, "Planner started");
 
-  const plannerCfg = modelConfig.planner ?? {
-    provider: config.defaultProvider,
-    model: config.defaultModelPlanner,
+  const plannerCfg = {
+    ...modelConfig.planner,
+    provider: modelConfig.planner?.provider ?? config.defaultProvider,
+    model: modelConfig.planner?.model ?? config.defaultModelPlanner,
   };
 
   const model = getModel(plannerCfg);

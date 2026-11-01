@@ -27,6 +27,6 @@ export async function authMiddleware(
   }
 }
 
-export function registerAuth(app: FastifyInstance): void {
+export function registerAuth(_app: FastifyInstance): void {
   // Applied per-route in api/* files — not globally so /health doesn't require auth
 }

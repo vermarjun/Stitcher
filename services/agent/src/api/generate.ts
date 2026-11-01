@@ -84,8 +84,6 @@ const GenerateRequestSchema = z.object({
   meta: z.object({ traceId: z.string().optional() }).optional(),
 });
 
-type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
-
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export function registerGenerate(app: FastifyInstance): void {
@@ -105,7 +103,7 @@ export function registerGenerate(app: FastifyInstance): void {
 
       log.info({ jobId, prompt: body.prompt.slice(0, 80), wait }, "Generate job created");
 
-      const emitter = createEmitter(jobId);
+      createEmitter(jobId);
       publishEvent(jobId, "job_started", { mode: "generate" });
 
       const initialState = {

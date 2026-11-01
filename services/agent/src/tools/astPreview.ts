@@ -10,7 +10,6 @@
 
 import { spawn } from "child_process";
 import { tool } from "@langchain/core/tools";
-import { z } from "zod";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
 
@@ -67,8 +66,10 @@ export async function astPreviewImpl(code: string): Promise<{
   });
 }
 
+// JSON Schema instead of zod: zod 3.25 + @langchain/core 0.3.80 make tsc blow up (TS2589, multi-GB heap).
 export const astPreviewTool = tool(
-  async ({ code }: { code: string }): Promise<string> => {
+  async (input): Promise<string> => {
+    const { code } = input as { code: string };
     const result = await astPreviewImpl(code);
     return JSON.stringify(result);
   },
@@ -78,8 +79,10 @@ export const astPreviewTool = tool(
       "Analyse Python code structure without executing it. " +
       "Returns top-level class names, imports, and functions. " +
       "Use during code drafting to verify the Scene class name and imports are correct.",
-    schema: z.object({
-      code: z.string().describe("Python source code to analyse"),
-    }),
+    schema: {
+      type: "object",
+      properties: { code: { type: "string", description: "Python source code to analyse" } },
+      required: ["code"],
+    } as const,
   }
 );

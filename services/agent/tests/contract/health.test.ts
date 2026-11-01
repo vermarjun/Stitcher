@@ -6,6 +6,7 @@
 process.env["AGENT_API_KEY"] = "test-key-for-contract-tests";
 process.env["MANIM_API_INDEX_PATH"] = require("path").join(__dirname, "../../src/assets/manim_api_index.json");
 
+import "./mocks";
 import Fastify from "fastify";
 import { registerHealth } from "../../src/api/health";
 

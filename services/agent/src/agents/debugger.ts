@@ -9,7 +9,7 @@
  */
 
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { GraphState, ValidationReport } from "../graph/state.js";
+import { GraphState } from "../graph/state.js";
 import { getModel } from "../models/factory.js";
 import { getPrompt } from "../prompts/registry.js";
 import { lookupCheatsheet } from "../tools/cheatsheet.js";
@@ -144,6 +144,7 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
       ...(takeLastUsage() ?? {
         role: "debugger", provider: "unknown", model: "unknown",
         inputTokens: 0, outputTokens: 0, durationMs: 0,
+        timestamp: new Date().toISOString(),
       }),
       systemPrompt,
       userPrompt: userContent,
@@ -182,6 +183,7 @@ export async function debuggerNode(state: GraphState): Promise<Partial<GraphStat
       ...(takeLastUsage() ?? {
         role: "debugger", provider: "unknown", model: "unknown",
         inputTokens: 0, outputTokens: 0, durationMs: 0,
+        timestamp: new Date().toISOString(),
       }),
       systemPrompt,
       userPrompt: userContent,

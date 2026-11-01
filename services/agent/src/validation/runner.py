@@ -58,8 +58,12 @@ def check_pyflakes(code: str) -> dict:
         import io
         tree = ast.parse(code)
         w = Checker(tree, "<string>")
-        if w.messages:
-            msg = w.messages[0]
+        # Manim scenes always start with `from manim import *`, so star-import
+        # notices are expected and must not fail validation.
+        star_notices = ("ImportStarUsed", "ImportStarUsage")
+        messages = [m for m in w.messages if type(m).__name__ not in star_notices]
+        if messages:
+            msg = messages[0]
             return {
                 "status": "fail",
                 "error": str(msg.message % msg.message_args),

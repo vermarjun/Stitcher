@@ -6,9 +6,14 @@
 process.env["AGENT_API_KEY"] = "test-key-for-contract-tests";
 process.env["MANIM_API_INDEX_PATH"] = require("path").join(__dirname, "../../src/assets/manim_api_index.json");
 
+import "./mocks";
 import Fastify from "fastify";
 import { registerPlan } from "../../src/api/plan";
 import { registerHealth } from "../../src/api/health";
+
+jest.mock("../../src/graph/planGraph", () => ({
+  buildPlanGraph: () => ({ invoke: async (state: object) => ({ ...state, scenes: [{ index: 0, prompt: "Show a square" }], styleManifest: {} }) }),
+}));
 
 const API_KEY = "test-key-for-contract-tests";
 
@@ -58,7 +63,7 @@ describe("POST /plan contract", () => {
     expect(resp.statusCode).toBe(400);
   });
 
-  it("accepts valid input (graph may fail without real LLM, but not 400/401)", async () => {
+  it("accepts valid input and returns the planned scenes", async () => {
     const resp = await app.inject({
       method: "POST",
       url: "/plan",
@@ -71,7 +76,7 @@ describe("POST /plan contract", () => {
         limits: { timeoutSec: 15 },
       },
     });
-    expect([200, 500]).toContain(resp.statusCode);
+    expect(resp.statusCode).toBe(200);
     const body = resp.json<{ jobId: string; success: boolean }>();
     expect(body).toHaveProperty("jobId");
     expect(body).toHaveProperty("success");

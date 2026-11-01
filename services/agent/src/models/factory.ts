@@ -37,7 +37,7 @@ export interface ModelConfig {
   model: string;
   temperature?: number;
   maxTokens?: number;
-  /** Required for ollama or any self-hosted OpenAI-compat endpoint. */
+  /** Optional override for an OpenAI-compatible endpoint. */
   baseURL?: string;
   /**
    * Freeform params block — per-request override for temperature, maxTokens,
@@ -67,33 +67,29 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
     provider === "opencodego" ||
     provider === "ollama"
   ) {
-    const apiKey =
-      cfg.apiKey ??
-      (provider === "openai" ? config.openaiApiKey : undefined) ??
-      (provider === "openrouter" ? config.openrouterApiKey : undefined) ??
-      (provider === "groq" ? config.groqApiKey : undefined) ??
-      (provider === "opencodego" ? config.opencodeGoApiKey : undefined) ??
-      "ollama"; // Ollama doesn't need a real key
-
-    const baseURL =
-      cfg.baseURL ?? OPENAI_COMPAT_BASE_URLS[provider] ?? undefined;
-
-    if (!apiKey && provider !== "ollama") {
+    const providerKeys: Record<string, [string, string | undefined]> = {
+      openai: ["OPENAI_API_KEY", config.openaiApiKey],
+      openrouter: ["OPENROUTER_API_KEY", config.openrouterApiKey],
+      groq: ["GROQ_API_KEY", config.groqApiKey],
+      opencodego: ["OPENCODE_GO_API_KEY", config.opencodeGoApiKey],
+    };
+    const apiKey = cfg.apiKey || (provider === "ollama" ? "ollama" : providerKeys[provider]?.[1]);
+    if (!apiKey) {
       throw new Error(
-        `No API key for provider "${provider}". Supply apiKey in modelConfig or set the env var.`
+        `No API key for provider "${provider}". Set ${providerKeys[provider]?.[0]} or supply modelConfig.apiKey.`
       );
     }
+    const baseURL = cfg.baseURL ?? (provider === "ollama"
+      ? config.ollamaBaseUrl : OPENAI_COMPAT_BASE_URLS[provider]);
 
-    // Build modelKwargs: start with the safe default (disable thinking for
-    // opencode.ai zen models), then merge any passthrough keys from params.
-    // The request can override enable_thinking and add any other keys.
-    const { temperature: _t, maxTokens: _m, ...passthroughParams } = cfg.params ?? {};
+    const { temperature: _t, maxTokens: _m, enable_thinking, ...passthroughParams } = cfg.params ?? {};
     const modelKwargs: Record<string, unknown> = {
-      enable_thinking: false,   // safe default — request can override via params
       ...passthroughParams,
+      ...(provider === "opencodego" ? { enable_thinking: enable_thinking ?? false } : {}),
     };
 
-    return new ChatOpenAI({
+    // Typed as unknown: assigning ChatOpenAI to BaseChatModel hits TS2589 (deep generics).
+    const chat: unknown = new ChatOpenAI({
       modelName: model,
       temperature,
       // Cap output so a "thinking" model can't burn an unbounded budget; a full
@@ -103,12 +99,13 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
       configuration: baseURL ? { baseURL } : undefined,
       modelKwargs,
     });
+    return chat as BaseChatModel;
   }
 
   // ── Anthropic ─────────────────────────────────────────────────────────────
   if (provider === "anthropic") {
     const apiKey = cfg.apiKey ?? config.anthropicApiKey;
-    if (!apiKey) throw new Error("No API key for provider 'anthropic'.");
+    if (!apiKey) throw new Error("No API key for provider 'anthropic'. Set ANTHROPIC_API_KEY or supply modelConfig.apiKey.");
     return new ChatAnthropic({
       modelName: model,
       temperature,
@@ -120,13 +117,14 @@ export function getModel(cfg: ModelConfig): BaseChatModel {
   // ── Google Gemini ─────────────────────────────────────────────────────────
   if (provider === "gemini") {
     const apiKey = cfg.apiKey ?? config.geminiApiKey;
-    if (!apiKey) throw new Error("No API key for provider 'gemini'.");
-    return new ChatGoogleGenerativeAI({
+    if (!apiKey) throw new Error("No API key for provider 'gemini'. Set GEMINI_API_KEY or supply modelConfig.apiKey.");
+    const chat: unknown = new ChatGoogleGenerativeAI({
       modelName: model,
       temperature,
       maxOutputTokens: maxTokens,
       apiKey,
     });
+    return chat as BaseChatModel;
   }
 
   // ── AWS Bedrock ───────────────────────────────────────────────────────────

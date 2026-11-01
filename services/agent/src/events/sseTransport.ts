@@ -18,6 +18,7 @@ export function streamJob(jobId: string, reply: FastifyReply, lastEventId?: stri
     reply.status(404).send({ error: "Job not found or already complete." });
     return;
   }
+  const jobEmitter = emitter;
 
   // SSE headers
   reply.raw.writeHead(200, {
@@ -57,7 +58,7 @@ export function streamJob(jobId: string, reply: FastifyReply, lastEventId?: stri
 
   function cleanup(): void {
     clearInterval(heartbeat);
-    emitter.removeListener("event", onEvent);
+    jobEmitter.removeListener("event", onEvent);
     log.debug({ jobId }, "SSE client disconnected");
   }
 

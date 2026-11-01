@@ -17,6 +17,7 @@ const config: Config = {
       isolatedModules: true,
     }],
   },
+  setupFiles: ["<rootDir>/tests/setup.ts"],
   clearMocks: true,
   testTimeout: 30000,
 };

@@ -10,7 +10,7 @@ function required(key: string): string {
 }
 
 function opt(key: string, fallback: string): string {
-  return process.env[key] ?? fallback;
+  return process.env[key] || fallback;
 }
 
 function optBool(key: string, fallback: boolean): boolean {
@@ -24,6 +24,20 @@ function optInt(key: string, fallback: number): number {
   return v ? parseInt(v, 10) : fallback;
 }
 
+// Defaults stay together so switching DEFAULT_PROVIDER also switches models.
+export const DEFAULT_MODELS: Record<string, string> = {
+  openai: "gpt-4.1",
+  anthropic: "claude-sonnet-4-6",
+  gemini: "gemini-3-flash-preview",
+  openrouter: "openai/gpt-4.1",
+  groq: "llama-3.3-70b-versatile",
+  ollama: "qwen3:8b",
+  opencodego: "kimi-k2.5",
+  bedrock: "anthropic.claude-sonnet-4-6",
+};
+const defaultProvider = opt("DEFAULT_PROVIDER", "openai");
+const defaultModel = DEFAULT_MODELS[defaultProvider] ?? "";
+
 export const config = {
   agentApiKey: required("AGENT_API_KEY"),
   host: opt("HOST", "0.0.0.0"),
@@ -32,10 +46,10 @@ export const config = {
 
   redisUrl: opt("CHECKPOINT_REDIS_URL", "redis://localhost:6379"),
 
-  defaultProvider: opt("DEFAULT_PROVIDER", "openai"),
-  defaultModelPlanner: opt("DEFAULT_MODEL_PLANNER", "gpt-4o"),
-  defaultModelCoder: opt("DEFAULT_MODEL_CODER", "gpt-4o"),
-  defaultModelDebugger: opt("DEFAULT_MODEL_DEBUGGER", "gpt-4o"),
+  defaultProvider,
+  defaultModelPlanner: opt("DEFAULT_MODEL_PLANNER", defaultModel),
+  defaultModelCoder: opt("DEFAULT_MODEL_CODER", defaultModel),
+  defaultModelDebugger: opt("DEFAULT_MODEL_DEBUGGER", defaultModel),
 
   openaiApiKey: process.env["OPENAI_API_KEY"],
   anthropicApiKey: process.env["ANTHROPIC_API_KEY"],
@@ -43,6 +57,8 @@ export const config = {
   openrouterApiKey: process.env["OPENROUTER_API_KEY"],
   groqApiKey: process.env["GROQ_API_KEY"],
   opencodeGoApiKey: process.env["OPENCODE_GO_API_KEY"],
+
+  ollamaBaseUrl: opt("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
 
   enableWebSearch: optBool("ENABLE_WEB_SEARCH", false),
   webSearchProvider: opt("WEB_SEARCH_PROVIDER", "tavily") as "tavily" | "serper" | "brave",
@@ -90,8 +106,7 @@ export const config = {
     "RUFF_CONFIG_PATH",
     path.join(__dirname, "assets", "ruff_manim.toml")
   ),
-  // Directory holding per-plugin skill docs (manim-<plugin>.md). Bind-mounted in
-  // docker at /srv/dist/prompts/skills (see docker-compose.services.yml).
+  // Directory holding bundled per-plugin skill docs (manim-<plugin>.md).
   skillsDir: opt("SKILLS_DIR", path.join(__dirname, "prompts", "skills")),
   pythonPath: opt("PYTHON_PATH", "python3"),
 } as const;

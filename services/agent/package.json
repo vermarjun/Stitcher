@@ -4,16 +4,14 @@
   "description": "Agentic Manim code-generation service: prompt → validated Manim Python scenes",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node copy-assets.cjs",
     "dev": "tsx watch src/index.ts",
     "start": "node -r ./dist/instrumentation.js dist/index.js",
-    "lint": "eslint src --ext .ts",
     "typecheck": "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit",
     "test": "jest --runInBand",
     "test:unit": "jest --testPathPattern=tests/unit",
     "test:contract": "jest --testPathPattern=tests/contract",
-    "test:integration": "jest --testPathPattern=tests/integration",
-    "eval": "tsx scripts/eval_prompts.ts"
+    "test:integration": "jest --testPathPattern=tests/integration"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

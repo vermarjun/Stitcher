@@ -8,7 +8,6 @@
 
 import * as fs from "fs";
 import { tool } from "@langchain/core/tools";
-import { z } from "zod";
 import { config } from "../config.js";
 import { getLogger } from "../logging.js";
 
@@ -44,8 +43,10 @@ export function checkSymbolsSync(symbols: string[]): { valid: boolean; missing: 
 }
 
 /** LangChain tool — given to planner and coder agents. */
+// JSON Schema instead of zod: zod 3.25 + @langchain/core 0.3.80 make tsc blow up (TS2589, multi-GB heap).
 export const manimApiCheckTool = tool(
-  async ({ symbols }: { symbols: string[] }): Promise<string> => {
+  async (input): Promise<string> => {
+    const { symbols } = input as { symbols: string[] };
     const index = loadIndex();
     const results = symbols.map((sym) => {
       if (sym in index) {
@@ -73,10 +74,16 @@ export const manimApiCheckTool = tool(
       "Check whether Manim symbols (class names, functions) exist in the installed version. " +
       "Call this before finalising requiredSymbols in a scene plan or before emitting code. " +
       "Returns { valid, missing, results } where results includes suggestions for missing symbols.",
-    schema: z.object({
-      symbols: z
-        .array(z.string())
-        .describe("List of Manim symbol names to verify, e.g. ['Scene', 'MathTex', 'Axes']"),
-    }),
+    schema: {
+      type: "object",
+      properties: {
+        symbols: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of Manim symbol names to verify, e.g. ['Scene', 'MathTex', 'Axes']",
+        },
+      },
+      required: ["symbols"],
+    } as const,
   }
 );

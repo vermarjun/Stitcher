@@ -7,7 +7,7 @@
  */
 
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { GraphStateAnnotation, GraphState, SceneState } from "./state.js";
+import { GraphStateAnnotation, GraphState } from "./state.js";
 import { plannerNode } from "../agents/planner.js";
 import { codeGenNode } from "../agents/codeGen.js";
 import { refinerNode } from "../agents/refiner.js";
