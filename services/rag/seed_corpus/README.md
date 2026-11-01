@@ -58,9 +58,26 @@ seed_corpus/
 }
 ```
 
+## Plugin paths (`MANIM_PLUGINS_DIR`)
+
+Plugin checkouts and their `.venv` directories are read from `MANIM_PLUGINS_DIR`.
+`render_and_verify.py` also accepts `--plugins-root`. The default is the
+monorepo's vendored tree, `services/render/vendor`, resolved relative to this
+directory (`../../render/vendor`), so no absolute paths are required.
+
+Each plugin is expected at `$MANIM_PLUGINS_DIR/<plugin>/`; the timeout wrapper
+and API extractor are read from `$MANIM_PLUGINS_DIR/_render_timeout.sh` and
+`$MANIM_PLUGINS_DIR/_extract_api.py`.
+
+```bash
+export MANIM_PLUGINS_DIR=/path/to/plugin-checkouts
+# or, for a single run:
+python render_and_verify.py --plugins-root /path/to/plugin-checkouts
+```
+
 ## Step 1: Render-gate
 
-Uses the hard-timeout wrapper at `_render_timeout.sh` with each plugin's `.venv`.
+Uses the hard-timeout wrapper at `$MANIM_PLUGINS_DIR/_render_timeout.sh` with each plugin's `.venv`.
 
 ```bash
 # Render all (idempotent — only re-renders failed examples):
@@ -127,7 +144,7 @@ python seed.py --plugin <plugin> --rag-url ... --rag-key ...
 
 The proof subset covers one API per plugin. To seed the full corpus with all
 plugin APIs:
-1. Extract API list: `python /Users/vermarjun/Desktop/Manim\ plugins/_extract_api.py <plugin>`
+1. Extract API list: `python "$MANIM_PLUGINS_DIR/_extract_api.py" <plugin>`
 2. Author 5–10 examples per API in `examples/<plugin>/<api>/`
 3. Run `python render_and_verify.py --plugin <plugin>`
 4. Run `python seed.py --plugin <plugin> --rag-url ... --rag-key ...`
@@ -136,12 +153,12 @@ plugin APIs:
 
 | Plugin | .venv path |
 |--------|-----------|
-| manim-physics | /Users/vermarjun/Desktop/Manim plugins/manim-physics/.venv |
-| manim-chess | /Users/vermarjun/Desktop/Manim plugins/manim-chess/.venv |
-| manim-chemistry | /Users/vermarjun/Desktop/Manim plugins/manim-chemistry/.venv |
-| manim-dsa | /Users/vermarjun/Desktop/Manim plugins/manim-dsa/.venv |
-| manim-ml | /Users/vermarjun/Desktop/Manim plugins/manim-ml/.venv |
-| manim-astronomy | /Users/vermarjun/Desktop/Manim plugins/manim-astronomy/.venv |
+| manim-physics | `$MANIM_PLUGINS_DIR/manim-physics/.venv` |
+| manim-chess | `$MANIM_PLUGINS_DIR/manim-chess/.venv` |
+| manim-chemistry | `$MANIM_PLUGINS_DIR/manim-chemistry/.venv` |
+| manim-dsa | `$MANIM_PLUGINS_DIR/manim-dsa/.venv` |
+| manim-ml | `$MANIM_PLUGINS_DIR/manim-ml/.venv` |
+| manim-astronomy | `$MANIM_PLUGINS_DIR/manim-astronomy/.venv` |
 
-Render timeout wrapper: `/Users/vermarjun/Desktop/Manim plugins/_render_timeout.sh`
+Render timeout wrapper: `$MANIM_PLUGINS_DIR/_render_timeout.sh`
 Usage: `bash _render_timeout.sh <timeout_s> <venv_dir> <file.py> <SceneClass> [extra manim args]`

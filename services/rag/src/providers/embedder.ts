@@ -2,6 +2,9 @@
  * Embedder — provider-dispatched, lean fetch-based clients. Selected by
  * EMBEDDER_PROVIDER; nothing is hardcoded.
  *
+ *   - "local"   → in-process ONNX model (default Xenova/bge-small-en-v1.5, 384-dim)
+ *                 via @huggingface/transformers. No key, no network once the
+ *                 weights are in MODELS_DIR.
  *   - "ollama"  → local Ollama /api/embed (e.g. bge-m3, 1024-dim). No rate
  *                 limit, no API key. taskType is ignored (BGE is prefix-free).
  *   - "gemini"  → Gemini gemini-embedding-001 (3072-dim default; MRL truncation
@@ -72,7 +75,7 @@ async function postJson(url: string, body: unknown, timeoutMs: number, headers: 
       signal: ctrl.signal,
     });
     const text = await res.text();
-    if (!res.ok) throw new HttpError(res.status, `${PROVIDER} ${res.status}: ${text.slice(0, 300)}`);
+    if (!res.ok) throw new HttpError(res.status, `${PROVIDER} ${res.status}: ${text.slice(0, 1500)}`);
     return JSON.parse(text);
   } finally {
     clearTimeout(timer);
@@ -81,10 +84,7 @@ async function postJson(url: string, body: unknown, timeoutMs: number, headers: 
 
 function checkDim(dims: number, where: string): void {
   if (dims !== config.EMBEDDING_DIM) {
-    log.warn(
-      { expected: config.EMBEDDING_DIM, actual: dims, model: config.EMBEDDER_MODEL, where },
-      "Embedding dimension mismatch — EMBEDDING_DIM must match the index numDimensions"
-    );
+    throw new Error(`Embedding dimension mismatch: expected ${config.EMBEDDING_DIM}, got ${dims} (${where}). Re-seed with a matching model and index.`);
   }
 }
 
@@ -94,7 +94,7 @@ async function ollamaEmbed(texts: string[], timeoutMs: number): Promise<number[]
   const data = await withRetry(
     () =>
       postJson(
-        `${config.OLLAMA_BASE_URL}/api/embed`,
+        `${config.EMBEDDER_BASE_URL ?? config.OLLAMA_BASE_URL}/api/embed`,
         { model: config.EMBEDDER_MODEL, input: texts },
         timeoutMs
       ),
@@ -123,7 +123,7 @@ async function geminiEmbedSingle(text: string, taskType: EmbedTaskType): Promise
     async () => {
       const key = nextKey();
       const data = await postJson(
-        `${config.GEMINI_BASE_URL}/models/${model}:embedContent?key=${key}`,
+        `${config.EMBEDDER_BASE_URL ?? config.GEMINI_BASE_URL}/models/${model}:embedContent?key=${key}`,
         { model: `models/${model}`, content: { parts: [{ text }] }, taskType, outputDimensionality: config.EMBEDDING_DIM },
         config.EMBED_TIMEOUT_MS
       );
@@ -145,7 +145,7 @@ async function geminiEmbedBatch(texts: string[], taskType: EmbedTaskType): Promi
     try {
       const key = nextKey();
       const data = await postJson(
-        `${config.GEMINI_BASE_URL}/models/${model}:batchEmbedContents?key=${key}`,
+        `${config.EMBEDDER_BASE_URL ?? config.GEMINI_BASE_URL}/models/${model}:batchEmbedContents?key=${key}`,
         {
           requests: texts.map((text) => ({
             model: `models/${model}`,
@@ -167,6 +167,9 @@ async function geminiEmbedBatch(texts: string[], taskType: EmbedTaskType): Promi
       if (!isTransient(err)) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       const is429 = err instanceof HttpError && err.status === 429;
+      if (is429 && (/PerDay/i.test(msg) || parseRetryDelayMs(msg) > 5 * 60_000)) {
+        throw new Error(`Gemini daily embedding quota exhausted; retry after it resets or use another key/provider. ${msg.slice(0, 200)}`);
+      }
       const delay = is429
         ? parseRetryDelayMs(msg)
         : Math.min(config.RETRY_BASE_MS * Math.pow(2, attempt) + Math.random() * 500, 15000);
@@ -180,15 +183,69 @@ async function geminiEmbedBatch(texts: string[], taskType: EmbedTaskType): Promi
   throw lastErr;
 }
 
+async function openaiEmbed(texts: string[], timeoutMs: number): Promise<number[][]> {
+  const data = await withRetry(() => postJson(
+    `${(config.EMBEDDER_BASE_URL ?? config.OPENAI_BASE_URL).replace(/\/$/, "")}/embeddings`,
+    { model: config.EMBEDDER_MODEL, input: texts, ...(config.EMBEDDER_MODEL.startsWith("text-embedding-3-") ? { dimensions: config.EMBEDDING_DIM } : {}) },
+    timeoutMs, { Authorization: `Bearer ${nextKey()}` }
+  ), { retries: config.RETRY_MAX, baseMs: config.RETRY_BASE_MS, label: "openai.embed", shouldRetry: isTransient });
+  const rows = data?.data?.sort((a: any, b: any) => a.index - b.index);
+  if (!Array.isArray(rows) || rows.length !== texts.length) throw new Error("OpenAI returned an incorrect embedding count");
+  return rows.map((r: any) => {
+    if (!Array.isArray(r.embedding)) throw new Error("OpenAI returned an empty embedding");
+    checkDim(r.embedding.length, "openai");
+    return l2normalize(r.embedding);
+  });
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
+
+// ─── Local (in-process ONNX) ─────────────────────────────────────────────────
+
+// bge models are trained with this instruction on the query side only.
+const BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: ";
+const LOCAL_BATCH = 16;
+let localPipe: Promise<(texts: string[], opts: Record<string, unknown>) => Promise<{ data: Float32Array | number[]; dims: number[] }>> | null = null;
+
+function localExtractor() {
+  if (!localPipe) {
+    localPipe = (async () => {
+      const { pipeline, env } = await import("@huggingface/transformers");
+      if (config.MODELS_DIR) env.cacheDir = config.MODELS_DIR;
+      if (config.EMBEDDER_OFFLINE) env.allowRemoteModels = false;
+      const t0 = Date.now();
+      const p = await pipeline("feature-extraction", config.EMBEDDER_MODEL, { dtype: config.LOCAL_EMBED_DTYPE });
+      log.info({ model: config.EMBEDDER_MODEL, dtype: config.LOCAL_EMBED_DTYPE, ms: Date.now() - t0 }, "Local embedding model loaded");
+      return p as any;
+    })();
+    localPipe.catch(() => { localPipe = null; });
+  }
+  return localPipe;
+}
+
+async function localEmbed(texts: string[], taskType: EmbedTaskType): Promise<number[][]> {
+  const extract = await localExtractor();
+  const isBge = config.EMBEDDER_MODEL.toLowerCase().includes("bge");
+  const input = isBge && taskType === "RETRIEVAL_QUERY" ? texts.map((t) => BGE_QUERY_PREFIX + t) : texts;
+  const out: number[][] = [];
+  for (let i = 0; i < input.length; i += LOCAL_BATCH) {
+    const t = await extract(input.slice(i, i + LOCAL_BATCH), { pooling: isBge ? "cls" : "mean", normalize: true });
+    const dim = t.dims[1]!;
+    checkDim(dim, "local");
+    for (let r = 0; r < t.dims[0]!; r++) out.push(Array.from((t.data as Float32Array).subarray(r * dim, (r + 1) * dim)));
+  }
+  return out;
+}
 
 /** Embed a single text (query-time). */
 export async function embedQuery(
   text: string,
   taskType: EmbedTaskType = "RETRIEVAL_QUERY"
 ): Promise<number[]> {
+  if (PROVIDER === "local") return (await localEmbed([text], taskType))[0]!;
   if (PROVIDER === "ollama") return (await ollamaEmbed([text], config.EMBED_TIMEOUT_MS))[0]!;
   if (PROVIDER === "gemini") return geminiEmbedSingle(text, taskType);
+  if (PROVIDER === "openai") return (await openaiEmbed([text], config.EMBED_TIMEOUT_MS))[0]!;
   throw new Error(`Unsupported EMBEDDER_PROVIDER: ${config.EMBEDDER_PROVIDER}`);
 }
 
@@ -245,7 +302,7 @@ async function openaiEmbedOnce(text: string, model: string, baseURL: string, api
     const res = await fetch(`${baseURL}/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
-      body: JSON.stringify({ model, input: text }),
+      body: JSON.stringify({ model, input: text, ...(model.startsWith("text-embedding-3-") ? { dimensions: config.EMBEDDING_DIM } : {}) }),
       signal: ctrl.signal,
     });
     const txt = await res.text();
@@ -310,8 +367,8 @@ export async function embedQueryWithOverride(
   } else if (provider === "ollama") {
     const ollamaBase = baseURL ?? config.OLLAMA_BASE_URL;
     attempts.push({ label: "ollama.override", run: () => ollamaEmbedOnce(text, model, ollamaBase) });
-  } else if (baseURL) {
-    attempts.push({ label: `${provider}.override`, run: () => openaiEmbedOnce(text, model, baseURL, override!.apiKey ?? "") });
+  } else if (provider === "openai" || baseURL) {
+    attempts.push({ label: `${provider}.override`, run: () => openaiEmbedOnce(text, model, baseURL ?? config.OPENAI_BASE_URL, override!.apiKey ?? nextKey()) });
   }
 
   // FINAL fallback — the env-default embedder (EMBEDDER_API_KEY/-KEYS). This is the
@@ -347,8 +404,10 @@ export async function embedBatch(
   taskType: EmbedTaskType = "RETRIEVAL_DOCUMENT"
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
+  if (PROVIDER === "local") return localEmbed(texts, taskType);
   if (PROVIDER === "ollama") return ollamaEmbed(texts, config.EMBED_BATCH_TIMEOUT_MS);
   if (PROVIDER === "gemini") return geminiEmbedBatch(texts, taskType);
+  if (PROVIDER === "openai") return openaiEmbed(texts, config.EMBED_BATCH_TIMEOUT_MS);
   throw new Error(`Unsupported EMBEDDER_PROVIDER: ${config.EMBEDDER_PROVIDER}`);
 }
 
@@ -357,6 +416,6 @@ export function embedderInfo() {
     provider: config.EMBEDDER_PROVIDER,
     model: config.EMBEDDER_MODEL,
     dim: config.EMBEDDING_DIM,
-    keys: PROVIDER === "ollama" ? 0 : KEYS.length,
+    keys: PROVIDER === "ollama" || PROVIDER === "local" ? 0 : KEYS.length,
   };
 }

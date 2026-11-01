@@ -351,6 +351,7 @@ async function main() {
 
   log.info("Starting ManimRAG HTTP service…");
   await connect();
+  await createCorpusStore(getDb()).ensureIndexes();
 
   // Warm the embedder (e.g. load the Ollama model into memory) so the first
   // real request doesn't eat the cold-start latency. Best-effort.

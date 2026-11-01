@@ -4,6 +4,7 @@ import { withTimeout } from "../util/retry.js";
 import { recordLlmTokens } from "../observability/rag.js";
 import type { Complexity, TransformedQuery, QueryTransformProviderOverride, TraceQueryTransform } from "../types.js";
 import type { ResolvedSettings } from "./settings.js";
+import { providerDefaults } from "../config.js";
 import type { LlmTarget } from "../providers/llm.js";
 
 // ─── Static API reference list (403 Manim symbols) ────────────────────────────
@@ -89,11 +90,12 @@ function llmTargetFromOverride(
   override: QueryTransformProviderOverride,
   fallback: LlmTarget
 ): LlmTarget {
+  const defaults = override.provider ? providerDefaults(override.provider) : undefined;
   return {
     apiKey: override.apiKey ?? fallback.apiKey,
-    model: override.model ?? fallback.model,
-    baseUrl: override.baseURL ?? fallback.baseUrl,
-    extraBody: override.params !== undefined ? override.params : fallback.extraBody,
+    model: override.model ?? defaults?.model ?? fallback.model,
+    baseUrl: override.baseURL ?? defaults?.baseUrl ?? fallback.baseUrl,
+    extraBody: override.params ?? (defaults ? (defaults.provider === "opencodego" ? { thinking: { type: "disabled" } } : {}) : fallback.extraBody),
   };
 }
 

@@ -1,7 +1,8 @@
 import { SpanStatusCode } from "@opentelemetry/api";
 import { transformQuery, embeddingTextFor } from "./query-transform.js";
-import { embedQuery, embedQueryWithOverride, embedderInfo } from "../providers/embedder.js";
+import { embedQueryWithOverride, embedderInfo } from "../providers/embedder.js";
 import { retrieve } from "./retrieve.js";
+import { rerank } from "./rerank.js";
 import { selectDiverse } from "./select.js";
 import { assemble } from "./assemble.js";
 import { resolveSettings, type ResolvedSettings } from "./settings.js";
@@ -177,15 +178,20 @@ export async function enhance(
   );
   const { merged, denseCount, sparseCount, vectorSearchMs, sparseSearchMs } = retrieval;
 
-  // ── 4. Coverage-greedy selection (replaces LLM reranker per CONTRACT 1) ────
+  const rerankStart = Date.now();
+  const reranked = await rerank(sparseQuery, merged, settings);
+  const rerankMs = Date.now() - rerankStart;
+  if (reranked.ran) llmCalls++;
+
+  // ── 4. Select relevant examples with API coverage ─────────────────────────
   // Rule-based: greedily pick examples that maximise distinct apisUsed coverage.
-  // No LLM call. OTEL span renamed from rag.rerank → rag.select.
-  const { selected: ranked, coveredApis, ran: rerankRan } = await ragTracer.startActiveSpan(
+  // This selection pass does not make an LLM call.
+  const { selected: ranked, coveredApis } = await ragTracer.startActiveSpan(
     "rag.select",
     async (span) => {
       try {
         const tR = Date.now();
-        const out = selectDiverse(merged, Math.max(topK + 2, 8), Math.max(topK, 5));
+        const out = selectDiverse(reranked.ranked, Math.max(topK + 2, 8), Math.max(topK, 5));
         span.setAttribute("stitcher.rag.stage", "select");
         span.setAttribute("stitcher.rag.select.ran", out.ran);
         span.setAttribute("stitcher.rag.select.candidates_in", merged.length);
@@ -220,7 +226,7 @@ export async function enhance(
     async (span) => {
       try {
         const tA = Date.now();
-        const out = assemble(input.prompt, transformed, ranked, topK);
+        const out = assemble(input.prompt, transformed, ranked, topK, settings.stages.pitfalls);
         span.setAttribute("stitcher.rag.stage", "assemble");
         span.setAttribute("stitcher.rag.assemble.top_k", topK);
         span.setAttribute("stitcher.rag.assemble.api_examples", out.structuredContext.apiExamples.length);
@@ -272,23 +278,23 @@ export async function enhance(
       mergedCandidates: merged.length,
       afterRerank: structuredContext.apiExamples.length + structuredContext.similarScripts.length,
       embedModel: config.EMBEDDER_MODEL,
-      rerankModel: "coverage-greedy",
+      rerankModel: reranked.ran ? settings.reranker.model : "coverage-greedy",
       store: config.VECTOR_STORE,
       queryTransformed: transformed.ok,
       coveredApis: coveredApis.length,
       stages: {
         queryTransform: settings.stages.queryTransform,
         sparse: settings.stages.sparse,
-        rerank: false, // replaced by coverage-greedy selection (no LLM)
+        rerank: reranked.ran,
       },
     },
     execution: {
       totalMs,
-      queryTransformMs: 0, // timing tracked in span
-      embeddingMs: 0,      // timing tracked in span
+      queryTransformMs: trace.queryTransform?.durationMs ?? 0,
+      embeddingMs: trace.embed?.durationMs ?? 0,
       vectorSearchMs,
       sparseSearchMs,
-      rerankMs: 0,         // selection is synchronous (<1ms); kept for back-compat
+      rerankMs,
       assembleMs: 0,       // timing tracked in span
       llmCalls,
     },

@@ -10,13 +10,14 @@
  * Flags: --file <path> (extra script JSON), --no-api, --no-scripts
  *
  * Corpus sources:
- *   - ipynb/output/chunks_all.json      → docType "api"    (Manim API reference)
+ *   - data/chunks_all.json      → docType "api"    (Manim API reference)
  *   - data/seed_examples.json           → docType "script" (curated full scenes)
  *   - data/expanded_examples.json       → docType "script" (scraped, run `npm run scrape` first)
  */
 
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { connect, disconnect, getDb } from "./src/db.js";
 import { createCorpusStore } from "./src/store/mongodb.js";
 import { embedBatch } from "./src/providers/embedder.js";
@@ -26,8 +27,9 @@ import { log } from "./src/logger.js";
 import type { Complexity, CorpusDoc, CorpusDocWithEmbedding } from "./src/types.js";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
-const p = (rel: string) => fileURLToPath(new URL(rel, import.meta.url));
-const CHUNKS = p("../ipynb/output/chunks_all.json");
+// ESM (tsx) resolves from import.meta.url; the CJS bundle in dist/ falls back to __dirname/..
+const p = (rel: string) => import.meta.url ? fileURLToPath(new URL(rel, import.meta.url)) : resolve(__dirname, "..", rel);
+const CHUNKS = p("./data/chunks_all.json");
 const SEED_SCRIPTS = p("./data/seed_examples.json");
 const EXPANDED_SCRIPTS = p("./data/expanded_examples.json");
 
@@ -220,16 +222,7 @@ async function runSeed() {
   }
   log.info({ embedded, written, ms: Date.now() - t0 }, "Embedding + upsert complete");
 
-  // Create indexes (idempotent) and wait until queryable.
-  log.info("Ensuring Atlas Vector Search index…");
-  await store.createVectorIndex();
-  if (config.STAGE_SPARSE) {
-    log.info("STAGE_SPARSE enabled — ensuring Atlas text (BM25) index…");
-    await store.createTextIndex();
-  }
-  log.info("Waiting for vector index to become READY (build can take 1–2 min)…");
-  await store.waitForIndexReady(config.VECTOR_INDEX_NAME);
-  if (config.STAGE_SPARSE) await store.waitForIndexReady(config.TEXT_INDEX_NAME);
+  await store.ensureIndexes();
 
   const stats = await store.stats();
   log.info({ stats }, "Seed complete ✓");

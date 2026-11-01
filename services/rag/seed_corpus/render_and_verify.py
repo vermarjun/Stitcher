@@ -15,6 +15,8 @@ Usage:
     python render_and_verify.py --plugin manim-dsa --api MArray
     python render_and_verify.py --only-unverified  # skip already-verified
     python render_and_verify.py --timeout 60       # per-render timeout (s)
+    MANIM_PLUGINS_DIR=/path/to/plugins python render_and_verify.py
+    python render_and_verify.py --plugins-root /path/to/plugins
 """
 
 import argparse
@@ -33,7 +35,11 @@ from pathlib import Path
 SEED_DIR = Path(__file__).parent.resolve()
 EXAMPLES_DIR = SEED_DIR / "examples"
 RENDERS_DIR = SEED_DIR / "renders"
-PLUGINS_ROOT = Path("/Users/vermarjun/Desktop/Manim plugins")
+# Plugin checkouts live in services/render/vendor by default; each plugin's
+# .venv is created inside <plugins-root>/<plugin>/.venv. Override with the
+# MANIM_PLUGINS_DIR environment variable or the --plugins-root CLI flag.
+DEFAULT_PLUGINS_ROOT = (SEED_DIR.parent.parent / "render" / "vendor").resolve()
+PLUGINS_ROOT = Path(os.environ.get("MANIM_PLUGINS_DIR", DEFAULT_PLUGINS_ROOT)).expanduser().resolve()
 TIMEOUT_SCRIPT = PLUGINS_ROOT / "_render_timeout.sh"
 
 PLUGIN_TIMEOUTS = {
@@ -192,7 +198,17 @@ def main():
     parser.add_argument("--api", help="Filter to a specific API (e.g. MArray)")
     parser.add_argument("--timeout", type=int, default=None, help="Per-render timeout in seconds")
     parser.add_argument("--only-unverified", action="store_true", help="Skip already-verified examples")
+    parser.add_argument(
+        "--plugins-root",
+        default=None,
+        help="Manim plugins root (default: $MANIM_PLUGINS_DIR or services/render/vendor)",
+    )
     args = parser.parse_args()
+
+    if args.plugins_root:
+        global PLUGINS_ROOT, TIMEOUT_SCRIPT
+        PLUGINS_ROOT = Path(args.plugins_root).expanduser().resolve()
+        TIMEOUT_SCRIPT = PLUGINS_ROOT / "_render_timeout.sh"
 
     examples = collect_examples(args.plugin, args.api)
     if not examples:

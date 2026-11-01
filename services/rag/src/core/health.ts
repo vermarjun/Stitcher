@@ -1,7 +1,7 @@
 import { getDb } from "../db.js";
 import { createCorpusStore } from "../store/mongodb.js";
 import { embedQuery, embedderInfo } from "../providers/embedder.js";
-import { chatStructured, chatText, llmInfo, rerankerInfo } from "../providers/llm.js";
+import { chatText, llmInfo, rerankerInfo } from "../providers/llm.js";
 import { config } from "../config.js";
 import { withTimeout } from "../util/retry.js";
 import { resolveSettings } from "./settings.js";
@@ -59,21 +59,18 @@ export async function runHealthCheck(): Promise<HealthResult> {
         }).then((h) => ({ ...h, ...rerankerInfo() }))
       : Promise.resolve<ComponentHealth>({ status: "disabled", ...rerankerInfo() }),
 
-    // llm (structured / tool_choice)
-    // The LLM is always probed (it powers query-transform when enabled); a
-    // generous timeout means "reachable + supports tool_choice", not "fast".
-    timed(async () => {
+    // Probe query-transform only when enabled, using its plain chat interface.
+    config.STAGE_QUERY_TRANSFORM ? timed(async () => {
       await withTimeout(
-        chatStructured({
+        chatText({
           target: s.llm,
           messages: [{ role: "user", content: "Return ping=pong" }],
-          schema: { type: "object", properties: { ping: { type: "string" } }, required: ["ping"] },
           timeoutMs: HEALTH_LLM_TIMEOUT_MS,
         }),
         HEALTH_LLM_TIMEOUT_MS,
         "llm"
       );
-    }).then((h) => ({ ...h, ...llmInfo() })),
+    }).then((h) => ({ ...h, ...llmInfo() })) : Promise.resolve<ComponentHealth>({ status: "disabled", ...llmInfo() }),
   ]);
 
   const critical = [vectorStore, embedder];

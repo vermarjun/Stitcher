@@ -2,8 +2,8 @@
   "chem_plugin_2d_molecule_morphine_structure": {
     "duration": 12.27,
     "self_play_count": 8,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/2d_molecule/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/2d_molecule/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/2d_molecule/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/2d_molecule/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true
@@ -11,8 +11,8 @@
   "chem_plugin_graph_molecule_acetone_labeled": {
     "duration": 11.53,
     "self_play_count": 8,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/graph_molecule/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/graph_molecule/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/graph_molecule/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/graph_molecule/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true
@@ -20,8 +20,8 @@
   "chem_plugin_periodic_element_spotlight": {
     "duration": 12.67,
     "self_play_count": 10,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/periodic_table/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/periodic_table/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/periodic_table/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/periodic_table/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true
@@ -29,8 +29,8 @@
   "chem_plugin_bohr_atom_silicon": {
     "duration": 13.2,
     "self_play_count": 9,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/bohr_atom/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/bohr_atom/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/bohr_atom/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/bohr_atom/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true
@@ -38,8 +38,8 @@
   "chem_plugin_chemical_formulas_showcase": {
     "duration": 13.4,
     "self_play_count": 13,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/chemical_formula/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/chemical_formula/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/chemical_formula/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/chemical_formula/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true
@@ -47,8 +47,8 @@
   "chem_plugin_orbital_p_3d": {
     "duration": 11.73,
     "self_play_count": 5,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/orbital/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/orbital/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/orbital/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/orbital/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true
@@ -56,8 +56,8 @@
   "chem_plugin_3d_molecule_morphine": {
     "duration": 13.67,
     "self_play_count": 2,
-    "mp4": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/3d_molecule/01.mp4",
-    "thumb": "/Users/vermarjun/Desktop/ManimRAG/pipeline/seed_corpus/renders_v2/manim-chemistry/3d_molecule/01.jpg",
+    "mp4": "renders_v2/manim-chemistry/3d_molecule/01.mp4",
+    "thumb": "renders_v2/manim-chemistry/3d_molecule/01.jpg",
     "verified": true,
     "passes_duration_gate": true,
     "passes_play_gate": true

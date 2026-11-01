@@ -18,6 +18,7 @@ export default defineConfig([
     outDir: "dist",
     external: [
       "mongodb",
+      "@huggingface/transformers",
       "fastify",
       "@fastify/rate-limit",
       "pino",
@@ -39,6 +40,7 @@ export default defineConfig([
   {
     entry: {
       server: "src/server.ts",
+      seed: "seed.ts",
       instrumentation: "src/instrumentation.ts",
     },
     format: ["cjs"],
@@ -49,6 +51,8 @@ export default defineConfig([
     splitting: false,
     outDir: "dist",
     // Bundle everything into the CJS outputs — no external at runtime in container.
-    noExternal: [/.*/],
+    // Except the local embedder: onnxruntime ships native binaries that cannot be bundled.
+    noExternal: [/^(?!@huggingface\/transformers|onnxruntime-)/],
+    external: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
   },
 ]);

@@ -167,8 +167,9 @@ export class CorpusStore {
   private async listSearchIndexes(): Promise<any[]> {
     try {
       return await this.coll.listSearchIndexes().toArray();
-    } catch {
-      return [];
+    } catch (err: any) {
+      if (err.code === 26) return [];
+      throw err;
     }
   }
 
@@ -189,7 +190,10 @@ export class CorpusStore {
 
   async createVectorIndex(): Promise<void> {
     const existing = await this.listSearchIndexes();
-    if (existing.some((i) => i.name === config.VECTOR_INDEX_NAME)) {
+    const vectorIndex = existing.find((i) => i.name === config.VECTOR_INDEX_NAME);
+    if (vectorIndex) {
+      const dimension = vectorIndex.latestDefinition?.fields?.find((f: any) => f.path === "embedding")?.numDimensions;
+      if (dimension !== undefined && dimension !== config.EMBEDDING_DIM) throw new Error(`Vector index has ${dimension} dimensions; configured ${config.EMBEDDING_DIM}. Re-seed with --reset.`);
       log.info({ index: config.VECTOR_INDEX_NAME }, "Vector index already exists");
       return;
     }
@@ -238,7 +242,8 @@ export class CorpusStore {
       const idxs = await this.listSearchIndexes();
       const idx = idxs.find((i) => i.name === name);
       const ready =
-        idx && (idx.queryable === true || idx.status === "READY" || idx.status === "STEADY");
+        idx?.queryable === true;
+      if (idx?.status === "FAILED") throw new Error(`Search index ${name} failed: ${JSON.stringify(idx.statusDetail ?? [])}`);
       if (ready) {
         log.info({ index: name, ms: Date.now() - start }, "Search index is READY");
         return true;
@@ -246,7 +251,15 @@ export class CorpusStore {
       await new Promise((r) => setTimeout(r, 3000));
     }
     log.warn({ index: name, timeoutMs }, "Timed out waiting for search index to become READY");
-    return false;
+    throw new Error(`Search index ${name} was not queryable after ${timeoutMs}ms`);
+  }
+
+  async ensureIndexes(): Promise<void> {
+    await this.coll.createIndex({ id: 1 }, { unique: true });
+    await this.createVectorIndex();
+    if (config.STAGE_SPARSE) await this.createTextIndex();
+    await this.waitForIndexReady(config.VECTOR_INDEX_NAME);
+    if (config.STAGE_SPARSE) await this.waitForIndexReady(config.TEXT_INDEX_NAME);
   }
 }
 

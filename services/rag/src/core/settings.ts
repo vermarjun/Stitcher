@@ -72,8 +72,14 @@ export interface ResolvedSettings {
 }
 
 /** Default reasoning/thinking params when the request doesn't specify extraBody. */
-function defaultExtraBody(): Record<string, unknown> {
-  return config.OPENCODE_DISABLE_THINKING ? { thinking: { type: "disabled" } } : {};
+function defaultExtraBody(provider: string, model: string): Record<string, unknown> {
+  if (["opencode", "opencodego"].includes(provider)) {
+    return config.OPENCODE_DISABLE_THINKING ? { thinking: { type: "disabled" } } : {};
+  }
+  // Gemini 2.5 Flash thinks by default (~3.5s). "none" is accepted by the Flash
+  // models only; Pro rejects it, so it is not sent there.
+  if (provider === "gemini" && /flash/i.test(model)) return { reasoning_effort: "none" };
+  return {};
 }
 
 /** Validate an overridden baseUrl: must be http(s) and (if configured) allow-listed. */
@@ -122,14 +128,14 @@ export function resolveSettings(ov: RequestOverrides = {}, keys: ByoKeys = {}): 
     llm: {
       apiKey: keys.llmKey || config.LLM_API_KEY,
       model: ov.llm?.model ?? config.LLM_MODEL,
-      baseUrl: ov.llm?.baseUrl ?? config.OPENCODE_GO_BASE_URL,
-      extraBody: ov.llm?.extraBody ?? defaultExtraBody(),
+      baseUrl: ov.llm?.baseUrl ?? config.LLM_BASE_URL,
+      extraBody: ov.llm?.extraBody ?? defaultExtraBody(config.LLM_PROVIDER, ov.llm?.model ?? config.LLM_MODEL),
     },
     reranker: {
       apiKey: keys.rerankerKey || config.RERANKER_API_KEY || config.LLM_API_KEY,
       model: ov.reranker?.model ?? config.RERANKER_MODEL,
-      baseUrl: ov.reranker?.baseUrl ?? config.OPENCODE_GO_BASE_URL,
-      extraBody: ov.reranker?.extraBody ?? defaultExtraBody(),
+      baseUrl: ov.reranker?.baseUrl ?? config.RERANKER_BASE_URL,
+      extraBody: ov.reranker?.extraBody ?? defaultExtraBody(config.RERANKER_PROVIDER, ov.reranker?.model ?? config.RERANKER_MODEL),
     },
     defaultTopK: ov.defaultTopK ?? config.DEFAULT_TOP_K,
   };

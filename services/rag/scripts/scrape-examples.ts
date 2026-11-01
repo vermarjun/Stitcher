@@ -3,7 +3,7 @@
  * Dataset expansion — scrape full Manim Community v0.19 scene examples.
  *
  * Sources (each best-effort; one failing source never aborts the run):
- *   1. Mined from ipynb/output/chunks_all.json `exampleCode` (full Scene classes).
+ *   1. Mined from data/chunks_all.json `exampleCode` (full Scene classes).
  *   2. GitHub ManimCommunity/manim `example_scenes/*.py` (raw).
  *   3. ManimCommunity docs `.. manim:: Name` RST code blocks (examples + tutorials).
  *
@@ -32,12 +32,12 @@ const OUT = (() => {
   const i = args.indexOf("--out");
   return i >= 0 ? args[i + 1]! : fileURLToPath(new URL("../data/expanded_examples.json", import.meta.url));
 })();
-const CHUNKS_PATH = fileURLToPath(new URL("../../ipynb/output/chunks_all.json", import.meta.url));
+const CHUNKS_PATH = fileURLToPath(new URL("../data/chunks_all.json", import.meta.url));
 
 const RST_SOURCES = [
-  "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/examples.rst",
-  "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/quickstart.rst",
-  "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/building_blocks.rst",
+  "https://raw.githubusercontent.com/ManimCommunity/manim/v0.19.0/docs/source/examples.rst",
+  "https://raw.githubusercontent.com/ManimCommunity/manim/v0.19.0/docs/source/tutorials/quickstart.rst",
+  "https://raw.githubusercontent.com/ManimCommunity/manim/v0.19.0/docs/source/tutorials/building_blocks.rst",
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ async function collectFromGithub(): Promise<ScriptRecord[]> {
     } catch { /* use default list */ }
   }
   for (const f of files) {
-    const py = await fetchText(`https://raw.githubusercontent.com/ManimCommunity/manim/main/example_scenes/${f}`);
+    const py = await fetchText(`https://raw.githubusercontent.com/ManimCommunity/manim/v0.19.0/example_scenes/${f}`);
     if (!py) continue;
     for (const sc of extractSceneClasses(py)) recs.push(makeRecord(sc.name, sc.code, `github:ManimCommunity/manim/example_scenes/${f}`, 5));
   }

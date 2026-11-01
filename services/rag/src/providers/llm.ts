@@ -53,7 +53,7 @@ async function postChat(
   try {
     // extraBody is spread first so it can ADD params (thinking/reasoning) but
     // never clobber the functional fields (messages/tools/tool_choice).
-    const res = await fetch(`${target.baseUrl}/chat/completions`, {
+    const res = await fetch(`${target.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -63,7 +63,7 @@ async function postChat(
       signal: ctrl.signal,
     });
     const text = await res.text();
-    if (!res.ok) throw new HttpError(res.status, `OpenCode ${res.status}: ${text.slice(0, 300)}`);
+    if (!res.ok) throw new HttpError(res.status, `LLM ${res.status}: ${text.slice(0, 300)}`);
     return JSON.parse(text);
   } finally {
     clearTimeout(timer);
@@ -136,7 +136,7 @@ export async function chatStructured<T = Record<string, unknown>>(opts: {
     {
       retries: config.RETRY_MAX,
       baseMs: config.RETRY_BASE_MS,
-      label: `opencode.chatStructured(${target.model})`,
+      label: `llm.chatStructured(${target.model})`,
       shouldRetry: isTransient,
     }
   );
@@ -167,14 +167,14 @@ export async function chatText(opts: {
     {
       retries: config.RETRY_MAX,
       baseMs: config.RETRY_BASE_MS,
-      label: `opencode.chatText(${target.model})`,
+      label: `llm.chatText(${target.model})`,
       shouldRetry: isTransient,
     }
   );
 }
 
 export function llmInfo() {
-  return { provider: config.LLM_PROVIDER, model: config.LLM_MODEL, baseUrl: config.OPENCODE_GO_BASE_URL };
+  return { provider: config.LLM_PROVIDER, model: config.LLM_MODEL, baseUrl: config.LLM_BASE_URL };
 }
 export function rerankerInfo() {
   return { provider: config.RERANKER_PROVIDER, model: config.RERANKER_MODEL };
