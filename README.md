@@ -4,6 +4,8 @@ Type a sentence. Get a narrated, animated explainer video, rendered with [Manim]
 
 Stitcher writes the Manim code for you, renders it in a sandbox, reads the render errors, fixes its own code, and adds a voiceover. Everything runs on your machine with `docker compose up`. You bring one LLM API key, or none at all if you run Ollama.
 
+Try the hosted version at [stitcher.cloud](https://stitcher.cloud), or run your own with the quickstart below.
+
 <table>
 <tr>
 <td><img src="docs/media/chess.gif" width="100%"><br><sub>Chess: the Najdorf Sicilian, move by move</sub></td>
